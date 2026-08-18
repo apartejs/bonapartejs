@@ -77,6 +77,8 @@ export const FR: AppTranslations = {
   chat: {
     placeholder: 'Écrivez à bonaparte…',
     errorPrefix: 'Erreur',
+    thinking: 'Réflexion',
+    waiting: 'bonaparte prépare sa réponse…',
   },
   status: {
     stopped: 'arrêté',

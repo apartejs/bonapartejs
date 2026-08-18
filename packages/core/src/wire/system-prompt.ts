@@ -25,6 +25,12 @@ export interface SystemPromptOptions {
   replyLanguage?: string;
   /** Consignes de projet (CLAUDE.md & co) — optionnel. */
   projectInstructions?: string;
+  /**
+   * Décrire la convention d'appel Hermes (défaut). À couper pour un serveur
+   * qui gère les outils nativement : lui montrer la syntaxe textuelle
+   * l'inciterait à écrire des balises plutôt qu'à appeler.
+   */
+  toolCallFormat?: boolean;
 }
 
 function renderToolLine(tool: ToolDef): string {
@@ -43,14 +49,21 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     options.projectRoot
       ? `Open project: ${options.projectRoot}\n` +
         'All tool paths are relative to this root, and you cannot step outside it.'
-      : 'No project is open, so file and shell tools are unavailable. You can ' +
-        'still discuss and reason; if the user needs you to act on files, ask ' +
-        'them to open a project folder.',
+      : // Discuter sans projet est un usage normal, pas un état dégradé : le
+        // modèle ne doit pas ouvrir la conversation en réclamant un dossier.
+        'No project folder is open, so file and shell tools are unavailable ' +
+        'here. This is a normal way to work: answer, explain and reason ' +
+        'directly. Bring up opening a project only if the user asks for ' +
+        'something that actually requires touching their files.',
     'Available tools:\n' + renderToolInventory(options.tools),
-    'To call a tool, emit exactly:\n' +
-      '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
-      'One call per block; emit several blocks for several calls. Results are ' +
-      'returned to you on the next turn.',
+    ...(options.toolCallFormat === false
+      ? []
+      : [
+          'To call a tool, emit exactly:\n' +
+            '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
+            'One call per block; emit several blocks for several calls. ' +
+            'Results are returned to you on the next turn.',
+        ]),
     // Sans cette clause, un delta appendé plus tard contredirait ce prompt.
     'This inventory may be amended later: a service message will announce any ' +
       'tool added or removed, and takes precedence over the list above.',

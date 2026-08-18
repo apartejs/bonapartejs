@@ -54,6 +54,21 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('</tool_call>');
   });
 
+  it('tait le format d’appel quand le serveur gère les outils lui-même', () => {
+    // Un backend OpenAI-compatible reçoit des outils structurés : lui décrire
+    // la convention Hermes l’inciterait à écrire des balises en texte au lieu
+    // d’appeler nativement.
+    const prompt = buildSystemPrompt({ ...base, toolCallFormat: false });
+    expect(prompt).not.toContain('<tool_call>');
+  });
+
+  it('n’invite pas le modèle à réclamer un dossier quand il n’y en a pas', () => {
+    // Discuter sans projet est un usage normal, pas un état dégradé à corriger.
+    const prompt = buildSystemPrompt({ tools: [] });
+    expect(prompt).toMatch(/unavailable/i);
+    expect(prompt).not.toMatch(/ask (them|the user) to open/i);
+  });
+
   it('prévient que l’inventaire peut être amendé plus tard', () => {
     // Sans cette phrase, un delta appendé contredirait le prompt initial.
     expect(buildSystemPrompt(base)).toMatch(/amended|later/i);

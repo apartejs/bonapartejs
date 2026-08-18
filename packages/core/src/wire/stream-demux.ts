@@ -45,10 +45,25 @@ function heldBackLength(buffer: string, markers: string[]): number {
   return 0;
 }
 
+export interface DemuxOptions {
+  /**
+   * Laisser les blocs `<tool_call>` dans le texte visible. Utile pour un
+   * backend dont le serveur gère les outils nativement : un bloc texte y est
+   * une bizarrerie du modèle, et la masquer ferait disparaître une intention
+   * sans trace.
+   */
+  keepToolCalls?: boolean;
+}
+
 export class HermesStreamDemux {
   private mode: DemuxMode = 'text';
   private buffer = '';
   private rawOutput = '';
+  private readonly markers: string[];
+
+  constructor(options: DemuxOptions = {}) {
+    this.markers = options.keepToolCalls ? [THINK_OPEN, IM_END] : TEXT_MARKERS;
+  }
 
   push(delta: string): DemuxEvent[] {
     this.rawOutput += delta;
@@ -89,7 +104,7 @@ export class HermesStreamDemux {
       }
 
       const inThink = this.mode === 'think';
-      const markers = inThink ? [THINK_CLOSE] : TEXT_MARKERS;
+      const markers = inThink ? [THINK_CLOSE] : this.markers;
       const type = inThink ? ('thinking' as const) : ('text' as const);
       const found = firstMarker(this.buffer, markers);
 

@@ -24,6 +24,7 @@ import type {
   TurnRequest,
 } from '../types.js';
 import { buildSystemPrompt } from '../../wire/system-prompt.js';
+import { HermesStreamDemux } from '../../wire/stream-demux.js';
 
 export interface OpenAiCompatOptions {
   /** Base de l'API, ex. http://127.0.0.1:1234/v1 (LM Studio). */
@@ -169,8 +170,10 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
         ...(request.system.projectRoot
           ? { projectRoot: request.system.projectRoot }
           : {}),
-        // Pas de bloc « format d'appel » : le serveur gère les outils nativement.
+        // Le serveur gère les outils nativement : ils sont déclarés dans le
+        // corps de la requête, et le prompt tait la convention textuelle.
         tools: [],
+        toolCallFormat: false,
         ...(request.system.replyLanguage
           ? { replyLanguage: request.system.replyLanguage }
           : {}),
@@ -203,6 +206,14 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
       const started = Date.now();
       const calls = new Map<number, StreamingCall>();
       let usage: OpenAiUsage | undefined;
+      // Deux façons d'émettre le raisonnement coexistent chez les serveurs
+      // compatibles : le champ `reasoning_content` (LM Studio, vLLM récents)
+      // ou des balises `<think>` au milieu du contenu. Le contenu passe donc
+      // par le démultiplexeur, sinon l'utilisateur lit les balises brutes.
+      // Les blocs `<tool_call>` restent visibles ici : le serveur gère les
+      // outils nativement, un bloc texte y serait une bizarrerie du modèle et
+      // la masquer ferait disparaître une intention sans laisser de trace.
+      const demux = new HermesStreamDemux({ keepToolCalls: true });
 
       for await (const chunk of sseChunks(res.body)) {
         if (chunk.usage) usage = chunk.usage;
@@ -219,7 +230,7 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
         if (!delta) continue;
 
         if (delta.content) {
-          yield { type: 'text', delta: delta.content };
+          for (const event of demux.push(delta.content)) yield event;
         }
         if (delta.reasoning_content) {
           yield { type: 'thinking', delta: delta.reasoning_content };
@@ -232,6 +243,9 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
           calls.set(part.index, current);
         }
       }
+
+      // Un fragment de balise retenu en fin de flux doit ressortir.
+      for (const event of demux.flush()) yield event;
 
       for (const call of [...calls.entries()]
         .sort(([a], [b]) => a - b)

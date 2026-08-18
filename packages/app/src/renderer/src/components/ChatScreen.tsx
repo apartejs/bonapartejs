@@ -4,9 +4,9 @@ import type {
   CompletionStatsDto,
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
-import { AsyncQueue } from '../lib/async-queue.js';
+import { SegmentWriter } from '../lib/segment-writer.js';
 
 interface ChatScreenProps {
   initialEvents: ConversationEventDto[];
@@ -16,6 +16,21 @@ interface ChatScreenProps {
 
 let nextId = 0;
 const freshId = (): string => `msg-${Date.now()}-${nextId++}`;
+
+/**
+ * Ce qui est ouvert dans le tour en cours. Un tour se compose de segments
+ * successifs — raisonnement, texte, pastilles d'outils — et non d'un seul bloc
+ * de texte : c'est ce qui permet de replier la réflexion et de montrer une
+ * activité d'outil pendant qu'elle tourne.
+ */
+interface TurnState {
+  thinking: string | null;
+  /** Segment de texte courant ; remis à null après un outil (le texte suivant
+   *  s'écrit alors APRÈS la pastille, dans un nouveau segment). */
+  text: string | null;
+  pendingCalls: { name: string; segmentId: string }[];
+  seq: number;
+}
 
 export function ChatScreen({
   initialEvents,
@@ -36,61 +51,156 @@ export function ChatScreen({
   );
 
   const chat = useAparteChat(initialMessages);
-  const activeQueue = useRef<AsyncQueue<string> | null>(null);
+  const turn = useRef<TurnState | null>(null);
+  // Entre l'envoi et le premier signe de vie il peut s'écouler une minute
+  // (prefill d'un gros contexte) : sans indicateur, l'app a l'air figée.
+  // Le miroir en ref évite un setState par token pour rien.
+  const [waiting, setWaiting] = useState(false);
+  const waitingRef = useRef(false);
+  const stopWaiting = (): void => {
+    if (!waitingRef.current) return;
+    waitingRef.current = false;
+    setWaiting(false);
+  };
+  const stopWaitingRef = useRef(stopWaiting);
+  stopWaitingRef.current = stopWaiting;
+
+  // La ref suit `chat` sans le mettre en dépendance de l'effet : le hook
+  // renvoie un objet neuf à chaque rendu, et l'abonnement IPC ne doit se
+  // reconstruire qu'au montage.
+  const chatRef = useRef(chat);
+  chatRef.current = chat;
 
   useEffect(() => {
-    const finish = (): void => {
-      activeQueue.current?.close();
-      activeQueue.current = null;
+    const writer = new SegmentWriter((segmentId, content) =>
+      chatRef.current.appendToSegment(segmentId, content),
+    );
+
+    const ensureThinking = (state: TurnState): string => {
+      if (state.thinking) return state.thinking;
+      const id = `seg-think-${state.seq++}`;
+      chatRef.current.addSegment({
+        id,
+        type: 'thinking',
+        content: '',
+        label: t.chat.thinking,
+      });
+      state.thinking = id;
+      return id;
+    };
+
+    const ensureText = (state: TurnState): string => {
+      if (state.text) return state.text;
+      writer.flush();
+      // La réflexion se replie dès que la réponse commence : visible pendant
+      // qu'elle sert, discrète ensuite — mais jamais effacée.
+      if (state.thinking) {
+        chatRef.current.updateSegment(state.thinking, { collapsed: true });
+        state.thinking = null;
+      }
+      const id = `seg-text-${state.seq++}`;
+      chatRef.current.addSegment({ id, type: 'text', content: '' });
+      state.text = id;
+      return id;
+    };
+
+    /** Fin de tour : rien ne doit rester en attente ni tourner dans le vide. */
+    const finish = (state: TurnState): void => {
+      writer.flush();
+      if (state.thinking) chatRef.current.updateSegment(state.thinking, { collapsed: true });
+      // Un outil resté « pending » afficherait un spinner éternel : on dit
+      // plutôt qu'il n'a pas abouti.
+      for (const call of state.pendingCalls) {
+        chatRef.current.updateSegment(call.segmentId, { status: 'aborted' });
+      }
+      turn.current = null;
+      stopWaitingRef.current();
       onStreamingChange(false);
     };
 
     const unsubscribe = window.bonaparte.onAgentEvent((event: AgentEventDto) => {
-      const queue = activeQueue.current;
-      if (!queue) return;
+      const state = turn.current;
+      if (!state) return;
+      stopWaitingRef.current();
+
       switch (event.type) {
         case 'token':
-          queue.push(event.text);
+          writer.append(ensureText(state), event.text);
           break;
+
         case 'thinking':
-          break; // le raisonnement reste hors du fil en J2
-        case 'tool_call':
-          // Activité d'outil rendue dans le fil : l'utilisateur doit voir ce
-          // que l'agent fait, pas seulement ce qu'il dit.
-          queue.push(`\n\n▸ ${event.name}\n`);
+          // Le raisonnement a sa place dans le fil : un modèle qui réfléchit
+          // une minute sans rien afficher passe pour une app plantée.
+          writer.append(ensureThinking(state), event.text);
           break;
-        case 'tool_result': {
-          const summary = event.content.split('\n')[0]?.slice(0, 200) ?? '';
-          queue.push(`${event.ok ? '✓' : '✗'} ${summary}\n\n`);
+
+        case 'tool_call': {
+          writer.flush();
+          if (state.thinking) {
+            chatRef.current.updateSegment(state.thinking, { collapsed: true });
+            state.thinking = null;
+          }
+          state.text = null;
+          const id = `seg-tool-${state.seq++}`;
+          chatRef.current.addSegment({
+            id,
+            type: 'tool_call',
+            status: 'pending',
+            toolCall: { id, name: event.name, input: event.args },
+          });
+          state.pendingCalls.push({ name: event.name, segmentId: id });
           break;
         }
+
+        case 'tool_result': {
+          writer.flush();
+          // Les résultats reviennent dans l'ordre des appels ; à nom égal, le
+          // plus ancien en attente est le bon.
+          const index = state.pendingCalls.findIndex((c) => c.name === event.name);
+          const call = index >= 0 ? state.pendingCalls.splice(index, 1)[0] : undefined;
+          if (call) {
+            chatRef.current.updateSegment(call.segmentId, {
+              status: event.ok ? 'resolved' : 'aborted',
+              result: event.content,
+            });
+          }
+          break;
+        }
+
         case 'done':
           onStats(event.stats);
-          finish();
+          finish(state);
           break;
+
         case 'error':
-          queue.push(`\n${t.chat.errorPrefix} : ${event.message}`);
-          finish();
+          writer.flush();
+          chatRef.current.addSegment({
+            id: `seg-error-${state.seq++}`,
+            type: 'error',
+            content: `${t.chat.errorPrefix} : ${event.message}`,
+          });
+          finish(state);
           break;
       }
     });
-    return unsubscribe;
-  }, [onStats, onStreamingChange, t.chat.errorPrefix]);
+
+    return () => {
+      unsubscribe();
+      writer.dispose();
+    };
+  }, [onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
 
   const handleSent = (detail: { content: string }): void => {
-    const messageId = freshId();
     chat.appendMessage({
-      id: messageId,
+      id: freshId(),
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
     });
-
-    const queue = new AsyncQueue<string>();
-    activeQueue.current = queue;
+    turn.current = { thinking: null, text: null, pendingCalls: [], seq: 0 };
+    waitingRef.current = true;
+    setWaiting(true);
     onStreamingChange(true);
-
-    void chat.injectTokenStream(messageId, queue);
     void window.bonaparte.sendMessage(detail.content);
   };
 
@@ -102,6 +212,8 @@ export function ChatScreen({
         onMessagesChange={chat.setMessages}
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
+        isTyping={waiting}
+        typingText={t.chat.waiting}
         centerWhenEmpty
         // Composer sans pièces jointes : le défaut de la lib monte un bouton
         // d'attachement, or notre boucle ne consomme pas encore detail.files —

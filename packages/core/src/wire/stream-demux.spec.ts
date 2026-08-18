@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { HermesStreamDemux, type DemuxEvent } from './stream-demux.js';
 
 /** Concatène les deltas d'un type donné sur toute une séquence de pushes. */
-function run(chunks: string[]): {
+function run(
+  chunks: string[],
+  options?: { keepToolCalls?: boolean },
+): {
   text: string;
   thinking: string;
   raw: string;
   events: DemuxEvent[];
 } {
-  const demux = new HermesStreamDemux();
+  const demux = new HermesStreamDemux(options);
   const events: DemuxEvent[] = [];
   for (const chunk of chunks) events.push(...demux.push(chunk));
   events.push(...demux.flush());
@@ -77,6 +80,17 @@ describe('HermesStreamDemux — tool_call', () => {
   it('ne laisse rien fuiter d’un appel jamais refermé', () => {
     const out = run(['ok<tool_call>{"name": "a"']);
     expect(out.text).toBe('ok');
+  });
+
+  it('laisse le bloc visible quand le serveur gère les outils lui-même', () => {
+    // Chez un backend OpenAI-compatible, un `<tool_call>` en texte est une
+    // bizarrerie du modèle : la masquer ferait disparaître une intention sans
+    // trace. On garde le raisonnement séparé, et rien d’autre n’est touché.
+    const out = run(['<think>hmm</think>Je lis.<tool_call>{"name": "a"}</tool_call>'], {
+      keepToolCalls: true,
+    });
+    expect(out.thinking).toBe('hmm');
+    expect(out.text).toBe('Je lis.<tool_call>{"name": "a"}</tool_call>');
   });
 });
 
