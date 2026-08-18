@@ -85,6 +85,17 @@ export function ChatScreen({
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
         centerWhenEmpty
+        // Composer sans pièces jointes : le défaut de la lib monte un bouton
+        // d'attachement, or notre boucle ne consomme pas encore detail.files —
+        // mieux vaut ne rien promettre que jeter les fichiers en silence.
+        composer={
+          <div className="aparte-composer-shell">
+            <div className="aparte-composer-row">
+              <aparte-composer-input />
+              <aparte-composer-send />
+            </div>
+          </div>
+        }
       />
     </div>
   );
