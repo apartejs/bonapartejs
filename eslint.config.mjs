@@ -8,6 +8,22 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   {
     files: ['**/*.ts', '**/*.tsx'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    // Les specs inspectent du JSON brut (réponses HTTP) : any y est légitime.
+    files: ['**/*.spec.ts', '**/*.spec.tsx'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    files: ['**/*.ts', '**/*.tsx'],
     plugins: { '@nx': nx },
     rules: {
       // Frontières structurelles du monorepo — la garantie que core reste

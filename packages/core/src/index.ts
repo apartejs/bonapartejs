@@ -22,3 +22,34 @@ export type { SystemDoctorEnvOptions } from './doctor/doctor-env.js';
 export { createSystemDoctorEnv } from './doctor/doctor-env.js';
 
 export { bonaparteDataDir, kvSlotsDir } from './paths.js';
+
+export type {
+  Backend,
+  BackendCapabilities,
+  BackendStatus,
+  CompletionEvent,
+  CompletionRequest,
+  CompletionStats,
+  PromptProgress,
+  SamplingParams,
+  ServerProps,
+  SlotApi,
+  SlotRestoreResult,
+  SlotSaveResult,
+} from './backend/types.js';
+export { BackendRegistry } from './backend/registry.js';
+export type { BackendType } from './backend/registry.js';
+export {
+  buildLlamaServerArgs,
+  createLlamaCppBackend,
+  LlamaCppHttpClient,
+} from './backend/llamacpp/llamacpp-backend.js';
+export type {
+  LlamaCppBackendOptions,
+  LlamaCppLaunchConfig,
+  ManagedOptions,
+  ProcessHandle,
+  RemoteOptions,
+  SpawnFn,
+} from './backend/llamacpp/llamacpp-backend.js';
+export { LlamaCppHttpError } from './backend/llamacpp/http-client.js';
