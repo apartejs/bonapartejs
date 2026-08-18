@@ -33,6 +33,12 @@ export interface ManagedOptions {
   healthIntervalMs?: number;
   healthTimeoutMs?: number;
   maxRestarts?: number;
+  /**
+   * Sous-commande à préfixer aux args — ['serve'] pour le CLI unifié
+   * `llama`, [] pour le binaire historique `llama-server`.
+   * Voir detectServeCommandPrefix().
+   */
+  commandPrefix?: string[];
 }
 
 export interface RemoteOptions {
@@ -160,7 +166,10 @@ class ManagedLlamaCppBackend extends BaseBackend {
   private async spawnAndWait(status: 'starting' | 'restarting'): Promise<void> {
     this.setStatus(status);
 
-    const args = buildLlamaServerArgs(this.options.launch);
+    const args = [
+      ...(this.options.commandPrefix ?? []),
+      ...buildLlamaServerArgs(this.options.launch),
+    ];
     const handle = this.options.spawnFn(this.options.binPath, args);
     this.handle = handle;
     handle.onExit((code) => this.onProcessExit(handle, code));
@@ -216,4 +225,5 @@ export function createLlamaCppBackend(options: LlamaCppBackendOptions): Backend 
 }
 
 export { buildLlamaServerArgs, LlamaCppHttpClient };
+export { detectServeCommandPrefix } from './serve-command.js';
 export type { LlamaCppLaunchConfig };

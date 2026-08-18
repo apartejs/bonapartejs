@@ -68,6 +68,36 @@ describe('runDoctor', () => {
     expect(llama.detail).toBe('C:\\tools\\llama\\llama-server.exe');
   });
 
+  it('trouve le CLI unifié `llama` quand llama-server est absent', async () => {
+    const report = await runDoctor(
+      fakeEnv({
+        lookupOnPath: async (binary) =>
+          binary === 'llama'
+            ? 'C:\\Users\\paul\\AppData\\Local\\Microsoft\\WindowsApps\\llama.exe'
+            : null,
+      }),
+      'fr',
+    );
+    const llama = check(report, 'llama-server');
+    expect(llama.status).toBe('ok');
+    expect(llama.detail).toContain('WindowsApps\\llama.exe');
+  });
+
+  it('préfère llama-server au CLI unifié quand les deux existent', async () => {
+    const report = await runDoctor(
+      fakeEnv({
+        lookupOnPath: async (binary) =>
+          binary === 'llama-server'
+            ? 'C:\\tools\\llama\\llama-server.exe'
+            : 'C:\\WindowsApps\\llama.exe',
+      }),
+      'fr',
+    );
+    expect(check(report, 'llama-server').detail).toBe(
+      'C:\\tools\\llama\\llama-server.exe',
+    );
+  });
+
   it('privilégie le chemin configuré quand il existe', async () => {
     const report = await runDoctor(
       fakeEnv({

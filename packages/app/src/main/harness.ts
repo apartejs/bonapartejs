@@ -4,7 +4,8 @@
  * Toute la logique métier vit dans core — ici, uniquement du câblage.
  */
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
@@ -12,6 +13,7 @@ import {
   ChatSession,
   ConversationStore,
   createLlamaCppBackend,
+  detectServeCommandPrefix,
   fingerprintModelFile,
   KvStore,
   kvSlotsDir,
@@ -52,6 +54,25 @@ function realSpawn(binPath: string, args: string[]): ProcessHandle {
 
 function stripThink(raw: string): string {
   return raw.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
+}
+
+const execFileAsync = promisify(execFile);
+
+/** Tag de build du binaire (ex. b10217-ddd4ec142) — 'unknown' en dernier recours. */
+async function readBuildTag(binPath: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await execFileAsync(binPath, ['--version'], {
+      timeout: 5_000,
+      windowsHide: true,
+    });
+    const line = `${stdout}\n${stderr}`
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .find((l) => l.length > 0);
+    return line ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 export class Harness {
@@ -112,6 +133,8 @@ export class Harness {
         mode: 'managed',
         binPath: config.binPath,
         spawnFn: realSpawn,
+        // CLI unifié `llama` → sous-commande serve ; binaire historique → rien.
+        commandPrefix: detectServeCommandPrefix(config.binPath),
         launch: {
           modelPath: config.modelPath,
           port: 8763,
@@ -130,9 +153,7 @@ export class Harness {
         nCtx,
         cacheTypeK: cacheType,
         cacheTypeV: cacheType,
-        // v1 : le tag de build du binaire managé sera fourni par le
-        // téléchargeur (J5) ; 'unknown' ne matche que 'unknown'.
-        buildTag: 'unknown',
+        buildTag: await readBuildTag(config.binPath),
       };
     } else {
       backend = createLlamaCppBackend({ mode: 'remote', url: config.url });

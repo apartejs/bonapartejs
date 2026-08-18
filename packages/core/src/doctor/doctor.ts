@@ -89,7 +89,9 @@ async function checkLlamaServer(
         };
   }
 
-  const onPath = await env.lookupOnPath('llama-server');
+  // Binaire historique d'abord, puis le CLI unifié (`llama serve`, b10xxx+).
+  const onPath =
+    (await env.lookupOnPath('llama-server')) ?? (await env.lookupOnPath('llama'));
   return onPath
     ? { ...base, status: 'ok', blocking: false, detail: onPath }
     : { ...base, status: 'fail', blocking: true, detail: notFoundMessage };

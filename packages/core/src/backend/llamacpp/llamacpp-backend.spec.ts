@@ -173,6 +173,26 @@ describe('createLlamaCppBackend — managed', () => {
   });
 });
 
+describe('createLlamaCppBackend — CLI unifié', () => {
+  it('préfixe les args avec la sous-commande quand commandPrefix est fourni', async () => {
+    const server = await fakeServer();
+    const spawn = makeFakeSpawn();
+    const backend = createLlamaCppBackend({
+      mode: 'managed',
+      binPath: 'C:\\WindowsApps\\llama.exe',
+      launch: { modelPath: 'D:\\models\\qwen3.gguf', port: server.port },
+      spawnFn: spawn.spawnFn,
+      baseUrl: server.url,
+      healthIntervalMs: 5,
+      healthTimeoutMs: 300,
+      commandPrefix: ['serve'],
+    });
+    await backend.start();
+    expect(spawn.calls[0]!.args[0]).toBe('serve');
+    expect(spawn.calls[0]!.args).toContain('-m');
+  });
+});
+
 describe('createLlamaCppBackend — remote', () => {
   it('start() vérifie la santé puis délègue complete() au serveur', async () => {
     const server = await fakeServer({ responder: () => 'coucou' });

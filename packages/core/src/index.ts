@@ -42,6 +42,7 @@ export type { BackendType } from './backend/registry.js';
 export {
   buildLlamaServerArgs,
   createLlamaCppBackend,
+  detectServeCommandPrefix,
   LlamaCppHttpClient,
 } from './backend/llamacpp/llamacpp-backend.js';
 export type {
