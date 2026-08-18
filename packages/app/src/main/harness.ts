@@ -30,7 +30,10 @@ import {
   type BackendStatusDto,
   type ConversationOpenResultDto,
 } from '@aparte/bonaparte-shared';
+import { dialog } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
+import { createSystemDoctorEnv } from '@aparte/bonaparte-core';
+import type { PickFileKind, SetupSuggestionDto } from '@aparte/bonaparte-shared';
 
 const DEFAULT_CONVERSATION = 'default';
 
@@ -258,6 +261,35 @@ export class Harness {
     await this.backend?.stop().catch(() => undefined);
   }
 
+  async suggestSetup(): Promise<SetupSuggestionDto> {
+    const env = createSystemDoctorEnv();
+    const binPath =
+      (await env.lookupOnPath('llama-server')) ??
+      (await env.lookupOnPath('llama'));
+    return binPath ? { binPath } : {};
+  }
+
+  async pickFile(kind: PickFileKind): Promise<string | null> {
+    if (!this.window) return null;
+    const filters =
+      kind === 'gguf'
+        ? [
+            { name: 'Modèle GGUF', extensions: ['gguf'] },
+            { name: 'Tous les fichiers', extensions: ['*'] },
+          ]
+        : process.platform === 'win32'
+          ? [
+              { name: 'Exécutable', extensions: ['exe'] },
+              { name: 'Tous les fichiers', extensions: ['*'] },
+            ]
+          : [{ name: 'Tous les fichiers', extensions: ['*'] }];
+    const result = await dialog.showOpenDialog(this.window, {
+      properties: ['openFile'],
+      filters,
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  }
+
   registerIpc(ipcMain: IpcMain, appVersion: string): void {
     ipcMain.handle(IPC.appVersion, () => appVersion);
     ipcMain.handle(IPC.configGet, () => this.loadConfig());
@@ -273,5 +305,9 @@ export class Harness {
     );
     ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
     ipcMain.handle(IPC.kvSave, () => this.saveKv());
+    ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
+    ipcMain.handle(IPC.dialogPickFile, (_e, kind: PickFileKind) =>
+      this.pickFile(kind),
+    );
   }
 }

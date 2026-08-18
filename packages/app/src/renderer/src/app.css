@@ -186,6 +186,27 @@ button.primary {
   width: 140px;
 }
 
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+
+.field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-row button {
+  white-space: nowrap;
+}
+
+.field-hint {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--aparte-success, #2e7d32);
+}
+
 .setup-error {
   color: var(--aparte-error, #c0392b);
   font-size: 13px;

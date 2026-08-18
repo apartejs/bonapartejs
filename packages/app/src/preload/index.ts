@@ -15,6 +15,8 @@ import { contextBridge, ipcRenderer } from 'electron';
  * ne puissent pas contourner le moteur de permissions.
  */
 const api: BonaparteBridge = {
+  suggestSetup: () => ipcRenderer.invoke(IPC.setupSuggest),
+  pickFile: (kind) => ipcRenderer.invoke(IPC.dialogPickFile, kind),
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   getConfig: (): Promise<AppConfigDto> => ipcRenderer.invoke(IPC.configGet),
   setConfig: (config: AppConfigDto): Promise<void> =>

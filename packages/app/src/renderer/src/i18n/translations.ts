@@ -27,6 +27,8 @@ export interface AppTranslations {
     modelPath: string;
     modelPathPlaceholder: string;
     nCtx: string;
+    browse: string;
+    detected: string;
     start: string;
     starting: string;
     failed: string;
@@ -75,6 +77,8 @@ export const FR: AppTranslations = {
     modelPath: 'Modèle GGUF',
     modelPathPlaceholder: 'D:\\models\\qwen3.gguf',
     nCtx: 'Taille de contexte',
+    browse: 'Parcourir…',
+    detected: 'détecté sur cette machine',
     start: 'Lever le rideau',
     starting: 'Démarrage…',
     failed: 'Échec du démarrage',
@@ -131,6 +135,8 @@ export const EN: AppTranslations = {
     modelPath: 'GGUF model',
     modelPathPlaceholder: 'D:\\models\\qwen3.gguf',
     nCtx: 'Context size',
+    browse: 'Browse…',
+    detected: 'detected on this machine',
     start: 'Raise the curtain',
     starting: 'Starting…',
     failed: 'Startup failed',

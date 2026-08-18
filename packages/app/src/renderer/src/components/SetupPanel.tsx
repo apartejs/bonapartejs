@@ -1,5 +1,5 @@
-import type { BackendConfigDto } from '@aparte/bonaparte-shared';
-import { useState } from 'react';
+import type { BackendConfigDto, PickFileKind } from '@aparte/bonaparte-shared';
+import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
 interface SetupPanelProps {
@@ -22,6 +22,31 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   const [nCtx, setNCtx] = useState(
     initial?.mode === 'managed' && initial.nCtx ? String(initial.nCtx) : '8192',
   );
+  const [binDetected, setBinDetected] = useState(false);
+
+  // Pré-remplit le binaire llama détecté sur la machine (doctor lookup).
+  useEffect(() => {
+    void window.bonaparte.suggestSetup().then((suggestion) => {
+      if (suggestion.binPath) {
+        setBinPath((current) => {
+          if (current) return current;
+          setBinDetected(true);
+          return suggestion.binPath as string;
+        });
+      }
+    });
+  }, []);
+
+  const browse = async (kind: PickFileKind): Promise<void> => {
+    const picked = await window.bonaparte.pickFile(kind);
+    if (!picked) return;
+    if (kind === 'binary') {
+      setBinPath(picked);
+      setBinDetected(false);
+    } else {
+      setModelPath(picked);
+    }
+  };
 
   const canSubmit =
     !busy && (mode === 'remote' ? url.trim() !== '' : binPath.trim() !== '' && modelPath.trim() !== '');
@@ -81,22 +106,40 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
         ) : (
           <>
             <label className="field">
-              <span>{t.setup.binPath}</span>
-              <input
-                value={binPath}
-                onChange={(e) => setBinPath(e.target.value)}
-                placeholder={t.setup.binPathPlaceholder}
-                spellCheck={false}
-              />
+              <span>
+                {t.setup.binPath}
+                {binDetected && (
+                  <em className="field-hint"> — {t.setup.detected}</em>
+                )}
+              </span>
+              <span className="field-row">
+                <input
+                  value={binPath}
+                  onChange={(e) => {
+                    setBinPath(e.target.value);
+                    setBinDetected(false);
+                  }}
+                  placeholder={t.setup.binPathPlaceholder}
+                  spellCheck={false}
+                />
+                <button type="button" onClick={() => void browse('binary')}>
+                  {t.setup.browse}
+                </button>
+              </span>
             </label>
             <label className="field">
               <span>{t.setup.modelPath}</span>
-              <input
-                value={modelPath}
-                onChange={(e) => setModelPath(e.target.value)}
-                placeholder={t.setup.modelPathPlaceholder}
-                spellCheck={false}
-              />
+              <span className="field-row">
+                <input
+                  value={modelPath}
+                  onChange={(e) => setModelPath(e.target.value)}
+                  placeholder={t.setup.modelPathPlaceholder}
+                  spellCheck={false}
+                />
+                <button type="button" onClick={() => void browse('gguf')}>
+                  {t.setup.browse}
+                </button>
+              </span>
             </label>
             <label className="field field-narrow">
               <span>{t.setup.nCtx}</span>

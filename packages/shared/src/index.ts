@@ -23,6 +23,8 @@ export const IPC = {
   conversationOpen: 'conversation.open',
   agentSend: 'agent.send',
   kvSave: 'kv.save',
+  setupSuggest: 'setup.suggest',
+  dialogPickFile: 'dialog.pickFile',
   /** Événements poussés main → renderer. */
   evAgent: 'ev.agent',
   evBackendStatus: 'ev.backendStatus',
@@ -89,11 +91,20 @@ export interface ConversationOpenResultDto {
   restore: RestoreDto;
 }
 
+/** Pré-remplissage du panneau de configuration (détection machine). */
+export interface SetupSuggestionDto {
+  binPath?: string;
+}
+
+export type PickFileKind = 'binary' | 'gguf';
+
 /**
  * Contrat du pont preload → renderer (window.bonaparte). Le preload
  * l'implémente, le renderer le consomme — jamais d'ipcRenderer brut exposé.
  */
 export interface BonaparteBridge {
+  suggestSetup(): Promise<SetupSuggestionDto>;
+  pickFile(kind: PickFileKind): Promise<string | null>;
   getVersion(): Promise<string>;
   getConfig(): Promise<AppConfigDto>;
   setConfig(config: AppConfigDto): Promise<void>;
