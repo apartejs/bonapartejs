@@ -4,11 +4,13 @@
  * brut, pas de grammaire, pas de format Hermes — des `messages[]`, des outils
  * déclarés en JSON, et des appels d'outils déjà structurés par le serveur.
  *
- * Note : `@aparte/provider-openai-compat` fait exactement ce mapping, mais
- * n'est pas importable depuis Node aujourd'hui (son import runtime de
- * `@aparte/core` charge les web components, qui touchent `customElements` au
- * niveau module). Cet adaptateur le remplace en attendant — voir le journal
- * de friction ; il sera remplacé par le provider de la lib dès que possible.
+ * À REMPLACER : `@aparte/provider-openai-compat` fait exactement ce mapping,
+ * y compris `include_usage` et `prompt_tokens_details.cached_tokens`. J'avais
+ * écrit ici qu'il n'était pas importable depuis Node — c'était faux :
+ * `@aparte/core` déclare une condition `node` dans sa map d'exports, qui
+ * résout vers un `index.node.js` sans DOM (vérifié par un import réel). Cet
+ * adaptateur ne survit donc que le temps de brancher le provider de la lib
+ * derrière notre interface `Backend`.
  */
 
 import type {
