@@ -53,3 +53,13 @@ export type {
   SpawnFn,
 } from './backend/llamacpp/llamacpp-backend.js';
 export { LlamaCppHttpError } from './backend/llamacpp/http-client.js';
+
+export type {
+  KvManifest,
+  LiveBackendConfig,
+  RestoreOutcome,
+  RestoreRefusalReason,
+  RestoreVerdict,
+} from './kv/kv-store.js';
+export { canRestore, KvStore } from './kv/kv-store.js';
+export { fingerprintModelFile } from './kv/fingerprint.js';
