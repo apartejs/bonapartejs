@@ -1,7 +1,11 @@
 /// <reference types="vite/client" />
 
-interface Window {
-  bonaparte: {
-    getVersion(): Promise<string>;
-  };
+import type { BonaparteBridge } from '@aparte/bonaparte-shared';
+
+declare global {
+  interface Window {
+    bonaparte: BonaparteBridge;
+  }
 }
+
+export {};

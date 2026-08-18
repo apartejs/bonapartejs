@@ -1,6 +1,9 @@
 import { join } from 'node:path';
-import { IPC } from '@aparte/bonaparte-shared';
 import { BrowserWindow, app, ipcMain } from 'electron';
+import { Harness } from './harness.js';
+
+const harness = new Harness();
+let quitting = false;
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -23,7 +26,19 @@ function createWindow(): void {
     },
   });
 
+  harness.attachWindow(win);
   win.once('ready-to-show', () => win.show());
+
+  // À la fermeture : sauvegarde de l'état KV avant de laisser partir.
+  win.on('close', (event) => {
+    if (quitting) return;
+    event.preventDefault();
+    quitting = true;
+    void harness
+      .shutdown()
+      .catch(() => undefined)
+      .finally(() => win.destroy());
+  });
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) {
@@ -34,8 +49,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  ipcMain.handle(IPC.appVersion, () => app.getVersion());
-
+  harness.registerIpc(ipcMain, app.getVersion());
   createWindow();
 
   app.on('activate', () => {

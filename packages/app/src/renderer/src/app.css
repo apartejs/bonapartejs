@@ -21,6 +21,7 @@ body {
   background: var(--aparte-bg);
   color: var(--aparte-text);
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 
 h1,
@@ -38,70 +39,278 @@ h3 {
   margin: 0 0 12px;
 }
 
-.hero {
-  height: 100%;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-}
-
-.hero-card {
-  text-align: center;
-  padding: 48px 56px;
-  background: var(--aparte-surface-1);
-  border: 1px solid var(--aparte-border);
-  border-radius: 14px;
-  animation: hero-in 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.wordmark {
-  font-size: 40px;
-  font-weight: 600;
-  margin: 0;
-  letter-spacing: 0.01em;
-}
-
-.mascot {
-  color: var(--aparte-primary);
-  font-family: var(--bp-serif);
-}
-
-.tagline {
-  margin: 10px 0 0;
-  font-size: 15px;
-  color: var(--aparte-text-muted);
-}
-
-.note {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--aparte-text-muted);
-}
-
-.hero-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 28px;
-}
-
-.hero-actions button {
+button {
   font-family: var(--bp-sans);
   font-size: 13px;
-  padding: 8px 16px;
+  padding: 7px 14px;
   border-radius: 10px;
   border: 1px solid var(--aparte-border);
   background: var(--aparte-surface-2);
   color: var(--aparte-text);
   cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  transition: border-color 160ms ease, background 160ms ease, opacity 160ms ease;
 }
 
-.hero-actions button:hover {
+button:hover:not(:disabled) {
   border-color: var(--aparte-primary);
 }
 
-@keyframes hero-in {
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--aparte-primary);
+  border-color: var(--aparte-primary);
+  color: var(--aparte-text-inverse, #fff);
+  font-weight: 600;
+}
+
+/* ── Shell ─────────────────────────────────────────────────────────── */
+
+.app-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* ── Chat (la lib exige une chaîne de hauteurs contrainte) ─────────── */
+
+.chat-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.chat-wrap > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Setup ─────────────────────────────────────────────────────────── */
+
+.setup-wrap {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.setup-card {
+  width: min(520px, 100%);
+  padding: 36px 40px;
+  background: var(--aparte-surface-1);
+  border: 1px solid var(--aparte-border);
+  border-radius: 14px;
+  animation: card-in 480ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.setup-card h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+}
+
+.setup-intro {
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  color: var(--aparte-text-muted);
+  line-height: 1.5;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--aparte-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+
+.segmented button {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 7px 16px;
+}
+
+.segmented button.active {
+  background: var(--aparte-primary);
+  color: var(--aparte-text-inverse, #fff);
+  font-weight: 600;
+}
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field span {
+  display: block;
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aparte-text-muted);
+  margin-bottom: 5px;
+}
+
+.field input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text);
+  font-family: var(--bp-mono);
+  font-size: 13px;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--aparte-primary);
+}
+
+.field-narrow input {
+  width: 140px;
+}
+
+.setup-error {
+  color: var(--aparte-error, #c0392b);
+  font-size: 13px;
+  margin: 4px 0 12px;
+}
+
+.setup-card .primary {
+  margin-top: 6px;
+}
+
+/* ── Barre de statut ───────────────────────────────────────────────── */
+
+.status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-1);
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.status-right button {
+  padding: 5px 11px;
+  font-size: 12px;
+}
+
+.status-pill {
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--aparte-border);
+  color: var(--aparte-text-muted);
+}
+
+.status-ready {
+  color: var(--aparte-success, #2e7d32);
+  border-color: currentColor;
+}
+
+.status-crashed {
+  color: var(--aparte-error, #c0392b);
+  border-color: currentColor;
+}
+
+.status-starting,
+.status-restarting {
+  color: var(--aparte-primary);
+  border-color: currentColor;
+}
+
+.status-chip {
+  font-size: 12px;
+}
+
+.chip-ok {
+  color: var(--aparte-success, #2e7d32);
+}
+
+.chip-dim {
+  color: var(--aparte-text-muted);
+}
+
+.chip-err {
+  color: var(--aparte-error, #c0392b);
+}
+
+/* ── Mascotte ──────────────────────────────────────────────────────── */
+
+.mascotte {
+  font-family: var(--bp-serif);
+  color: var(--aparte-primary);
+  font-size: 15px;
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.mascotte-dots {
+  animation: mascotte-dots 1.2s steps(4, end) infinite;
+}
+
+.mascotte-caret {
+  animation: mascotte-caret 900ms steps(2, end) infinite;
+}
+
+.mascotte[data-state='sleeping'] .mascotte-face {
+  opacity: 0.55;
+}
+
+@keyframes mascotte-dots {
+  0% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes mascotte-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes card-in {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -113,7 +322,9 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-card {
+  .setup-card,
+  .mascotte-dots,
+  .mascotte-caret {
     animation: none;
   }
 }
