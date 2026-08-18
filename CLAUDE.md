@@ -71,5 +71,8 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
 - Plan v1 approuvé : `docs/superpowers/specs/2026-08-18-bonaparte-v1-design.md`
 - La machine de Paul a le **CLI unifié `llama`** (WindowsApps) : serveur =
   `llama serve`, mêmes flags que llama-server (`detectServeCommandPrefix()`).
-- Jalons : J1 fondations+KV ✅ (validation Paul en attente) · J2 boucle
-  agentique/outils/permissions/projet · J3 shell plugin-first · J4 MCP · J5 npx.
+- Jalons : J1 fondations+KV ✅ (validé en réel par Paul le 2026-08-18 : conv
+  lancée sur serveur managé) · J2 boucle agentique/outils/permissions/projet ·
+  J3 shell plugin-first (hub Réglages schema-driven, vraie barre de statut —
+  l'écran de distribution et les boutons de la barre actuels sont des
+  intérimaires assumés) · J4 MCP · J5 npx.

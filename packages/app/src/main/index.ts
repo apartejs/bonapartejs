@@ -60,3 +60,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// Ceinture et bretelles : même si la fenêtre a sauté l'étape close (crash
+// renderer, quit forcé), le serveur de modèle ne doit jamais survivre à l'app.
+app.on('will-quit', () => {
+  void harness.shutdown().catch(() => undefined);
+});

@@ -58,6 +58,11 @@ export interface ModelInfoDto {
 
 export interface AppConfigDto {
   backend?: BackendConfigDto;
+  /** Modèle par défaut des nouvelles conversations (réglable dans Réglages). */
+  defaultModel?: {
+    path: string;
+    nCtx?: number;
+  };
 }
 
 export type BackendStatusDto =

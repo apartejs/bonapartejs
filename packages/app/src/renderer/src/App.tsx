@@ -78,7 +78,8 @@ export function App() {
       setError(null);
       try {
         await window.bonaparte.startBackend(engine);
-        await window.bonaparte.setConfig({ backend: engine });
+        const existing = await window.bonaparte.getConfig();
+        await window.bonaparte.setConfig({ ...existing, backend: engine });
         setConfig(engine);
         setBusy(false);
         await tryOpen();
@@ -137,9 +138,17 @@ export function App() {
           <ModelPicker
             busy={busy}
             error={error}
-            onPick={(modelPath, nCtx) =>
-              void tryOpen(pendingConv.current, modelPath, nCtx)
-            }
+            onPick={(modelPath, nCtx) => {
+              // Le choix devient aussi le défaut des futures conversations —
+              // l'écran de distribution ne réapparaîtra plus (hub Réglages en J3).
+              if (config) {
+                void window.bonaparte.setConfig({
+                  backend: config,
+                  defaultModel: { path: modelPath, nCtx },
+                });
+              }
+              void tryOpen(pendingConv.current, modelPath, nCtx);
+            }}
           />
         ) : opened ? (
           <ChatScreen

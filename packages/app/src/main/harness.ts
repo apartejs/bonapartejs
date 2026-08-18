@@ -65,7 +65,16 @@ function realSpawn(binPath: string, args: string[]): ProcessHandle {
   return {
     onExit: (cb) => child.on('exit', (code) => cb(code)),
     kill: () => {
-      child.kill();
+      // Windows : le CLI unifié `llama serve` est un lanceur qui spawne le
+      // vrai serveur en enfant — child.kill() ne tuerait que le lanceur et
+      // laisserait le modèle chargé en VRAM. taskkill /T abat tout l'arbre.
+      if (process.platform === 'win32' && child.pid) {
+        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+          windowsHide: true,
+        });
+      } else {
+        child.kill();
+      }
     },
   };
 }
@@ -263,19 +272,20 @@ export class Harness {
   ): Promise<ConversationOpenReplyDto> {
     if (!this.engine) throw new Error('Moteur non configuré.');
 
-    // Résout modèle + nCtx : méta épinglée > paramètres > à choisir.
+    // Résout modèle + nCtx : méta épinglée > paramètres > défaut des Réglages.
+    const defaults = (await this.loadConfig()).defaultModel;
     let convModel: string | undefined;
     let convNCtx: number | undefined;
     if (await this.store.exists(id)) {
       const meta = await this.store.meta(id);
-      convModel = meta.modelPath ?? modelPath;
-      convNCtx = meta.nCtx ?? nCtx;
-      if (!meta.modelPath && modelPath) {
-        await this.store.setModel(id, modelPath, nCtx);
+      convModel = meta.modelPath ?? modelPath ?? defaults?.path;
+      convNCtx = meta.nCtx ?? nCtx ?? defaults?.nCtx;
+      if (!meta.modelPath && convModel) {
+        await this.store.setModel(id, convModel, convNCtx);
       }
     } else {
-      convModel = modelPath;
-      convNCtx = nCtx;
+      convModel = modelPath ?? defaults?.path;
+      convNCtx = nCtx ?? defaults?.nCtx;
     }
 
     if (this.engine.mode === 'managed') {
