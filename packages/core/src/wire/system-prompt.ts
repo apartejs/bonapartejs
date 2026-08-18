@@ -18,7 +18,8 @@ import type { ToolOutcome } from '../backend/types.js';
 import type { ToolDef, ToolInventoryDelta } from '../tools/types.js';
 
 export interface SystemPromptOptions {
-  projectRoot: string;
+  /** Absent = aucun projet ouvert (les outils disque sont indisponibles). */
+  projectRoot?: string;
   tools: ToolDef[];
   /** Langue attendue des réponses, en clair (ex. « French »). */
   replyLanguage?: string;
@@ -39,8 +40,12 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   const blocks = [
     'You are bonaparte, a local-first coding agent working on a real project. ' +
       'Be precise and concise. Verify with tools instead of assuming.',
-    `Open project: ${options.projectRoot}\n` +
-      'All tool paths are relative to this root, and you cannot step outside it.',
+    options.projectRoot
+      ? `Open project: ${options.projectRoot}\n` +
+        'All tool paths are relative to this root, and you cannot step outside it.'
+      : 'No project is open, so file and shell tools are unavailable. You can ' +
+        'still discuss and reason; if the user needs you to act on files, ask ' +
+        'them to open a project folder.',
     'Available tools:\n' + renderToolInventory(options.tools),
     'To call a tool, emit exactly:\n' +
       '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +

@@ -50,7 +50,7 @@ export class TranscriptRenderer {
   ensureSystemPrompt(system: SystemSpec, tools: ToolDefLike[]): string {
     if (this.frozenSystemPrompt === null) {
       this.frozenSystemPrompt = buildSystemPrompt({
-        projectRoot: system.projectRoot,
+        ...(system.projectRoot ? { projectRoot: system.projectRoot } : {}),
         tools: tools.map((t) => ({ ...t, effect: 'read' as const })),
         ...(system.replyLanguage ? { replyLanguage: system.replyLanguage } : {}),
         ...(system.projectInstructions
@@ -67,9 +67,9 @@ export class TranscriptRenderer {
     tools: ToolDefLike[],
     options: { thinking?: boolean } = {},
   ): RenderedTurn {
-    this.ensureSystemPrompt(system, tools);
+    const systemPrompt = this.ensureSystemPrompt(system, tools);
     if (this.log === null) {
-      this.log = new PromptLog(this.frozenSystemPrompt);
+      this.log = new PromptLog(systemPrompt);
       this.rendered = 0;
     }
     if (this.turnOpen) {

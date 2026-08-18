@@ -85,6 +85,8 @@ export const FR: AppTranslations = {
     crashed: 'en panne',
     restarting: 'redémarrage…',
     notConnected: 'moteur non connecté',
+    noProject: 'aucun projet',
+    openProjectHint: 'Ouvrir un projet donne à l’agent ses outils fichiers et shell',
     restored: 'contexte restauré',
     notRestored: 'reprise à froid',
     reasons: {

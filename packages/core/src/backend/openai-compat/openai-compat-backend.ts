@@ -166,7 +166,9 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
 
     async *runTurn(request: TurnRequest): AsyncIterable<ProviderEvent> {
       const systemPrompt = buildSystemPrompt({
-        projectRoot: request.system.projectRoot,
+        ...(request.system.projectRoot
+          ? { projectRoot: request.system.projectRoot }
+          : {}),
         // Pas de bloc « format d'appel » : le serveur gère les outils nativement.
         tools: [],
         ...(request.system.replyLanguage

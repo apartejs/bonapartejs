@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { BrowserWindow, app, ipcMain } from 'electron';
+import { BrowserWindow, Menu, app, ipcMain } from 'electron';
 import { Harness } from './harness.js';
 
 const harness = new Harness();
@@ -49,6 +49,10 @@ function createWindow(): void {
 }
 
 app.whenReady().then(async () => {
+  // Pas de barre de menu : l'app porte sa propre navigation. Sur macOS on la
+  // garde, le système y attache les raccourcis d'édition standard.
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+
   harness.registerIpc(ipcMain, app.getVersion());
   await harness.restoreSession();
   createWindow();

@@ -135,7 +135,12 @@ export type TranscriptEntry =
   | { role: 'service'; text: string };
 
 export interface SystemSpec {
-  projectRoot: string;
+  /**
+   * Projet ouvert. Absent = discussion sans projet : les outils qui touchent
+   * au disque ne sont simplement pas dans l'inventaire, mais la conversation
+   * fonctionne. Ouvrir un projet plus tard les annonce par un delta.
+   */
+  projectRoot?: string;
   replyLanguage?: string;
   projectInstructions?: string;
 }

@@ -215,11 +215,19 @@ export class AgentLoop {
       }
     }
 
+    const projectRoot = this.options.system.projectRoot;
+    if (!projectRoot) {
+      // Sans projet, les outils disque ne sont pas dans l'inventaire ; ce
+      // garde-fou couvre un outil enregistré par ailleurs.
+      return {
+        name,
+        ok: false,
+        content: `No project is open, so ${name} cannot run. Ask the user to open a project folder.`,
+      };
+    }
+
     try {
-      const result = await registered.handler(args, {
-        projectRoot: this.options.system.projectRoot,
-        signal,
-      });
+      const result = await registered.handler(args, { projectRoot, signal });
       return { name, ok: result.ok, content: result.content };
     } catch (error) {
       return {

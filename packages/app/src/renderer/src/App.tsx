@@ -12,12 +12,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ModelPicker } from './components/ModelPicker.js';
-import { ProjectGate } from './components/ProjectGate.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
 import { useTranslate } from './i18n/LocaleProvider.js';
 
-type View = 'boot' | 'setup' | 'pickProject' | 'pickModel' | 'chat';
+type View = 'boot' | 'setup' | 'pickModel' | 'chat';
 
 function currentTheme(): 'dark' | 'light' {
   return document.documentElement.getAttribute('data-aparte-theme') === 'dark'
@@ -88,9 +87,7 @@ export function App() {
       setError(null);
       try {
         const reply = await window.bonaparte.openConversation(id, modelPath, nCtx);
-        if ('needsProject' in reply) {
-          setView('pickProject');
-        } else if ('needsModel' in reply) {
+        if ('needsModel' in reply) {
           pendingConv.current = reply.conversationId;
           setView('pickModel');
         } else {
@@ -144,10 +141,6 @@ export function App() {
       // message — lancer l'app ne doit charger aucun modèle.
       await window.bonaparte.registerBackend(appConfig.backend);
       const history = await window.bonaparte.conversationHistory();
-      if ('needsProject' in history) {
-        setView('pickProject');
-        return;
-      }
       if ('needsModel' in history) {
         setView('pickModel');
         return;
@@ -156,6 +149,15 @@ export function App() {
       setView('chat');
     })();
   }, [startWith]);
+
+  const openProject = useCallback(async () => {
+    const project = await window.bonaparte.openProject();
+    if (!project) return;
+    setProjectName(project.name);
+    // Le projet change l'inventaire d'outils : on rouvre la conversation
+    // pour que le delta soit annoncé au modèle.
+    await tryOpen();
+  }, [tryOpen]);
 
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
@@ -184,16 +186,7 @@ export function App() {
             error={error}
             onSubmit={(engine) => void startWith(engine)}
           />
-        ) : view === 'pickProject' ? (
-          <ProjectGate
-            busy={busy}
-            error={error}
-            onOpen={(project) => {
-              setProjectName(project.name);
-              void tryOpen();
-            }}
-          />
-        ) : view === 'pickModel' ? (
+                ) : view === 'pickModel' ? (
           <ModelPicker
             busy={busy}
             error={error}
@@ -226,6 +219,7 @@ export function App() {
         mode={mode}
         onModeChange={changeMode}
         projectName={projectName}
+        onOpenProject={() => void openProject()}
         modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
         lastStats={lastStats}

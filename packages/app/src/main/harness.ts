@@ -56,6 +56,8 @@ import type { BrowserWindow, IpcMain } from 'electron';
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
 const DEFAULT_CONVERSATION = 'default';
+/** Conversation hors projet : discuter ne doit jamais exiger un dossier. */
+const NO_PROJECT_CONVERSATION = 'no-project-default';
 const MANAGED_PORT = 8763;
 
 // Le prompt système est désormais construit par ChatSession depuis
@@ -145,9 +147,19 @@ export class Harness {
   );
   private readonly configPath = join(bonaparteDataDir(), 'config', 'global.json');
 
-  constructor() {
-    for (const tool of builtinTools()) {
-      this.registry.register(tool.def, tool.handler, 'builtin');
+  /**
+   * Les outils disque suivent le projet : sans projet, ils ne sont PAS dans
+   * l'inventaire (donc inémettables), et en ouvrir un les annonce par un
+   * delta d'inventaire dans les conversations en cours.
+   */
+  private syncToolsWithProject(): void {
+    const registered = this.registry.list().length > 0;
+    if (this.projectRoot && !registered) {
+      for (const tool of builtinTools()) {
+        this.registry.register(tool.def, tool.handler, 'builtin');
+      }
+    } else if (!this.projectRoot && registered) {
+      for (const tool of builtinTools()) this.registry.unregister(tool.def.name);
     }
   }
 
@@ -159,6 +171,7 @@ export class Harness {
   async restoreSession(): Promise<void> {
     const config = await this.loadConfig();
     if (config.projectRoot) this.projectRoot = config.projectRoot;
+    this.syncToolsWithProject();
     if (config.mode) this.permissions.setMode(config.mode as PlayMode);
   }
 
@@ -186,6 +199,7 @@ export class Harness {
 
     this.projectRoot = picked;
     this.session = null;
+    this.syncToolsWithProject();
 
     const config = await this.loadConfig();
     const recents = [picked, ...(config.recentProjects ?? []).filter((p) => p !== picked)]
@@ -419,9 +433,10 @@ export class Harness {
     nCtx?: number,
   ): Promise<ConversationOpenReplyDto> {
     if (!this.engine) throw new Error('Moteur non configuré.');
-    // Un agent de code travaille sur un dossier : pas de projet, pas de tour.
-    if (!this.projectRoot) return { needsProject: true };
-    id ??= conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION);
+    // Sans projet on discute quand même : seuls les outils disque manquent.
+    id ??= this.projectRoot
+      ? conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION)
+      : NO_PROJECT_CONVERSATION;
 
     // Résout modèle + nCtx : méta épinglée > paramètres > défaut des Réglages.
     const defaults = (await this.loadConfig()).defaultModel;
@@ -466,7 +481,7 @@ export class Harness {
         store: this.store,
         registry: this.registry,
         permissions: this.permissions,
-        projectRoot: this.projectRoot,
+        ...(this.projectRoot ? { projectRoot: this.projectRoot } : {}),
         approve: this.approve,
         // Le fil est anglais ; seule la langue de réponse suit l'utilisateur.
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
@@ -512,8 +527,9 @@ export class Harness {
    * n'a lieu qu'au premier message.
    */
   async conversationHistory(): Promise<ConversationOpenReplyDto> {
-    if (!this.projectRoot) return { needsProject: true };
-    const id = conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION);
+    const id = this.projectRoot
+      ? conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION)
+      : NO_PROJECT_CONVERSATION;
     if (!(await this.store.exists(id))) {
       return { conversationId: id, events: [], restore: { restored: false, reason: 'missing' } };
     }
@@ -545,13 +561,10 @@ export class Harness {
     // Connexion paresseuse : c'est le premier message qui réveille le moteur.
     if (!this.session && this.engine) {
       const reply = await this.openConversation();
-      if ('needsModel' in reply || 'needsProject' in reply) {
+      if ('needsModel' in reply) {
         this.emit(IPC.evAgent, {
           type: 'error',
-          message:
-            'needsModel' in reply
-              ? 'Aucun modèle choisi pour cette conversation.'
-              : 'Aucun projet ouvert.',
+          message: 'Aucun modèle choisi pour cette conversation.',
         } satisfies AgentEventDto);
         return;
       }

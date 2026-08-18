@@ -84,6 +84,8 @@ export const EN: AppTranslations = {
     crashed: 'crashed',
     restarting: 'restarting…',
     notConnected: 'engine not connected',
+    noProject: 'no project',
+    openProjectHint: 'Opening a project gives the agent its file and shell tools',
     restored: 'context restored',
     notRestored: 'cold start',
     reasons: {

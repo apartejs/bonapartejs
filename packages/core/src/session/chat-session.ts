@@ -28,8 +28,8 @@ export interface ChatSessionOptions {
   store: ConversationStore;
   registry: ToolRegistry;
   permissions: PermissionEngine;
-  /** Racine du projet ouvert : contexte des outils et du prompt. */
-  projectRoot: string;
+  /** Projet ouvert — absent = discussion sans outils disque. */
+  projectRoot?: string;
   live: LiveBackendConfig;
   /** Langue attendue des réponses (ex. « French ») — le fil reste anglais. */
   replyLanguage?: string;
@@ -78,7 +78,7 @@ export class ChatSession {
       permissions: options.permissions,
       conversationId,
       system: {
-        projectRoot: options.projectRoot,
+        ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
         ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
         ...(options.projectInstructions
           ? { projectInstructions: options.projectInstructions }
@@ -94,7 +94,7 @@ export class ChatSession {
     backend.prepareConversation?.(
       conversationId,
       {
-        projectRoot: options.projectRoot,
+        ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
         ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
         ...(options.projectInstructions
           ? { projectInstructions: options.projectInstructions }

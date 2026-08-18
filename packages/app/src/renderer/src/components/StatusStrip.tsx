@@ -16,6 +16,7 @@ interface StatusStripProps {
   mode: PlayModeDto;
   onModeChange: (mode: PlayModeDto) => void;
   projectName: string | null;
+  onOpenProject: () => void;
   modelName: string | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
@@ -51,6 +52,7 @@ export function StatusStrip({
   mode,
   onModeChange,
   projectName,
+  onOpenProject,
   modelName,
   restore,
   lastStats,
@@ -74,11 +76,16 @@ export function StatusStrip({
         <span className={`status-pill status-${backendStatus}`}>
           {t.status[backendStatus]}
         </span>
-        {projectName && (
-          <span className="status-chip chip-project" title={projectName}>
-            {projectName}
-          </span>
-        )}
+        {/* Le projet n'est jamais un prérequis : on discute sans, et l'ouvrir
+            donne accès aux outils disque (annoncés par un delta). */}
+        <button
+          type="button"
+          className={`chip-button ${projectName ? 'chip-project' : 'chip-dim'}`}
+          title={projectName ?? t.status.openProjectHint}
+          onClick={onOpenProject}
+        >
+          {projectName ?? t.status.noProject}
+        </button>
         {modelName && (
           <span className="status-chip chip-model" title={modelName}>
             {modelName}

@@ -427,6 +427,25 @@ button.primary {
   color: var(--aparte-primary);
 }
 
+/* Puce cliquable : ouvrir un projet reste une action, jamais un passage obligé. */
+.chip-button {
+  font-family: var(--bp-mono);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px dashed var(--aparte-border);
+  background: transparent;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-button.chip-project {
+  border-style: solid;
+  border-color: var(--aparte-primary);
+}
+
 .recent-row {
   display: block;
   width: 100%;

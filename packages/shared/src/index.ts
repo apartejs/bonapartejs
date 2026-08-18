@@ -180,15 +180,7 @@ export interface NeedsModelDto {
   conversationId: string;
 }
 
-/** L'ouverture exige un projet : un agent de code travaille sur un dossier. */
-export interface NeedsProjectDto {
-  needsProject: true;
-}
-
-export type ConversationOpenReplyDto =
-  | ConversationOpenResultDto
-  | NeedsModelDto
-  | NeedsProjectDto;
+export type ConversationOpenReplyDto = ConversationOpenResultDto | NeedsModelDto;
 
 /** Pré-remplissage du panneau de configuration (détection machine). */
 export interface SetupSuggestionDto {
