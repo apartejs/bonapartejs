@@ -3,7 +3,24 @@ import { BrowserWindow, Menu, app, ipcMain } from 'electron';
 import { Harness } from './harness.js';
 
 const harness = new Harness();
-let quitting = false;
+
+/**
+ * Arrêt propre, exécuté une seule fois et ATTENDU par tous les chemins de
+ * sortie. Sans cette garantie, Electron quitte pendant que la sauvegarde KV
+ * et l'arrêt du serveur sont encore en vol — et le modèle survit à l'app.
+ */
+let shutdownPromise: Promise<void> | null = null;
+let shutdownDone = false;
+
+function shutdownOnce(): Promise<void> {
+  shutdownPromise ??= harness
+    .shutdown()
+    .catch((error) => console.error('[shutdown]', error))
+    .finally(() => {
+      shutdownDone = true;
+    });
+  return shutdownPromise;
+}
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -29,15 +46,12 @@ function createWindow(): void {
   harness.attachWindow(win);
   win.once('ready-to-show', () => win.show());
 
-  // À la fermeture : sauvegarde de l'état KV avant de laisser partir.
+  // À la fermeture : sauvegarde de l'état KV et arrêt du serveur AVANT de
+  // laisser la fenêtre partir.
   win.on('close', (event) => {
-    if (quitting) return;
+    if (shutdownDone) return;
     event.preventDefault();
-    quitting = true;
-    void harness
-      .shutdown()
-      .catch(() => undefined)
-      .finally(() => win.destroy());
+    void shutdownOnce().finally(() => win.destroy());
   });
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
@@ -68,6 +82,10 @@ app.on('window-all-closed', () => {
 
 // Ceinture et bretelles : même si la fenêtre a sauté l'étape close (crash
 // renderer, quit forcé), le serveur de modèle ne doit jamais survivre à l'app.
-app.on('will-quit', () => {
-  void harness.shutdown().catch(() => undefined);
+// On RETARDE la sortie le temps du nettoyage — un `void` ne suffisait pas :
+// Electron quittait avant que le kill ne parte.
+app.on('before-quit', (event) => {
+  if (shutdownDone) return;
+  event.preventDefault();
+  void shutdownOnce().finally(() => app.quit());
 });

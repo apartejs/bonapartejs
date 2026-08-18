@@ -6,8 +6,8 @@
  * active. Toute la logique métier vit dans core — ici, uniquement du câblage.
  */
 
-import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { execFile, spawn, spawnSync } from 'node:child_process';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
@@ -69,22 +69,46 @@ function realSpawn(binPath: string, args: string[]): ProcessHandle {
   const child = spawn(binPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
+    // POSIX : le serveur devient chef de son groupe, pour qu'on puisse
+    // abattre tout l'arbre d'un coup (cf. kill).
+    ...(process.platform === 'win32' ? {} : { detached: true }),
   });
   child.stderr?.on('data', (chunk: Buffer) => {
     console.log(`[llama-server] ${chunk.toString('utf8').trimEnd()}`);
   });
+  void rememberSpawnedPid(child.pid);
   return {
-    onExit: (cb) => child.on('exit', (code) => cb(code)),
+    onExit: (cb) =>
+      child.on('exit', (code) => {
+        void forgetSpawnedPid();
+        cb(code);
+      }),
     kill: () => {
       // Windows : le CLI unifié `llama serve` est un lanceur qui spawne le
       // vrai serveur en enfant — child.kill() ne tuerait que le lanceur et
       // laisserait le modèle chargé en VRAM. taskkill /T abat tout l'arbre.
+      //
+      // SYNCHRONE volontairement : à la fermeture, un taskkill asynchrone
+      // n'a pas le temps de démarrer avant qu'Electron ne quitte, et le
+      // serveur survit à l'app (constaté : un llama-server orphelin de
+      // 24 Go). Bloquer ~50 ms au shutdown est le prix de la certitude.
       if (process.platform === 'win32' && child.pid) {
-        spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
-          windowsHide: true,
-        });
+        try {
+          spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+            windowsHide: true,
+            timeout: 5_000,
+          });
+        } catch {
+          child.kill(); // dernier recours
+        }
       } else {
-        child.kill();
+        // POSIX : tuer le groupe de process, pas seulement le lanceur.
+        try {
+          if (child.pid) process.kill(-child.pid, 'SIGTERM');
+          else child.kill();
+        } catch {
+          child.kill();
+        }
       }
     },
   };
@@ -112,6 +136,81 @@ async function readBuildTag(binPath: string): Promise<string> {
     return line ?? 'unknown';
   } catch {
     return 'unknown';
+  }
+}
+
+/**
+ * Trace du serveur managé en cours, pour le nettoyer au démarrage suivant si
+ * l'app est morte sans arrêt propre (crash, kill -9, rechargement à chaud en
+ * développement). Sinon un modèle de plusieurs Go reste en mémoire sans que
+ * rien ne le rattache à quoi que ce soit.
+ */
+const PID_FILE = join(bonaparteDataDir(), 'managed-server.pid');
+
+async function rememberSpawnedPid(pid: number | undefined): Promise<void> {
+  if (!pid) return;
+  try {
+    await mkdir(dirname(PID_FILE), { recursive: true });
+    await writeFile(PID_FILE, String(pid), 'utf8');
+  } catch {
+    /* la trace est un confort, jamais un prérequis */
+  }
+}
+
+async function forgetSpawnedPid(): Promise<void> {
+  try {
+    await rm(PID_FILE, { force: true });
+  } catch {
+    /* idem */
+  }
+}
+
+/** Le process existe-t-il encore ET est-ce bien un llama ? (garde anti-recyclage de PID) */
+function isOrphanLlama(pid: number): boolean {
+  if (process.platform !== 'win32') {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const listed = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], {
+    windowsHide: true,
+    encoding: 'utf8',
+    timeout: 5_000,
+  });
+  return /llama/i.test(listed.stdout ?? '');
+}
+
+/** Abat un serveur managé resté seul après une fin brutale de l'app. */
+async function killOrphanedServer(): Promise<void> {
+  let recorded: string;
+  try {
+    recorded = await readFile(PID_FILE, 'utf8');
+  } catch {
+    return;
+  }
+  const pid = Number.parseInt(recorded.trim(), 10);
+  await forgetSpawnedPid();
+  if (!Number.isInteger(pid) || pid <= 0 || !isOrphanLlama(pid)) return;
+
+  console.log(`[llama-server] orphelin détecté (pid ${pid}) — arrêt`);
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
+      windowsHide: true,
+      timeout: 5_000,
+    });
+  } else {
+    try {
+      process.kill(-pid, 'SIGTERM');
+    } catch {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        /* déjà parti */
+      }
+    }
   }
 }
 
@@ -169,6 +268,8 @@ export class Harness {
 
   /** Restaure projet et mode depuis la config au démarrage. */
   async restoreSession(): Promise<void> {
+    // Avant tout : un serveur laissé par une session morte brutalement.
+    await killOrphanedServer();
     const config = await this.loadConfig();
     if (config.projectRoot) this.projectRoot = config.projectRoot;
     this.syncToolsWithProject();
