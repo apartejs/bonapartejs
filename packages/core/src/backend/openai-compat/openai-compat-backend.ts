@@ -201,7 +201,6 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
       const started = Date.now();
       const calls = new Map<number, StreamingCall>();
       let usage: OpenAiUsage | undefined;
-      let text = '';
 
       for await (const chunk of sseChunks(res.body)) {
         if (chunk.usage) usage = chunk.usage;
@@ -218,7 +217,6 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
         if (!delta) continue;
 
         if (delta.content) {
-          text += delta.content;
           yield { type: 'text', delta: delta.content };
         }
         if (delta.reasoning_content) {
