@@ -1,0 +1,38 @@
+{
+  "name": "@aparte/bonaparte-app",
+  "version": "0.1.0",
+  "description": "bonaparte — Electron app (main + preload + React renderer)",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-shared": "workspace:*",
+    "@aparte/core": "0.2.0-alpha.0",
+    "@aparte/engine": "0.2.0-alpha.0",
+    "@aparte/locale-fr": "0.2.0-alpha.0",
+    "@aparte/react": "0.2.0-alpha.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^43.4.0",
+    "electron-vite": "^5.0.0",
+    "typescript": "catalog:",
+    "vite": "^7.0.0",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": ["scope:app"]
+  }
+}

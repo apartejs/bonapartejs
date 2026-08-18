@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bonaparte</title>
+    <!-- Anti-flash : pose le thème avant le premier paint (pattern monaparte).
+         CSP : appliquée côté main process au packaging (les scripts inline de
+         dev — celui-ci et le preamble HMR de React — l'empêchent ici). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('bp.theme');
+          if (t !== 'dark' && t !== 'light') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+          }
+          document.documentElement.setAttribute('data-aparte-theme', t);
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {
+          /* thème par défaut */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

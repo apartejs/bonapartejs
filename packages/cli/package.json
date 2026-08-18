@@ -1,0 +1,28 @@
+{
+  "name": "@aparte/bonaparte",
+  "version": "0.1.0",
+  "description": "bonaparte — local-first coding agent. CLI: doctor & app launcher.",
+  "type": "module",
+  "bin": {
+    "bonaparte": "./dist/cli.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": ["scope:cli"]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@aparte/bonaparte-core",
+  "version": "0.1.0",
+  "description": "bonaparte — the harness: llama.cpp backend, per-conversation KV persistence, agent loop, tools, permissions, plugin host. Pure Node, no Electron.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-shared": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": ["scope:core"]
+  }
+}

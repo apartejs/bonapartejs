@@ -1,0 +1,19 @@
+# Dependencies & builds
+node_modules/
+dist/
+out/
+coverage/
+.nx/
+*.tsbuildinfo
+
+# Logs & env
+*.log
+.env
+.env.*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+
+# Notes privées — ne JAMAIS retirer (repo public)
+docs/superpowers/
