@@ -15,11 +15,14 @@ export interface ConversationMeta {
   updatedAt: string;
   /** Modèle épinglé à la conversation (chemin GGUF) — pas au backend. */
   modelPath?: string;
+  /** Taille de contexte épinglée avec le modèle (entre au manifest KV). */
+  nCtx?: number;
 }
 
 export interface CreateConversationOptions {
   title?: string;
   modelPath?: string;
+  nCtx?: number;
 }
 
 export type ConversationEvent =
@@ -52,6 +55,7 @@ export class ConversationStore {
       createdAt: now,
       updatedAt: now,
       ...(options.modelPath ? { modelPath: options.modelPath } : {}),
+      ...(options.nCtx !== undefined ? { nCtx: options.nCtx } : {}),
     };
     await mkdir(this.convDir(id), { recursive: true });
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
@@ -67,9 +71,10 @@ export class ConversationStore {
     }
   }
 
-  async setModel(id: string, modelPath: string): Promise<void> {
+  async setModel(id: string, modelPath: string, nCtx?: number): Promise<void> {
     const meta = await this.meta(id);
     meta.modelPath = modelPath;
+    if (nCtx !== undefined) meta.nCtx = nCtx;
     meta.updatedAt = new Date().toISOString();
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }

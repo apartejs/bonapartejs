@@ -124,11 +124,13 @@ export class Harness {
   async loadConfig(): Promise<AppConfigDto> {
     try {
       const raw = JSON.parse(await readFile(this.configPath, 'utf8')) as {
-        backend?: BackendConfigDto & { modelPath?: string };
+        backend?: BackendConfigDto & { modelPath?: string; nCtx?: number };
       };
-      // Migration : les anciennes configs portaient modelPath dans le moteur.
-      if (raw.backend && 'modelPath' in raw.backend) {
+      // Migration : les anciennes configs portaient modelPath/nCtx dans le
+      // moteur — ils appartiennent désormais à chaque conversation.
+      if (raw.backend) {
         delete raw.backend.modelPath;
+        delete raw.backend.nCtx;
       }
       return raw as AppConfigDto;
     } catch {
@@ -188,17 +190,22 @@ export class Harness {
     this.backend = null;
     this.live = null;
     this.loadedModelPath = null;
+    this.loadedNCtx = null;
     this.session = null;
   }
 
-  /** Garantit un serveur managé chargé avec CE modèle (redémarre si besoin). */
-  private async ensureManagedBackend(modelPath: string): Promise<void> {
+  /** Modèle + nCtx actuellement servis par le serveur managé. */
+  private loadedNCtx: number | null = null;
+
+  /** Garantit un serveur managé chargé avec CE modèle et CE nCtx. */
+  private async ensureManagedBackend(modelPath: string, nCtx: number): Promise<void> {
     if (!this.engine || this.engine.mode !== 'managed') {
       throw new Error('Moteur managé non configuré.');
     }
     if (
       this.backend &&
       this.loadedModelPath === modelPath &&
+      this.loadedNCtx === nCtx &&
       this.backend.status() === 'ready'
     ) {
       return;
@@ -212,7 +219,6 @@ export class Harness {
       this.backend = null;
     }
 
-    const nCtx = this.engine.nCtx ?? 8192;
     const cacheType = 'f16';
     const backend = createLlamaCppBackend({
       mode: 'managed',
@@ -240,6 +246,7 @@ export class Harness {
 
     this.backend = backend;
     this.loadedModelPath = modelPath;
+    this.loadedNCtx = nCtx;
     this.live = {
       modelFingerprint: await fingerprintModelFile(modelPath),
       nCtx,
@@ -252,24 +259,28 @@ export class Harness {
   async openConversation(
     id: string = DEFAULT_CONVERSATION,
     modelPath?: string,
+    nCtx?: number,
   ): Promise<ConversationOpenReplyDto> {
     if (!this.engine) throw new Error('Moteur non configuré.');
 
-    // Résout le modèle de la conversation : méta épinglée > paramètre > à choisir.
+    // Résout modèle + nCtx : méta épinglée > paramètres > à choisir.
     let convModel: string | undefined;
+    let convNCtx: number | undefined;
     if (await this.store.exists(id)) {
       const meta = await this.store.meta(id);
       convModel = meta.modelPath ?? modelPath;
+      convNCtx = meta.nCtx ?? nCtx;
       if (!meta.modelPath && modelPath) {
-        await this.store.setModel(id, modelPath);
+        await this.store.setModel(id, modelPath, nCtx);
       }
     } else {
       convModel = modelPath;
+      convNCtx = nCtx;
     }
 
     if (this.engine.mode === 'managed') {
       if (!convModel) return { needsModel: true, conversationId: id };
-      await this.ensureManagedBackend(convModel);
+      await this.ensureManagedBackend(convModel, convNCtx ?? 8192);
     } else if (!convModel) {
       // Distant : le modèle est celui du serveur — informatif.
       convModel = this.loadedModelPath ?? 'remote';
@@ -278,7 +289,10 @@ export class Harness {
     if (!this.backend || !this.live) throw new Error('Backend non démarré.');
 
     if (!(await this.store.exists(id))) {
-      await this.store.create(id, { modelPath: convModel });
+      await this.store.create(id, {
+        modelPath: convModel,
+        ...(convNCtx !== undefined ? { nCtx: convNCtx } : {}),
+      });
     }
 
     const { session, restore } = await ChatSession.open(
@@ -396,8 +410,10 @@ export class Harness {
     ipcMain.handle(IPC.backendStart, (_e, config: BackendConfigDto) =>
       this.startEngine(config),
     );
-    ipcMain.handle(IPC.conversationOpen, (_e, id?: string, modelPath?: string) =>
-      this.openConversation(id, modelPath),
+    ipcMain.handle(
+      IPC.conversationOpen,
+      (_e, id?: string, modelPath?: string, nCtx?: number) =>
+        this.openConversation(id, modelPath, nCtx),
     );
     ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
     ipcMain.handle(IPC.kvSave, () => this.saveKv());

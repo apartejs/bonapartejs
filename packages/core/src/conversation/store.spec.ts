@@ -58,19 +58,22 @@ describe('ConversationStore', () => {
     await expect(store.loadEvents('fantome')).rejects.toThrow(/fantome/);
   });
 
-  it('épingle le modèle de la conversation à la création', async () => {
+  it('épingle le modèle ET la taille de contexte à la création', async () => {
     const store = await makeStore();
-    await store.create('conv-1', { modelPath: 'D:\\models\\qwen3.gguf' });
+    await store.create('conv-1', { modelPath: 'D:\\models\\qwen3.gguf', nCtx: 32768 });
     const meta = await store.meta('conv-1');
     expect(meta.modelPath).toBe('D:\\models\\qwen3.gguf');
+    expect(meta.nCtx).toBe(32768);
   });
 
-  it('setModel pose le modèle sur une conversation qui n’en avait pas', async () => {
+  it('setModel pose modèle + nCtx sur une conversation qui n’en avait pas', async () => {
     const store = await makeStore();
     await store.create('conv-1');
     expect((await store.meta('conv-1')).modelPath).toBeUndefined();
-    await store.setModel('conv-1', 'D:\\models\\qwen3.gguf');
-    expect((await store.meta('conv-1')).modelPath).toBe('D:\\models\\qwen3.gguf');
+    await store.setModel('conv-1', 'D:\\models\\qwen3.gguf', 16384);
+    const meta = await store.meta('conv-1');
+    expect(meta.modelPath).toBe('D:\\models\\qwen3.gguf');
+    expect(meta.nCtx).toBe(16384);
   });
 
   it('meta lève une erreur claire pour une conversation inconnue', async () => {

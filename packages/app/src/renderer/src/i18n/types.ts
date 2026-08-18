@@ -22,7 +22,6 @@ export interface AppTranslations {
     urlPlaceholder: string;
     binPath: string;
     binPathPlaceholder: string;
-    nCtx: string;
     browse: string;
     detected: string;
     notInstalled: string;
@@ -38,6 +37,7 @@ export interface AppTranslations {
     intro: string;
     scanning: string;
     empty: string;
+    nCtx: string;
     manual: string;
     confirm: string;
   };

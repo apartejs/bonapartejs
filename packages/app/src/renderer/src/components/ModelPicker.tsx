@@ -5,7 +5,7 @@ import { useTranslate } from '../i18n/LocaleProvider.js';
 interface ModelPickerProps {
   busy: boolean;
   error: string | null;
-  onPick: (modelPath: string) => void;
+  onPick: (modelPath: string, nCtx: number) => void;
 }
 
 function formatSize(bytes: number): string {
@@ -18,6 +18,9 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
   const { t } = useTranslate();
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [nCtx, setNCtx] = useState('8192');
+
+  const parsedNCtx = (): number => Number.parseInt(nCtx, 10) || 8192;
 
   useEffect(() => {
     void window.bonaparte.scanModels().then((found) => {
@@ -28,7 +31,7 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
 
   const browse = async (): Promise<void> => {
     const picked = await window.bonaparte.pickFile('gguf');
-    if (picked) onPick(picked);
+    if (picked) onPick(picked, parsedNCtx());
   };
 
   return (
@@ -69,6 +72,16 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
           </ul>
         )}
 
+        <label className="field field-narrow">
+          <span className="field-label">{t.picker.nCtx}</span>
+          <input
+            value={nCtx}
+            onChange={(e) => setNCtx(e.target.value)}
+            inputMode="numeric"
+            spellCheck={false}
+          />
+        </label>
+
         {error && (
           <p className="setup-error">
             {t.setup.failed} — {error}
@@ -83,7 +96,7 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
             type="button"
             className="primary"
             disabled={busy || !selected}
-            onClick={() => selected && onPick(selected)}
+            onClick={() => selected && onPick(selected, parsedNCtx())}
           >
             {busy ? t.setup.starting : t.picker.confirm}
           </button>

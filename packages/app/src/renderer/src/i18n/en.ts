@@ -19,7 +19,6 @@ export const EN: AppTranslations = {
     urlPlaceholder: 'http://127.0.0.1:8080',
     binPath: 'llama (or llama-server) binary',
     binPathPlaceholder: 'C:\\tools\\llama\\llama.exe',
-    nCtx: 'Context size',
     browse: 'Browse…',
     detected: 'detected on this machine',
     notInstalled:
@@ -37,6 +36,7 @@ export const EN: AppTranslations = {
       'This conversation will be played by this model — it stays pinned to it. Models found on this machine:',
     scanning: 'Scanning…',
     empty: 'No GGUF model found in the known locations. Add one with Browse.',
+    nCtx: 'Context size',
     manual: 'Browse…',
     confirm: 'Cast this role',
   },

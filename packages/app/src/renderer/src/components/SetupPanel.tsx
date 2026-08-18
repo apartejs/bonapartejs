@@ -17,9 +17,6 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   const [binPath, setBinPath] = useState(
     initial?.mode === 'managed' ? initial.binPath : '',
   );
-  const [nCtx, setNCtx] = useState(
-    initial?.mode === 'managed' && initial.nCtx ? String(initial.nCtx) : '8192',
-  );
   const [binDetected, setBinDetected] = useState(false);
   const [binMissing, setBinMissing] = useState(false);
   const [wingetCopied, setWingetCopied] = useState(false);
@@ -67,7 +64,6 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
         : {
             mode: 'managed',
             binPath: binPath.trim(),
-            nCtx: Number.parseInt(nCtx, 10) || 8192,
           },
     );
   };
@@ -155,15 +151,6 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
                 </div>
               </div>
             )}
-            <label className="field field-narrow">
-              <span className="field-label">{t.setup.nCtx}</span>
-              <input
-                value={nCtx}
-                onChange={(e) => setNCtx(e.target.value)}
-                inputMode="numeric"
-                spellCheck={false}
-              />
-            </label>
           </>
         )}
 

@@ -44,7 +44,6 @@ export type BackendConfigDto =
   | {
       mode: 'managed';
       binPath: string;
-      nCtx?: number;
       nGpuLayers?: number;
     };
 
@@ -138,7 +137,11 @@ export interface BonaparteBridge {
   setConfig(config: AppConfigDto): Promise<void>;
   getBackendStatus(): Promise<BackendStatusDto>;
   startBackend(config: BackendConfigDto): Promise<BackendStatusDto>;
-  openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto>;
+  openConversation(
+    id?: string,
+    modelPath?: string,
+    nCtx?: number,
+  ): Promise<ConversationOpenReplyDto>;
   sendMessage(text: string): Promise<void>;
   saveKv(): Promise<boolean>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;

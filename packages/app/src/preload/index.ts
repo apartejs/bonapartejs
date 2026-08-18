@@ -26,8 +26,8 @@ const api: BonaparteBridge = {
     ipcRenderer.invoke(IPC.backendStatus),
   startBackend: (config: BackendConfigDto): Promise<BackendStatusDto> =>
     ipcRenderer.invoke(IPC.backendStart, config),
-  openConversation: (id?: string, modelPath?: string) =>
-    ipcRenderer.invoke(IPC.conversationOpen, id, modelPath),
+  openConversation: (id?: string, modelPath?: string, nCtx?: number) =>
+    ipcRenderer.invoke(IPC.conversationOpen, id, modelPath, nCtx),
   sendMessage: (text: string): Promise<void> =>
     ipcRenderer.invoke(IPC.agentSend, text),
   saveKv: (): Promise<boolean> => ipcRenderer.invoke(IPC.kvSave),

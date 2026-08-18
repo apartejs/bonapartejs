@@ -19,7 +19,6 @@ export const FR: AppTranslations = {
     urlPlaceholder: 'http://127.0.0.1:8080',
     binPath: 'Binaire llama (ou llama-server)',
     binPathPlaceholder: 'C:\\outils\\llama\\llama.exe',
-    nCtx: 'Taille de contexte',
     browse: 'Parcourir…',
     detected: 'détecté sur cette machine',
     notInstalled:
@@ -38,6 +37,7 @@ export const FR: AppTranslations = {
     scanning: 'Inventaire en cours…',
     empty:
       'Aucun modèle GGUF trouvé dans les emplacements connus. Ajoutez-en un avec Parcourir.',
+    nCtx: 'Taille de contexte',
     manual: 'Parcourir…',
     confirm: 'Distribuer ce rôle',
   },

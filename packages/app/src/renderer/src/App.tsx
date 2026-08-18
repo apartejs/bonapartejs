@@ -48,11 +48,11 @@ export function App() {
   }, []);
 
   const tryOpen = useCallback(
-    async (id?: string, modelPath?: string) => {
+    async (id?: string, modelPath?: string, nCtx?: number) => {
       setBusy(true);
       setError(null);
       try {
-        const reply = await window.bonaparte.openConversation(id, modelPath);
+        const reply = await window.bonaparte.openConversation(id, modelPath, nCtx);
         if ('needsModel' in reply) {
           pendingConv.current = reply.conversationId;
           setView('pickModel');
@@ -136,7 +136,9 @@ export function App() {
           <ModelPicker
             busy={busy}
             error={error}
-            onPick={(modelPath) => void tryOpen(pendingConv.current, modelPath)}
+            onPick={(modelPath, nCtx) =>
+              void tryOpen(pendingConv.current, modelPath, nCtx)
+            }
           />
         ) : opened ? (
           <ChatScreen
