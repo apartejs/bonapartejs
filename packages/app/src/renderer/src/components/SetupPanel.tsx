@@ -1,4 +1,8 @@
-import type { BackendConfigDto, PickFileKind } from '@aparte/bonaparte-shared';
+import type {
+  BackendConfigDto,
+  EndpointProbeDto,
+  PickFileKind,
+} from '@aparte/bonaparte-shared';
 import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
@@ -9,40 +13,37 @@ interface SetupPanelProps {
   onSubmit: (config: BackendConfigDto) => void;
 }
 
+/**
+ * Deux intentions, pas trois implémentations : « bonaparte s'en occupe » ou
+ * « j'ai déjà un serveur ». Dans le second cas le protocole est deviné —
+ * llama.cpp ou OpenAI-compatible — plutôt que demandé.
+ */
+type Intent = 'managed' | 'existing';
+
 export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) {
   const { t } = useTranslate();
-  // Local-first : le mode managé (local) est le défaut.
-  const [mode, setMode] = useState<BackendConfigDto['mode']>(
-    initial?.mode ?? 'managed',
+  const [intent, setIntent] = useState<Intent>(
+    initial && initial.mode !== 'managed' ? 'existing' : 'managed',
   );
-  const [url, setUrl] = useState(initial?.mode === 'remote' ? initial.url : '');
-  const [endpointUrl, setEndpointUrl] = useState(
-    initial?.mode === 'openai-compat' ? initial.baseUrl : 'http://127.0.0.1:1234/v1',
-  );
-  const [endpointModels, setEndpointModels] = useState<string[] | null>(null);
-  const [endpointModel, setEndpointModel] = useState(
-    initial?.mode === 'openai-compat' ? initial.model : '',
-  );
-  const [probing, setProbing] = useState(false);
 
-  const probeEndpoint = async (): Promise<void> => {
-    setProbing(true);
-    try {
-      const models = await window.bonaparte.listEndpointModels(endpointUrl.trim());
-      setEndpointModels(models);
-      setEndpointModel((current) => current || (models[0] ?? ''));
-    } catch {
-      setEndpointModels([]);
-    } finally {
-      setProbing(false);
-    }
-  };
   const [binPath, setBinPath] = useState(
     initial?.mode === 'managed' ? initial.binPath : '',
   );
   const [binDetected, setBinDetected] = useState(false);
   const [binMissing, setBinMissing] = useState(false);
   const [wingetCopied, setWingetCopied] = useState(false);
+
+  const [url, setUrl] = useState(
+    initial?.mode === 'remote'
+      ? initial.url
+      : initial?.mode === 'openai-compat'
+        ? initial.baseUrl
+        : '',
+  );
+  const [probe, setProbe] = useState<EndpointProbeDto | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeFailed, setProbeFailed] = useState(false);
+  const [model, setModel] = useState('');
 
   // Pré-remplit le binaire llama détecté sur la machine (doctor lookup).
   useEffect(() => {
@@ -76,24 +77,37 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
     setBinDetected(false);
   };
 
+  const runProbe = async (): Promise<void> => {
+    setProbing(true);
+    setProbeFailed(false);
+    try {
+      const found = await window.bonaparte.probeEndpoint(url);
+      setProbe(found);
+      setProbeFailed(found === null);
+      setModel(found?.model ?? '');
+    } finally {
+      setProbing(false);
+    }
+  };
+
   const canSubmit =
     !busy &&
-    (mode === 'remote'
-      ? url.trim() !== ''
-      : mode === 'openai-compat'
-        ? endpointUrl.trim() !== '' && endpointModel !== ''
-        : binPath.trim() !== '');
+    (intent === 'managed'
+      ? binPath.trim() !== ''
+      : probe !== null && (probe.protocol === 'llamacpp' || model !== ''));
 
   const submit = (): void => {
     if (!canSubmit) return;
-    if (mode === 'remote') onSubmit({ mode: 'remote', url: url.trim() });
-    else if (mode === 'openai-compat') {
-      onSubmit({
-        mode: 'openai-compat',
-        baseUrl: endpointUrl.trim().replace(/\/$/, ''),
-        model: endpointModel,
-      });
-    } else onSubmit({ mode: 'managed', binPath: binPath.trim() });
+    if (intent === 'managed') {
+      onSubmit({ mode: 'managed', binPath: binPath.trim() });
+      return;
+    }
+    if (!probe) return;
+    onSubmit(
+      probe.protocol === 'llamacpp'
+        ? { mode: 'remote', url: probe.baseUrl }
+        : { mode: 'openai-compat', baseUrl: probe.baseUrl, model },
+    );
   };
 
   return (
@@ -107,91 +121,30 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
           <button
             type="button"
             role="tab"
-            aria-selected={mode === 'managed'}
-            className={mode === 'managed' ? 'active' : ''}
-            onClick={() => setMode('managed')}
+            aria-selected={intent === 'managed'}
+            className={intent === 'managed' ? 'active' : ''}
+            onClick={() => setIntent('managed')}
           >
-            {t.setup.modeManaged}
+            {t.setup.intentManaged}
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={mode === 'remote'}
-            className={mode === 'remote' ? 'active' : ''}
-            onClick={() => setMode('remote')}
+            aria-selected={intent === 'existing'}
+            className={intent === 'existing' ? 'active' : ''}
+            onClick={() => setIntent('existing')}
           >
-            {t.setup.modeRemote}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'openai-compat'}
-            className={mode === 'openai-compat' ? 'active' : ''}
-            onClick={() => setMode('openai-compat')}
-          >
-            {t.setup.modeEndpoint}
+            {t.setup.intentExisting}
           </button>
         </div>
 
-        {mode === 'openai-compat' ? (
+        {intent === 'managed' ? (
           <>
-            <p className="setup-note">{t.setup.endpointNote}</p>
-            <label className="field">
-              <span className="field-label">{t.setup.endpointUrl}</span>
-              <span className="field-row">
-                <input
-                  value={endpointUrl}
-                  onChange={(e) => {
-                    setEndpointUrl(e.target.value);
-                    setEndpointModels(null);
-                  }}
-                  placeholder="http://127.0.0.1:1234/v1"
-                  spellCheck={false}
-                />
-                <button type="button" onClick={() => void probeEndpoint()} disabled={probing}>
-                  {probing ? t.setup.starting : t.setup.endpointProbe}
-                </button>
-              </span>
-            </label>
-            {endpointModels !== null && (
-              <label className="field">
-                <span className="field-label">{t.setup.endpointModel}</span>
-                {endpointModels.length === 0 ? (
-                  <p className="picker-empty">{t.setup.endpointEmpty}</p>
-                ) : (
-                  <select
-                    className="field-select"
-                    value={endpointModel}
-                    onChange={(e) => setEndpointModel(e.target.value)}
-                  >
-                    {endpointModels.map((id) => (
-                      <option key={id} value={id}>
-                        {id}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </label>
-            )}
-          </>
-        ) : mode === 'remote' ? (
-          <label className="field">
-            <span className="field-label">{t.setup.url}</span>
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder={t.setup.urlPlaceholder}
-              spellCheck={false}
-            />
-          </label>
-        ) : (
-          <>
+            <p className="setup-note">{t.setup.managedNote}</p>
             <label className="field">
               <span className="field-label">
                 {t.setup.binPath}
-                {binDetected && (
-                  <em className="field-hint"> — {t.setup.detected}</em>
-                )}
+                {binDetected && <em className="field-hint"> — {t.setup.detected}</em>}
               </span>
               <span className="field-row">
                 <input
@@ -227,6 +180,66 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
                     {t.setup.openReleases}
                   </button>
                 </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="setup-note">{t.setup.existingNote}</p>
+            <label className="field">
+              <span className="field-label">{t.setup.endpointUrl}</span>
+              <span className="field-row">
+                <input
+                  value={url}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    setProbe(null);
+                    setProbeFailed(false);
+                  }}
+                  placeholder="http://127.0.0.1:1234/v1"
+                  spellCheck={false}
+                />
+                <button
+                  type="button"
+                  onClick={() => void runProbe()}
+                  disabled={probing || url.trim() === ''}
+                >
+                  {probing ? t.setup.probing : t.setup.endpointProbe}
+                </button>
+              </span>
+            </label>
+
+            {probeFailed && <p className="setup-error">{t.setup.probeFailed}</p>}
+
+            {probe && (
+              <div className="probe-result">
+                <p>
+                  <strong>
+                    {probe.protocol === 'llamacpp'
+                      ? t.setup.foundLlama
+                      : t.setup.foundOpenAi}
+                  </strong>
+                  {' — '}
+                  {probe.protocol === 'llamacpp'
+                    ? t.setup.persistenceYes
+                    : t.setup.persistenceNo}
+                </p>
+                {probe.protocol === 'llamacpp' && probe.model && (
+                  <p className="probe-model">{probe.model}</p>
+                )}
+                {probe.protocol === 'openai-compat' && (
+                  <select
+                    className="field-select"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                  >
+                    {(probe.models ?? []).map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
           </>

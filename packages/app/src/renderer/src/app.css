@@ -197,6 +197,30 @@ button.primary {
   font-size: 13px;
 }
 
+.probe-result {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--aparte-primary);
+  background: var(--aparte-surface-2);
+  font-size: 13px;
+}
+
+.probe-result p {
+  margin: 0 0 8px;
+}
+
+.probe-result p:last-child {
+  margin-bottom: 0;
+}
+
+.probe-model {
+  font-family: var(--bp-mono);
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+  overflow-wrap: anywhere;
+}
+
 .setup-note {
   margin: 0 0 14px;
   padding: 10px 12px;

@@ -18,8 +18,7 @@ const api: BonaparteBridge = {
   suggestSetup: () => ipcRenderer.invoke(IPC.setupSuggest),
   pickFile: (kind) => ipcRenderer.invoke(IPC.dialogPickFile, kind),
   scanModels: () => ipcRenderer.invoke(IPC.modelsScan),
-  listEndpointModels: (baseUrl, apiKey) =>
-    ipcRenderer.invoke(IPC.endpointModels, baseUrl, apiKey),
+  probeEndpoint: (url) => ipcRenderer.invoke(IPC.endpointProbe, url),
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   getConfig: (): Promise<AppConfigDto> => ipcRenderer.invoke(IPC.configGet),

@@ -25,6 +25,7 @@ import {
   KvStore,
   kvSlotsDir,
   PermissionEngine,
+  probeEndpoint,
   scanModels,
   ToolRegistry,
   type Backend,
@@ -41,6 +42,7 @@ import {
   type BackendStatusDto,
   type ConversationEventDto,
   type ConversationOpenReplyDto,
+  type EndpointProbeDto,
   type ModelInfoDto,
   type PickFileKind,
   type PlayModeDto,
@@ -588,17 +590,9 @@ export class Harness {
     return scanModels(defaultScanRoots());
   }
 
-  /** Modèles servis par un endpoint OpenAI-compatible. */
-  async listEndpointModels(baseUrl: string, apiKey?: string): Promise<string[]> {
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
-      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
-    });
-    if (!res.ok) throw new Error(`Endpoint injoignable (HTTP ${res.status}).`);
-    const body = (await res.json()) as { data?: { id?: string }[] };
-    return (body.data ?? [])
-      .map((entry) => entry.id)
-      .filter((id): id is string => typeof id === 'string')
-      .sort((a, b) => a.localeCompare(b));
+  /** Découvre à quoi répond une URL (llama.cpp ou OpenAI-compatible). */
+  async probeEndpointUrl(url: string): Promise<EndpointProbeDto | null> {
+    return probeEndpoint(url);
   }
 
   async pickFile(kind: PickFileKind): Promise<string | null> {
@@ -641,9 +635,7 @@ export class Harness {
     ipcMain.handle(IPC.kvSave, () => this.saveKv());
     ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
     ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
-    ipcMain.handle(IPC.endpointModels, (_e, baseUrl: string, apiKey?: string) =>
-      this.listEndpointModels(baseUrl, apiKey),
-    );
+    ipcMain.handle(IPC.endpointProbe, (_e, url: string) => this.probeEndpointUrl(url));
     ipcMain.handle(IPC.dialogPickFile, (_e, kind: PickFileKind) =>
       this.pickFile(kind),
     );

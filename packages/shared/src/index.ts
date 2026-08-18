@@ -26,7 +26,7 @@ export const IPC = {
   setupSuggest: 'setup.suggest',
   dialogPickFile: 'dialog.pickFile',
   modelsScan: 'models.scan',
-  endpointModels: 'models.endpoint',
+  endpointProbe: 'endpoint.probe',
   openExternal: 'shell.openExternal',
   projectOpen: 'project.open',
   projectCurrent: 'project.current',
@@ -64,6 +64,15 @@ export type BackendConfigDto =
       model: string;
       apiKey?: string;
     };
+
+/** Ce qu'une URL d'endpoint s'est révélée être. */
+export interface EndpointProbeDto {
+  protocol: 'llamacpp' | 'openai-compat';
+  baseUrl: string;
+  model?: string;
+  models?: string[];
+  totalSlots?: number;
+}
 
 /** Modèle découvert par l'inventaire (scan des emplacements connus). */
 export interface ModelInfoDto {
@@ -194,8 +203,8 @@ export interface BonaparteBridge {
   suggestSetup(): Promise<SetupSuggestionDto>;
   pickFile(kind: PickFileKind): Promise<string | null>;
   scanModels(): Promise<ModelInfoDto[]>;
-  /** Modèles servis par un endpoint OpenAI-compatible (GET /models). */
-  listEndpointModels(baseUrl: string, apiKey?: string): Promise<string[]>;
+  /** Découvre à quoi répond une URL : llama.cpp ou OpenAI-compatible. */
+  probeEndpoint(url: string): Promise<EndpointProbeDto | null>;
   /** N'ouvre que des URLs https d'une liste blanche (main process). */
   openExternal(url: string): Promise<void>;
   getVersion(): Promise<string>;
