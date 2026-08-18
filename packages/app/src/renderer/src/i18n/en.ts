@@ -1,0 +1,71 @@
+import type { AppTranslations } from './types.js';
+
+export const EN: AppTranslations = {
+  app: {
+    tagline: 'Local-first coding agent',
+  },
+  actions: {
+    toggleTheme: 'Theme',
+    toggleLocale: 'Français',
+  },
+  setup: {
+    eyebrow: 'curtain up',
+    title: 'Connect the engine',
+    intro:
+      'bonaparte drives a llama-server: launch one right here (managed) or point to an existing host. The model is chosen afterwards, per conversation.',
+    modeRemote: 'Remote server',
+    modeManaged: 'Managed (local)',
+    url: 'Server URL',
+    urlPlaceholder: 'http://127.0.0.1:8080',
+    binPath: 'llama (or llama-server) binary',
+    binPathPlaceholder: 'C:\\tools\\llama\\llama.exe',
+    nCtx: 'Context size',
+    browse: 'Browse…',
+    detected: 'detected on this machine',
+    notInstalled:
+      'llama.cpp does not seem to be installed on this machine. Install it, then come back:',
+    installWinget: 'Copy the winget command',
+    openReleases: 'Open llama.cpp releases',
+    start: 'Raise the curtain',
+    starting: 'Starting…',
+    failed: 'Startup failed',
+  },
+  picker: {
+    eyebrow: 'casting',
+    title: 'Choose the model',
+    intro:
+      'This conversation will be played by this model — it stays pinned to it. Models found on this machine:',
+    scanning: 'Scanning…',
+    empty: 'No GGUF model found in the known locations. Add one with Browse.',
+    manual: 'Browse…',
+    confirm: 'Cast this role',
+  },
+  chat: {
+    placeholder: 'Write to bonaparte…',
+    errorPrefix: 'Error',
+  },
+  status: {
+    stopped: 'stopped',
+    starting: 'starting…',
+    ready: 'ready',
+    crashed: 'crashed',
+    restarting: 'restarting…',
+    restored: 'context restored',
+    notRestored: 'cold start',
+    reasons: {
+      missing: 'no saved state',
+      unsupported: 'backend without persistence',
+      model: 'model changed',
+      nCtx: 'context size changed',
+      cacheType: 'KV quantization changed',
+      buildTag: 'llama.cpp build changed',
+      corrupt: 'corrupt manifest',
+    },
+    prefill: 'prefill',
+    cacheShare: 'cache',
+    save: 'Save state',
+    saved: 'State saved',
+    saveFailed: 'Save failed',
+    changeBackend: 'Engine…',
+  },
+};

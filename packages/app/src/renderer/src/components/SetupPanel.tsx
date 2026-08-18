@@ -17,13 +17,12 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   const [binPath, setBinPath] = useState(
     initial?.mode === 'managed' ? initial.binPath : '',
   );
-  const [modelPath, setModelPath] = useState(
-    initial?.mode === 'managed' ? initial.modelPath : '',
-  );
   const [nCtx, setNCtx] = useState(
     initial?.mode === 'managed' && initial.nCtx ? String(initial.nCtx) : '8192',
   );
   const [binDetected, setBinDetected] = useState(false);
+  const [binMissing, setBinMissing] = useState(false);
+  const [wingetCopied, setWingetCopied] = useState(false);
 
   // Pré-remplit le binaire llama détecté sur la machine (doctor lookup).
   useEffect(() => {
@@ -34,23 +33,31 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
           setBinDetected(true);
           return suggestion.binPath as string;
         });
+      } else {
+        setBinMissing(true);
       }
     });
   }, []);
 
-  const browse = async (kind: PickFileKind): Promise<void> => {
-    const picked = await window.bonaparte.pickFile(kind);
-    if (!picked) return;
-    if (kind === 'binary') {
-      setBinPath(picked);
-      setBinDetected(false);
-    } else {
-      setModelPath(picked);
+  const copyWinget = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText('winget install ggml.llamacpp');
+      setWingetCopied(true);
+      setTimeout(() => setWingetCopied(false), 2000);
+    } catch {
+      /* presse-papiers indisponible : la commande reste affichée */
     }
   };
 
+  const browse = async (kind: PickFileKind): Promise<void> => {
+    const picked = await window.bonaparte.pickFile(kind);
+    if (!picked) return;
+    setBinPath(picked);
+    setBinDetected(false);
+  };
+
   const canSubmit =
-    !busy && (mode === 'remote' ? url.trim() !== '' : binPath.trim() !== '' && modelPath.trim() !== '');
+    !busy && (mode === 'remote' ? url.trim() !== '' : binPath.trim() !== '');
 
   const submit = (): void => {
     if (!canSubmit) return;
@@ -60,7 +67,6 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
         : {
             mode: 'managed',
             binPath: binPath.trim(),
-            modelPath: modelPath.trim(),
             nCtx: Number.parseInt(nCtx, 10) || 8192,
           },
     );
@@ -128,20 +134,27 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
                 </button>
               </span>
             </label>
-            <label className="field">
-              <span className="field-label">{t.setup.modelPath}</span>
-              <span className="field-row">
-                <input
-                  value={modelPath}
-                  onChange={(e) => setModelPath(e.target.value)}
-                  placeholder={t.setup.modelPathPlaceholder}
-                  spellCheck={false}
-                />
-                <button type="button" onClick={() => void browse('gguf')}>
-                  {t.setup.browse}
-                </button>
-              </span>
-            </label>
+            {binMissing && !binPath && (
+              <div className="install-hint">
+                <p>{t.setup.notInstalled}</p>
+                <code>winget install ggml.llamacpp</code>
+                <div className="install-hint-actions">
+                  <button type="button" onClick={() => void copyWinget()}>
+                    {wingetCopied ? '✓' : t.setup.installWinget}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void window.bonaparte.openExternal(
+                        'https://github.com/ggml-org/llama.cpp/releases',
+                      )
+                    }
+                  >
+                    {t.setup.openReleases}
+                  </button>
+                </div>
+              </div>
+            )}
             <label className="field field-narrow">
               <span className="field-label">{t.setup.nCtx}</span>
               <input

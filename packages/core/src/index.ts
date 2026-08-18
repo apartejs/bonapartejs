@@ -71,8 +71,17 @@ export { PromptLog, renderSystem, renderUser } from './wire/qwen-template.js';
 export type {
   ConversationEvent,
   ConversationMeta,
+  CreateConversationOptions,
 } from './conversation/store.js';
 export { ConversationStore, rebuildPromptLog } from './conversation/store.js';
+
+export type { DiscoveredModel, ModelSource, ScanOptions, ScanRoot } from './models/inventory.js';
+export { defaultScanRoots, scanModels } from './models/inventory.js';
+export {
+  isSupportedLlamaBuild,
+  MIN_LLAMA_BUILD,
+  parseLlamaBuildNumber,
+} from './backend/llamacpp/version.js';
 
 export type { ChatSessionOptions, OpenResult } from './session/chat-session.js';
 export { ChatSession } from './session/chat-session.js';

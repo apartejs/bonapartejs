@@ -10,6 +10,7 @@ import { useTranslate } from '../i18n/LocaleProvider.js';
 interface StatusStripProps {
   backendStatus: BackendStatusDto;
   streaming: boolean;
+  modelName: string | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
   saveState: 'idle' | 'saved' | 'failed';
@@ -41,6 +42,7 @@ function formatMs(ms: number): string {
 export function StatusStrip({
   backendStatus,
   streaming,
+  modelName,
   restore,
   lastStats,
   saveState,
@@ -63,6 +65,11 @@ export function StatusStrip({
         <span className={`status-pill status-${backendStatus}`}>
           {t.status[backendStatus]}
         </span>
+        {modelName && (
+          <span className="status-chip chip-model" title={modelName}>
+            {modelName}
+          </span>
+        )}
         {restore && (
           <span
             className={`status-chip ${restore.restored ? 'chip-ok' : 'chip-dim'}`}

@@ -8,9 +8,12 @@ import type {
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatScreen } from './components/ChatScreen.js';
+import { ModelPicker } from './components/ModelPicker.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
 import { useTranslate } from './i18n/LocaleProvider.js';
+
+type View = 'boot' | 'setup' | 'pickModel' | 'chat';
 
 function currentTheme(): 'dark' | 'light' {
   return document.documentElement.getAttribute('data-aparte-theme') === 'dark'
@@ -20,15 +23,16 @@ function currentTheme(): 'dark' | 'light' {
 
 export function App() {
   const { locale, setLocale } = useTranslate();
+  const [view, setView] = useState<View>('boot');
   const [backendStatus, setBackendStatus] = useState<BackendStatusDto>('stopped');
   const [opened, setOpened] = useState<ConversationOpenResultDto | null>(null);
-  const [showSetup, setShowSetup] = useState(false);
-  const [setupBusy, setSetupBusy] = useState(false);
-  const [setupError, setSetupError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastStats, setLastStats] = useState<CompletionStatsDto | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [config, setConfig] = useState<BackendConfigDto | undefined>(undefined);
+  const pendingConv = useRef<string | undefined>(undefined);
   const bootAttempted = useRef(false);
 
   // Locale des composants aparté (chaînes internes des web components).
@@ -38,26 +42,54 @@ export function App() {
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
 
-  const startWith = useCallback(async (backendConfig: BackendConfigDto) => {
-    setSetupBusy(true);
-    setSetupError(null);
-    try {
-      await window.bonaparte.startBackend(backendConfig);
-      await window.bonaparte.setConfig({ backend: backendConfig });
-      setConfig(backendConfig);
-      const result = await window.bonaparte.openConversation();
-      setOpened(result);
-      setShowSetup(false);
-      setBackendStatus(await window.bonaparte.getBackendStatus());
-    } catch (error) {
-      setSetupError(error instanceof Error ? error.message : String(error));
-      setShowSetup(true);
-    } finally {
-      setSetupBusy(false);
-    }
+  const fail = useCallback((err: unknown, fallbackView: View) => {
+    setError(err instanceof Error ? err.message : String(err));
+    setView(fallbackView);
   }, []);
 
-  // Boot : si un backend est configuré, on le démarre et on ouvre la
+  const tryOpen = useCallback(
+    async (id?: string, modelPath?: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const reply = await window.bonaparte.openConversation(id, modelPath);
+        if ('needsModel' in reply) {
+          pendingConv.current = reply.conversationId;
+          setView('pickModel');
+        } else {
+          setOpened(reply);
+          setLastStats(null);
+          setView('chat');
+        }
+        setBackendStatus(await window.bonaparte.getBackendStatus());
+      } catch (err) {
+        fail(err, modelPath ? 'pickModel' : 'setup');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [fail],
+  );
+
+  const startWith = useCallback(
+    async (engine: BackendConfigDto) => {
+      setBusy(true);
+      setError(null);
+      try {
+        await window.bonaparte.startBackend(engine);
+        await window.bonaparte.setConfig({ backend: engine });
+        setConfig(engine);
+        setBusy(false);
+        await tryOpen();
+      } catch (err) {
+        setBusy(false);
+        fail(err, 'setup');
+      }
+    },
+    [fail, tryOpen],
+  );
+
+  // Boot : si un moteur est configuré, on le démarre et on ouvre la
   // conversation ; sinon, panneau de configuration.
   useEffect(() => {
     if (bootAttempted.current) return;
@@ -68,7 +100,7 @@ export function App() {
         setConfig(appConfig.backend);
         await startWith(appConfig.backend);
       } else {
-        setShowSetup(true);
+        setView('setup');
       }
     })();
   }, [startWith]);
@@ -93,29 +125,36 @@ export function App() {
   return (
     <div className="app-shell">
       <main className="app-main">
-        {showSetup || !opened ? (
+        {view === 'setup' || view === 'boot' ? (
           <SetupPanel
             {...(config ? { initial: config } : {})}
-            busy={setupBusy}
-            error={setupError}
-            onSubmit={(c) => void startWith(c)}
+            busy={busy || view === 'boot'}
+            error={error}
+            onSubmit={(engine) => void startWith(engine)}
           />
-        ) : (
+        ) : view === 'pickModel' ? (
+          <ModelPicker
+            busy={busy}
+            error={error}
+            onPick={(modelPath) => void tryOpen(pendingConv.current, modelPath)}
+          />
+        ) : opened ? (
           <ChatScreen
             initialEvents={opened.events}
             onStats={setLastStats}
             onStreamingChange={setStreaming}
           />
-        )}
+        ) : null}
       </main>
       <StatusStrip
         backendStatus={backendStatus}
         streaming={streaming}
-        restore={opened?.restore ?? null}
+        modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
+        restore={view === 'chat' ? (opened?.restore ?? null) : null}
         lastStats={lastStats}
         saveState={saveState}
         onSave={() => void handleSave()}
-        onChangeBackend={() => setShowSetup(true)}
+        onChangeBackend={() => setView('setup')}
         onToggleTheme={toggleTheme}
         onToggleLocale={() => setLocale(locale === 'fr' ? 'en' : 'fr')}
       />

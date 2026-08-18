@@ -13,6 +13,13 @@ export interface ConversationMeta {
   title: string;
   createdAt: string;
   updatedAt: string;
+  /** Modèle épinglé à la conversation (chemin GGUF) — pas au backend. */
+  modelPath?: string;
+}
+
+export interface CreateConversationOptions {
+  title?: string;
+  modelPath?: string;
 }
 
 export type ConversationEvent =
@@ -34,13 +41,37 @@ export class ConversationStore {
     return join(this.convDir(id), 'log.jsonl');
   }
 
-  async create(id: string, title = 'Nouvelle conversation'): Promise<ConversationMeta> {
+  async create(
+    id: string,
+    options: CreateConversationOptions = {},
+  ): Promise<ConversationMeta> {
     const now = new Date().toISOString();
-    const meta: ConversationMeta = { id, title, createdAt: now, updatedAt: now };
+    const meta: ConversationMeta = {
+      id,
+      title: options.title ?? 'Nouvelle conversation',
+      createdAt: now,
+      updatedAt: now,
+      ...(options.modelPath ? { modelPath: options.modelPath } : {}),
+    };
     await mkdir(this.convDir(id), { recursive: true });
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
     await writeFile(this.logPath(id), '', 'utf8');
     return meta;
+  }
+
+  async meta(id: string): Promise<ConversationMeta> {
+    try {
+      return await this.readMeta(id);
+    } catch {
+      throw new Error(`Conversation inconnue : ${id}`);
+    }
+  }
+
+  async setModel(id: string, modelPath: string): Promise<void> {
+    const meta = await this.meta(id);
+    meta.modelPath = modelPath;
+    meta.updatedAt = new Date().toISOString();
+    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }
 
   async exists(id: string): Promise<boolean> {

@@ -1,22 +1,27 @@
 /**
- * Pont entre @aparte/bonaparte-core et Electron : possède le backend, la
- * session de chat active et la config, et expose le tout via l'IPC typé.
- * Toute la logique métier vit dans core — ici, uniquement du câblage.
+ * Pont entre @aparte/bonaparte-core et Electron : possède le MOTEUR (config
+ * llama.cpp managé ou distant), la session de chat active et la config app.
+ * Le modèle n'est pas un paramètre du moteur : chaque conversation épingle le
+ * sien, et le serveur managé est (re)lancé avec le modèle de la conversation
+ * active. Toute la logique métier vit dans core — ici, uniquement du câblage.
  */
 
 import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { promisify } from 'node:util';
 import {
   bonaparteDataDir,
   ChatSession,
   ConversationStore,
   createLlamaCppBackend,
+  createSystemDoctorEnv,
+  defaultScanRoots,
   detectServeCommandPrefix,
   fingerprintModelFile,
   KvStore,
   kvSlotsDir,
+  scanModels,
   type Backend,
   type CompletionStats,
   type LiveBackendConfig,
@@ -28,22 +33,32 @@ import {
   type AppConfigDto,
   type BackendConfigDto,
   type BackendStatusDto,
-  type ConversationOpenResultDto,
+  type ConversationOpenReplyDto,
+  type ModelInfoDto,
+  type PickFileKind,
+  type SetupSuggestionDto,
 } from '@aparte/bonaparte-shared';
-import { dialog } from 'electron';
+import { dialog, shell } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
-import { createSystemDoctorEnv } from '@aparte/bonaparte-core';
-import type { PickFileKind, SetupSuggestionDto } from '@aparte/bonaparte-shared';
+
+/** Seules destinations externes autorisées depuis le renderer. */
+const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
 const DEFAULT_CONVERSATION = 'default';
+const MANAGED_PORT = 8763;
 
 // Prompt système v1 — figé par conversation (le contrat outillé arrive en J2).
 const SYSTEM_PROMPT =
   'Tu es bonaparte, un agent de développement local-first. ' +
   'Réponds de façon précise et concise, en français par défaut.';
 
+const execFileAsync = promisify(execFile);
+
 function realSpawn(binPath: string, args: string[]): ProcessHandle {
-  const child = spawn(binPath, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
+  const child = spawn(binPath, args, {
+    stdio: ['ignore', 'ignore', 'pipe'],
+    windowsHide: true,
+  });
   child.stderr?.on('data', (chunk: Buffer) => {
     console.log(`[llama-server] ${chunk.toString('utf8').trimEnd()}`);
   });
@@ -59,7 +74,9 @@ function stripThink(raw: string): string {
   return raw.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
 }
 
-const execFileAsync = promisify(execFile);
+function modelDisplayName(modelPath: string): string {
+  return basename(modelPath).replace(/\.gguf$/i, '');
+}
 
 /** Tag de build du binaire (ex. b10217-ddd4ec142) — 'unknown' en dernier recours. */
 async function readBuildTag(binPath: string): Promise<string> {
@@ -80,8 +97,11 @@ async function readBuildTag(binPath: string): Promise<string> {
 
 export class Harness {
   private window: BrowserWindow | null = null;
+  private engine: BackendConfigDto | null = null;
   private backend: Backend | null = null;
   private live: LiveBackendConfig | null = null;
+  /** Modèle actuellement chargé par le serveur managé. */
+  private loadedModelPath: string | null = null;
   private session: ChatSession | null = null;
   private unsubscribeStatus: (() => void) | null = null;
 
@@ -103,7 +123,14 @@ export class Harness {
 
   async loadConfig(): Promise<AppConfigDto> {
     try {
-      return JSON.parse(await readFile(this.configPath, 'utf8')) as AppConfigDto;
+      const raw = JSON.parse(await readFile(this.configPath, 'utf8')) as {
+        backend?: BackendConfigDto & { modelPath?: string };
+      };
+      // Migration : les anciennes configs portaient modelPath dans le moteur.
+      if (raw.backend && 'modelPath' in raw.backend) {
+        delete raw.backend.modelPath;
+      }
+      return raw as AppConfigDto;
     } catch {
       return {};
     }
@@ -118,50 +145,23 @@ export class Harness {
     return this.backend?.status() ?? 'stopped';
   }
 
-  async startBackend(config: BackendConfigDto): Promise<BackendStatusDto> {
-    if (this.backend) {
-      this.unsubscribeStatus?.();
-      await this.backend.stop().catch(() => undefined);
-      this.backend = null;
-      this.session = null;
-    }
+  /**
+   * Configure le moteur. Distant : connexion immédiate. Managé : le serveur
+   * démarrera au premier openConversation (il lui faut un modèle).
+   */
+  async startEngine(config: BackendConfigDto): Promise<BackendStatusDto> {
+    await this.teardownBackend();
+    this.engine = config;
 
-    let backend: Backend;
-    let live: LiveBackendConfig;
-
-    if (config.mode === 'managed') {
-      const nCtx = config.nCtx ?? 8192;
-      const cacheType = 'f16';
-      backend = createLlamaCppBackend({
-        mode: 'managed',
-        binPath: config.binPath,
-        spawnFn: realSpawn,
-        // CLI unifié `llama` → sous-commande serve ; binaire historique → rien.
-        commandPrefix: detectServeCommandPrefix(config.binPath),
-        launch: {
-          modelPath: config.modelPath,
-          port: 8763,
-          nCtx,
-          cacheTypeK: cacheType,
-          cacheTypeV: cacheType,
-          slotSavePath: kvSlotsDir(),
-          parallelSlots: 1,
-          ...(config.nGpuLayers !== undefined
-            ? { nGpuLayers: config.nGpuLayers }
-            : {}),
-        },
-      });
-      live = {
-        modelFingerprint: await fingerprintModelFile(config.modelPath),
-        nCtx,
-        cacheTypeK: cacheType,
-        cacheTypeV: cacheType,
-        buildTag: await readBuildTag(config.binPath),
-      };
-    } else {
-      backend = createLlamaCppBackend({ mode: 'remote', url: config.url });
-      live = {
-        modelFingerprint: 'remote:pending',
+    if (config.mode === 'remote') {
+      const backend = createLlamaCppBackend({ mode: 'remote', url: config.url });
+      this.watchStatus(backend);
+      await backend.start();
+      const props = await backend.props();
+      this.backend = backend;
+      this.loadedModelPath = props.modelPath || 'remote';
+      this.live = {
+        modelFingerprint: `remote:${props.modelPath}`,
         nCtx: 0,
         cacheTypeK: 'f16',
         cacheTypeV: 'f16',
@@ -169,28 +169,118 @@ export class Harness {
       };
     }
 
+    return this.status();
+  }
+
+  private watchStatus(backend: Backend): void {
+    this.unsubscribeStatus?.();
     this.unsubscribeStatus = backend.onStatusChange((status) =>
       this.emit(IPC.evBackendStatus, status),
     );
+  }
+
+  private async teardownBackend(): Promise<void> {
+    this.unsubscribeStatus?.();
+    this.unsubscribeStatus = null;
+    if (this.backend) {
+      await this.backend.stop().catch(() => undefined);
+    }
+    this.backend = null;
+    this.live = null;
+    this.loadedModelPath = null;
+    this.session = null;
+  }
+
+  /** Garantit un serveur managé chargé avec CE modèle (redémarre si besoin). */
+  private async ensureManagedBackend(modelPath: string): Promise<void> {
+    if (!this.engine || this.engine.mode !== 'managed') {
+      throw new Error('Moteur managé non configuré.');
+    }
+    if (
+      this.backend &&
+      this.loadedModelPath === modelPath &&
+      this.backend.status() === 'ready'
+    ) {
+      return;
+    }
+
+    // Bascule de modèle : on sauvegarde l'état de la session courante avant.
+    await this.saveKv();
+    if (this.backend) {
+      this.unsubscribeStatus?.();
+      await this.backend.stop().catch(() => undefined);
+      this.backend = null;
+    }
+
+    const nCtx = this.engine.nCtx ?? 8192;
+    const cacheType = 'f16';
+    const backend = createLlamaCppBackend({
+      mode: 'managed',
+      binPath: this.engine.binPath,
+      spawnFn: realSpawn,
+      // CLI unifié `llama` → sous-commande serve ; binaire historique → rien.
+      commandPrefix: detectServeCommandPrefix(this.engine.binPath),
+      launch: {
+        modelPath,
+        port: MANAGED_PORT,
+        nCtx,
+        cacheTypeK: cacheType,
+        cacheTypeV: cacheType,
+        slotSavePath: kvSlotsDir(),
+        parallelSlots: 1,
+        ...(this.engine.nGpuLayers !== undefined
+          ? { nGpuLayers: this.engine.nGpuLayers }
+          : {}),
+      },
+    });
+    this.watchStatus(backend);
 
     await mkdir(kvSlotsDir(), { recursive: true });
     await backend.start();
 
-    if (config.mode === 'remote') {
-      // Identité du modèle distant : le chemin rapporté par /props.
-      const props = await backend.props();
-      live = { ...live, modelFingerprint: `remote:${props.modelPath}` };
-    }
-
     this.backend = backend;
-    this.live = live;
-    return backend.status();
+    this.loadedModelPath = modelPath;
+    this.live = {
+      modelFingerprint: await fingerprintModelFile(modelPath),
+      nCtx,
+      cacheTypeK: cacheType,
+      cacheTypeV: cacheType,
+      buildTag: await readBuildTag(this.engine.binPath),
+    };
   }
 
-  async openConversation(id: string): Promise<ConversationOpenResultDto> {
-    if (!this.backend || !this.live) {
-      throw new Error('Backend non démarré.');
+  async openConversation(
+    id: string = DEFAULT_CONVERSATION,
+    modelPath?: string,
+  ): Promise<ConversationOpenReplyDto> {
+    if (!this.engine) throw new Error('Moteur non configuré.');
+
+    // Résout le modèle de la conversation : méta épinglée > paramètre > à choisir.
+    let convModel: string | undefined;
+    if (await this.store.exists(id)) {
+      const meta = await this.store.meta(id);
+      convModel = meta.modelPath ?? modelPath;
+      if (!meta.modelPath && modelPath) {
+        await this.store.setModel(id, modelPath);
+      }
+    } else {
+      convModel = modelPath;
     }
+
+    if (this.engine.mode === 'managed') {
+      if (!convModel) return { needsModel: true, conversationId: id };
+      await this.ensureManagedBackend(convModel);
+    } else if (!convModel) {
+      // Distant : le modèle est celui du serveur — informatif.
+      convModel = this.loadedModelPath ?? 'remote';
+    }
+
+    if (!this.backend || !this.live) throw new Error('Backend non démarré.');
+
+    if (!(await this.store.exists(id))) {
+      await this.store.create(id, { modelPath: convModel });
+    }
+
     const { session, restore } = await ChatSession.open(
       {
         backend: this.backend,
@@ -206,6 +296,8 @@ export class Harness {
     const events = await this.store.loadEvents(id);
     return {
       conversationId: id,
+      modelPath: convModel,
+      modelName: modelDisplayName(convModel),
       events: events.map((event) =>
         event.type === 'user'
           ? { type: 'user', text: event.text, at: event.at }
@@ -269,6 +361,10 @@ export class Harness {
     return binPath ? { binPath } : {};
   }
 
+  async scanModelInventory(): Promise<ModelInfoDto[]> {
+    return scanModels(defaultScanRoots());
+  }
+
   async pickFile(kind: PickFileKind): Promise<string | null> {
     if (!this.window) return null;
     const filters =
@@ -298,16 +394,23 @@ export class Harness {
     );
     ipcMain.handle(IPC.backendStatus, () => this.status());
     ipcMain.handle(IPC.backendStart, (_e, config: BackendConfigDto) =>
-      this.startBackend(config),
+      this.startEngine(config),
     );
-    ipcMain.handle(IPC.conversationOpen, (_e, id?: string) =>
-      this.openConversation(id ?? DEFAULT_CONVERSATION),
+    ipcMain.handle(IPC.conversationOpen, (_e, id?: string, modelPath?: string) =>
+      this.openConversation(id, modelPath),
     );
     ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
     ipcMain.handle(IPC.kvSave, () => this.saveKv());
     ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
+    ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
     ipcMain.handle(IPC.dialogPickFile, (_e, kind: PickFileKind) =>
       this.pickFile(kind),
     );
+    ipcMain.handle(IPC.openExternal, async (_e, url: string) => {
+      if (!EXTERNAL_URL_ALLOWLIST.some((re) => re.test(url))) {
+        throw new Error(`URL externe refusée : ${url}`);
+      }
+      await shell.openExternal(url);
+    });
   }
 }

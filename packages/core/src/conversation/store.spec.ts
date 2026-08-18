@@ -25,7 +25,7 @@ afterEach(async () => {
 describe('ConversationStore', () => {
   it('create puis listMeta expose la conversation', async () => {
     const store = await makeStore();
-    await store.create('conv-1', 'Ma conversation');
+    await store.create('conv-1', { title: 'Ma conversation' });
     const metas = await store.listMeta();
     expect(metas).toHaveLength(1);
     expect(metas[0]).toMatchObject({ id: 'conv-1', title: 'Ma conversation' });
@@ -56,6 +56,26 @@ describe('ConversationStore', () => {
   it('loadEvents sur une conversation inconnue lève une erreur claire', async () => {
     const store = await makeStore();
     await expect(store.loadEvents('fantome')).rejects.toThrow(/fantome/);
+  });
+
+  it('épingle le modèle de la conversation à la création', async () => {
+    const store = await makeStore();
+    await store.create('conv-1', { modelPath: 'D:\\models\\qwen3.gguf' });
+    const meta = await store.meta('conv-1');
+    expect(meta.modelPath).toBe('D:\\models\\qwen3.gguf');
+  });
+
+  it('setModel pose le modèle sur une conversation qui n’en avait pas', async () => {
+    const store = await makeStore();
+    await store.create('conv-1');
+    expect((await store.meta('conv-1')).modelPath).toBeUndefined();
+    await store.setModel('conv-1', 'D:\\models\\qwen3.gguf');
+    expect((await store.meta('conv-1')).modelPath).toBe('D:\\models\\qwen3.gguf');
+  });
+
+  it('meta lève une erreur claire pour une conversation inconnue', async () => {
+    const store = await makeStore();
+    await expect(store.meta('fantome')).rejects.toThrow(/fantome/);
   });
 
   it('appendEvent met à jour updatedAt', async () => {

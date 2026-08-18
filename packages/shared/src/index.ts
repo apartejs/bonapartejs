@@ -25,6 +25,8 @@ export const IPC = {
   kvSave: 'kv.save',
   setupSuggest: 'setup.suggest',
   dialogPickFile: 'dialog.pickFile',
+  modelsScan: 'models.scan',
+  openExternal: 'shell.openExternal',
   /** Événements poussés main → renderer. */
   evAgent: 'ev.agent',
   evBackendStatus: 'ev.backendStatus',
@@ -32,16 +34,28 @@ export const IPC = {
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
-/** Config d'un backend llama.cpp, telle que persistée dans global.json. */
+/**
+ * Config du MOTEUR llama.cpp (persistée dans global.json). Le modèle n'en
+ * fait pas partie : c'est une propriété de chaque conversation, choisie
+ * depuis l'inventaire.
+ */
 export type BackendConfigDto =
   | { mode: 'remote'; url: string }
   | {
       mode: 'managed';
       binPath: string;
-      modelPath: string;
       nCtx?: number;
       nGpuLayers?: number;
     };
+
+/** Modèle découvert par l'inventaire (scan des emplacements connus). */
+export interface ModelInfoDto {
+  path: string;
+  name: string;
+  sizeBytes: number;
+  modifiedAt: string;
+  source: 'lmstudio' | 'hf-cache' | 'custom' | 'manual';
+}
 
 export interface AppConfigDto {
   backend?: BackendConfigDto;
@@ -89,7 +103,18 @@ export interface ConversationOpenResultDto {
   conversationId: string;
   events: ConversationEventDto[];
   restore: RestoreDto;
+  /** Modèle épinglé à la conversation. */
+  modelPath?: string;
+  modelName?: string;
 }
+
+/** L'ouverture exige un choix de modèle (nouvelle conversation en managé). */
+export interface NeedsModelDto {
+  needsModel: true;
+  conversationId: string;
+}
+
+export type ConversationOpenReplyDto = ConversationOpenResultDto | NeedsModelDto;
 
 /** Pré-remplissage du panneau de configuration (détection machine). */
 export interface SetupSuggestionDto {
@@ -105,12 +130,15 @@ export type PickFileKind = 'binary' | 'gguf';
 export interface BonaparteBridge {
   suggestSetup(): Promise<SetupSuggestionDto>;
   pickFile(kind: PickFileKind): Promise<string | null>;
+  scanModels(): Promise<ModelInfoDto[]>;
+  /** N'ouvre que des URLs https d'une liste blanche (main process). */
+  openExternal(url: string): Promise<void>;
   getVersion(): Promise<string>;
   getConfig(): Promise<AppConfigDto>;
   setConfig(config: AppConfigDto): Promise<void>;
   getBackendStatus(): Promise<BackendStatusDto>;
   startBackend(config: BackendConfigDto): Promise<BackendStatusDto>;
-  openConversation(id?: string): Promise<ConversationOpenResultDto>;
+  openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto>;
   sendMessage(text: string): Promise<void>;
   saveKv(): Promise<boolean>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;

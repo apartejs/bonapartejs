@@ -5,7 +5,6 @@ import {
   type BackendConfigDto,
   type BackendStatusDto,
   type BonaparteBridge,
-  type ConversationOpenResultDto,
 } from '@aparte/bonaparte-shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -17,6 +16,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 const api: BonaparteBridge = {
   suggestSetup: () => ipcRenderer.invoke(IPC.setupSuggest),
   pickFile: (kind) => ipcRenderer.invoke(IPC.dialogPickFile, kind),
+  scanModels: () => ipcRenderer.invoke(IPC.modelsScan),
+  openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   getConfig: (): Promise<AppConfigDto> => ipcRenderer.invoke(IPC.configGet),
   setConfig: (config: AppConfigDto): Promise<void> =>
@@ -25,8 +26,8 @@ const api: BonaparteBridge = {
     ipcRenderer.invoke(IPC.backendStatus),
   startBackend: (config: BackendConfigDto): Promise<BackendStatusDto> =>
     ipcRenderer.invoke(IPC.backendStart, config),
-  openConversation: (id?: string): Promise<ConversationOpenResultDto> =>
-    ipcRenderer.invoke(IPC.conversationOpen, id),
+  openConversation: (id?: string, modelPath?: string) =>
+    ipcRenderer.invoke(IPC.conversationOpen, id, modelPath),
   sendMessage: (text: string): Promise<void> =>
     ipcRenderer.invoke(IPC.agentSend, text),
   saveKv: (): Promise<boolean> => ipcRenderer.invoke(IPC.kvSave),

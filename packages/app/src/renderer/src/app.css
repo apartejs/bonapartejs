@@ -231,6 +231,125 @@ button.primary {
   color: var(--aparte-success, #2e7d32);
 }
 
+.install-hint {
+  border: 1px dashed var(--aparte-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--aparte-text-muted);
+}
+
+.install-hint p {
+  margin: 0 0 8px;
+}
+
+.install-hint code {
+  display: block;
+  font-family: var(--bp-mono);
+  font-size: 12.5px;
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+  user-select: all;
+}
+
+.install-hint-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Sélecteur de modèles ──────────────────────────────────────────── */
+
+.model-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--aparte-border);
+  border-radius: 10px;
+}
+
+.model-list li + li {
+  border-top: 1px solid var(--aparte-border);
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.model-row:hover {
+  background: var(--aparte-surface-2);
+}
+
+.model-row.selected {
+  background: var(--aparte-surface-2);
+  box-shadow: inset 3px 0 0 var(--aparte-primary);
+}
+
+.model-row input {
+  accent-color: var(--aparte-primary);
+}
+
+.model-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--bp-mono);
+  font-size: 13px;
+}
+
+.model-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+  white-space: nowrap;
+}
+
+.model-source {
+  font-family: var(--bp-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--aparte-border);
+}
+
+.picker-scanning,
+.picker-empty {
+  color: var(--aparte-text-muted);
+  font-size: 13.5px;
+  margin: 0 0 16px;
+}
+
+.picker-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chip-model {
+  font-family: var(--bp-mono);
+  color: var(--aparte-secondary, var(--aparte-text-muted));
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .setup-error {
   color: var(--aparte-error, #c0392b);
   font-size: 13px;
