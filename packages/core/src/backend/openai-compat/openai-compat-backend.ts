@@ -4,15 +4,20 @@
  * brut, pas de grammaire, pas de format Hermes — des `messages[]`, des outils
  * déclarés en JSON, et des appels d'outils déjà structurés par le serveur.
  *
- * À REMPLACER : `@aparte/provider-openai-compat` fait exactement ce mapping,
- * y compris `include_usage` et `prompt_tokens_details.cached_tokens`. J'avais
- * écrit ici qu'il n'était pas importable depuis Node — c'était faux :
- * `@aparte/core` déclare une condition `node` dans sa map d'exports, qui
- * résout vers un `index.node.js` sans DOM (vérifié par un import réel). Cet
- * adaptateur ne survit donc que le temps de brancher le provider de la lib
- * derrière notre interface `Backend`.
+ * Le format est délégué à `@aparte/provider-openai-compat` : `buildRequest()`
+ * fabrique le corps de la requête, `parseStream()` démultiplexe le SSE. Ce
+ * paquet sépare proprement le FORMAT du TRANSPORT, donc bonaparte garde son
+ * `fetch` (son signal d'annulation, son URL, ses en-têtes) et n'emprunte que
+ * la partie « dialecte OpenAI ». Notre travail se réduit à traduire notre
+ * transcript en messages aparté, et les événements aparté en `ProviderEvent`.
  */
 
+import { createOpenAICompatProvider } from '@aparte/provider-openai-compat';
+import type {
+  AparteChatMessage,
+  AparteTool,
+  AparteUsage,
+} from '@aparte/core';
 import type {
   Backend,
   BackendStatus,
@@ -37,23 +42,15 @@ export interface OpenAiCompatOptions {
   label?: string;
 }
 
-export interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
-  tool_calls?: {
-    id: string;
-    type: 'function';
-    function: { name: string; arguments: string };
-  }[];
-  tool_call_id?: string;
-}
-
-/** Transcript sémantique → messages OpenAI. */
+/**
+ * Transcript sémantique → messages aparté. C'est notre seule responsabilité de
+ * format : la traduction vers le dialecte OpenAI appartient au provider.
+ */
 export function toChatMessages(
   systemPrompt: string,
   transcript: TranscriptEntry[],
-): ChatMessage[] {
-  const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
+): AparteChatMessage[] {
+  const messages: AparteChatMessage[] = [{ role: 'system', content: systemPrompt }];
   let callSeq = 0;
   /** Ids attribués aux appels du dernier tour, pour lier les résultats. */
   let lastCallIds: string[] = [];
@@ -66,32 +63,31 @@ export function toChatMessages(
         break;
       case 'assistant': {
         const calls = entry.calls ?? [];
-        // N'écraser les ids que s'il y a des appels : un tour assistant sans
-        // appel ne doit pas orphelin les résultats du tour précédent.
-        if (calls.length > 0) lastCallIds = calls.map(() => `call_${callSeq++}`);
+        // Un tour assistant sans appel reste un tour assistant : il ne doit pas
+        // écraser les ids et orpheliner les résultats du tour précédent.
+        if (calls.length === 0) {
+          messages.push({ role: 'assistant', content: entry.text });
+          break;
+        }
+        lastCallIds = calls.map(() => `call_${callSeq++}`);
         messages.push({
-          role: 'assistant',
+          role: 'tool_call',
           content: entry.text,
-          ...(calls.length > 0
-            ? {
-                tool_calls: calls.map((call, index) => ({
-                  id: lastCallIds[index] as string,
-                  type: 'function' as const,
-                  function: {
-                    name: call.name,
-                    arguments: JSON.stringify(call.arguments),
-                  },
-                })),
-              }
-            : {}),
+          // Le texte dit avant l'appel : le provider le remet dans `content`.
+          precedingText: entry.text,
+          toolCalls: calls.map((call, index) => ({
+            id: lastCallIds[index] as string,
+            name: call.name,
+            input: call.arguments,
+          })),
         });
         break;
       }
       case 'tool_results':
         entry.results.forEach((result, index) => {
           messages.push({
-            role: 'tool',
-            tool_call_id: lastCallIds[index] ?? `call_${index}`,
+            role: 'tool_result',
+            toolCallId: lastCallIds[index] ?? `call_${index}`,
             content: `${result.ok ? '' : '[failed] '}${result.content}`,
           });
         });
@@ -101,28 +97,13 @@ export function toChatMessages(
   return messages;
 }
 
-/** Outils bonaparte → schéma d'outils OpenAI. */
-export function toChatTools(tools: ToolDefLike[]): unknown[] {
+/** Outils bonaparte → outils aparté (le provider en fait des `function`). */
+export function toChatTools(tools: ToolDefLike[]): AparteTool[] {
   return tools.map((tool) => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.inputSchema,
-    },
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema,
   }));
-}
-
-interface StreamingCall {
-  name: string;
-  args: string;
-}
-
-interface OpenAiUsage {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-  prompt_tokens_details?: { cached_tokens?: number };
 }
 
 export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend {
@@ -133,9 +114,34 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
     for (const listener of listeners) listener(next);
   };
 
+  // `isLocal` : sans clé, un serveur local est le cas normal, pas une erreur
+  // de configuration.
+  const provider = createOpenAICompatProvider({
+    id: options.label ?? 'openai-compat',
+    baseURL: options.baseUrl,
+    ...(options.label ? { name: options.label } : {}),
+    isLocal: !options.apiKey,
+  });
+
+  // `AparteAIProvider` déclare la surface d'adaptateur de format en optionnel
+  // (un provider peut, à la place, faire ses I/O lui-même) — la factory, elle,
+  // la fournit toujours. On vérifie une fois, avec un message utile, plutôt
+  // que de semer des `!` qui mentiraient le jour où ça changerait.
+  const { buildRequest, parseStream } = provider;
+  if (!buildRequest || !parseStream) {
+    throw new Error(
+      'Le provider OpenAI-compatible n’expose plus buildRequest/parseStream : ' +
+        'la surface d’adaptateur de format d’@aparte/provider-openai-compat a changé.',
+    );
+  }
+
   const headers = (): Record<string, string> => ({
     'content-type': 'application/json',
-    ...(options.apiKey ? { authorization: `Bearer ${options.apiKey}` } : {}),
+    ...(options.apiKey
+      ? (provider.authHeaders?.(options.apiKey) ?? {
+          Authorization: `Bearer ${options.apiKey}`,
+        })
+      : {}),
   });
 
   const backend: Backend = {
@@ -184,18 +190,18 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
           : {}),
       });
 
-      const res = await fetch(`${options.baseUrl}/chat/completions`, {
+      const built = buildRequest({
+        modelId: options.model,
+        messages: toChatMessages(systemPrompt, request.transcript),
+        stream: true,
+        ...(request.tools.length > 0 ? { tools: toChatTools(request.tools) } : {}),
+      });
+
+      const res = await fetch(`${options.baseUrl}${built.path}`, {
         method: 'POST',
-        headers: headers(),
+        headers: { ...headers(), ...built.headers },
         signal: request.signal,
-        body: JSON.stringify({
-          model: options.model,
-          stream: true,
-          // Sans ceci, aucun compte de tokens n'est renvoyé en streaming.
-          stream_options: { include_usage: true },
-          messages: toChatMessages(systemPrompt, request.transcript),
-          ...(request.tools.length > 0 ? { tools: toChatTools(request.tools) } : {}),
-        }),
+        body: JSON.stringify(built.body),
       });
       if (!res.ok || !res.body) {
         throw new Error(
@@ -206,59 +212,69 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
       }
 
       const started = Date.now();
-      const calls = new Map<number, StreamingCall>();
-      let usage: OpenAiUsage | undefined;
       // Deux façons d'émettre le raisonnement coexistent chez les serveurs
-      // compatibles : le champ `reasoning_content` (LM Studio, vLLM récents)
-      // ou des balises `<think>` au milieu du contenu. Le contenu passe donc
-      // par le démultiplexeur, sinon l'utilisateur lit les balises brutes.
-      // Les blocs `<tool_call>` restent visibles ici : le serveur gère les
-      // outils nativement, un bloc texte y serait une bizarrerie du modèle et
-      // la masquer ferait disparaître une intention sans laisser de trace.
+      // compatibles : le champ `reasoning_content`, que le provider traduit en
+      // événement `thinking`, ou des balises `<think>` au milieu du contenu,
+      // qu'il laisse passer — d'où le démultiplexeur sur le texte, sinon
+      // l'utilisateur lit les balises brutes. Les blocs `<tool_call>` restent
+      // visibles : le serveur gère les outils nativement, un bloc texte y
+      // serait une bizarrerie du modèle et la masquer ferait disparaître une
+      // intention sans laisser de trace.
       const demux = new HermesStreamDemux({ keepToolCalls: true });
+      // CONTOURNEMENT (à retirer dès correction de la lib) : `parseStream`
+      // sort dès `finish_reason: "tool_calls"`, donc AVANT le chunk d'usage
+      // que `include_usage` — demandé par son propre `buildRequest` — envoie
+      // ensuite. Sur un agent, la plupart des tours finissent par un appel :
+      // sans cette dérivation, la barre de statut afficherait zéro token la
+      // moitié du temps. On duplique donc le flux et on relit la queue nous-
+      // mêmes uniquement si l'usage manque.
+      const [forParser, forUsage] = res.body.tee();
+      const reader = parseStream(forParser).getReader();
+      let usage: AparteUsage | undefined;
+      let drained = false;
 
-      for await (const chunk of sseChunks(res.body)) {
-        if (chunk.usage) usage = chunk.usage;
-        const delta = chunk?.choices?.[0]?.delta as
-          | {
-              content?: string;
-              reasoning_content?: string;
-              tool_calls?: {
-                index: number;
-                function?: { name?: string; arguments?: string };
-              }[];
-            }
-          | undefined;
-        if (!delta) continue;
-
-        if (delta.content) {
-          for (const event of demux.push(delta.content)) yield event;
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          switch (value.type) {
+            case 'text':
+              for (const event of demux.push(value.delta)) yield event;
+              break;
+            case 'thinking':
+              yield { type: 'thinking', delta: value.delta };
+              break;
+            case 'tool_use':
+              // Le texte retenu par le démultiplexeur doit sortir avant
+              // l'appel : sinon la phrase précédant l'outil arrive après lui.
+              for (const event of demux.flush()) yield event;
+              yield {
+                type: 'tool_use',
+                call: { name: value.name, arguments: value.input },
+              };
+              break;
+            case 'done':
+              usage = value.usage;
+              break;
+            case 'error':
+              throw new Error(value.message);
+          }
         }
-        if (delta.reasoning_content) {
-          yield { type: 'thinking', delta: delta.reasoning_content };
-        }
-        // Les arguments arrivent en fragments : on accumule par index.
-        for (const part of delta.tool_calls ?? []) {
-          const current = calls.get(part.index) ?? { name: '', args: '' };
-          if (part.function?.name) current.name = part.function.name;
-          if (part.function?.arguments) current.args += part.function.arguments;
-          calls.set(part.index, current);
-        }
+        drained = true;
+      } finally {
+        // Annuler propage jusqu'au corps de la réponse : un `stop` utilisateur
+        // ne doit pas laisser le serveur générer dans le vide. La branche de
+        // secours doit partir avec, sinon elle reste verrouillée pour rien.
+        await reader.cancel().catch(() => undefined);
+        if (!drained) await forUsage.cancel().catch(() => undefined);
       }
+
+      usage ??= await readTrailingUsage(forUsage);
 
       // Un fragment de balise retenu en fin de flux doit ressortir.
       for (const event of demux.flush()) yield event;
 
-      for (const call of [...calls.entries()]
-        .sort(([a], [b]) => a - b)
-        .map(([, value]) => value)) {
-        yield {
-          type: 'tool_use',
-          call: { name: call.name, arguments: safeJson(call.args) },
-        };
-      }
-
-      const cached = usage?.prompt_tokens_details?.cached_tokens;
+      const cached = usage?.cacheReadTokens;
       yield {
         type: 'done',
         stats: {
@@ -268,18 +284,18 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
           promptMs: 0,
           promptUncachedTokens:
             usage && cached !== undefined
-              ? Math.max(0, (usage.prompt_tokens ?? 0) - cached)
-              : (usage?.prompt_tokens ?? 0),
-          predictedTokens: usage?.completion_tokens ?? 0,
+              ? Math.max(0, usage.inputTokens - cached)
+              : (usage?.inputTokens ?? 0),
+          predictedTokens: usage?.outputTokens ?? 0,
           predictedMs: Date.now() - started,
           // Certains serveurs (dont LM Studio récent) rapportent la part de
           // prompt servie par leur cache : on l'affiche telle quelle.
           ...(usage && cached !== undefined
             ? {
                 progress: {
-                  total: usage.prompt_tokens ?? 0,
+                  total: usage.inputTokens,
                   cache: cached,
-                  processed: usage.prompt_tokens ?? 0,
+                  processed: usage.inputTokens,
                   timeMs: 0,
                 },
               }
@@ -307,44 +323,57 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
   return backend;
 }
 
-function safeJson(raw: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw || '{}');
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-/** Itère les objets JSON d'un flux SSE `data: {...}` (bufferisé). */
-async function* sseChunks(
-  body: ReadableStream<Uint8Array>,
-): AsyncGenerator<{ choices?: { delta?: unknown }[]; usage?: OpenAiUsage }> {
+/**
+ * Dernier objet `usage` d'un flux SSE, ou `undefined`. Filet de secours pour
+ * le tour qui finit par un appel d'outil — disparaît avec le contournement.
+ */
+async function readTrailingUsage(
+  stream: ReadableStream<Uint8Array>,
+): Promise<AparteUsage | undefined> {
+  const reader = stream.getReader();
   const decoder = new TextDecoder();
-  const reader = body.getReader();
   let buffer = '';
+  let found: AparteUsage | undefined;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      let sep: number;
-      while ((sep = buffer.indexOf('\n\n')) !== -1) {
-        const block = buffer.slice(0, sep).trim();
-        buffer = buffer.slice(sep + 2);
-        if (!block.startsWith('data: ')) continue;
-        const payload = block.slice('data: '.length);
-        if (payload === '[DONE]') return;
-        try {
-          yield JSON.parse(payload);
-        } catch {
-          // fragment inexploitable : ignoré
-        }
+    }
+    for (const line of buffer.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const raw = trimmed.slice(5).trim();
+      if (raw === '[DONE]') continue;
+      try {
+        const usage = (
+          JSON.parse(raw) as {
+            usage?: {
+              prompt_tokens?: number;
+              completion_tokens?: number;
+              total_tokens?: number;
+              prompt_tokens_details?: { cached_tokens?: number };
+            };
+          }
+        ).usage;
+        if (!usage) continue;
+        found = {
+          inputTokens: usage.prompt_tokens ?? 0,
+          outputTokens: usage.completion_tokens ?? 0,
+          ...(usage.total_tokens !== undefined ? { totalTokens: usage.total_tokens } : {}),
+          ...(usage.prompt_tokens_details?.cached_tokens !== undefined
+            ? { cacheReadTokens: usage.prompt_tokens_details.cached_tokens }
+            : {}),
+        };
+      } catch {
+        // Ligne inexploitable : le filet de secours ne doit jamais faire
+        // échouer un tour par ailleurs réussi.
       }
     }
+  } catch {
+    // idem : pas d'usage vaut mieux qu'un tour perdu.
   } finally {
     reader.releaseLock();
   }
+  return found;
 }

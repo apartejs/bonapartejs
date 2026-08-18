@@ -42,7 +42,7 @@ async function collect(
   };
 }
 
-describe('mapping transcript → messages OpenAI', () => {
+describe('mapping transcript → messages aparté', () => {
   it('traduit chaque rôle, et lie les résultats à leur appel', () => {
     const transcript: TranscriptEntry[] = [
       { role: 'user', text: 'lis a.ts' },
@@ -60,12 +60,17 @@ describe('mapping transcript → messages OpenAI', () => {
 
     expect(messages[0]).toEqual({ role: 'system', content: 'SYS' });
     expect(messages[1]).toEqual({ role: 'user', content: 'lis a.ts' });
-    expect(messages[2]!.tool_calls?.[0]).toMatchObject({
-      type: 'function',
-      function: { name: 'read_file', arguments: '{"path":"a.ts"}' },
+
+    const call = messages[2]!;
+    expect(call.role).toBe('tool_call');
+    expect(call.toolCalls?.[0]).toMatchObject({
+      name: 'read_file',
+      input: { path: 'a.ts' },
     });
+    // Le texte dit avant l'appel n'est pas perdu.
+    expect(call.precedingText).toBe('je regarde');
     // Le résultat référence l'id de l'appel auquel il répond.
-    expect(messages[3]!.tool_call_id).toBe(messages[2]!.tool_calls![0]!.id);
+    expect(messages[3]!.toolCallId).toBe(call.toolCalls![0]!.id);
   });
 
   it('rend un message de service comme un tour utilisateur', () => {
@@ -82,10 +87,11 @@ describe('mapping transcript → messages OpenAI', () => {
     expect(messages[1]!.content).toContain('failed');
   });
 
-  it('déclare les outils au format function-calling', () => {
+  it('déclare les outils avec leur schéma', () => {
     expect(toChatTools([def('read_file')])[0]).toMatchObject({
-      type: 'function',
-      function: { name: 'read_file', description: 'outil read_file' },
+      name: 'read_file',
+      description: 'outil read_file',
+      inputSchema: { type: 'object' },
     });
   });
 });
@@ -145,6 +151,30 @@ describe('backend OpenAI-compatible', () => {
     expect(done.stats.progress?.cache).toBe(100);
   });
 
+  it('rapporte l’usage même quand le tour se termine par un appel d’outil', async () => {
+    // Sur un agent, la plupart des tours finissent par un appel : si l'usage
+    // n'était compté que sur les tours purement textuels, la barre de statut
+    // afficherait zéro token la moitié du temps.
+    const { backend } = await rig([
+      { text: 'je regarde ', calls: [{ name: 'read_file', arguments: { path: 'a.ts' } }] },
+    ]);
+    const events: unknown[] = [];
+    for await (const event of backend.runTurn({
+      conversationId: 'c1',
+      system: {},
+      tools: [def('read_file')],
+      transcript: [{ role: 'user', text: 'lis' }],
+      signal: new AbortController().signal,
+    })) {
+      events.push(event);
+    }
+    const done = events.at(-1) as {
+      stats: { predictedTokens: number; progress?: { cache: number } };
+    };
+    expect(done.stats.predictedTokens).toBe(7);
+    expect(done.stats.progress?.cache).toBe(100);
+  });
+
   it('ne rattache pas les résultats à un tour assistant sans appel', () => {
     const messages = toChatMessages('SYS', [
       {
@@ -155,8 +185,7 @@ describe('backend OpenAI-compatible', () => {
       { role: 'assistant', text: 'digression sans appel' },
       { role: 'tool_results', results: [{ name: 't', ok: true, content: 'r' }] },
     ]);
-    const callId = messages[1]!.tool_calls![0]!.id;
-    expect(messages.at(-1)!.tool_call_id).toBe(callId);
+    expect(messages.at(-1)!.toolCallId).toBe(messages[1]!.toolCalls![0]!.id);
   });
 
   it('recompose des arguments d’outil fragmentés', async () => {

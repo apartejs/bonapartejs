@@ -63,10 +63,17 @@ export async function startFakeOpenAiServer(
         for (const piece of (reply.text ?? '').match(/.{1,6}/gs) ?? []) {
           send({ content: piece });
         }
-        // Les arguments arrivent fragmentés, comme sur un vrai serveur.
+        // Les arguments arrivent fragmentés, comme sur un vrai serveur, et le
+        // premier fragment porte l'id de l'appel.
         (reply.calls ?? []).forEach((call, index) => {
           send({
-            tool_calls: [{ index, function: { name: call.name, arguments: '' } }],
+            tool_calls: [
+              {
+                index,
+                id: `call_${index}`,
+                function: { name: call.name, arguments: '' },
+              },
+            ],
           });
           const args = JSON.stringify(call.arguments);
           const half = Math.ceil(args.length / 2);
@@ -77,6 +84,19 @@ export async function startFakeOpenAiServer(
             tool_calls: [{ index, function: { arguments: args.slice(half) } }],
           });
         });
+        // Chunk de fin de tour : c'est LUI qui dit au client que les appels
+        // sont complets. L'omettre rendait la fixture plus permissive qu'un
+        // vrai serveur, et masquait les clients trop laxistes.
+        res.write(
+          `data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {},
+                finish_reason: (reply.calls ?? []).length > 0 ? 'tool_calls' : 'stop',
+              },
+            ],
+          })}\n\n`,
+        );
         // Chunk d'usage final, comme un vrai serveur avec include_usage.
         res.write(
           `data: ${JSON.stringify({

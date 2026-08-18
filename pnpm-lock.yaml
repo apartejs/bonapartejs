@@ -123,6 +123,12 @@ importers:
       '@aparte/bonaparte-shared':
         specifier: workspace:*
         version: link:../shared
+      '@aparte/core':
+        specifier: 0.3.0-alpha.0
+        version: 0.3.0-alpha.0
+      '@aparte/provider-openai-compat':
+        specifier: 0.3.0-alpha.0
+        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -173,6 +179,12 @@ packages:
 
   '@aparte/locale-fr@0.3.0-alpha.0':
     resolution: {integrity: sha512-QI0b4rjGEimny7qM+s12/XjvcQUBRx5hw8sb0fLyy4C67Az28u4hesE6F58W2QjiJTwcGLJcc59UrC1icLLxsw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@aparte/core': 0.3.0-alpha.0
+
+  '@aparte/provider-openai-compat@0.3.0-alpha.0':
+    resolution: {integrity: sha512-72+JSqhOVBo0JUDnEWsphF1z0TW9tZPIundW7g3+IbjnFKwUla0XI9gMwF1uv8AuIH1mGEJoG+DAq4PPqQVxZA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': 0.3.0-alpha.0
@@ -3081,6 +3093,10 @@ snapshots:
       '@aparte/core': 0.3.0-alpha.0
 
   '@aparte/locale-fr@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
+    dependencies:
+      '@aparte/core': 0.3.0-alpha.0
+
+  '@aparte/provider-openai-compat@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
     dependencies:
       '@aparte/core': 0.3.0-alpha.0
 
