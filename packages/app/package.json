@@ -14,10 +14,10 @@
   "dependencies": {
     "@aparte/bonaparte-core": "workspace:*",
     "@aparte/bonaparte-shared": "workspace:*",
-    "@aparte/core": "0.2.0-alpha.0",
-    "@aparte/engine": "0.2.0-alpha.0",
-    "@aparte/locale-fr": "0.2.0-alpha.0",
-    "@aparte/react": "0.2.0-alpha.0",
+    "@aparte/core": "0.3.0-alpha.0",
+    "@aparte/engine": "0.3.0-alpha.0",
+    "@aparte/locale-fr": "0.3.0-alpha.0",
+    "@aparte/react": "0.3.0-alpha.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

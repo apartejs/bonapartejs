@@ -51,17 +51,17 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.2.0-alpha.0
-        version: 0.2.0-alpha.0
+        specifier: 0.3.0-alpha.0
+        version: 0.3.0-alpha.0
       '@aparte/engine':
-        specifier: 0.2.0-alpha.0
-        version: 0.2.0-alpha.0(@aparte/core@0.2.0-alpha.0)
+        specifier: 0.3.0-alpha.0
+        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)
       '@aparte/locale-fr':
-        specifier: 0.2.0-alpha.0
-        version: 0.2.0-alpha.0(@aparte/core@0.2.0-alpha.0)
+        specifier: 0.3.0-alpha.0
+        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)
       '@aparte/react':
-        specifier: 0.2.0-alpha.0
-        version: 0.2.0-alpha.0(@aparte/core@0.2.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.3.0-alpha.0
+        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -158,30 +158,30 @@ importers:
 
 packages:
 
-  '@aparte/core@0.2.0-alpha.0':
-    resolution: {integrity: sha512-al8xr8vcnXFFSL2yitc7V+1MoK3GRgUEr5Ddw4y5KR1eWNNK3SCufDksqDiilkfoRhGkw6JzADyjx4aGZybJPg==}
+  '@aparte/core@0.3.0-alpha.0':
+    resolution: {integrity: sha512-ge9xNoJpgW1sbVXbx2pQjZNJ8XGF88hLByOutdXu0B1pAezVjh7V35tKPBk2qznp3Sp4S0QrWpDSZbTJBsPv7Q==}
     engines: {node: '>=18'}
 
-  '@aparte/engine@0.2.0-alpha.0':
-    resolution: {integrity: sha512-ZNfaELXJ/AX/0zmy9ESxPor1FfiEYpdtjLwDIJVByuhdowmGXQvdz3xJxGOz3n2J7Z40rBuCMuOkB2TVMR+ghA==}
+  '@aparte/engine@0.3.0-alpha.0':
+    resolution: {integrity: sha512-F6cs04q0caE6qgkf36eNjU/gVbVfq0LFbGcPu+WLxiqj1q4LrqgduKUdBeIzgr4xIbZgC18e9I5zdiCJ8/w4Ig==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.2.0-alpha.0
+      '@aparte/core': 0.3.0-alpha.0
     peerDependenciesMeta:
       '@aparte/core':
         optional: true
 
-  '@aparte/locale-fr@0.2.0-alpha.0':
-    resolution: {integrity: sha512-5LzBeVLr1MqO6y04jKpN5aDsYTNcMxhgvR3oN8rvDl9cRBrSI7DZTC2scdur+bEpp4huRAm28I42+IHhbnWHOQ==}
+  '@aparte/locale-fr@0.3.0-alpha.0':
+    resolution: {integrity: sha512-QI0b4rjGEimny7qM+s12/XjvcQUBRx5hw8sb0fLyy4C67Az28u4hesE6F58W2QjiJTwcGLJcc59UrC1icLLxsw==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.2.0-alpha.0
+      '@aparte/core': 0.3.0-alpha.0
 
-  '@aparte/react@0.2.0-alpha.0':
-    resolution: {integrity: sha512-nmqX8wG4xdDRfHGqnA+kA7rWN/Mk+zh3i887QYKtfjpY1Tn1x/y7oyUanrV8WRZMyR61tPdYYe98ylyzxwiSRQ==}
+  '@aparte/react@0.3.0-alpha.0':
+    resolution: {integrity: sha512-pcbs5sEHPY9n2loMswae8HN/hkd1qwcz3R87e4oiq4KZxJZiodVwk9Xvk+l34BkvALZOLSTjpNAc8e5pqZIauw==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.2.0-alpha.0
+      '@aparte/core': 0.3.0-alpha.0
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -3074,19 +3074,19 @@ packages:
 
 snapshots:
 
-  '@aparte/core@0.2.0-alpha.0': {}
+  '@aparte/core@0.3.0-alpha.0': {}
 
-  '@aparte/engine@0.2.0-alpha.0(@aparte/core@0.2.0-alpha.0)':
+  '@aparte/engine@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
     optionalDependencies:
-      '@aparte/core': 0.2.0-alpha.0
+      '@aparte/core': 0.3.0-alpha.0
 
-  '@aparte/locale-fr@0.2.0-alpha.0(@aparte/core@0.2.0-alpha.0)':
+  '@aparte/locale-fr@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
     dependencies:
-      '@aparte/core': 0.2.0-alpha.0
+      '@aparte/core': 0.3.0-alpha.0
 
-  '@aparte/react@0.2.0-alpha.0(@aparte/core@0.2.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@aparte/react@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@aparte/core': 0.2.0-alpha.0
+      '@aparte/core': 0.3.0-alpha.0
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 

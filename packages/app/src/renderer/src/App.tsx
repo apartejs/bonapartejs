@@ -1,4 +1,4 @@
-import { AparteConfig, DEFAULT_LOCALE } from '@aparte/core';
+import { AparteConfig } from '@aparte/core';
 import { fr as aparteFr } from '@aparte/locale-fr';
 import type {
   BackendConfigDto,
@@ -37,7 +37,8 @@ export function App() {
 
   // Locale des composants aparté (chaînes internes des web components).
   useEffect(() => {
-    AparteConfig.setLocale(locale === 'fr' ? aparteFr : DEFAULT_LOCALE);
+    if (locale === 'fr') AparteConfig.setLocale(aparteFr);
+    else AparteConfig.resetLocale(); // 0.3.0-alpha.0 — retour au défaut (en)
   }, [locale]);
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
