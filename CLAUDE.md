@@ -71,8 +71,15 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
 - Plan v1 approuvé : `docs/superpowers/specs/2026-08-18-bonaparte-v1-design.md`
 - La machine de Paul a le **CLI unifié `llama`** (WindowsApps) : serveur =
   `llama serve`, mêmes flags que llama-server (`detectServeCommandPrefix()`).
-- Jalons : J1 fondations+KV ✅ (validé en réel par Paul le 2026-08-18 : conv
-  lancée sur serveur managé) · J2 boucle agentique/outils/permissions/projet ·
-  J3 shell plugin-first (hub Réglages schema-driven, vraie barre de statut —
-  l'écran de distribution et les boutons de la barre actuels sont des
-  intérimaires assumés) · J4 MCP · J5 npx.
+- Jalons : J1 fondations+KV ✅ (validé en réel par Paul le 2026-08-18) ·
+  J2 boucle agentique/outils/permissions/projet ✅ en CI (288 tests core) —
+  **validation réelle en attente** · J3 shell plugin-first (hub Réglages
+  schema-driven, vraie barre de statut — l'écran de distribution et les
+  boutons de la barre actuels sont des intérimaires assumés) · J4 MCP · J5 npx.
+- Grammaire des tool-calls : `grammar_lazy` + `grammar_triggers` +
+  `preserved_tokens` sur `/completion` — **non documentés** dans le README de
+  llama.cpp, vérifiés dans `tools/server/server-schema.cpp`. Sans la
+  paresse, le modèle serait forcé d'appeler un outil à chaque tour.
+- La boucle N'utilise PAS `runStreamAgent` (@aparte/engine) : cet engine
+  possède la liste de messages, incompatible avec le prompt append-only.
+  Boucle maison dans `core/src/agent/loop.ts` (friction consignée).
