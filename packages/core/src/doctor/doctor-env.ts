@@ -73,6 +73,21 @@ export function createSystemDoctorEnv(
   return {
     nodeVersion: process.version,
     configuredLlamaServerPath: options.configuredLlamaServerPath ?? null,
+    readVersionOutput: async (binPath) => {
+      // llama peut écrire la version sur stderr : on capture les deux.
+      try {
+        const { stdout, stderr } = await execFileAsync(binPath, ['--version'], {
+          timeout: 5_000,
+          windowsHide: true,
+        });
+        return `${stdout}\n${stderr}`;
+      } catch (error) {
+        // execFile rejette aussi quand l'exit code ≠ 0 mais la sortie existe.
+        const e = error as { stdout?: string; stderr?: string };
+        const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}`.trim();
+        return out.length > 0 ? out : null;
+      }
+    },
     fileExists: async (path) => {
       try {
         await access(path);

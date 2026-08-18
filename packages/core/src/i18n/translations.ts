@@ -21,6 +21,7 @@ export interface HarnessTranslations {
     hasBlockingIssues: string;
     lowDisk: string;
     cpuOnly: string;
+    versionUnknown: string;
   };
   backend: {
     starting: string;
@@ -38,6 +39,7 @@ export interface HarnessTranslations {
   };
   errors: {
     llamaServerNotFound: string;
+    llamaTooOld: string;
     slotSavePathNotWritable: string;
     modelFileNotFound: string;
     backendUnreachable: string;
@@ -58,6 +60,7 @@ export const FR: HarnessTranslations = {
     hasBlockingIssues: 'Des problèmes bloquants ont été détectés.',
     lowDisk: 'Espace disque faible',
     cpuOnly: 'Aucun GPU détecté — exécution CPU uniquement',
+    versionUnknown: 'version indéterminable, compatibilité slots non garantie',
   },
   backend: {
     starting: 'Démarrage du serveur de modèle…',
@@ -78,6 +81,8 @@ export const FR: HarnessTranslations = {
   errors: {
     llamaServerNotFound:
       'llama-server introuvable — ni configuré, ni présent sur le PATH.',
+    llamaTooOld:
+      'build llama.cpp trop ancien pour la persistance de contexte (slots) — mettez à jour.',
     slotSavePathNotWritable:
       'Le répertoire des états KV n’est pas accessible en écriture.',
     modelFileNotFound: 'Fichier de modèle introuvable.',
@@ -99,6 +104,7 @@ export const EN: HarnessTranslations = {
     hasBlockingIssues: 'Blocking issues were detected.',
     lowDisk: 'Low disk space',
     cpuOnly: 'No GPU detected — running CPU-only',
+    versionUnknown: 'version undetectable, slots compatibility not guaranteed',
   },
   backend: {
     starting: 'Starting the model server…',
@@ -118,6 +124,8 @@ export const EN: HarnessTranslations = {
   errors: {
     llamaServerNotFound:
       'llama-server not found — neither configured nor on the PATH.',
+    llamaTooOld:
+      'llama.cpp build too old for context persistence (slots) — please update.',
     slotSavePathNotWritable: 'The KV state directory is not writable.',
     modelFileNotFound: 'Model file not found.',
     backendUnreachable: 'The model server is not responding.',

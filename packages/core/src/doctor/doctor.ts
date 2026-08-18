@@ -6,6 +6,11 @@
  */
 
 import type { BonaparteLocale } from '@aparte/bonaparte-shared';
+import {
+  isSupportedLlamaBuild,
+  MIN_LLAMA_BUILD,
+  parseLlamaBuildNumber,
+} from '../backend/llamacpp/version.js';
 import { harnessT } from '../i18n/translations.js';
 
 export interface GpuInfo {
@@ -21,6 +26,8 @@ export interface DoctorEnv {
   fileExists(path: string): Promise<boolean>;
   /** Résolution PATH (where/which) — null si absent. */
   lookupOnPath(binary: string): Promise<string | null>;
+  /** Sortie de `<binaire> --version` — null si inexécutable. */
+  readVersionOutput(binPath: string): Promise<string | null>;
   /** Répertoire où les états KV seront écrits (--slot-save-path). */
   slotSavePath: string;
   canWrite(dir: string): Promise<boolean>;
@@ -71,30 +78,59 @@ async function checkNode(env: DoctorEnv, label: string): Promise<DoctorCheck> {
 async function checkLlamaServer(
   env: DoctorEnv,
   label: string,
-  notFoundMessage: string,
+  messages: {
+    notFound: string;
+    tooOld: string;
+    versionUnknown: string;
+  },
 ): Promise<DoctorCheck> {
   const base = { id: 'llama-server' as const, label };
 
+  let binPath: string | null = null;
   if (env.configuredLlamaServerPath) {
     const exists = await env.fileExists(env.configuredLlamaServerPath);
     // Un chemin configuré qui ne pointe sur rien est une erreur de config :
     // échec explicite, pas de repli silencieux sur le PATH.
-    return exists
-      ? { ...base, status: 'ok', blocking: false, detail: env.configuredLlamaServerPath }
-      : {
-          ...base,
-          status: 'fail',
-          blocking: true,
-          detail: env.configuredLlamaServerPath,
-        };
+    if (!exists) {
+      return {
+        ...base,
+        status: 'fail',
+        blocking: true,
+        detail: env.configuredLlamaServerPath,
+      };
+    }
+    binPath = env.configuredLlamaServerPath;
+  } else {
+    // Binaire historique d'abord, puis le CLI unifié (`llama serve`, b10xxx+).
+    binPath =
+      (await env.lookupOnPath('llama-server')) ??
+      (await env.lookupOnPath('llama'));
   }
 
-  // Binaire historique d'abord, puis le CLI unifié (`llama serve`, b10xxx+).
-  const onPath =
-    (await env.lookupOnPath('llama-server')) ?? (await env.lookupOnPath('llama'));
-  return onPath
-    ? { ...base, status: 'ok', blocking: false, detail: onPath }
-    : { ...base, status: 'fail', blocking: true, detail: notFoundMessage };
+  if (!binPath) {
+    return { ...base, status: 'fail', blocking: true, detail: messages.notFound };
+  }
+
+  const versionOutput = await env.readVersionOutput(binPath);
+  const build = versionOutput === null ? null : parseLlamaBuildNumber(versionOutput);
+
+  if (build === null) {
+    return {
+      ...base,
+      status: 'warn',
+      blocking: false,
+      detail: `${binPath} — ${messages.versionUnknown}`,
+    };
+  }
+  if (!isSupportedLlamaBuild(build)) {
+    return {
+      ...base,
+      status: 'fail',
+      blocking: true,
+      detail: `${binPath} — b${build} < b${MIN_LLAMA_BUILD} : ${messages.tooOld}`,
+    };
+  }
+  return { ...base, status: 'ok', blocking: false, detail: `${binPath} (b${build})` };
 }
 
 async function checkSlotSavePath(
@@ -155,7 +191,11 @@ export async function runDoctor(
 
   const checks = [
     await checkNode(env, t.doctor.checkNode),
-    await checkLlamaServer(env, t.doctor.checkLlamaServer, t.errors.llamaServerNotFound),
+    await checkLlamaServer(env, t.doctor.checkLlamaServer, {
+      notFound: t.errors.llamaServerNotFound,
+      tooOld: t.errors.llamaTooOld,
+      versionUnknown: t.doctor.versionUnknown,
+    }),
     await checkSlotSavePath(
       env,
       t.doctor.checkSlotSavePath,

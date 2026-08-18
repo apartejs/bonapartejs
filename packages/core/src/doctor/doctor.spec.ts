@@ -7,6 +7,7 @@ function fakeEnv(overrides: Partial<DoctorEnv> = {}): DoctorEnv {
     nodeVersion: 'v24.14.0',
     configuredLlamaServerPath: null,
     fileExists: async () => false,
+    readVersionOutput: async () => 'b10217-ddd4ec142',
     lookupOnPath: async (binary) =>
       binary === 'llama-server' ? 'C:\\tools\\llama\\llama-server.exe' : null,
     slotSavePath: 'C:\\fake\\bonaparte\\kv-slots',
@@ -61,11 +62,35 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(false);
   });
 
-  it('trouve llama-server sur le PATH et donne son chemin', async () => {
+  it('trouve llama-server sur le PATH et donne chemin + build', async () => {
     const report = await runDoctor(fakeEnv(), 'fr');
     const llama = check(report, 'llama-server');
     expect(llama.status).toBe('ok');
-    expect(llama.detail).toBe('C:\\tools\\llama\\llama-server.exe');
+    expect(llama.detail).toContain('C:\\tools\\llama\\llama-server.exe');
+    expect(llama.detail).toContain('b10217');
+  });
+
+  it('échoue (bloquant) si le build llama est trop vieux pour les slots', async () => {
+    const report = await runDoctor(
+      fakeEnv({ readVersionOutput: async () => 'version: 3000 (abc1234)' }),
+      'fr',
+    );
+    const llama = check(report, 'llama-server');
+    expect(llama.status).toBe('fail');
+    expect(llama.blocking).toBe(true);
+    expect(llama.detail).toContain('3000');
+    expect(report.ok).toBe(false);
+  });
+
+  it('avertit (non bloquant) si la version est indéterminable', async () => {
+    const report = await runDoctor(
+      fakeEnv({ readVersionOutput: async () => 'sortie exotique' }),
+      'fr',
+    );
+    const llama = check(report, 'llama-server');
+    expect(llama.status).toBe('warn');
+    expect(llama.blocking).toBe(false);
+    expect(report.ok).toBe(true);
   });
 
   it('trouve le CLI unifié `llama` quand llama-server est absent', async () => {
@@ -93,7 +118,7 @@ describe('runDoctor', () => {
       }),
       'fr',
     );
-    expect(check(report, 'llama-server').detail).toBe(
+    expect(check(report, 'llama-server').detail).toContain(
       'C:\\tools\\llama\\llama-server.exe',
     );
   });
@@ -107,7 +132,7 @@ describe('runDoctor', () => {
       }),
       'fr',
     );
-    expect(check(report, 'llama-server').detail).toBe('D:\\ia\\llama-server.exe');
+    expect(check(report, 'llama-server').detail).toContain('D:\\ia\\llama-server.exe');
   });
 
   it('échoue si le chemin configuré ne pointe sur rien (pas de repli silencieux)', async () => {
