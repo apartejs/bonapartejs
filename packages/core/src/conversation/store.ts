@@ -17,6 +17,14 @@ export interface ConversationMeta {
   modelPath?: string;
   /** Taille de contexte épinglée avec le modèle (entre au manifest KV). */
   nCtx?: number;
+  /**
+   * Prompt système FIGÉ à la création : il est réutilisé verbatim à chaque
+   * réouverture. Le reconstruire risquerait de le faire varier (inventaire
+   * d'outils différent) et de casser le préfixe du cache KV.
+   */
+  systemPrompt?: string;
+  /** Inventaire d'outils au moment du figeage (base des deltas). */
+  toolNames?: string[];
 }
 
 export interface CreateConversationOptions {
@@ -27,7 +35,12 @@ export interface CreateConversationOptions {
 
 export type ConversationEvent =
   | { type: 'user'; text: string; at: string }
-  | { type: 'assistant'; raw: string; thinking: boolean; at: string };
+  | { type: 'assistant'; raw: string; thinking: boolean; at: string }
+  /**
+   * Message de service (delta d'inventaire d'outils, résultats d'outils) :
+   * rendu comme un tour utilisateur dans le prompt, masqué dans l'UI.
+   */
+  | { type: 'service'; text: string; at: string };
 
 export class ConversationStore {
   constructor(readonly dir: string) {}
@@ -75,8 +88,31 @@ export class ConversationStore {
     const meta = await this.meta(id);
     meta.modelPath = modelPath;
     if (nCtx !== undefined) meta.nCtx = nCtx;
+    await this.writeMeta(meta);
+  }
+
+  /** Fige le prompt système et l'inventaire d'outils de la conversation. */
+  async freezeSystemPrompt(
+    id: string,
+    systemPrompt: string,
+    toolNames: string[],
+  ): Promise<void> {
+    const meta = await this.meta(id);
+    meta.systemPrompt = systemPrompt;
+    meta.toolNames = [...toolNames];
+    await this.writeMeta(meta);
+  }
+
+  /** Met à jour l'inventaire de référence après annonce d'un delta. */
+  async setFrozenTools(id: string, toolNames: string[]): Promise<void> {
+    const meta = await this.meta(id);
+    meta.toolNames = [...toolNames];
+    await this.writeMeta(meta);
+  }
+
+  private async writeMeta(meta: ConversationMeta): Promise<void> {
     meta.updatedAt = new Date().toISOString();
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await writeFile(this.metaPath(meta.id), JSON.stringify(meta, null, 2), 'utf8');
   }
 
   async exists(id: string): Promise<boolean> {
@@ -141,11 +177,12 @@ export function rebuildPromptLog(
 ): PromptLog {
   const log = new PromptLog(systemPrompt);
   for (const event of events) {
-    if (event.type === 'user') {
-      log.appendUser(event.text);
-    } else {
+    if (event.type === 'assistant') {
       log.beginAssistantTurn({ thinking: event.thinking });
       log.completeAssistantTurn(event.raw);
+    } else {
+      // user ET service : même forme dans le prompt, seule l'UI les distingue.
+      log.appendUser(event.text);
     }
   }
   return log;

@@ -2,6 +2,7 @@ import {
   IPC,
   type AgentEventDto,
   type AppConfigDto,
+  type ApprovalRequestDto,
   type BackendConfigDto,
   type BackendStatusDto,
   type BonaparteBridge,
@@ -45,6 +46,19 @@ const api: BonaparteBridge = {
       listener(payload);
     ipcRenderer.on(IPC.evBackendStatus, wrapped);
     return () => ipcRenderer.removeListener(IPC.evBackendStatus, wrapped);
+  },
+
+  openProject: () => ipcRenderer.invoke(IPC.projectOpen),
+  currentProject: () => ipcRenderer.invoke(IPC.projectCurrent),
+  getMode: () => ipcRenderer.invoke(IPC.modeGet),
+  setMode: (mode) => ipcRenderer.invoke(IPC.modeSet, mode),
+  respondToApproval: (response) =>
+    ipcRenderer.invoke(IPC.approvalRespond, response),
+  onApprovalRequest: (listener): (() => void) => {
+    const wrapped = (_e: unknown, payload: ApprovalRequestDto): void =>
+      listener(payload);
+    ipcRenderer.on(IPC.evApproval, wrapped);
+    return () => ipcRenderer.removeListener(IPC.evApproval, wrapped);
   },
 };
 

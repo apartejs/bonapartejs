@@ -48,8 +48,9 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   harness.registerIpc(ipcMain, app.getVersion());
+  await harness.restoreSession();
   createWindow();
 
   app.on('activate', () => {

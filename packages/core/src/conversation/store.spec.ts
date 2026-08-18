@@ -76,6 +76,15 @@ describe('ConversationStore', () => {
     expect(meta.nCtx).toBe(16384);
   });
 
+  it('fige le prompt système et l’inventaire d’outils', async () => {
+    const store = await makeStore();
+    await store.create('conv-1');
+    await store.freezeSystemPrompt('conv-1', 'SYS gelé', ['read_file']);
+    const meta = await store.meta('conv-1');
+    expect(meta.systemPrompt).toBe('SYS gelé');
+    expect(meta.toolNames).toEqual(['read_file']);
+  });
+
   it('meta lève une erreur claire pour une conversation inconnue', async () => {
     const store = await makeStore();
     await expect(store.meta('fantome')).rejects.toThrow(/fantome/);
@@ -121,6 +130,15 @@ describe('rebuildPromptLog', () => {
     }
 
     const rebuilt = rebuildPromptLog(system, events);
+    expect(rebuilt.frozen).toBe(live.frozen);
+  });
+
+  it('rejoue un message de service comme un tour utilisateur', () => {
+    const live = new PromptLog('SYS');
+    live.appendUser('[inventaire modifié]');
+    const rebuilt = rebuildPromptLog('SYS', [
+      { type: 'service', text: '[inventaire modifié]', at: 'x' },
+    ]);
     expect(rebuilt.frozen).toBe(live.frozen);
   });
 });

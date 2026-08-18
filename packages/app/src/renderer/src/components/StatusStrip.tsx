@@ -1,15 +1,21 @@
 import type {
   BackendStatusDto,
   CompletionStatsDto,
+  PlayModeDto,
   RestoreDto,
 } from '@aparte/bonaparte-shared';
 import { Mascotte } from '../mascotte/Mascotte.js';
 import type { MascotteState } from '../mascotte/mascotte-states.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
+const MODES: PlayModeDto[] = ['lecture', 'repetition', 'plume', 'impro'];
+
 interface StatusStripProps {
   backendStatus: BackendStatusDto;
   streaming: boolean;
+  mode: PlayModeDto;
+  onModeChange: (mode: PlayModeDto) => void;
+  projectName: string | null;
   modelName: string | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
@@ -42,6 +48,9 @@ function formatMs(ms: number): string {
 export function StatusStrip({
   backendStatus,
   streaming,
+  mode,
+  onModeChange,
+  projectName,
   modelName,
   restore,
   lastStats,
@@ -65,11 +74,28 @@ export function StatusStrip({
         <span className={`status-pill status-${backendStatus}`}>
           {t.status[backendStatus]}
         </span>
+        {projectName && (
+          <span className="status-chip chip-project" title={projectName}>
+            {projectName}
+          </span>
+        )}
         {modelName && (
           <span className="status-chip chip-model" title={modelName}>
             {modelName}
           </span>
         )}
+        <select
+          className={`mode-select mode-${mode}`}
+          value={mode}
+          onChange={(e) => onModeChange(e.target.value as PlayModeDto)}
+          title={t.modes.hint}
+        >
+          {MODES.map((value) => (
+            <option key={value} value={value}>
+              {t.modes[value]}
+            </option>
+          ))}
+        </select>
         {restore && (
           <span
             className={`status-chip ${restore.restored ? 'chip-ok' : 'chip-dim'}`}

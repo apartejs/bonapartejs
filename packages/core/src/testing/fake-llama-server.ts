@@ -74,9 +74,15 @@ export async function startFakeLlamaServer(
   const modelPath = options.modelPath ?? 'C:\\fake\\model.gguf';
   const files = options.files ?? new Map<string, FakeSlotSnapshot>();
 
-  /** Cache par slot : les tokens « vus » (préfixe réutilisable). */
-  const slots = new Map<number, string[]>();
-  const slotTokens = (id: number): string[] => slots.get(id) ?? [];
+  /**
+   * Cache par slot : le TEXTE vu, tokenisé à la volée. Stocker le texte
+   * (plutôt que deux tokenisations concaténées) reproduit le vrai serveur,
+   * qui tokenise une séquence continue — sinon la frontière prompt/génération
+   * casserait artificiellement le préfixe commun.
+   */
+  const slots = new Map<number, string>();
+  const slotText = (id: number): string => slots.get(id) ?? '';
+  const slotTokens = (id: number): string[] => fakeTokenize(slotText(id));
 
   function handleCompletion(
     body: Record<string, unknown>,
@@ -97,7 +103,7 @@ export async function startFakeLlamaServer(
     const promptMs = uncached * msPerToken;
 
     const text = responder(prompt);
-    slots.set(idSlot, [...tokens, ...fakeTokenize(text)]);
+    slots.set(idSlot, prompt + text);
 
     res.writeHead(200, {
       'content-type': 'text/event-stream',
@@ -152,7 +158,7 @@ export async function startFakeLlamaServer(
         return;
       }
       const tokens = slotTokens(idSlot);
-      files.set(filename, { tokens: [...tokens] });
+      files.set(filename, { tokens });
       json(res, 200, {
         id_slot: idSlot,
         filename,
@@ -170,7 +176,7 @@ export async function startFakeLlamaServer(
         json(res, 400, { error: { message: `fichier inconnu : ${filename}` } });
         return;
       }
-      slots.set(idSlot, [...snapshot.tokens]);
+      slots.set(idSlot, snapshot.tokens.join(''));
       json(res, 200, {
         id_slot: idSlot,
         filename,
@@ -183,7 +189,7 @@ export async function startFakeLlamaServer(
 
     if (action === 'erase') {
       const erased = slotTokens(idSlot).length;
-      slots.set(idSlot, []);
+      slots.set(idSlot, '');
       json(res, 200, { id_slot: idSlot, n_erased: erased });
       return;
     }

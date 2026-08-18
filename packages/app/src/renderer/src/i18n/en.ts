@@ -42,6 +42,27 @@ export const EN: AppTranslations = {
     manual: 'Browse…',
     confirm: 'Cast this role',
   },
+  project: {
+    eyebrow: 'the set',
+    title: 'Open a project',
+    intro:
+      'bonaparte works on a folder: its tools are confined to it and cannot step outside.',
+    choose: 'Choose a folder…',
+  },
+  approval: {
+    eyebrow: 'approval needed',
+    title: 'bonaparte wants to act on your machine',
+    allow: 'Allow',
+    always: 'Always allow',
+    refuse: 'Refuse',
+  },
+  modes: {
+    hint: 'Play mode: what the agent may do without asking',
+    lecture: 'Reading',
+    repetition: 'Rehearsal',
+    plume: 'Quill',
+    impro: 'Improv',
+  },
   chat: {
     placeholder: 'Write to bonaparte…',
     errorPrefix: 'Error',

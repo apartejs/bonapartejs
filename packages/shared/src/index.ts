@@ -27,6 +27,12 @@ export const IPC = {
   dialogPickFile: 'dialog.pickFile',
   modelsScan: 'models.scan',
   openExternal: 'shell.openExternal',
+  projectOpen: 'project.open',
+  projectCurrent: 'project.current',
+  modeGet: 'mode.get',
+  modeSet: 'mode.set',
+  approvalRespond: 'approval.respond',
+  evApproval: 'ev.approval',
   /** Événements poussés main → renderer. */
   evAgent: 'ev.agent',
   evBackendStatus: 'ev.backendStatus',
@@ -63,6 +69,34 @@ export interface AppConfigDto {
     path: string;
     nCtx?: number;
   };
+  /** Dernier projet ouvert, et l'historique récent. */
+  projectRoot?: string;
+  recentProjects?: string[];
+  mode?: PlayModeDto;
+}
+
+/** Modes de jeu (lexique théâtre) — cf. moteur de permissions. */
+export type PlayModeDto = 'lecture' | 'repetition' | 'plume' | 'impro';
+
+export interface ProjectDto {
+  root: string;
+  name: string;
+  recents: string[];
+}
+
+/** Demande d'autorisation poussée au renderer pendant la boucle. */
+export interface ApprovalRequestDto {
+  id: string;
+  tool: string;
+  args: Record<string, unknown>;
+  command?: string;
+}
+
+export interface ApprovalResponseDto {
+  id: string;
+  granted: boolean;
+  /** Mémoriser la règle pour ce projet (« toujours autoriser »). */
+  always?: boolean;
 }
 
 export type BackendStatusDto =
@@ -90,6 +124,9 @@ export interface CompletionStatsDto {
 /** Événement de flux agent, sérialisé sur l'IPC. */
 export type AgentEventDto =
   | { type: 'token'; text: string }
+  | { type: 'thinking'; text: string }
+  | { type: 'tool_call'; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; name: string; ok: boolean; content: string }
   | { type: 'done'; stats: CompletionStatsDto }
   | { type: 'error'; message: string };
 
@@ -118,7 +155,15 @@ export interface NeedsModelDto {
   conversationId: string;
 }
 
-export type ConversationOpenReplyDto = ConversationOpenResultDto | NeedsModelDto;
+/** L'ouverture exige un projet : un agent de code travaille sur un dossier. */
+export interface NeedsProjectDto {
+  needsProject: true;
+}
+
+export type ConversationOpenReplyDto =
+  | ConversationOpenResultDto
+  | NeedsModelDto
+  | NeedsProjectDto;
 
 /** Pré-remplissage du panneau de configuration (détection machine). */
 export interface SetupSuggestionDto {
@@ -151,4 +196,14 @@ export interface BonaparteBridge {
   saveKv(): Promise<boolean>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;
   onBackendStatus(listener: (status: BackendStatusDto) => void): () => void;
+
+  /** Ouvre un dossier de projet (dialogue natif) ; null si annulé. */
+  openProject(): Promise<ProjectDto | null>;
+  currentProject(): Promise<ProjectDto | null>;
+  getMode(): Promise<PlayModeDto>;
+  setMode(mode: PlayModeDto): Promise<void>;
+  respondToApproval(response: ApprovalResponseDto): Promise<void>;
+  onApprovalRequest(
+    listener: (request: ApprovalRequestDto) => void,
+  ): () => void;
 }

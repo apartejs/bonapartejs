@@ -1,19 +1,23 @@
 import { AparteConfig } from '@aparte/core';
 import { fr as aparteFr } from '@aparte/locale-fr';
 import type {
+  ApprovalRequestDto,
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
   ConversationOpenResultDto,
+  PlayModeDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ModelPicker } from './components/ModelPicker.js';
+import { ProjectGate } from './components/ProjectGate.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
 import { useTranslate } from './i18n/LocaleProvider.js';
 
-type View = 'boot' | 'setup' | 'pickModel' | 'chat';
+type View = 'boot' | 'setup' | 'pickProject' | 'pickModel' | 'chat';
 
 function currentTheme(): 'dark' | 'light' {
   return document.documentElement.getAttribute('data-aparte-theme') === 'dark'
@@ -34,6 +38,36 @@ export function App() {
   const [config, setConfig] = useState<BackendConfigDto | undefined>(undefined);
   const pendingConv = useRef<string | undefined>(undefined);
   const bootAttempted = useRef(false);
+  const [mode, setModeState] = useState<PlayModeDto>('repetition');
+  const [projectName, setProjectName] = useState<string | null>(null);
+  const [approval, setApproval] = useState<ApprovalRequestDto | null>(null);
+
+  useEffect(() => window.bonaparte.onApprovalRequest(setApproval), []);
+
+  useEffect(() => {
+    void window.bonaparte.getMode().then(setModeState);
+    void window.bonaparte
+      .currentProject()
+      .then((project) => setProjectName(project?.name ?? null));
+  }, []);
+
+  const changeMode = useCallback((next: PlayModeDto) => {
+    setModeState(next);
+    void window.bonaparte.setMode(next);
+  }, []);
+
+  const respondToApproval = useCallback(
+    (granted: boolean, always?: boolean) => {
+      if (!approval) return;
+      void window.bonaparte.respondToApproval({
+        id: approval.id,
+        granted,
+        ...(always ? { always } : {}),
+      });
+      setApproval(null);
+    },
+    [approval],
+  );
 
   // Locale des composants aparté (chaînes internes des web components).
   useEffect(() => {
@@ -54,7 +88,9 @@ export function App() {
       setError(null);
       try {
         const reply = await window.bonaparte.openConversation(id, modelPath, nCtx);
-        if ('needsModel' in reply) {
+        if ('needsProject' in reply) {
+          setView('pickProject');
+        } else if ('needsModel' in reply) {
           pendingConv.current = reply.conversationId;
           setView('pickModel');
         } else {
@@ -134,6 +170,15 @@ export function App() {
             error={error}
             onSubmit={(engine) => void startWith(engine)}
           />
+        ) : view === 'pickProject' ? (
+          <ProjectGate
+            busy={busy}
+            error={error}
+            onOpen={(project) => {
+              setProjectName(project.name);
+              void tryOpen();
+            }}
+          />
         ) : view === 'pickModel' ? (
           <ModelPicker
             busy={busy}
@@ -158,9 +203,15 @@ export function App() {
           />
         ) : null}
       </main>
+      {approval && (
+        <ApprovalDialog request={approval} onRespond={respondToApproval} />
+      )}
       <StatusStrip
         backendStatus={backendStatus}
         streaming={streaming}
+        mode={mode}
+        onModeChange={changeMode}
+        projectName={projectName}
         modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
         lastStats={lastStats}

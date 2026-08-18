@@ -49,7 +49,11 @@ export type AgentEvent =
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
   | { type: 'turn_end'; promptMs: number; cachedTokens: number }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  // ── mutations du log : l'appelant les persiste pour rejouer un prompt
+  //    octet-identique. L'UI les ignore.
+  | { type: 'assistant_committed'; raw: string; thinking: boolean }
+  | { type: 'service_appended'; text: string };
 
 const DEFAULT_MAX_TURNS = 10;
 
@@ -117,6 +121,12 @@ export class AgentLoop {
         log.completeAssistantTurn(raw);
       }
 
+      yield {
+        type: 'assistant_committed',
+        raw,
+        thinking: this.options.thinking ?? false,
+      };
+
       const parsed = parseHermesOutput(raw);
       if (parsed.calls.length === 0) {
         yield { type: 'turn_end', promptMs, cachedTokens };
@@ -136,7 +146,10 @@ export class AgentLoop {
         };
       }
 
-      log.appendUser(renderToolResults(outcomes));
+      const serviceText = renderToolResults(outcomes);
+      log.appendUser(serviceText);
+      yield { type: 'service_appended', text: serviceText };
+
       if (signal.aborted) {
         yield { type: 'turn_end', promptMs, cachedTokens };
         return;

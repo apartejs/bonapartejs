@@ -349,6 +349,117 @@ button.primary {
   gap: 10px;
 }
 
+/* ── Modes de jeu, projet, dialogue d’accord ───────────────────────── */
+
+.mode-select {
+  font-family: var(--bp-sans);
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text);
+  cursor: pointer;
+}
+
+.mode-lecture {
+  color: var(--aparte-text-muted);
+}
+
+.mode-plume {
+  color: var(--aparte-primary);
+  border-color: currentColor;
+}
+
+.mode-impro {
+  color: var(--aparte-error, #c0392b);
+  border-color: currentColor;
+}
+
+.chip-project {
+  font-family: var(--bp-mono);
+  color: var(--aparte-primary);
+}
+
+.recent-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 9px 12px;
+}
+
+.recent-row:hover {
+  background: var(--aparte-surface-2);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(2px);
+  z-index: 10;
+  animation: fade-in 160ms ease both;
+}
+
+.modal-card {
+  width: min(560px, 100%);
+  padding: 28px 32px;
+  background: var(--aparte-surface-1);
+  border: 1px solid var(--aparte-border);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 28%);
+  animation: card-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.modal-card h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.approval-tool {
+  font-family: var(--bp-mono);
+  font-size: 13px;
+  color: var(--aparte-primary);
+  margin: 0 0 8px;
+}
+
+.approval-preview {
+  font-family: var(--bp-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--aparte-surface-2);
+  border: 1px solid var(--aparte-border);
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .chip-model {
   font-family: var(--bp-mono);
   color: var(--aparte-secondary, var(--aparte-text-muted));

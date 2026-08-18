@@ -43,6 +43,26 @@ export interface AppTranslations {
     manual: string;
     confirm: string;
   };
+  project: {
+    eyebrow: string;
+    title: string;
+    intro: string;
+    choose: string;
+  };
+  approval: {
+    eyebrow: string;
+    title: string;
+    allow: string;
+    always: string;
+    refuse: string;
+  };
+  modes: {
+    hint: string;
+    lecture: string;
+    repetition: string;
+    plume: string;
+    impro: string;
+  };
   chat: {
     placeholder: string;
     errorPrefix: string;

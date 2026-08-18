@@ -43,6 +43,27 @@ export const FR: AppTranslations = {
     manual: 'Parcourir…',
     confirm: 'Distribuer ce rôle',
   },
+  project: {
+    eyebrow: 'le décor',
+    title: 'Ouvrir un projet',
+    intro:
+      'bonaparte travaille sur un dossier : ses outils y sont confinés et ne peuvent pas en sortir.',
+    choose: 'Choisir un dossier…',
+  },
+  approval: {
+    eyebrow: 'demande d’accord',
+    title: 'bonaparte veut agir sur votre machine',
+    allow: 'Autoriser',
+    always: 'Toujours autoriser',
+    refuse: 'Refuser',
+  },
+  modes: {
+    hint: 'Mode de jeu : ce que l’agent peut faire sans vous demander',
+    lecture: 'Lecture',
+    repetition: 'Répétition',
+    plume: 'Plume',
+    impro: 'Impro',
+  },
   chat: {
     placeholder: 'Écrivez à bonaparte…',
     errorPrefix: 'Erreur',

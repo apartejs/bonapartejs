@@ -39,21 +39,39 @@ export function ChatScreen({
   const activeQueue = useRef<AsyncQueue<string> | null>(null);
 
   useEffect(() => {
+    const finish = (): void => {
+      activeQueue.current?.close();
+      activeQueue.current = null;
+      onStreamingChange(false);
+    };
+
     const unsubscribe = window.bonaparte.onAgentEvent((event: AgentEventDto) => {
       const queue = activeQueue.current;
       if (!queue) return;
-      if (event.type === 'token') {
-        queue.push(event.text);
-      } else if (event.type === 'done') {
-        queue.close();
-        activeQueue.current = null;
-        onStats(event.stats);
-        onStreamingChange(false);
-      } else {
-        queue.push(`\n${t.chat.errorPrefix} : ${event.message}`);
-        queue.close();
-        activeQueue.current = null;
-        onStreamingChange(false);
+      switch (event.type) {
+        case 'token':
+          queue.push(event.text);
+          break;
+        case 'thinking':
+          break; // le raisonnement reste hors du fil en J2
+        case 'tool_call':
+          // Activité d'outil rendue dans le fil : l'utilisateur doit voir ce
+          // que l'agent fait, pas seulement ce qu'il dit.
+          queue.push(`\n\n▸ ${event.name}\n`);
+          break;
+        case 'tool_result': {
+          const summary = event.content.split('\n')[0]?.slice(0, 200) ?? '';
+          queue.push(`${event.ok ? '✓' : '✗'} ${summary}\n\n`);
+          break;
+        }
+        case 'done':
+          onStats(event.stats);
+          finish();
+          break;
+        case 'error':
+          queue.push(`\n${t.chat.errorPrefix} : ${event.message}`);
+          finish();
+          break;
       }
     });
     return unsubscribe;

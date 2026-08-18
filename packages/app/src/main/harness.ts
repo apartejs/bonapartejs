@@ -9,9 +9,12 @@
 import { execFile, spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
+export type { ProjectDto };
 import { promisify } from 'node:util';
+import { createHash } from 'node:crypto';
 import {
   bonaparteDataDir,
+  builtinTools,
   ChatSession,
   ConversationStore,
   createLlamaCppBackend,
@@ -21,21 +24,26 @@ import {
   fingerprintModelFile,
   KvStore,
   kvSlotsDir,
+  PermissionEngine,
   scanModels,
+  ToolRegistry,
   type Backend,
-  type CompletionStats,
   type LiveBackendConfig,
+  type PlayMode,
   type ProcessHandle,
 } from '@aparte/bonaparte-core';
 import {
   IPC,
   type AgentEventDto,
   type AppConfigDto,
+  type ApprovalResponseDto,
   type BackendConfigDto,
   type BackendStatusDto,
   type ConversationOpenReplyDto,
   type ModelInfoDto,
   type PickFileKind,
+  type PlayModeDto,
+  type ProjectDto,
   type SetupSuggestionDto,
 } from '@aparte/bonaparte-shared';
 import { dialog, shell } from 'electron';
@@ -47,10 +55,8 @@ const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/
 const DEFAULT_CONVERSATION = 'default';
 const MANAGED_PORT = 8763;
 
-// Prompt système v1 — figé par conversation (le contrat outillé arrive en J2).
-const SYSTEM_PROMPT =
-  'Tu es bonaparte, un agent de développement local-first. ' +
-  'Réponds de façon précise et concise, en français par défaut.';
+// Le prompt système est désormais construit par ChatSession depuis
+// l'inventaire d'outils, puis figé dans la conversation (J2).
 
 const execFileAsync = promisify(execFile);
 
@@ -104,9 +110,25 @@ async function readBuildTag(binPath: string): Promise<string> {
   }
 }
 
+/** Identifiant de conversation propre au projet (les slots KV sont globaux). */
+function conversationIdFor(projectRoot: string, name = 'default'): string {
+  const hash = createHash('sha256').update(projectRoot).digest('hex').slice(0, 8);
+  return `${hash}-${name}`;
+}
+
 export class Harness {
   private window: BrowserWindow | null = null;
   private engine: BackendConfigDto | null = null;
+  private projectRoot: string | null = null;
+  private readonly registry = new ToolRegistry();
+  private readonly permissions = new PermissionEngine('repetition');
+  private readonly pendingApprovals = new Map<
+    string,
+    {
+      resolve: (granted: boolean) => void;
+      request: { tool: string; command?: string };
+    }
+  >();
   private backend: Backend | null = null;
   private live: LiveBackendConfig | null = null;
   /** Modèle actuellement chargé par le serveur managé. */
@@ -120,8 +142,102 @@ export class Harness {
   );
   private readonly configPath = join(bonaparteDataDir(), 'config', 'global.json');
 
+  constructor() {
+    for (const tool of builtinTools()) {
+      this.registry.register(tool.def, tool.handler, 'builtin');
+    }
+  }
+
   attachWindow(window: BrowserWindow): void {
     this.window = window;
+  }
+
+  /** Restaure projet et mode depuis la config au démarrage. */
+  async restoreSession(): Promise<void> {
+    const config = await this.loadConfig();
+    if (config.projectRoot) this.projectRoot = config.projectRoot;
+    if (config.mode) this.permissions.setMode(config.mode as PlayMode);
+  }
+
+  private project(recents: string[] = []): ProjectDto | null {
+    if (!this.projectRoot) return null;
+    return {
+      root: this.projectRoot,
+      name: basename(this.projectRoot),
+      recents,
+    };
+  }
+
+  async currentProject(): Promise<ProjectDto | null> {
+    const config = await this.loadConfig();
+    return this.project(config.recentProjects ?? []);
+  }
+
+  async openProject(): Promise<ProjectDto | null> {
+    if (!this.window) return null;
+    const result = await dialog.showOpenDialog(this.window, {
+      properties: ['openDirectory'],
+    });
+    const picked = result.canceled ? null : (result.filePaths[0] ?? null);
+    if (!picked) return null;
+
+    this.projectRoot = picked;
+    this.session = null;
+
+    const config = await this.loadConfig();
+    const recents = [picked, ...(config.recentProjects ?? []).filter((p) => p !== picked)]
+      .slice(0, 8);
+    await this.saveConfig({ ...config, projectRoot: picked, recentProjects: recents });
+    return this.project(recents);
+  }
+
+  getMode(): PlayModeDto {
+    return this.permissions.getMode();
+  }
+
+  async setMode(mode: PlayModeDto): Promise<void> {
+    this.permissions.setMode(mode as PlayMode);
+    const config = await this.loadConfig();
+    await this.saveConfig({ ...config, mode });
+  }
+
+  /** Demande l'accord de l'utilisateur ; résolue par respondToApproval. */
+  private readonly approve = (request: {
+    id: string;
+    tool: string;
+    args: Record<string, unknown>;
+    command?: string;
+  }): Promise<boolean> =>
+    new Promise<boolean>((resolve) => {
+      if (!this.window || this.window.isDestroyed()) {
+        resolve(false); // pas d'interlocuteur : fail-safe
+        return;
+      }
+      this.pendingApprovals.set(request.id, {
+        resolve,
+        request: {
+          tool: request.tool,
+          ...(request.command !== undefined ? { command: request.command } : {}),
+        },
+      });
+      this.emit(IPC.evApproval, request);
+    });
+
+  async respondToApproval(response: ApprovalResponseDto): Promise<void> {
+    const pending = this.pendingApprovals.get(response.id);
+    if (!pending) return;
+    this.pendingApprovals.delete(response.id);
+
+    if (response.granted && response.always) {
+      // « Toujours autoriser » : pour une commande, la règle porte sur son
+      // premier mot (ex. « pnpm »), pas sur la ligne entière.
+      const prefix = pending.request.command?.trim().split(/\s+/)[0];
+      this.permissions.remember({
+        tool: pending.request.tool,
+        ...(prefix ? { commandPrefix: prefix } : {}),
+      });
+    }
+    pending.resolve(response.granted);
   }
 
   private emit(channel: string, payload: unknown): void {
@@ -266,11 +382,14 @@ export class Harness {
   }
 
   async openConversation(
-    id: string = DEFAULT_CONVERSATION,
+    id?: string,
     modelPath?: string,
     nCtx?: number,
   ): Promise<ConversationOpenReplyDto> {
     if (!this.engine) throw new Error('Moteur non configuré.');
+    // Un agent de code travaille sur un dossier : pas de projet, pas de tour.
+    if (!this.projectRoot) return { needsProject: true };
+    id ??= conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION);
 
     // Résout modèle + nCtx : méta épinglée > paramètres > défaut des Réglages.
     const defaults = (await this.loadConfig()).defaultModel;
@@ -310,7 +429,10 @@ export class Harness {
         backend: this.backend,
         kv: this.kv,
         store: this.store,
-        systemPrompt: SYSTEM_PROMPT,
+        registry: this.registry,
+        permissions: this.permissions,
+        projectRoot: this.projectRoot,
+        approve: this.approve,
         live: this.live,
       },
       id,
@@ -322,11 +444,20 @@ export class Harness {
       conversationId: id,
       modelPath: convModel,
       modelName: modelDisplayName(convModel),
-      events: events.map((event) =>
-        event.type === 'user'
-          ? { type: 'user', text: event.text, at: event.at }
-          : { type: 'assistant', text: stripThink(event.raw), at: event.at },
-      ),
+      // Les messages de service (deltas d'outillage, résultats) restent hors
+      // de l'UI : ils vivent dans le prompt, pas dans la conversation lue.
+      events: events
+        .filter((event) => event.type !== 'service')
+        .map((event) =>
+          event.type === 'user'
+            ? { type: 'user' as const, text: event.text, at: event.at }
+            : {
+                type: 'assistant' as const,
+                text: stripThink(event.raw),
+                at: event.at,
+              },
+        )
+        .filter((event) => event.text.trim() !== ''),
       restore: restore.restored
         ? { restored: true, nRestored: restore.nRestored }
         : { restored: false, reason: restore.reason },
@@ -342,16 +473,54 @@ export class Harness {
       return;
     }
     try {
-      // J1 : thinking désactivé (streaming propre) — toggle par tour en J2.
-      for await (const event of this.session.send(text, { thinking: false })) {
-        if (event.type === 'token') {
-          this.emit(IPC.evAgent, {
-            type: 'token',
-            text: event.text,
-          } satisfies AgentEventDto);
-        } else {
-          const stats: CompletionStats = event.stats;
-          this.emit(IPC.evAgent, { type: 'done', stats } satisfies AgentEventDto);
+      for await (const event of this.session.send(text)) {
+        switch (event.type) {
+          case 'token':
+            this.emit(IPC.evAgent, {
+              type: 'token',
+              text: event.text,
+            } satisfies AgentEventDto);
+            break;
+          case 'thinking':
+            this.emit(IPC.evAgent, {
+              type: 'thinking',
+              text: event.text,
+            } satisfies AgentEventDto);
+            break;
+          case 'tool_call':
+            this.emit(IPC.evAgent, {
+              type: 'tool_call',
+              name: event.name,
+              args: event.args,
+            } satisfies AgentEventDto);
+            break;
+          case 'tool_result':
+            this.emit(IPC.evAgent, {
+              type: 'tool_result',
+              name: event.name,
+              ok: event.ok,
+              content: event.content,
+            } satisfies AgentEventDto);
+            break;
+          case 'turn_end':
+            this.emit(IPC.evAgent, {
+              type: 'done',
+              stats: {
+                promptMs: event.promptMs,
+                promptUncachedTokens: 0,
+                predictedTokens: 0,
+                predictedMs: 0,
+              },
+            } satisfies AgentEventDto);
+            break;
+          case 'error':
+            this.emit(IPC.evAgent, {
+              type: 'error',
+              message: event.message,
+            } satisfies AgentEventDto);
+            break;
+          default:
+            break; // mutations du log : persistées par la session
         }
       }
     } catch (error) {
@@ -431,6 +600,13 @@ export class Harness {
     ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
     ipcMain.handle(IPC.dialogPickFile, (_e, kind: PickFileKind) =>
       this.pickFile(kind),
+    );
+    ipcMain.handle(IPC.projectOpen, () => this.openProject());
+    ipcMain.handle(IPC.projectCurrent, () => this.currentProject());
+    ipcMain.handle(IPC.modeGet, () => this.getMode());
+    ipcMain.handle(IPC.modeSet, (_e, mode: PlayModeDto) => this.setMode(mode));
+    ipcMain.handle(IPC.approvalRespond, (_e, response: ApprovalResponseDto) =>
+      this.respondToApproval(response),
     );
     ipcMain.handle(IPC.openExternal, async (_e, url: string) => {
       if (!EXTERNAL_URL_ALLOWLIST.some((re) => re.test(url))) {
