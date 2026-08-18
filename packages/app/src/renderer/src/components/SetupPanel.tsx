@@ -11,7 +11,8 @@ interface SetupPanelProps {
 
 export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) {
   const { t } = useTranslate();
-  const [mode, setMode] = useState<'remote' | 'managed'>(initial?.mode ?? 'remote');
+  // Local-first : le mode managé (local) est le défaut.
+  const [mode, setMode] = useState<'remote' | 'managed'>(initial?.mode ?? 'managed');
   const [url, setUrl] = useState(initial?.mode === 'remote' ? initial.url : '');
   const [binPath, setBinPath] = useState(
     initial?.mode === 'managed' ? initial.binPath : '',
@@ -76,26 +77,26 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
           <button
             type="button"
             role="tab"
-            aria-selected={mode === 'remote'}
-            className={mode === 'remote' ? 'active' : ''}
-            onClick={() => setMode('remote')}
-          >
-            {t.setup.modeRemote}
-          </button>
-          <button
-            type="button"
-            role="tab"
             aria-selected={mode === 'managed'}
             className={mode === 'managed' ? 'active' : ''}
             onClick={() => setMode('managed')}
           >
             {t.setup.modeManaged}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'remote'}
+            className={mode === 'remote' ? 'active' : ''}
+            onClick={() => setMode('remote')}
+          >
+            {t.setup.modeRemote}
+          </button>
         </div>
 
         {mode === 'remote' ? (
           <label className="field">
-            <span>{t.setup.url}</span>
+            <span className="field-label">{t.setup.url}</span>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
@@ -106,7 +107,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
         ) : (
           <>
             <label className="field">
-              <span>
+              <span className="field-label">
                 {t.setup.binPath}
                 {binDetected && (
                   <em className="field-hint"> — {t.setup.detected}</em>
@@ -128,7 +129,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
               </span>
             </label>
             <label className="field">
-              <span>{t.setup.modelPath}</span>
+              <span className="field-label">{t.setup.modelPath}</span>
               <span className="field-row">
                 <input
                   value={modelPath}
@@ -142,7 +143,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
               </span>
             </label>
             <label className="field field-narrow">
-              <span>{t.setup.nCtx}</span>
+              <span className="field-label">{t.setup.nCtx}</span>
               <input
                 value={nCtx}
                 onChange={(e) => setNCtx(e.target.value)}

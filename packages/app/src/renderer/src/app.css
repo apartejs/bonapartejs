@@ -156,7 +156,7 @@ button.primary {
   margin-bottom: 14px;
 }
 
-.field span {
+.field-label {
   display: block;
   font-family: var(--bp-mono);
   font-size: 11px;
@@ -186,18 +186,42 @@ button.primary {
   width: 140px;
 }
 
+/* Groupe intégré : champ + bouton Parcourir dans le même encadré. */
 .field-row {
   display: flex;
-  gap: 8px;
+  align-items: stretch;
+  border: 1px solid var(--aparte-border);
+  border-radius: 10px;
+  background: var(--aparte-surface-2);
+  overflow: hidden;
+  transition: border-color 160ms ease;
 }
 
-.field-row input {
+.field-row:focus-within {
+  border-color: var(--aparte-primary);
+}
+
+.field-row input,
+.field-row input:focus {
   flex: 1;
   min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .field-row button {
   white-space: nowrap;
+  border: none;
+  border-left: 1px solid var(--aparte-border);
+  border-radius: 0;
+  background: var(--aparte-surface-1);
+  padding: 0 14px;
+}
+
+.field-row button:hover {
+  background: var(--aparte-surface-3, var(--aparte-surface-1));
+  color: var(--aparte-primary);
 }
 
 .field-hint {
