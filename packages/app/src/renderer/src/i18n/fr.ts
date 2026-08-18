@@ -84,6 +84,7 @@ export const FR: AppTranslations = {
     ready: 'prêt',
     crashed: 'en panne',
     restarting: 'redémarrage…',
+    notConnected: 'moteur non connecté',
     restored: 'contexte restauré',
     notRestored: 'reprise à froid',
     reasons: {

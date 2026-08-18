@@ -134,12 +134,26 @@ export function App() {
     bootAttempted.current = true;
     void (async () => {
       const appConfig = await window.bonaparte.getConfig();
-      if (appConfig.backend) {
-        setConfig(appConfig.backend);
-        await startWith(appConfig.backend);
-      } else {
+      if (!appConfig.backend) {
         setView('setup');
+        return;
       }
+      setConfig(appConfig.backend);
+      // Démarrage à FROID : on enregistre le moteur et on affiche
+      // l'historique, sans rien réveiller. La connexion se fait au premier
+      // message — lancer l'app ne doit charger aucun modèle.
+      await window.bonaparte.registerBackend(appConfig.backend);
+      const history = await window.bonaparte.conversationHistory();
+      if ('needsProject' in history) {
+        setView('pickProject');
+        return;
+      }
+      if ('needsModel' in history) {
+        setView('pickModel');
+        return;
+      }
+      setOpened(history);
+      setView('chat');
     })();
   }, [startWith]);
 

@@ -28,6 +28,8 @@ const api: BonaparteBridge = {
     ipcRenderer.invoke(IPC.backendStatus),
   startBackend: (config: BackendConfigDto): Promise<BackendStatusDto> =>
     ipcRenderer.invoke(IPC.backendStart, config),
+  registerBackend: (config) => ipcRenderer.invoke(IPC.backendRegister, config),
+  conversationHistory: () => ipcRenderer.invoke(IPC.conversationHistory),
   openConversation: (id?: string, modelPath?: string, nCtx?: number) =>
     ipcRenderer.invoke(IPC.conversationOpen, id, modelPath, nCtx),
   sendMessage: (text: string): Promise<void> =>

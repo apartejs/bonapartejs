@@ -279,6 +279,16 @@ export class Harness {
    * Configure le moteur. Distant : connexion immédiate. Managé : le serveur
    * démarrera au premier openConversation (il lui faut un modèle).
    */
+  /**
+   * Enregistre le moteur SANS s'y connecter : au démarrage, bonaparte ne doit
+   * ni pinger un endpoint (certains serveurs chargent le modèle à la moindre
+   * requête), ni lancer un llama-server. Utiliser `connect()` pour l'activer.
+   */
+  async registerEngine(config: BackendConfigDto): Promise<void> {
+    await this.teardownBackend();
+    this.engine = config;
+  }
+
   async startEngine(config: BackendConfigDto): Promise<BackendStatusDto> {
     await this.teardownBackend();
     this.engine = config;
@@ -496,7 +506,56 @@ export class Harness {
     };
   }
 
+  /**
+   * Historique d'une conversation SANS toucher au moteur : lancer l'app ne
+   * doit ni réveiller un serveur, ni charger un modèle en VRAM. La connexion
+   * n'a lieu qu'au premier message.
+   */
+  async conversationHistory(): Promise<ConversationOpenReplyDto> {
+    if (!this.projectRoot) return { needsProject: true };
+    const id = conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION);
+    if (!(await this.store.exists(id))) {
+      return { conversationId: id, events: [], restore: { restored: false, reason: 'missing' } };
+    }
+    const meta = await this.store.meta(id);
+    const events = await this.store.loadEvents(id);
+    return {
+      conversationId: id,
+      ...(meta.modelPath
+        ? { modelPath: meta.modelPath, modelName: modelDisplayName(meta.modelPath) }
+        : {}),
+      events: events
+        .flatMap((event): ConversationEventDto[] => {
+          if (event.type === 'user') {
+            return [{ type: 'user', text: event.text, at: event.at }];
+          }
+          if (event.type === 'assistant') {
+            return [
+              { type: 'assistant', text: stripThink(event.entry.text), at: event.at },
+            ];
+          }
+          return [];
+        })
+        .filter((event) => event.text.trim() !== ''),
+      restore: { restored: false, reason: 'not-connected' },
+    };
+  }
+
   async send(text: string): Promise<void> {
+    // Connexion paresseuse : c'est le premier message qui réveille le moteur.
+    if (!this.session && this.engine) {
+      const reply = await this.openConversation();
+      if ('needsModel' in reply || 'needsProject' in reply) {
+        this.emit(IPC.evAgent, {
+          type: 'error',
+          message:
+            'needsModel' in reply
+              ? 'Aucun modèle choisi pour cette conversation.'
+              : 'Aucun projet ouvert.',
+        } satisfies AgentEventDto);
+        return;
+      }
+    }
     if (!this.session) {
       this.emit(IPC.evAgent, {
         type: 'error',
@@ -626,6 +685,10 @@ export class Harness {
     ipcMain.handle(IPC.backendStart, (_e, config: BackendConfigDto) =>
       this.startEngine(config),
     );
+    ipcMain.handle(IPC.backendRegister, (_e, config: BackendConfigDto) =>
+      this.registerEngine(config),
+    );
+    ipcMain.handle(IPC.conversationHistory, () => this.conversationHistory());
     ipcMain.handle(
       IPC.conversationOpen,
       (_e, id?: string, modelPath?: string, nCtx?: number) =>

@@ -81,6 +81,7 @@ export interface AppTranslations {
     ready: string;
     crashed: string;
     restarting: string;
+    notConnected: string;
     restored: string;
     notRestored: string;
     reasons: Record<string, string>;

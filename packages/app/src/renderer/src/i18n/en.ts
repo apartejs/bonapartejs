@@ -83,6 +83,7 @@ export const EN: AppTranslations = {
     ready: 'ready',
     crashed: 'crashed',
     restarting: 'restarting…',
+    notConnected: 'engine not connected',
     restored: 'context restored',
     notRestored: 'cold start',
     reasons: {

@@ -96,7 +96,9 @@ export function StatusStrip({
             </option>
           ))}
         </select>
-        {restore && (
+        {restore && restore.restored === false && restore.reason === 'not-connected' ? (
+          <span className="status-chip chip-dim">{t.status.notConnected}</span>
+        ) : restore ? (
           <span
             className={`status-chip ${restore.restored ? 'chip-ok' : 'chip-dim'}`}
             title={
@@ -109,7 +111,7 @@ export function StatusStrip({
               ? `${t.status.restored} · ${restore.nRestored} tokens`
               : `${t.status.notRestored} · ${t.status.reasons[restore.reason] ?? restore.reason}`}
           </span>
-        )}
+        ) : null}
         {lastStats && (
           <span className="status-chip chip-dim">
             {t.status.prefill} {formatMs(lastStats.promptMs)}

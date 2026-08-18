@@ -19,6 +19,8 @@ export const IPC = {
   configGet: 'config.get',
   configSet: 'config.set',
   backendStart: 'backend.start',
+  backendRegister: 'backend.register',
+  conversationHistory: 'conversation.history',
   backendStatus: 'backend.status',
   conversationOpen: 'conversation.open',
   agentSend: 'agent.send',
@@ -212,6 +214,10 @@ export interface BonaparteBridge {
   setConfig(config: AppConfigDto): Promise<void>;
   getBackendStatus(): Promise<BackendStatusDto>;
   startBackend(config: BackendConfigDto): Promise<BackendStatusDto>;
+  /** Enregistre le moteur sans s'y connecter (démarrage à froid). */
+  registerBackend(config: BackendConfigDto): Promise<void>;
+  /** Historique seul, sans réveiller le moteur. */
+  conversationHistory(): Promise<ConversationOpenReplyDto>;
   openConversation(
     id?: string,
     modelPath?: string,
