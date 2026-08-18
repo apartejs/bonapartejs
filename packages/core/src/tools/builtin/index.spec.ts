@@ -90,7 +90,7 @@ describe('read_file', () => {
     const root = await project();
     const res = await call('read_file', { path: '../secrets.txt' }, root);
     expect(res.ok).toBe(false);
-    expect(res.content).toMatch(/projet/i);
+    expect(res.content).toMatch(/project/i);
   });
 
   it('tronque un fichier démesuré en le signalant', async () => {
@@ -98,7 +98,7 @@ describe('read_file', () => {
     const res = await call('read_file', { path: 'gros.txt' }, root);
     expect(res.ok).toBe(true);
     expect(res.content.length).toBeLessThan(MAX_TOOL_OUTPUT_CHARS + 300);
-    expect(res.content).toMatch(/tronqué|truncated/i);
+    expect(res.content).toMatch(/truncated/i);
   });
 
   it('lit une tranche avec offset et limit', async () => {
@@ -166,7 +166,7 @@ describe('edit_file', () => {
       root,
     );
     expect(res.ok).toBe(false);
-    expect(res.content).toMatch(/introuvable|aucune/i);
+    expect(res.content).toMatch(/not found|no occurrence/i);
   });
 
   it('refuse si le motif est ambigu (plusieurs occurrences)', async () => {
@@ -228,7 +228,7 @@ describe('grep_files', () => {
     const root = await project({ 'a.ts': 'x' });
     const res = await call('grep_files', { pattern: 'zzz' }, root);
     expect(res.ok).toBe(true);
-    expect(res.content).toMatch(/aucun|no match/i);
+    expect(res.content).toMatch(/no match/i);
   });
 });
 
@@ -262,7 +262,7 @@ describe('run_shell', () => {
         : 'sleep 20';
     const res = await call('run_shell', { command, timeout_ms: 300 }, root);
     expect(res.ok).toBe(false);
-    expect(res.content).toMatch(/délai|timeout/i);
+    expect(res.content).toMatch(/timeout/i);
   }, 15_000);
 
   it('exige une commande non vide', async () => {

@@ -158,7 +158,7 @@ export class AgentLoop {
 
     yield {
       type: 'error',
-      message: `Limite de ${maxTurns} allers-retours atteinte : boucle interrompue.`,
+      message: `Reached the limit of ${maxTurns} tool round-trips: loop stopped.`,
     };
   }
 
@@ -174,8 +174,8 @@ export class AgentLoop {
         name,
         ok: false,
         content:
-          `Outil inconnu : ${name}. Outils disponibles : ` +
-          `${available.join(', ') || 'aucun'}.`,
+          `Unknown tool: ${name}. Available tools: ` +
+          `${available.join(', ') || 'none'}.`,
       };
     }
 
@@ -192,8 +192,8 @@ export class AgentLoop {
         name,
         ok: false,
         content:
-          `Action refusée par le mode ${this.options.permissions.getMode()} : ` +
-          `${name} (${registered.def.effect}). Propose une alternative en lecture seule.`,
+          `Denied by the current play mode (${this.options.permissions.getMode()}): ` +
+          `${name} (${registered.def.effect}). Propose a read-only alternative.`,
       };
     }
 
@@ -204,7 +204,7 @@ export class AgentLoop {
         return {
           name,
           ok: false,
-          content: `Action non autorisée : ${name} exige un accord, indisponible ici.`,
+          content: `Not authorized: ${name} requires approval, which is unavailable here.`,
         };
       }
       const granted = await approve({
@@ -217,7 +217,7 @@ export class AgentLoop {
         return {
           name,
           ok: false,
-          content: `Action refusée par l'utilisateur : ${name}.`,
+          content: `The user declined this action: ${name}.`,
         };
       }
     }
@@ -232,7 +232,7 @@ export class AgentLoop {
       return {
         name,
         ok: false,
-        content: `L'outil ${name} a échoué : ${
+        content: `Tool ${name} threw: ${
           error instanceof Error ? error.message : String(error)
         }`,
       };

@@ -40,6 +40,11 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       /* non bloquant */
     }
     document.documentElement.lang = next;
+    // Le harness a besoin de la locale : elle décide de la langue dans
+    // laquelle le modèle répond (le protocole, lui, reste anglais).
+    void window.bonaparte?.getConfig().then((config) =>
+      window.bonaparte.setConfig({ ...config, locale: next }),
+    );
   }, []);
 
   const value = useMemo(

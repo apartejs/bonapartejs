@@ -33,7 +33,7 @@ describe('renderToolInventory', () => {
   });
 
   it('rend un inventaire vide explicite', () => {
-    expect(renderToolInventory([])).toMatch(/aucun outil/i);
+    expect(renderToolInventory([])).toMatch(/no tools/i);
   });
 });
 
@@ -56,7 +56,7 @@ describe('buildSystemPrompt', () => {
 
   it('prévient que l’inventaire peut être amendé plus tard', () => {
     // Sans cette phrase, un delta appendé contredirait le prompt initial.
-    expect(buildSystemPrompt(base)).toMatch(/ultérieur|plus tard|amend/i);
+    expect(buildSystemPrompt(base)).toMatch(/amended|later/i);
   });
 
   it('inclut les consignes de projet quand elles existent', () => {
@@ -76,13 +76,13 @@ describe('renderInventoryDelta', () => {
   it('annonce les ajouts avec leur schéma', () => {
     const message = renderInventoryDelta({ added: [tool('nouveau')], removed: [] })!;
     expect(message).toContain('nouveau');
-    expect(message).toMatch(/disponible|ajout/i);
+    expect(message).toMatch(/available|added/i);
   });
 
   it('annonce les retraits', () => {
     const message = renderInventoryDelta({ added: [], removed: ['ancien'] })!;
     expect(message).toContain('ancien');
-    expect(message).toMatch(/retiré|plus disponible/i);
+    expect(message).toMatch(/removed/i);
   });
 
   it('rend null quand rien n’a changé (aucun message inutile appendé)', () => {
@@ -112,7 +112,7 @@ describe('renderToolResults', () => {
     const rendered = renderToolResults([
       { name: 'edit_file', ok: false, content: 'motif ambigu' },
     ]);
-    expect(rendered).toMatch(/échec|erreur/i);
+    expect(rendered).toMatch(/failed|error/i);
     expect(rendered).toContain('motif ambigu');
   });
 

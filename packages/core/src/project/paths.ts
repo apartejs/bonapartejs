@@ -13,9 +13,10 @@ export class PathOutsideProjectError extends Error {
     readonly requested: string,
     readonly projectRoot: string,
   ) {
+    // Message destiné au modèle : anglais, comme tout ce qui part sur le fil.
     super(
-      `Chemin hors du projet : ${requested} (racine : ${projectRoot}). ` +
-        'Les outils ne peuvent pas sortir du projet ouvert.',
+      `Path outside the project: ${requested} (root: ${projectRoot}). ` +
+        'Tools cannot step outside the open project.',
     );
     this.name = 'PathOutsideProjectError';
   }

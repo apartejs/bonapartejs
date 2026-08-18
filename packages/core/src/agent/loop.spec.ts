@@ -231,7 +231,7 @@ describe('AgentLoop — permissions', () => {
     expect(calls).toEqual([]);
     const result = all.find((e) => e.type === 'tool_result') as { ok: boolean; content: string };
     expect(result.ok).toBe(false);
-    expect(result.content).toMatch(/lecture|refus/i);
+    expect(result.content).toMatch(/denied|play mode/i);
   });
 
   it('mode Répétition : l’accord de l’utilisateur est demandé puis honoré', async () => {

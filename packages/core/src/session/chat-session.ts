@@ -32,6 +32,8 @@ export interface ChatSessionOptions {
   /** Racine du projet ouvert : contexte des outils et du prompt. */
   projectRoot: string;
   live: LiveBackendConfig;
+  /** Langue attendue des réponses (ex. « French ») — le fil reste anglais. */
+  replyLanguage?: string;
   projectInstructions?: string;
   approve?: ApprovalResolver;
   maxTurns?: number;
@@ -70,6 +72,7 @@ export class ChatSession {
       const systemPrompt = buildSystemPrompt({
         projectRoot: options.projectRoot,
         tools: registry.list(),
+        ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
         ...(options.projectInstructions
           ? { projectInstructions: options.projectInstructions }
           : {}),

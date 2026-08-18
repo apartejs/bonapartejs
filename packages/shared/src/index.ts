@@ -73,6 +73,8 @@ export interface AppConfigDto {
   projectRoot?: string;
   recentProjects?: string[];
   mode?: PlayModeDto;
+  /** Langue de l'utilisateur — pilote l'UI ET la langue de réponse du modèle. */
+  locale?: BonaparteLocale;
 }
 
 /** Modes de jeu (lexique théâtre) — cf. moteur de permissions. */

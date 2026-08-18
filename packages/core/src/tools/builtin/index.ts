@@ -43,7 +43,7 @@ function int(args: Record<string, unknown>, key: string): number | null {
 
 function clamp(text: string): string {
   if (text.length <= MAX_TOOL_OUTPUT_CHARS) return text;
-  return `${text.slice(0, MAX_TOOL_OUTPUT_CHARS)}\n… [tronqué : ${text.length} caractères au total]`;
+  return `${text.slice(0, MAX_TOOL_OUTPUT_CHARS)}\n… [truncated: ${text.length} characters total]`;
 }
 
 function describeError(error: unknown): string {
@@ -93,21 +93,21 @@ const readFileTool: BuiltinTool = {
   def: {
     name: 'read_file',
     description:
-      "Lit un fichier du projet. Optionnellement une tranche de lignes via offset (1-based) et limit.",
+      "Read a file from the project. Optionally a slice of lines via offset (1-based) and limit.",
     effect: 'read',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Chemin relatif au projet' },
-        offset: { type: 'number', description: 'Première ligne (1-based)' },
-        limit: { type: 'number', description: 'Nombre de lignes' },
+        path: { type: 'string', description: 'Path relative to the project root' },
+        offset: { type: 'number', description: 'First line (1-based)' },
+        limit: { type: 'number', description: 'Number of lines' },
       },
       required: ['path'],
     },
   },
   handler: async (args, ctx) => {
     const requested = str(args, 'path');
-    if (!requested) return ko('Argument « path » manquant.');
+    if (!requested) return ko('Missing argument: path.');
     const resolved = inProject(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
 
@@ -115,7 +115,7 @@ const readFileTool: BuiltinTool = {
     try {
       content = await readFile(resolved.path, 'utf8');
     } catch (error) {
-      return ko(`Fichier illisible : ${requested} (${describeError(error)})`);
+      return ko(`Cannot read file: ${requested} (${describeError(error)})`);
     }
 
     const offset = int(args, 'offset');
@@ -136,7 +136,7 @@ const writeFileTool: BuiltinTool = {
   def: {
     name: 'write_file',
     description:
-      'Écrit un fichier du projet (écrase s’il existe, crée les dossiers manquants).',
+      'Write a file in the project (overwrites, creates missing directories).',
     effect: 'write',
     inputSchema: {
       type: 'object',
@@ -149,10 +149,10 @@ const writeFileTool: BuiltinTool = {
   },
   handler: async (args, ctx) => {
     const requested = str(args, 'path');
-    if (!requested) return ko('Argument « path » manquant.');
+    if (!requested) return ko('Missing argument: path.');
     const content = str(args, 'content');
     if (content === null) {
-      return ko('Argument « content » manquant ou non textuel.');
+      return ko('Missing or non-string argument: content.');
     }
     const resolved = inProject(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
@@ -161,10 +161,10 @@ const writeFileTool: BuiltinTool = {
       await mkdir(dirname(resolved.path), { recursive: true });
       await writeFile(resolved.path, content, 'utf8');
     } catch (error) {
-      return ko(`Écriture impossible : ${requested} (${describeError(error)})`);
+      return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
     return ok(
-      `Écrit : ${displayPath(ctx.projectRoot, resolved.path)} (${content.length} caractères)`,
+      `Wrote: ${displayPath(ctx.projectRoot, resolved.path)} (${content.length} characters)`,
     );
   },
 };
@@ -175,8 +175,8 @@ const editFileTool: BuiltinTool = {
   def: {
     name: 'edit_file',
     description:
-      'Remplace une occurrence UNIQUE de old_string par new_string dans un fichier. ' +
-      'Donner assez de contexte pour que le motif soit sans ambiguïté.',
+      'Replace a UNIQUE occurrence of old_string with new_string in a file. ' +
+      'Give enough context to make the match unambiguous.',
     effect: 'write',
     inputSchema: {
       type: 'object',
@@ -192,9 +192,9 @@ const editFileTool: BuiltinTool = {
     const requested = str(args, 'path');
     const oldString = str(args, 'old_string');
     const newString = str(args, 'new_string');
-    if (!requested) return ko('Argument « path » manquant.');
+    if (!requested) return ko('Missing argument: path.');
     if (oldString === null || newString === null) {
-      return ko('Arguments « old_string » et « new_string » requis.');
+      return ko('Arguments old_string and new_string are required.');
     }
     const resolved = inProject(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
@@ -203,28 +203,28 @@ const editFileTool: BuiltinTool = {
     try {
       content = await readFile(resolved.path, 'utf8');
     } catch (error) {
-      return ko(`Fichier illisible : ${requested} (${describeError(error)})`);
+      return ko(`Cannot read file: ${requested} (${describeError(error)})`);
     }
 
     const occurrences = content.split(oldString).length - 1;
     if (occurrences === 0) {
       return ko(
-        `Motif introuvable dans ${requested} : aucune occurrence de old_string.`,
+        `Pattern not found in ${requested}: no occurrence of old_string.`,
       );
     }
     if (occurrences > 1) {
       return ko(
-        `Motif ambigu dans ${requested} : ${occurrences} occurrences. ` +
-          'Élargir old_string pour le rendre unique. Fichier inchangé.',
+        `Ambiguous pattern in ${requested}: ${occurrences} occurrences. ` +
+          'Widen old_string to make it unique. File left unchanged.',
       );
     }
 
     try {
       await writeFile(resolved.path, content.replace(oldString, newString), 'utf8');
     } catch (error) {
-      return ko(`Écriture impossible : ${requested} (${describeError(error)})`);
+      return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
-    return ok(`Modifié : ${displayPath(ctx.projectRoot, resolved.path)}`);
+    return ok(`Edited: ${displayPath(ctx.projectRoot, resolved.path)}`);
   },
 };
 
@@ -233,7 +233,7 @@ const editFileTool: BuiltinTool = {
 const listDirTool: BuiltinTool = {
   def: {
     name: 'list_dir',
-    description: 'Liste le contenu d’un dossier du projet (racine par défaut).',
+    description: 'List the contents of a project directory (root by default).',
     effect: 'read',
     inputSchema: {
       type: 'object',
@@ -247,13 +247,13 @@ const listDirTool: BuiltinTool = {
 
     try {
       const entries = await readdir(resolved.path, { withFileTypes: true });
-      if (entries.length === 0) return ok('(dossier vide)');
+      if (entries.length === 0) return ok('(empty directory)');
       const lines = entries
         .map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
         .sort((a, b) => a.localeCompare(b));
       return ok(clamp(lines.join('\n')));
     } catch (error) {
-      return ko(`Dossier illisible : ${requested} (${describeError(error)})`);
+      return ko(`Cannot read directory: ${requested} (${describeError(error)})`);
     }
   },
 };
@@ -264,27 +264,27 @@ const grepFilesTool: BuiltinTool = {
   def: {
     name: 'grep_files',
     description:
-      'Cherche une expression régulière dans les fichiers du projet et rend les ' +
-      'lignes correspondantes au format chemin:ligne: contenu.',
+      'Search a regular expression across project files and return matching ' +
+      'lines as path:line: content.',
     effect: 'read',
     inputSchema: {
       type: 'object',
       properties: {
-        pattern: { type: 'string', description: 'Expression régulière' },
-        path: { type: 'string', description: 'Sous-dossier à explorer' },
+        pattern: { type: 'string', description: 'Regular expression' },
+        path: { type: 'string', description: 'Subdirectory to search' },
       },
       required: ['pattern'],
     },
   },
   handler: async (args, ctx) => {
     const pattern = str(args, 'pattern');
-    if (!pattern) return ko('Argument « pattern » manquant.');
+    if (!pattern) return ko('Missing argument: pattern.');
 
     let regex: RegExp;
     try {
       regex = new RegExp(pattern);
     } catch (error) {
-      return ko(`Expression régulière invalide : ${describeError(error)}`);
+      return ko(`Invalid regular expression: ${describeError(error)}`);
     }
 
     const resolved = inProject(ctx, str(args, 'path') ?? '.');
@@ -305,7 +305,7 @@ const grepFilesTool: BuiltinTool = {
       });
     }
 
-    if (hits.length === 0) return ok(`Aucune correspondance pour /${pattern}/.`);
+    if (hits.length === 0) return ok(`No match for /${pattern}/.`);
     return ok(clamp(hits.join('\n')));
   },
 };
@@ -316,14 +316,14 @@ const runShellTool: BuiltinTool = {
   def: {
     name: 'run_shell',
     description:
-      'Exécute une commande shell à la racine du projet et rend sa sortie. ' +
-      'Bornée dans le temps ; la sortie est tronquée si elle est énorme.',
+      'Run a shell command at the project root and return its output. ' +
+      'Time-bounded; output is truncated when huge.',
     effect: 'execute',
     inputSchema: {
       type: 'object',
       properties: {
         command: { type: 'string' },
-        timeout_ms: { type: 'number', description: 'Délai max (défaut 120000)' },
+        timeout_ms: { type: 'number', description: 'Max duration in ms (default 120000)' },
       },
       required: ['command'],
     },
@@ -331,7 +331,7 @@ const runShellTool: BuiltinTool = {
   handler: async (args, ctx) => {
     const command = str(args, 'command');
     if (!command || command.trim() === '') {
-      return ko('Argument « command » manquant ou vide.');
+      return ko('Missing or empty argument: command.');
     }
     const timeout = Math.min(
       int(args, 'timeout_ms') ?? DEFAULT_SHELL_TIMEOUT_MS,
@@ -350,17 +350,17 @@ const runShellTool: BuiltinTool = {
         },
         (error, stdout, stderr) => {
           const output = clamp([stdout, stderr].filter(Boolean).join('').trimEnd());
-          if (!error) return resolve(ok(output || '(aucune sortie)'));
+          if (!error) return resolve(ok(output || '(no output)'));
 
           const killed = (error as { killed?: boolean }).killed === true;
           if (killed) {
             return resolve(
-              ko(`Commande interrompue : délai de ${timeout} ms dépassé.\n${output}`),
+              ko(`Command aborted: timeout of ${timeout} ms exceeded.\n${output}`),
             );
           }
           const code = (error as { code?: number | string }).code;
           return resolve(
-            ko(`Commande terminée avec le code ${String(code)}.\n${output}`),
+            ko(`Command exited with code ${String(code)}.\n${output}`),
           );
         },
       );

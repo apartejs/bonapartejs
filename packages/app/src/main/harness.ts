@@ -433,6 +433,8 @@ export class Harness {
         permissions: this.permissions,
         projectRoot: this.projectRoot,
         approve: this.approve,
+        // Le fil est anglais ; seule la langue de réponse suit l'utilisateur.
+        replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
         live: this.live,
       },
       id,

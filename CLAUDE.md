@@ -50,8 +50,13 @@ Quand une nouvelle version de la lib corrige une entrée, la marquer résolue
 - **TDD systématique** : test rouge d'abord, implémentation minimale ensuite.
   Le faux llama-server (`core/src/testing/fake-llama-server.ts`) sert de fixture
   à tout ce qui touche au backend — jamais besoin de GPU en CI.
-- **i18n fr/en dès la première chaîne** (pattern TS-typé, pas de JSON pour le
-  harness/l'UI ; les specs vérifient la parité des clés).
+- **i18n fr/en dès la première chaîne** (un fichier par langue : `types.ts` +
+  `fr.ts` + `en.ts` ; les specs vérifient la parité des clés). **L'i18n
+  concerne l'INTERFACE. Tout ce qui part vers le modèle est en ANGLAIS** —
+  prompt système, descriptions d'outils, résultats, messages d'erreur d'outil,
+  refus de permission : c'est un protocole, et les modèles sont entraînés en
+  anglais pour l'instruction et le tool-calling. La langue de réponse est une
+  consigne explicite du prompt (`replyLanguage`), pilotée par la locale.
 - **Finition UI niveau pro dès le premier jet** — un écran pas fini n'est pas montré.
 - **Commits locaux libres ; AUCUN push sans validation de Paul dans l'app.**
 
