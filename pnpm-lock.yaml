@@ -98,14 +98,13 @@ importers:
         version: 4.1.11(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(lightningcss@1.33.0)(yaml@2.9.0))
 
   packages/cli:
-    dependencies:
+    devDependencies:
       '@aparte/bonaparte-core':
         specifier: workspace:*
         version: link:../core
       '@aparte/bonaparte-shared':
         specifier: workspace:*
         version: link:../shared
-    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3

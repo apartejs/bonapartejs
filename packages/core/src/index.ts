@@ -8,3 +8,17 @@
 
 export type { HarnessTranslations } from './i18n/translations.js';
 export { EN, FR, harnessT } from './i18n/translations.js';
+
+export type {
+  DoctorCheck,
+  DoctorCheckId,
+  DoctorEnv,
+  DoctorReport,
+  DoctorStatus,
+  GpuInfo,
+} from './doctor/doctor.js';
+export { LOW_DISK_BYTES, MIN_NODE_MAJOR, runDoctor } from './doctor/doctor.js';
+export type { SystemDoctorEnvOptions } from './doctor/doctor-env.js';
+export { createSystemDoctorEnv } from './doctor/doctor-env.js';
+
+export { bonaparteDataDir, kvSlotsDir } from './paths.js';

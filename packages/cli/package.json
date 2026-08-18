@@ -12,11 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
-  "dependencies": {
-    "@aparte/bonaparte-core": "workspace:*",
-    "@aparte/bonaparte-shared": "workspace:*"
-  },
   "devDependencies": {
+    "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-shared": "workspace:*",
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

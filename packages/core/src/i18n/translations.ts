@@ -19,6 +19,8 @@ export interface HarnessTranslations {
     warn: string;
     allGood: string;
     hasBlockingIssues: string;
+    lowDisk: string;
+    cpuOnly: string;
   };
   backend: {
     starting: string;
@@ -54,6 +56,8 @@ export const FR: HarnessTranslations = {
     warn: 'ATTENTION',
     allGood: 'Tout est en ordre.',
     hasBlockingIssues: 'Des problèmes bloquants ont été détectés.',
+    lowDisk: 'Espace disque faible',
+    cpuOnly: 'Aucun GPU détecté — exécution CPU uniquement',
   },
   backend: {
     starting: 'Démarrage du serveur de modèle…',
@@ -93,6 +97,8 @@ export const EN: HarnessTranslations = {
     warn: 'WARNING',
     allGood: 'Everything looks good.',
     hasBlockingIssues: 'Blocking issues were detected.',
+    lowDisk: 'Low disk space',
+    cpuOnly: 'No GPU detected — running CPU-only',
   },
   backend: {
     starting: 'Starting the model server…',
