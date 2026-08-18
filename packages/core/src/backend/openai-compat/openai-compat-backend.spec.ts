@@ -123,6 +123,42 @@ describe('backend OpenAI-compatible', () => {
     expect(backend.slots).toBeUndefined();
   });
 
+  it('rapporte l’usage réel du serveur (jamais un comptage de caractères)', async () => {
+    const { backend } = await rig([{ text: 'bonjour' }]);
+    const events: unknown[] = [];
+    for await (const event of backend.runTurn({
+      conversationId: 'c1',
+      system: { projectRoot: 'C:\\projet' },
+      tools: [],
+      transcript: [{ role: 'user', text: 'x' }],
+      signal: new AbortController().signal,
+    })) {
+      events.push(event);
+    }
+    const done = events.at(-1) as {
+      type: string;
+      stats: { predictedTokens: number; promptUncachedTokens: number; progress?: { cache: number } };
+    };
+    expect(done.type).toBe('done');
+    expect(done.stats.predictedTokens).toBe(7); // completion_tokens, pas 7 caractères par hasard
+    expect(done.stats.promptUncachedTokens).toBe(20); // 120 - 100 en cache
+    expect(done.stats.progress?.cache).toBe(100);
+  });
+
+  it('ne rattache pas les résultats à un tour assistant sans appel', () => {
+    const messages = toChatMessages('SYS', [
+      {
+        role: 'assistant',
+        text: 'je regarde',
+        calls: [{ name: 't', arguments: {} }],
+      },
+      { role: 'assistant', text: 'digression sans appel' },
+      { role: 'tool_results', results: [{ name: 't', ok: true, content: 'r' }] },
+    ]);
+    const callId = messages[1]!.tool_calls![0]!.id;
+    expect(messages.at(-1)!.tool_call_id).toBe(callId);
+  });
+
   it('recompose des arguments d’outil fragmentés', async () => {
     const { backend } = await rig([
       { calls: [{ name: 'read_file', arguments: { path: 'src/a.ts' } }] },

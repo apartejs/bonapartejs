@@ -63,7 +63,9 @@ export function toChatMessages(
         break;
       case 'assistant': {
         const calls = entry.calls ?? [];
-        lastCallIds = calls.map(() => `call_${callSeq++}`);
+        // N'écraser les ids que s'il y a des appels : un tour assistant sans
+        // appel ne doit pas orphelin les résultats du tour précédent.
+        if (calls.length > 0) lastCallIds = calls.map(() => `call_${callSeq++}`);
         messages.push({
           role: 'assistant',
           content: entry.text,
@@ -111,6 +113,13 @@ export function toChatTools(tools: ToolDefLike[]): unknown[] {
 interface StreamingCall {
   name: string;
   args: string;
+}
+
+interface OpenAiUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
 }
 
 export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend {
@@ -175,6 +184,8 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
         body: JSON.stringify({
           model: options.model,
           stream: true,
+          // Sans ceci, aucun compte de tokens n'est renvoyé en streaming.
+          stream_options: { include_usage: true },
           messages: toChatMessages(systemPrompt, request.transcript),
           ...(request.tools.length > 0 ? { tools: toChatTools(request.tools) } : {}),
         }),
@@ -189,9 +200,11 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
 
       const started = Date.now();
       const calls = new Map<number, StreamingCall>();
+      let usage: OpenAiUsage | undefined;
       let text = '';
 
       for await (const chunk of sseChunks(res.body)) {
+        if (chunk.usage) usage = chunk.usage;
         const delta = chunk?.choices?.[0]?.delta as
           | {
               content?: string;
@@ -229,14 +242,32 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
         };
       }
 
+      const cached = usage?.prompt_tokens_details?.cached_tokens;
       yield {
         type: 'done',
         stats: {
-          // Pas de cache de préfixe côté serveur : le prefill n'est pas mesuré.
+          // Le serveur ne rapporte pas de durée de prefill : 0 plutôt qu'un
+          // chiffre inventé. Les tokens viennent de l'usage réel, jamais
+          // d'un comptage de caractères.
           promptMs: 0,
-          promptUncachedTokens: 0,
-          predictedTokens: text.length,
+          promptUncachedTokens:
+            usage && cached !== undefined
+              ? Math.max(0, (usage.prompt_tokens ?? 0) - cached)
+              : (usage?.prompt_tokens ?? 0),
+          predictedTokens: usage?.completion_tokens ?? 0,
           predictedMs: Date.now() - started,
+          // Certains serveurs (dont LM Studio récent) rapportent la part de
+          // prompt servie par leur cache : on l'affiche telle quelle.
+          ...(usage && cached !== undefined
+            ? {
+                progress: {
+                  total: usage.prompt_tokens ?? 0,
+                  cache: cached,
+                  processed: usage.prompt_tokens ?? 0,
+                  timeMs: 0,
+                },
+              }
+            : {}),
         },
       };
     },
@@ -274,7 +305,7 @@ function safeJson(raw: string): Record<string, unknown> {
 /** Itère les objets JSON d'un flux SSE `data: {...}` (bufferisé). */
 async function* sseChunks(
   body: ReadableStream<Uint8Array>,
-): AsyncGenerator<{ choices?: { delta?: unknown }[] }> {
+): AsyncGenerator<{ choices?: { delta?: unknown }[]; usage?: OpenAiUsage }> {
   const decoder = new TextDecoder();
   const reader = body.getReader();
   let buffer = '';

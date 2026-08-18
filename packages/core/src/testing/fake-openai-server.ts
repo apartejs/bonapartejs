@@ -77,6 +77,18 @@ export async function startFakeOpenAiServer(
             tool_calls: [{ index, function: { arguments: args.slice(half) } }],
           });
         });
+        // Chunk d'usage final, comme un vrai serveur avec include_usage.
+        res.write(
+          `data: ${JSON.stringify({
+            choices: [],
+            usage: {
+              prompt_tokens: 120,
+              completion_tokens: 7,
+              total_tokens: 127,
+              prompt_tokens_details: { cached_tokens: 100 },
+            },
+          })}\n\n`,
+        );
         res.write('data: [DONE]\n\n');
         res.end();
         return;
