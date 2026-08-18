@@ -26,6 +26,7 @@ export const IPC = {
   setupSuggest: 'setup.suggest',
   dialogPickFile: 'dialog.pickFile',
   modelsScan: 'models.scan',
+  endpointModels: 'models.endpoint',
   openExternal: 'shell.openExternal',
   projectOpen: 'project.open',
   projectCurrent: 'project.current',
@@ -51,6 +52,17 @@ export type BackendConfigDto =
       mode: 'managed';
       binPath: string;
       nGpuLayers?: number;
+    }
+  /**
+   * Endpoint OpenAI-compatible : LM Studio, Ollama, vLLM… et le cloud avec une
+   * clé. Pas de persistance de contexte (l'UI le signale honnêtement) ; le
+   * modèle est celui que sert l'endpoint.
+   */
+  | {
+      mode: 'openai-compat';
+      baseUrl: string;
+      model: string;
+      apiKey?: string;
     };
 
 /** Modèle découvert par l'inventaire (scan des emplacements connus). */
@@ -182,6 +194,8 @@ export interface BonaparteBridge {
   suggestSetup(): Promise<SetupSuggestionDto>;
   pickFile(kind: PickFileKind): Promise<string | null>;
   scanModels(): Promise<ModelInfoDto[]>;
+  /** Modèles servis par un endpoint OpenAI-compatible (GET /models). */
+  listEndpointModels(baseUrl: string, apiKey?: string): Promise<string[]>;
   /** N'ouvre que des URLs https d'une liste blanche (main process). */
   openExternal(url: string): Promise<void>;
   getVersion(): Promise<string>;

@@ -17,6 +17,7 @@ import {
   ChatSession,
   ConversationStore,
   createLlamaCppBackend,
+  createOpenAiCompatBackend,
   createSystemDoctorEnv,
   defaultScanRoots,
   detectServeCommandPrefix,
@@ -294,6 +295,25 @@ export class Harness {
         cacheTypeV: 'f16',
         buildTag: 'unknown',
       };
+    } else if (config.mode === 'openai-compat') {
+      const backend = createOpenAiCompatBackend({
+        baseUrl: config.baseUrl,
+        model: config.model,
+        ...(config.apiKey ? { apiKey: config.apiKey } : {}),
+        label: 'endpoint OpenAI-compatible',
+      });
+      this.watchStatus(backend);
+      await backend.start();
+      this.backend = backend;
+      this.loadedModelPath = config.model;
+      // Pas de slots : le manifest n'aura jamais à être comparé.
+      this.live = {
+        modelFingerprint: `openai-compat:${config.baseUrl}:${config.model}`,
+        nCtx: 0,
+        cacheTypeK: 'n/a',
+        cacheTypeV: 'n/a',
+        buildTag: 'n/a',
+      };
     }
 
     return this.status();
@@ -407,7 +427,10 @@ export class Harness {
       convNCtx = nCtx ?? defaults?.nCtx;
     }
 
-    if (this.engine.mode === 'managed') {
+    if (this.engine.mode === 'openai-compat') {
+      // Le modèle est celui que sert l'endpoint : rien à choisir ici.
+      convModel = this.engine.model;
+    } else if (this.engine.mode === 'managed') {
       if (!convModel) return { needsModel: true, conversationId: id };
       await this.ensureManagedBackend(convModel, convNCtx ?? 8192);
     } else if (!convModel) {
@@ -565,6 +588,19 @@ export class Harness {
     return scanModels(defaultScanRoots());
   }
 
+  /** Modèles servis par un endpoint OpenAI-compatible. */
+  async listEndpointModels(baseUrl: string, apiKey?: string): Promise<string[]> {
+    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+    });
+    if (!res.ok) throw new Error(`Endpoint injoignable (HTTP ${res.status}).`);
+    const body = (await res.json()) as { data?: { id?: string }[] };
+    return (body.data ?? [])
+      .map((entry) => entry.id)
+      .filter((id): id is string => typeof id === 'string')
+      .sort((a, b) => a.localeCompare(b));
+  }
+
   async pickFile(kind: PickFileKind): Promise<string | null> {
     if (!this.window) return null;
     const filters =
@@ -605,6 +641,9 @@ export class Harness {
     ipcMain.handle(IPC.kvSave, () => this.saveKv());
     ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
     ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
+    ipcMain.handle(IPC.endpointModels, (_e, baseUrl: string, apiKey?: string) =>
+      this.listEndpointModels(baseUrl, apiKey),
+    );
     ipcMain.handle(IPC.dialogPickFile, (_e, kind: PickFileKind) =>
       this.pickFile(kind),
     );

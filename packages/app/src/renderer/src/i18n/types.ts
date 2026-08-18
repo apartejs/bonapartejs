@@ -17,6 +17,12 @@ export interface AppTranslations {
     title: string;
     intro: string;
     modeRemote: string;
+    modeEndpoint: string;
+    endpointNote: string;
+    endpointUrl: string;
+    endpointProbe: string;
+    endpointModel: string;
+    endpointEmpty: string;
     modeManaged: string;
     url: string;
     urlPlaceholder: string;

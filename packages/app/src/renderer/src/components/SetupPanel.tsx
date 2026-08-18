@@ -12,8 +12,31 @@ interface SetupPanelProps {
 export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) {
   const { t } = useTranslate();
   // Local-first : le mode managé (local) est le défaut.
-  const [mode, setMode] = useState<'remote' | 'managed'>(initial?.mode ?? 'managed');
+  const [mode, setMode] = useState<BackendConfigDto['mode']>(
+    initial?.mode ?? 'managed',
+  );
   const [url, setUrl] = useState(initial?.mode === 'remote' ? initial.url : '');
+  const [endpointUrl, setEndpointUrl] = useState(
+    initial?.mode === 'openai-compat' ? initial.baseUrl : 'http://127.0.0.1:1234/v1',
+  );
+  const [endpointModels, setEndpointModels] = useState<string[] | null>(null);
+  const [endpointModel, setEndpointModel] = useState(
+    initial?.mode === 'openai-compat' ? initial.model : '',
+  );
+  const [probing, setProbing] = useState(false);
+
+  const probeEndpoint = async (): Promise<void> => {
+    setProbing(true);
+    try {
+      const models = await window.bonaparte.listEndpointModels(endpointUrl.trim());
+      setEndpointModels(models);
+      setEndpointModel((current) => current || (models[0] ?? ''));
+    } catch {
+      setEndpointModels([]);
+    } finally {
+      setProbing(false);
+    }
+  };
   const [binPath, setBinPath] = useState(
     initial?.mode === 'managed' ? initial.binPath : '',
   );
@@ -54,18 +77,23 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   };
 
   const canSubmit =
-    !busy && (mode === 'remote' ? url.trim() !== '' : binPath.trim() !== '');
+    !busy &&
+    (mode === 'remote'
+      ? url.trim() !== ''
+      : mode === 'openai-compat'
+        ? endpointUrl.trim() !== '' && endpointModel !== ''
+        : binPath.trim() !== '');
 
   const submit = (): void => {
     if (!canSubmit) return;
-    onSubmit(
-      mode === 'remote'
-        ? { mode: 'remote', url: url.trim() }
-        : {
-            mode: 'managed',
-            binPath: binPath.trim(),
-          },
-    );
+    if (mode === 'remote') onSubmit({ mode: 'remote', url: url.trim() });
+    else if (mode === 'openai-compat') {
+      onSubmit({
+        mode: 'openai-compat',
+        baseUrl: endpointUrl.trim().replace(/\/$/, ''),
+        model: endpointModel,
+      });
+    } else onSubmit({ mode: 'managed', binPath: binPath.trim() });
   };
 
   return (
@@ -94,9 +122,59 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
           >
             {t.setup.modeRemote}
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'openai-compat'}
+            className={mode === 'openai-compat' ? 'active' : ''}
+            onClick={() => setMode('openai-compat')}
+          >
+            {t.setup.modeEndpoint}
+          </button>
         </div>
 
-        {mode === 'remote' ? (
+        {mode === 'openai-compat' ? (
+          <>
+            <p className="setup-note">{t.setup.endpointNote}</p>
+            <label className="field">
+              <span className="field-label">{t.setup.endpointUrl}</span>
+              <span className="field-row">
+                <input
+                  value={endpointUrl}
+                  onChange={(e) => {
+                    setEndpointUrl(e.target.value);
+                    setEndpointModels(null);
+                  }}
+                  placeholder="http://127.0.0.1:1234/v1"
+                  spellCheck={false}
+                />
+                <button type="button" onClick={() => void probeEndpoint()} disabled={probing}>
+                  {probing ? t.setup.starting : t.setup.endpointProbe}
+                </button>
+              </span>
+            </label>
+            {endpointModels !== null && (
+              <label className="field">
+                <span className="field-label">{t.setup.endpointModel}</span>
+                {endpointModels.length === 0 ? (
+                  <p className="picker-empty">{t.setup.endpointEmpty}</p>
+                ) : (
+                  <select
+                    className="field-select"
+                    value={endpointModel}
+                    onChange={(e) => setEndpointModel(e.target.value)}
+                  >
+                    {endpointModels.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+            )}
+          </>
+        ) : mode === 'remote' ? (
           <label className="field">
             <span className="field-label">{t.setup.url}</span>
             <input

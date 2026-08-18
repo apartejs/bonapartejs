@@ -14,6 +14,13 @@ export const FR: AppTranslations = {
     intro:
       'bonaparte pilote un llama-server : lancez-en un ici même (managé) ou pointez vers un hôte existant. Le modèle se choisit ensuite, conversation par conversation.',
     modeRemote: 'Serveur distant',
+    modeEndpoint: 'Endpoint OpenAI',
+    endpointNote:
+      'LM Studio, Ollama, vLLM… Immédiat, mais sans persistance de contexte : chaque reprise repart à froid.',
+    endpointUrl: 'URL de l’API',
+    endpointProbe: 'Interroger',
+    endpointModel: 'Modèle servi',
+    endpointEmpty: 'Aucun modèle servi par cet endpoint.',
     modeManaged: 'Managé (local)',
     url: 'URL du serveur',
     urlPlaceholder: 'http://127.0.0.1:8080',
