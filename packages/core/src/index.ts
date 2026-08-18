@@ -66,3 +66,12 @@ export { fingerprintModelFile } from './kv/fingerprint.js';
 
 export type { AssistantTurnOptions } from './wire/qwen-template.js';
 export { PromptLog, renderSystem, renderUser } from './wire/qwen-template.js';
+
+export type {
+  ConversationEvent,
+  ConversationMeta,
+} from './conversation/store.js';
+export { ConversationStore, rebuildPromptLog } from './conversation/store.js';
+
+export type { ChatSessionOptions, OpenResult } from './session/chat-session.js';
+export { ChatSession } from './session/chat-session.js';
