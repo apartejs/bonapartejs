@@ -19,8 +19,24 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [nCtx, setNCtx] = useState('8192');
+  const [query, setQuery] = useState('');
 
   const parsedNCtx = (): number => Number.parseInt(nCtx, 10) || 8192;
+
+  // Filtre : chaque terme doit apparaître dans le nom OU le chemin, ce qui
+  // permet de chercher « qwen 32 q4 » sans se soucier de l'ordre.
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const visible = (models ?? []).filter((model) => {
+    const haystack = `${model.name} ${model.path}`.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+
+  // On ne confirme jamais une sélection masquée par le filtre : si elle sort
+  // de la liste visible, c'est la première ligne affichée qui fait foi.
+  const effective =
+    selected && visible.some((m) => m.path === selected)
+      ? selected
+      : (visible[0]?.path ?? null);
 
   useEffect(() => {
     void window.bonaparte.scanModels().then((found) => {
@@ -41,22 +57,43 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
         <h1>{t.picker.title}</h1>
         <p className="setup-intro">{t.picker.intro}</p>
 
+        {models !== null && models.length > 0 && (
+          <label className="field picker-search">
+            <span className="field-row">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t.picker.searchPlaceholder}
+                spellCheck={false}
+                autoFocus
+              />
+              {query && (
+                <button type="button" onClick={() => setQuery('')}>
+                  ✕
+                </button>
+              )}
+            </span>
+          </label>
+        )}
+
         {models === null ? (
           <p className="picker-scanning">{t.picker.scanning}</p>
         ) : models.length === 0 ? (
           <p className="picker-empty">{t.picker.empty}</p>
+        ) : visible.length === 0 ? (
+          <p className="picker-empty">{t.picker.noMatch}</p>
         ) : (
           <ul className="model-list">
-            {models.map((model) => (
+            {visible.map((model) => (
               <li key={model.path}>
                 <label
-                  className={`model-row ${selected === model.path ? 'selected' : ''}`}
+                  className={`model-row ${effective === model.path ? 'selected' : ''}`}
                   title={model.path}
                 >
                   <input
                     type="radio"
                     name="model"
-                    checked={selected === model.path}
+                    checked={effective === model.path}
                     onChange={() => setSelected(model.path)}
                   />
                   <span className="model-name">{model.name}</span>
@@ -95,8 +132,8 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
           <button
             type="button"
             className="primary"
-            disabled={busy || !selected}
-            onClick={() => selected && onPick(selected, parsedNCtx())}
+            disabled={busy || !effective}
+            onClick={() => effective && onPick(effective, parsedNCtx())}
           >
             {busy ? t.setup.starting : t.picker.confirm}
           </button>

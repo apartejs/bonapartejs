@@ -37,6 +37,8 @@ export interface AppTranslations {
     intro: string;
     scanning: string;
     empty: string;
+    searchPlaceholder: string;
+    noMatch: string;
     nCtx: string;
     manual: string;
     confirm: string;

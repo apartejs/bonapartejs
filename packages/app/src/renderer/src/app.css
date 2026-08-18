@@ -263,6 +263,14 @@ button.primary {
 
 /* ── Sélecteur de modèles ──────────────────────────────────────────── */
 
+.picker-search {
+  margin-bottom: 10px;
+}
+
+.picker-search input {
+  font-family: var(--bp-sans);
+}
+
 .model-list {
   list-style: none;
   margin: 0 0 16px;

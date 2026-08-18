@@ -36,6 +36,8 @@ export const EN: AppTranslations = {
       'This conversation will be played by this model — it stays pinned to it. Models found on this machine:',
     scanning: 'Scanning…',
     empty: 'No GGUF model found in the known locations. Add one with Browse.',
+    searchPlaceholder: 'Filter models…',
+    noMatch: 'No model matches this search.',
     nCtx: 'Context size',
     manual: 'Browse…',
     confirm: 'Cast this role',

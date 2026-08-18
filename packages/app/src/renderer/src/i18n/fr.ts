@@ -37,6 +37,8 @@ export const FR: AppTranslations = {
     scanning: 'Inventaire en cours…',
     empty:
       'Aucun modèle GGUF trouvé dans les emplacements connus. Ajoutez-en un avec Parcourir.',
+    searchPlaceholder: 'Filtrer les modèles…',
+    noMatch: 'Aucun modèle ne correspond à cette recherche.',
     nCtx: 'Taille de contexte',
     manual: 'Parcourir…',
     confirm: 'Distribuer ce rôle',
