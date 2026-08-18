@@ -36,6 +36,13 @@ export type {
   SlotApi,
   SlotRestoreResult,
   SlotSaveResult,
+  ProviderEvent,
+  SystemSpec,
+  ToolCall,
+  ToolDefLike,
+  ToolOutcome,
+  TranscriptEntry,
+  TurnRequest,
 } from './backend/types.js';
 export { BackendRegistry } from './backend/registry.js';
 export type { BackendType } from './backend/registry.js';
@@ -73,7 +80,7 @@ export type {
   ConversationMeta,
   CreateConversationOptions,
 } from './conversation/store.js';
-export { ConversationStore, rebuildPromptLog } from './conversation/store.js';
+export { ConversationStore, rebuildTranscript } from './conversation/store.js';
 
 export type { DiscoveredModel, ModelSource, ScanOptions, ScanRoot } from './models/inventory.js';
 export { defaultScanRoots, scanModels } from './models/inventory.js';
@@ -93,7 +100,7 @@ export type {
 export { parseHermesOutput } from './wire/hermes-parser.js';
 export { HermesStreamDemux } from './wire/stream-demux.js';
 export type { DemuxEvent } from './wire/stream-demux.js';
-export type { SystemPromptOptions, ToolOutcome } from './wire/system-prompt.js';
+export type { SystemPromptOptions } from './wire/system-prompt.js';
 export {
   buildSystemPrompt,
   renderInventoryDelta,
@@ -135,3 +142,6 @@ export type {
 export { AgentLoop } from './agent/loop.js';
 
 export { displayPath, PathOutsideProjectError, resolveInProject } from './project/paths.js';
+
+export type { OpenAiCompatOptions } from './backend/openai-compat/openai-compat-backend.js';
+export { createOpenAiCompatBackend } from './backend/openai-compat/openai-compat-backend.js';

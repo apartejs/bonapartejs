@@ -1,25 +1,26 @@
 /**
- * Boucle agentique.
+ * Boucle agentique — AGNOSTIQUE du fournisseur.
  *
- * Elle est maison plutôt que bâtie sur `runStreamAgent` (@aparte/engine) : cet
- * engine possède la liste de messages et la re-sérialise à chaque tour, ce qui
- * est incompatible avec notre invariant append-only (un prompt dont chaque
- * tour ÉTEND octet-pour-octet le précédent). Voir le journal de friction.
+ * Elle ne manipule qu'un transcript sémantique et des événements structurés :
+ * elle ignore tout du prompt brut, de la grammaire GBNF et du format Hermes.
+ * Comment une conversation devient une requête est l'affaire du backend
+ * (prompt append-only pour llama.cpp, `messages[]` pour un endpoint
+ * OpenAI-compatible ou une API cloud).
  *
- * Invariants tenus ici :
- * - un tour = begin/complete sur le PromptLog, jamais de re-rendu ;
- * - la grammaire est régénérée depuis l'inventaire courant à chaque requête ;
- * - un outil inconnu, refusé ou en erreur produit un RÉSULTAT réinjecté au
- *   modèle, jamais une exception qui casserait la conversation.
+ * Elle n'est pas bâtie sur `runStreamAgent` (@aparte/engine) : cet engine
+ * possède la liste de messages et la re-sérialise à chaque tour, incompatible
+ * avec un backend à préfixe stable. Voir le journal de friction.
  */
 
-import type { Backend } from '../backend/types.js';
+import type {
+  Backend,
+  SystemSpec,
+  ToolCall,
+  ToolOutcome,
+  TranscriptEntry,
+} from '../backend/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import { parseHermesOutput } from '../wire/hermes-parser.js';
-import type { PromptLog } from '../wire/qwen-template.js';
-import { HermesStreamDemux } from '../wire/stream-demux.js';
-import { renderToolResults, type ToolOutcome } from '../wire/system-prompt.js';
 
 export interface ApprovalRequest {
   id: string;
@@ -35,12 +36,12 @@ export interface AgentLoopOptions {
   backend: Backend;
   registry: ToolRegistry;
   permissions: PermissionEngine;
-  projectRoot: string;
+  system: SystemSpec;
+  conversationId: string;
   /** Nombre max d'allers-retours modèle↔outils pour un message. @default 10 */
   maxTurns?: number;
   approve?: ApprovalResolver;
   idSlot?: number;
-  thinking?: boolean;
 }
 
 export type AgentEvent =
@@ -50,10 +51,10 @@ export type AgentEvent =
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
   | { type: 'turn_end'; promptMs: number; cachedTokens: number }
   | { type: 'error'; message: string }
-  // ── mutations du log : l'appelant les persiste pour rejouer un prompt
-  //    octet-identique. L'UI les ignore.
-  | { type: 'assistant_committed'; raw: string; thinking: boolean }
-  | { type: 'service_appended'; text: string };
+  // ── mutations du transcript : l'appelant les persiste pour rejouer à
+  //    l'identique. L'UI les ignore.
+  | { type: 'assistant_committed'; entry: TranscriptEntry }
+  | { type: 'results_committed'; entry: TranscriptEntry };
 
 const DEFAULT_MAX_TURNS = 10;
 
@@ -62,82 +63,74 @@ export class AgentLoop {
 
   constructor(private readonly options: AgentLoopOptions) {}
 
+  /**
+   * Déroule un message. `transcript` est muté en append-only : c'est la
+   * source de vérité partagée avec la persistance.
+   */
   async *run(
-    log: PromptLog,
+    transcript: TranscriptEntry[],
     userText: string,
     signal: AbortSignal,
   ): AsyncIterable<AgentEvent> {
     const maxTurns = this.options.maxTurns ?? DEFAULT_MAX_TURNS;
-    log.appendUser(userText);
+    transcript.push({ role: 'user', text: userText });
 
     for (let turn = 0; turn < maxTurns; turn++) {
-      const prompt = log.beginAssistantTurn({
-        thinking: this.options.thinking ?? false,
-      });
-
-      let raw = '';
+      let text = '';
+      let thinking = '';
+      const calls: ToolCall[] = [];
       let promptMs = 0;
       let cachedTokens = 0;
-      const demux = new HermesStreamDemux();
+      let raw: string | undefined;
 
-      try {
-        // Grammaire régénérée ici : elle reflète l'inventaire de CE tour.
-        const constraint = this.options.registry.grammar();
-        for await (const event of this.options.backend.complete({
-          prompt,
-          idSlot: this.options.idSlot ?? 0,
-          cachePrompt: true,
-          returnProgress: true,
-          signal,
-          ...(constraint
-            ? {
-                grammar: constraint.grammar,
-                grammarLazy: constraint.grammarLazy,
-                grammarTriggers: constraint.grammarTriggers,
-                preservedTokens: constraint.preservedTokens,
-              }
-            : {}),
-        })) {
-          if (event.type === 'token') {
-            for (const out of demux.push(event.text)) {
-              yield out.type === 'text'
-                ? { type: 'token', text: out.delta }
-                : { type: 'thinking', text: out.delta };
-            }
-          } else {
+      for await (const event of this.options.backend.runTurn({
+        conversationId: this.options.conversationId,
+        system: this.options.system,
+        tools: this.options.registry.list(),
+        transcript,
+        signal,
+        ...(this.options.idSlot !== undefined ? { idSlot: this.options.idSlot } : {}),
+      })) {
+        switch (event.type) {
+          case 'text':
+            text += event.delta;
+            yield { type: 'token', text: event.delta };
+            break;
+          case 'thinking':
+            thinking += event.delta;
+            yield { type: 'thinking', text: event.delta };
+            break;
+          case 'tool_use':
+            calls.push(event.call);
+            break;
+          case 'done':
             promptMs = event.stats.promptMs;
             cachedTokens = event.stats.progress?.cache ?? 0;
-          }
+            raw = event.raw;
+            break;
         }
-        for (const out of demux.flush()) {
-          yield out.type === 'text'
-            ? { type: 'token', text: out.delta }
-            : { type: 'thinking', text: out.delta };
-        }
-      } finally {
-        raw = demux.raw;
-        // Le tour est gelé même en cas d'interruption : le préfixe reste
-        // cohérent avec ce que le serveur a réellement vu.
-        log.completeAssistantTurn(raw);
       }
 
-      yield {
-        type: 'assistant_committed',
-        raw,
-        thinking: this.options.thinking ?? false,
+      const entry: TranscriptEntry = {
+        role: 'assistant',
+        text,
+        ...(thinking ? { thinking } : {}),
+        ...(calls.length > 0 ? { calls } : {}),
+        ...(raw !== undefined ? { raw } : {}),
       };
+      transcript.push(entry);
+      yield { type: 'assistant_committed', entry };
 
-      const parsed = parseHermesOutput(raw);
-      if (parsed.calls.length === 0) {
+      if (calls.length === 0) {
         yield { type: 'turn_end', promptMs, cachedTokens };
         return;
       }
 
-      const outcomes: ToolOutcome[] = [];
-      for (const call of parsed.calls) {
+      const results: ToolOutcome[] = [];
+      for (const call of calls) {
         yield { type: 'tool_call', name: call.name, args: call.arguments };
-        const outcome = await this.dispatch(call.name, call.arguments, signal);
-        outcomes.push(outcome);
+        const outcome = await this.dispatch(call, signal);
+        results.push(outcome);
         yield {
           type: 'tool_result',
           name: outcome.name,
@@ -146,9 +139,9 @@ export class AgentLoop {
         };
       }
 
-      const serviceText = renderToolResults(outcomes);
-      log.appendUser(serviceText);
-      yield { type: 'service_appended', text: serviceText };
+      const resultsEntry: TranscriptEntry = { role: 'tool_results', results };
+      transcript.push(resultsEntry);
+      yield { type: 'results_committed', entry: resultsEntry };
 
       if (signal.aborted) {
         yield { type: 'turn_end', promptMs, cachedTokens };
@@ -163,10 +156,10 @@ export class AgentLoop {
   }
 
   private async dispatch(
-    name: string,
-    args: Record<string, unknown>,
+    call: ToolCall,
     signal: AbortSignal,
   ): Promise<ToolOutcome> {
+    const { name, arguments: args } = call;
     const registered = this.options.registry.get(name);
     if (!registered) {
       const available = this.options.registry.list().map((d) => d.name);
@@ -224,7 +217,7 @@ export class AgentLoop {
 
     try {
       const result = await registered.handler(args, {
-        projectRoot: this.options.projectRoot,
+        projectRoot: this.options.system.projectRoot,
         signal,
       });
       return { name, ok: result.ok, content: result.content };

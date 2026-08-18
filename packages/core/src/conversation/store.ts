@@ -6,7 +6,7 @@
 
 import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PromptLog } from '../wire/qwen-template.js';
+import type { TranscriptEntry } from '../backend/types.js';
 
 export interface ConversationMeta {
   id: string;
@@ -18,11 +18,11 @@ export interface ConversationMeta {
   /** Taille de contexte épinglée avec le modèle (entre au manifest KV). */
   nCtx?: number;
   /**
-   * Prompt système FIGÉ à la création : il est réutilisé verbatim à chaque
-   * réouverture. Le reconstruire risquerait de le faire varier (inventaire
-   * d'outils différent) et de casser le préfixe du cache KV.
+   * État opaque du backend pour cette conversation (llama.cpp y met son
+   * prompt système figé). Le reconstruire le ferait varier avec l'inventaire
+   * et casserait le préfixe du cache KV.
    */
-  systemPrompt?: string;
+  backendState?: unknown;
   /** Inventaire d'outils au moment du figeage (base des deltas). */
   toolNames?: string[];
 }
@@ -33,13 +33,24 @@ export interface CreateConversationOptions {
   nCtx?: number;
 }
 
+/**
+ * Log persisté. Les entrées assistant et résultats d'outils stockent
+ * l'entrée de transcript telle quelle (verbatim du fournisseur compris) :
+ * c'est ce qui permet de rejouer un rendu octet-identique.
+ */
 export type ConversationEvent =
   | { type: 'user'; text: string; at: string }
-  | { type: 'assistant'; raw: string; thinking: boolean; at: string }
-  /**
-   * Message de service (delta d'inventaire d'outils, résultats d'outils) :
-   * rendu comme un tour utilisateur dans le prompt, masqué dans l'UI.
-   */
+  | {
+      type: 'assistant';
+      entry: Extract<TranscriptEntry, { role: 'assistant' }>;
+      at: string;
+    }
+  | {
+      type: 'tool_results';
+      entry: Extract<TranscriptEntry, { role: 'tool_results' }>;
+      at: string;
+    }
+  /** Message de service (delta d'inventaire) : dans le prompt, pas dans l'UI. */
   | { type: 'service'; text: string; at: string };
 
 export class ConversationStore {
@@ -91,14 +102,14 @@ export class ConversationStore {
     await this.writeMeta(meta);
   }
 
-  /** Fige le prompt système et l'inventaire d'outils de la conversation. */
-  async freezeSystemPrompt(
+  /** Fige l'état backend et l'inventaire d'outils de la conversation. */
+  async freezeBackendState(
     id: string,
-    systemPrompt: string,
+    backendState: unknown,
     toolNames: string[],
   ): Promise<void> {
     const meta = await this.meta(id);
-    meta.systemPrompt = systemPrompt;
+    meta.backendState = backendState;
     meta.toolNames = [...toolNames];
     await this.writeMeta(meta);
   }
@@ -168,22 +179,17 @@ export class ConversationStore {
 }
 
 /**
- * Rejoue les événements dans un PromptLog neuf — DOIT produire un historique
- * gelé octet-identique à celui de la session d'origine (condition du restore).
+ * Reconstruit le transcript sémantique depuis les événements persistés.
+ * C'est LUI que la boucle et les backends consomment — chaque backend en
+ * dérive ensuite sa propre représentation.
  */
-export function rebuildPromptLog(
-  systemPrompt: string,
+export function rebuildTranscript(
   events: ConversationEvent[],
-): PromptLog {
-  const log = new PromptLog(systemPrompt);
-  for (const event of events) {
-    if (event.type === 'assistant') {
-      log.beginAssistantTurn({ thinking: event.thinking });
-      log.completeAssistantTurn(event.raw);
-    } else {
-      // user ET service : même forme dans le prompt, seule l'UI les distingue.
-      log.appendUser(event.text);
-    }
-  }
-  return log;
+): TranscriptEntry[] {
+  return events.map((event): TranscriptEntry => {
+    if (event.type === 'assistant') return event.entry;
+    if (event.type === 'tool_results') return event.entry;
+    if (event.type === 'service') return { role: 'service', text: event.text };
+    return { role: 'user', text: event.text };
+  });
 }

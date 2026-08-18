@@ -97,6 +97,79 @@ export interface ServerProps {
   chatTemplate: string;
 }
 
+// ── Contrat de tour, agnostique du fournisseur ─────────────────────────
+//
+// La boucle agentique ne connaît QUE ces types : un transcript sémantique
+// entre et des événements structurés sortent. Comment une conversation
+// devient une requête — prompt brut templaté pour llama.cpp, `messages[]`
+// pour une API cloud — est l'affaire du backend, pas de la boucle.
+
+export interface ToolCall {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ToolOutcome {
+  name: string;
+  ok: boolean;
+  content: string;
+}
+
+export type TranscriptEntry =
+  | { role: 'user'; text: string }
+  | {
+      role: 'assistant';
+      text: string;
+      thinking?: string;
+      calls?: ToolCall[];
+      /**
+       * Sortie VERBATIM du fournisseur pour ce tour. Indispensable aux
+       * backends à préfixe stable : au rejeu, reconstituer le texte depuis
+       * `text`/`calls` donnerait un octet près mais pas identique, et le
+       * cache KV sauterait. Les autres fournisseurs l'ignorent.
+       */
+      raw?: string;
+    }
+  | { role: 'tool_results'; results: ToolOutcome[] }
+  /** Message de service (delta d'inventaire d'outils). */
+  | { role: 'service'; text: string };
+
+export interface SystemSpec {
+  projectRoot: string;
+  replyLanguage?: string;
+  projectInstructions?: string;
+}
+
+export interface TurnRequest {
+  conversationId: string;
+  system: SystemSpec;
+  /** Inventaire d'outils de CE tour (grammaire ou API native selon le backend). */
+  tools: ToolDefLike[];
+  transcript: TranscriptEntry[];
+  signal: AbortSignal;
+  idSlot?: number;
+}
+
+/** Forme minimale d'un outil attendue par un backend (cf. tools/types.ts). */
+export interface ToolDefLike {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+/**
+ * Événements d'un tour. Les noms suivent volontairement `AparteStreamEvent`
+ * d'apartéJS (text / thinking / tool_use / done) : le jour où les providers
+ * de la lib seront importables depuis Node, l'un d'eux deviendra un backend
+ * bonaparte sans traduction — un appel d'outil par événement, la boucle les
+ * regroupe jusqu'au `done`.
+ */
+export type ProviderEvent =
+  | { type: 'text'; delta: string }
+  | { type: 'thinking'; delta: string }
+  | { type: 'tool_use'; call: ToolCall }
+  | { type: 'done'; stats: CompletionStats; raw?: string };
+
 export interface Backend {
   /** Identifiant d'instance (ex. 'llamacpp:local'). */
   id: string;
@@ -106,6 +179,25 @@ export interface Backend {
   status(): BackendStatus;
   start(): Promise<void>;
   stop(): Promise<void>;
+  /** LE point d'entrée de la boucle agentique. */
+  runTurn(request: TurnRequest): AsyncIterable<ProviderEvent>;
+  /**
+   * État opaque à persister par conversation (llama.cpp y met son prompt
+   * système figé). Absent = le backend n'a rien à retenir.
+   */
+  exportState?(conversationId: string): unknown;
+  importState?(conversationId: string, state: unknown): void;
+  /**
+   * Prépare une conversation à son ouverture (llama.cpp y fige son prompt
+   * système). Attendre le premier tour laisserait une fenêtre où l'inventaire
+   * pourrait changer sans qu'aucun delta ne l'annonce.
+   */
+  prepareConversation?(
+    conversationId: string,
+    system: SystemSpec,
+    tools: ToolDefLike[],
+  ): void;
+  /** Primitive bas niveau — utile aux backends à complétion brute. */
   complete(request: CompletionRequest): AsyncIterable<CompletionEvent>;
   props(): Promise<ServerProps>;
   /** Présent si et seulement si capabilities.kvPersistence. */

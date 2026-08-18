@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentEvent } from '../agent/loop.js';
 import { createLlamaCppBackend } from '../backend/llamacpp/llamacpp-backend.js';
 import type { Backend } from '../backend/types.js';
-import { ConversationStore, rebuildPromptLog } from '../conversation/store.js';
+import { ConversationStore } from '../conversation/store.js';
 import { KvStore, type LiveBackendConfig } from '../kv/kv-store.js';
 import { PermissionEngine } from '../permissions/engine.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -117,7 +117,7 @@ describe('ChatSession — ouverture', () => {
     expect(restore).toMatchObject({ restored: false, reason: 'missing' });
 
     const meta = await rig.options.store.meta('conv-1');
-    expect(meta.systemPrompt).toContain('read_file');
+    expect((meta.backendState as { systemPrompt: string }).systemPrompt).toContain('read_file');
     expect(meta.toolNames).toEqual(['read_file']);
   });
 
@@ -126,7 +126,7 @@ describe('ChatSession — ouverture', () => {
     dirs.push(dir);
     const first = await makeRig({ baseDir: dir, tools: [def('read_file')] });
     await ChatSession.open(first.options, 'conv-1');
-    const frozen = (await first.options.store.meta('conv-1')).systemPrompt;
+    const frozen = (await first.options.store.meta('conv-1')).backendState;
 
     // Réouverture avec un inventaire différent : le prompt ne doit pas bouger.
     const second = await makeRig({
@@ -134,7 +134,7 @@ describe('ChatSession — ouverture', () => {
       tools: [def('read_file'), def('run_shell', 'execute')],
     });
     await ChatSession.open(second.options, 'conv-1');
-    expect((await second.options.store.meta('conv-1')).systemPrompt).toBe(frozen);
+    expect((await second.options.store.meta('conv-1')).backendState).toEqual(frozen);
   });
 
   it('annonce un delta d’inventaire par un message de service appendé', async () => {
@@ -201,17 +201,15 @@ describe('ChatSession — envoi', () => {
     expect(persisted.map((e) => e.type)).toEqual([
       'user',
       'assistant',
-      'service',
+      'tool_results',
       'assistant',
     ]);
 
-    // Le rejeu doit reproduire le prompt de la session vivante à l'octet près.
-    const meta = await rig.options.store.meta('conv-1');
-    const replayed = rebuildPromptLog(meta.systemPrompt ?? '', persisted);
-    const live = await ChatSession.open(rig.options, 'conv-1');
-    expect(replayed.frozen).toBe(
-      (live.session as unknown as { log: { frozen: string } }).log.frozen,
-    );
+    // Le verbatim du fournisseur est conservé : c'est lui qui permet un
+    // rendu octet-identique au rejeu (cf. turn-renderer.spec).
+    const first = persisted[1] as { entry: { raw?: string; calls?: unknown[] } };
+    expect(first.entry.raw).toContain('<tool_call>');
+    expect(first.entry.calls).toHaveLength(1);
   });
 });
 

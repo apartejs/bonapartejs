@@ -7,14 +7,23 @@
  * contre le faux llama-server pour la partie HTTP.
  */
 
+import { parseHermesOutput } from '../../wire/hermes-parser.js';
+import { HermesStreamDemux } from '../../wire/stream-demux.js';
+import { buildGrammarConstraint } from '../../tools/grammar.js';
 import type {
   Backend,
   BackendStatus,
   CompletionRequest,
+  CompletionStats,
+  ProviderEvent,
   SlotApi,
+  SystemSpec,
+  ToolDefLike,
+  TurnRequest,
 } from '../types.js';
 import { buildLlamaServerArgs, type LlamaCppLaunchConfig } from './args.js';
 import { LlamaCppHttpClient } from './http-client.js';
+import { TranscriptRenderer } from './turn-renderer.js';
 
 export interface ProcessHandle {
   onExit(cb: (code: number | null) => void): void;
@@ -64,7 +73,107 @@ function slotApi(client: LlamaCppHttpClient): SlotApi {
   };
 }
 
+/** État persistable d'une conversation côté llama.cpp. */
+interface LlamaConversationState {
+  systemPrompt: string;
+}
+
 abstract class BaseBackend implements Backend {
+  /** Un rendu append-only par conversation. */
+  private readonly renderers = new Map<string, TranscriptRenderer>();
+
+  private renderer(conversationId: string): TranscriptRenderer {
+    let renderer = this.renderers.get(conversationId);
+    if (!renderer) {
+      renderer = new TranscriptRenderer();
+      this.renderers.set(conversationId, renderer);
+    }
+    return renderer;
+  }
+
+  exportState(conversationId: string): unknown {
+    const systemPrompt = this.renderers.get(conversationId)?.systemPrompt;
+    return systemPrompt ? ({ systemPrompt } satisfies LlamaConversationState) : undefined;
+  }
+
+  prepareConversation(
+    conversationId: string,
+    system: SystemSpec,
+    tools: ToolDefLike[],
+  ): void {
+    this.renderer(conversationId).ensureSystemPrompt(system, tools);
+  }
+
+  importState(conversationId: string, state: unknown): void {
+    const systemPrompt = (state as LlamaConversationState | undefined)?.systemPrompt;
+    if (typeof systemPrompt === 'string') {
+      this.renderer(conversationId).restore(systemPrompt);
+    }
+  }
+
+  /**
+   * Un tour : le transcript est rendu en prompt append-only, la grammaire est
+   * régénérée depuis l'inventaire de CE tour, la sortie est démultiplexée puis
+   * parsée — tout ce qui est spécifique à llama.cpp/Qwen reste ici.
+   */
+  async *runTurn(request: TurnRequest): AsyncIterable<ProviderEvent> {
+    const renderer = this.renderer(request.conversationId);
+    const turn = renderer.next(request.transcript, request.system, request.tools);
+    const constraint = buildGrammarConstraint(
+      request.tools.map((t) => ({ ...t, effect: 'read' as const })),
+    );
+
+    const demux = new HermesStreamDemux();
+    let stats: CompletionStats = {
+      promptMs: 0,
+      promptUncachedTokens: 0,
+      predictedTokens: 0,
+      predictedMs: 0,
+    };
+
+    try {
+      for await (const event of this.complete({
+        prompt: turn.prompt,
+        idSlot: request.idSlot ?? 0,
+        cachePrompt: true,
+        returnProgress: true,
+        signal: request.signal,
+        ...(constraint
+          ? {
+              grammar: constraint.grammar,
+              grammarLazy: constraint.grammarLazy,
+              grammarTriggers: constraint.grammarTriggers,
+              preservedTokens: constraint.preservedTokens,
+            }
+          : {}),
+      })) {
+        if (event.type === 'token') {
+          for (const out of demux.push(event.text)) {
+            yield out.type === 'text'
+              ? { type: 'text', delta: out.delta }
+              : { type: 'thinking', delta: out.delta };
+          }
+        } else {
+          stats = event.stats;
+        }
+      }
+      for (const out of demux.flush()) {
+        yield out.type === 'text'
+          ? { type: 'text', delta: out.delta }
+          : { type: 'thinking', delta: out.delta };
+      }
+    } finally {
+      // Le tour est gelé même en cas d'interruption : le préfixe reste
+      // cohérent avec ce que le serveur a réellement vu.
+      turn.commit(demux.raw);
+    }
+
+    for (const call of parseHermesOutput(demux.raw).calls) {
+      yield { type: 'tool_use', call: { name: call.name, arguments: call.arguments } };
+    }
+    yield { type: 'done', stats, raw: demux.raw };
+  }
+
   abstract readonly id: string;
   readonly typeId = 'llamacpp';
   abstract readonly capabilities: Backend['capabilities'];

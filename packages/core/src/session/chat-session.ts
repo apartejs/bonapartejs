@@ -1,13 +1,16 @@
 /**
- * ChatSession — orchestre pour UNE conversation active : prompt figé,
- * PromptLog append-only, boucle agentique (outils + permissions), persistance
- * des événements et save/restore d'état KV via le manifest strict.
+ * ChatSession — orchestre pour UNE conversation active : transcript sémantique,
+ * boucle agentique (outils + permissions), persistance des événements et
+ * save/restore d'état KV via le manifest strict.
+ *
+ * Elle ne connaît AUCUN détail de fournisseur : elle passe un transcript et un
+ * `SystemSpec` au backend, qui en dérive sa propre représentation.
  */
 
 import { AgentLoop, type AgentEvent, type ApprovalResolver } from '../agent/loop.js';
-import type { Backend } from '../backend/types.js';
+import type { Backend, TranscriptEntry } from '../backend/types.js';
 import {
-  rebuildPromptLog,
+  rebuildTranscript,
   type ConversationStore,
 } from '../conversation/store.js';
 import type {
@@ -17,11 +20,7 @@ import type {
 } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import type { PromptLog } from '../wire/qwen-template.js';
-import {
-  buildSystemPrompt,
-  renderInventoryDelta,
-} from '../wire/system-prompt.js';
+import { renderInventoryDelta } from '../wire/system-prompt.js';
 
 export interface ChatSessionOptions {
   backend: Backend;
@@ -50,7 +49,7 @@ export class ChatSession {
   private constructor(
     private readonly options: ChatSessionOptions,
     private readonly conversationId: string,
-    private readonly log: PromptLog,
+    private readonly transcript: TranscriptEntry[],
     private readonly loop: AgentLoop,
   ) {}
 
@@ -64,45 +63,51 @@ export class ChatSession {
       await store.create(conversationId);
     }
 
-    // Le prompt système est figé à la première ouverture et réutilisé
-    // verbatim : le reconstruire le ferait varier avec l'inventaire et
-    // casserait le préfixe du cache KV.
-    let meta = await store.meta(conversationId);
-    if (!meta.systemPrompt) {
-      const systemPrompt = buildSystemPrompt({
-        projectRoot: options.projectRoot,
-        tools: registry.list(),
-        ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
-        ...(options.projectInstructions
-          ? { projectInstructions: options.projectInstructions }
-          : {}),
-      });
-      await store.freezeSystemPrompt(
-        conversationId,
-        systemPrompt,
-        registry.list().map((d) => d.name),
-      );
-      meta = await store.meta(conversationId);
+    // L'état backend (prompt figé pour llama.cpp) est rendu au backend tel
+    // quel : le reconstruire le ferait dériver avec l'inventaire.
+    const meta = await store.meta(conversationId);
+    if (meta.backendState !== undefined) {
+      backend.importState?.(conversationId, meta.backendState);
     }
 
-    const events = await store.loadEvents(conversationId);
-    const log = rebuildPromptLog(meta.systemPrompt ?? '', events);
+    const transcript = rebuildTranscript(await store.loadEvents(conversationId));
 
     const loop = new AgentLoop({
       backend,
       registry,
       permissions: options.permissions,
-      projectRoot: options.projectRoot,
+      conversationId,
+      system: {
+        projectRoot: options.projectRoot,
+        ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
+        ...(options.projectInstructions
+          ? { projectInstructions: options.projectInstructions }
+          : {}),
+      },
       ...(options.approve ? { approve: options.approve } : {}),
       ...(options.maxTurns !== undefined ? { maxTurns: options.maxTurns } : {}),
       ...(options.idSlot !== undefined ? { idSlot: options.idSlot } : {}),
     });
 
-    const session = new ChatSession(options, conversationId, log, loop);
+    // Le backend fige ce qu'il doit figer MAINTENANT (prompt système pour
+    // llama.cpp), pas au premier tour.
+    backend.prepareConversation?.(
+      conversationId,
+      {
+        projectRoot: options.projectRoot,
+        ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
+        ...(options.projectInstructions
+          ? { projectInstructions: options.projectInstructions }
+          : {}),
+      },
+      registry.list(),
+    );
+
+    const session = new ChatSession(options, conversationId, transcript, loop);
 
     // L'outillage a-t-il bougé depuis le figeage ? Si oui : message de
     // service APPENDÉ (jamais de re-rendu du prompt système).
-    await session.announceInventoryDelta(meta.toolNames ?? []);
+    await session.announceInventoryDelta(meta.toolNames);
 
     if (!backend.slots) {
       return { session, restore: { restored: false, reason: 'unsupported' } };
@@ -120,32 +125,42 @@ export class ChatSession {
     return this.conversationId;
   }
 
-  private async announceInventoryDelta(frozenNames: string[]): Promise<void> {
-    const { registry, store } = this.options;
+  private async announceInventoryDelta(frozenNames?: string[]): Promise<void> {
+    const { registry, store, backend } = this.options;
+    const names = registry.list().map((d) => d.name);
+
+    // Première ouverture : rien à annoncer, on note juste l'inventaire de
+    // référence (et l'état que le backend aura figé au premier tour).
+    if (frozenNames === undefined) {
+      await store.freezeBackendState(
+        this.conversationId,
+        backend.exportState?.(this.conversationId),
+        names,
+      );
+      return;
+    }
+
     const message = renderInventoryDelta(
       registry.diff({ names: frozenNames, hash: '' }),
     );
     if (!message) return;
 
-    this.log.appendUser(message);
+    this.transcript.push({ role: 'service', text: message });
     await store.appendEvent(this.conversationId, {
       type: 'service',
       text: message,
       at: new Date().toISOString(),
     });
-    await store.setFrozenTools(
-      this.conversationId,
-      registry.list().map((d) => d.name),
-    );
+    await store.setFrozenTools(this.conversationId, names);
   }
 
   /**
    * Envoie un message et déroule la boucle agentique. Chaque mutation du
-   * PromptLog annoncée par la boucle est persistée dans le même ordre : le
-   * rejeu reconstruit un prompt octet-identique.
+   * transcript annoncée par la boucle est persistée dans le même ordre : le
+   * rejeu reconstruit un transcript identique.
    */
   async *send(text: string, signal?: AbortSignal): AsyncIterable<AgentEvent> {
-    const { store } = this.options;
+    const { store, backend } = this.options;
     const now = (): string => new Date().toISOString();
 
     await store.appendEvent(this.conversationId, {
@@ -155,22 +170,31 @@ export class ChatSession {
     });
 
     const effective = signal ?? new AbortController().signal;
-    for await (const event of this.loop.run(this.log, text, effective)) {
+    for await (const event of this.loop.run(this.transcript, text, effective)) {
       if (event.type === 'assistant_committed') {
         await store.appendEvent(this.conversationId, {
           type: 'assistant',
-          raw: event.raw,
-          thinking: event.thinking,
+          entry: event.entry as Extract<TranscriptEntry, { role: 'assistant' }>,
           at: now(),
         });
-      } else if (event.type === 'service_appended') {
+      } else if (event.type === 'results_committed') {
         await store.appendEvent(this.conversationId, {
-          type: 'service',
-          text: event.text,
+          type: 'tool_results',
+          entry: event.entry as Extract<TranscriptEntry, { role: 'tool_results' }>,
           at: now(),
         });
       }
       yield event;
+    }
+
+    // Le backend a peut-être figé son état au premier tour (prompt système).
+    const state = backend.exportState?.(this.conversationId);
+    if (state !== undefined) {
+      await store.freezeBackendState(
+        this.conversationId,
+        state,
+        this.options.registry.list().map((d) => d.name),
+      );
     }
   }
 
@@ -188,4 +212,4 @@ export class ChatSession {
   }
 }
 
-export { rebuildPromptLog };
+export { rebuildTranscript };

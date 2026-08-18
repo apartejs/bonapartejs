@@ -8,7 +8,7 @@ import {
   startFakeLlamaServer,
   type FakeLlamaServer,
 } from '../testing/fake-llama-server.js';
-import { PromptLog } from '../wire/qwen-template.js';
+import type { TranscriptEntry } from '../backend/types.js';
 import { AgentLoop, type AgentEvent, type ApprovalResolver } from './loop.js';
 
 let servers: FakeLlamaServer[] = [];
@@ -36,7 +36,7 @@ const def = (name: string, effect: ToolDef['effect'] = 'read'): ToolDef => ({
 
 interface Rig {
   loop: AgentLoop;
-  log: PromptLog;
+  transcript: TranscriptEntry[];
   registry: ToolRegistry;
   permissions: PermissionEngine;
   backend: Backend;
@@ -74,12 +74,13 @@ async function rig(options: {
     backend,
     registry,
     permissions,
-    projectRoot: 'C:\\projet',
+    conversationId: 'conv-test',
+    system: { projectRoot: 'C:\\projet' },
     ...(options.approve ? { approve: options.approve } : {}),
     ...(options.maxTurns !== undefined ? { maxTurns: options.maxTurns } : {}),
   });
 
-  return { loop, log: new PromptLog('SYS'), registry, permissions, backend, calls };
+  return { loop, transcript: [] as TranscriptEntry[], registry, permissions, backend, calls };
 }
 
 async function collect(
@@ -98,32 +99,30 @@ async function collect(
 
 describe('AgentLoop — tour simple', () => {
   it('streame la réponse et termine sans outil', async () => {
-    const { loop, log } = await rig({ replies: ['Bonjour Paul.'] });
+    const { loop, transcript } = await rig({ replies: ['Bonjour Paul.'] });
     const { all, text } = await collect(
-      loop.run(log, 'Salut', new AbortController().signal),
+      loop.run(transcript, 'Salut', new AbortController().signal),
     );
     expect(text).toBe('Bonjour Paul.');
     expect(all.at(-1)?.type).toBe('turn_end');
     expect(all.some((e) => e.type === 'tool_call')).toBe(false);
   });
 
-  it('gèle le tour dans le log (le prompt suivant étend le précédent)', async () => {
-    const { loop, log } = await rig({ replies: ['Réponse.'] });
-    await collect(loop.run(log, 'Question', new AbortController().signal));
-    const frozen = log.frozen;
-    expect(frozen).toContain('Question');
-    expect(frozen).toContain('Réponse.');
-    // Un second tour doit étendre le premier, jamais le réécrire.
-    const next = log.beginAssistantTurn({ thinking: false });
-    expect(next.startsWith(frozen)).toBe(true);
+  it('appende le tour au transcript (user puis assistant)', async () => {
+    const { loop, transcript } = await rig({ replies: ['Réponse.'] });
+    await collect(loop.run(transcript, 'Question', new AbortController().signal));
+    expect(transcript).toEqual([
+      { role: 'user', text: 'Question' },
+      expect.objectContaining({ role: 'assistant', text: 'Réponse.' }),
+    ]);
   });
 
   it('remonte le raisonnement séparément du texte', async () => {
-    const { loop, log } = await rig({
+    const { loop, transcript } = await rig({
       replies: ['<think>je pense</think>Voilà.'],
     });
     const { all, text } = await collect(
-      loop.run(log, 'x', new AbortController().signal),
+      loop.run(transcript, 'x', new AbortController().signal),
     );
     expect(text).toBe('Voilà.');
     expect(all.filter((e) => e.type === 'thinking').map((e) => e.text).join('')).toBe(
@@ -132,8 +131,8 @@ describe('AgentLoop — tour simple', () => {
   });
 
   it('expose le coût de prefill et la part de cache', async () => {
-    const { loop, log } = await rig({ replies: ['ok'] });
-    const { all } = await collect(loop.run(log, 'x', new AbortController().signal));
+    const { loop, transcript } = await rig({ replies: ['ok'] });
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     const end = all.find((e) => e.type === 'turn_end');
     expect(end).toBeDefined();
     expect(typeof (end as { promptMs: number }).promptMs).toBe('number');
@@ -142,12 +141,12 @@ describe('AgentLoop — tour simple', () => {
 
 describe('AgentLoop — outils', () => {
   it('exécute un appel puis boucle jusqu’à la réponse finale', async () => {
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('read_file', { path: 'a.ts' }), 'Le fichier dit bonjour.'],
       tools: [{ def: def('read_file') }],
     });
     const { all, text } = await collect(
-      loop.run(log, 'lis a.ts', new AbortController().signal),
+      loop.run(transcript, 'lis a.ts', new AbortController().signal),
     );
     expect(calls).toEqual([{ name: 'read_file', args: { path: 'a.ts' } }]);
     expect(all.some((e) => e.type === 'tool_call')).toBe(true);
@@ -157,30 +156,39 @@ describe('AgentLoop — outils', () => {
     expect(text).toContain('Le fichier dit bonjour.');
   });
 
-  it('réinjecte le résultat dans le log en append-only', async () => {
-    const { loop, log } = await rig({
+  it('appende les résultats d’outils au transcript', async () => {
+    const { loop, transcript } = await rig({
       replies: [toolCall('read_file'), 'fini'],
       tools: [{ def: def('read_file') }],
     });
-    await collect(loop.run(log, 'x', new AbortController().signal));
-    expect(log.frozen).toContain('résultat de read_file');
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
+    expect(transcript.map((e) => e.role)).toEqual([
+      'user',
+      'assistant',
+      'tool_results',
+      'assistant',
+    ]);
+    const results = transcript.find((e) => e.role === 'tool_results');
+    expect(results).toMatchObject({
+      results: [{ name: 'read_file', ok: true }],
+    });
   });
 
   it('exécute plusieurs appels du même tour dans l’ordre', async () => {
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('a') + toolCall('b'), 'fini'],
       tools: [{ def: def('a') }, { def: def('b') }],
     });
-    await collect(loop.run(log, 'x', new AbortController().signal));
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(calls.map((c) => c.name)).toEqual(['a', 'b']);
   });
 
   it('répond proprement à un outil inconnu, en rappelant l’inventaire', async () => {
-    const { loop, log } = await rig({
+    const { loop, transcript } = await rig({
       replies: [toolCall('fantome'), 'compris'],
       tools: [{ def: def('read_file') }],
     });
-    const { all } = await collect(loop.run(log, 'x', new AbortController().signal));
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     const result = all.find((e) => e.type === 'tool_result') as {
       ok: boolean;
       content: string;
@@ -191,7 +199,7 @@ describe('AgentLoop — outils', () => {
   });
 
   it('transforme une exception de handler en résultat d’échec', async () => {
-    const { loop, log } = await rig({
+    const { loop, transcript } = await rig({
       replies: [toolCall('casse'), 'compris'],
       tools: [
         {
@@ -202,19 +210,19 @@ describe('AgentLoop — outils', () => {
         },
       ],
     });
-    const { all } = await collect(loop.run(log, 'x', new AbortController().signal));
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     const result = all.find((e) => e.type === 'tool_result') as { ok: boolean; content: string };
     expect(result.ok).toBe(false);
     expect(result.content).toContain('boum');
   });
 
   it('borne le nombre d’allers-retours', async () => {
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('boucle')], // le modèle rappelle l'outil sans fin
       tools: [{ def: def('boucle') }],
       maxTurns: 3,
     });
-    const { all } = await collect(loop.run(log, 'x', new AbortController().signal));
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(calls.length).toBeLessThanOrEqual(3);
     expect(all.some((e) => e.type === 'error')).toBe(true);
   });
@@ -222,12 +230,12 @@ describe('AgentLoop — outils', () => {
 
 describe('AgentLoop — permissions', () => {
   it('mode Lecture : une écriture est refusée sans exécuter le handler', async () => {
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file', { path: 'a' }), 'compris'],
       tools: [{ def: def('write_file', 'write') }],
       mode: 'lecture',
     });
-    const { all } = await collect(loop.run(log, 'x', new AbortController().signal));
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(calls).toEqual([]);
     const result = all.find((e) => e.type === 'tool_result') as { ok: boolean; content: string };
     expect(result.ok).toBe(false);
@@ -236,50 +244,50 @@ describe('AgentLoop — permissions', () => {
 
   it('mode Répétition : l’accord de l’utilisateur est demandé puis honoré', async () => {
     const approve = vi.fn<ApprovalResolver>(async () => true);
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file', { path: 'a' }), 'fait'],
       tools: [{ def: def('write_file', 'write') }],
       mode: 'repetition',
       approve,
     });
-    await collect(loop.run(log, 'x', new AbortController().signal));
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(approve).toHaveBeenCalledTimes(1);
     expect(approve.mock.calls[0]![0]).toMatchObject({ tool: 'write_file' });
     expect(calls).toHaveLength(1);
   });
 
   it('mode Répétition : un refus de l’utilisateur n’exécute rien', async () => {
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'compris'],
       tools: [{ def: def('write_file', 'write') }],
       mode: 'repetition',
       approve: async () => false,
     });
-    const { all } = await collect(loop.run(log, 'x', new AbortController().signal));
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(calls).toEqual([]);
     const result = all.find((e) => e.type === 'tool_result') as { ok: boolean };
     expect(result.ok).toBe(false);
   });
 
   it('sans résolveur d’accord, une action à autoriser est refusée (fail-safe)', async () => {
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'compris'],
       tools: [{ def: def('write_file', 'write') }],
       mode: 'repetition',
     });
-    await collect(loop.run(log, 'x', new AbortController().signal));
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(calls).toEqual([]);
   });
 
   it('mode Plume : une édition passe sans demander', async () => {
     const approve = vi.fn<ApprovalResolver>(async () => true);
-    const { loop, log, calls } = await rig({
+    const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'fait'],
       tools: [{ def: def('write_file', 'write') }],
       mode: 'plume',
       approve,
     });
-    await collect(loop.run(log, 'x', new AbortController().signal));
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
     expect(approve).not.toHaveBeenCalled();
     expect(calls).toHaveLength(1);
   });
@@ -287,7 +295,7 @@ describe('AgentLoop — permissions', () => {
 
 describe('AgentLoop — inventaire changeant', () => {
   it('la grammaire envoyée suit le registre courant', async () => {
-    const { loop, log, registry } = await rig({
+    const { loop, transcript, registry } = await rig({
       replies: ['ok'],
       tools: [{ def: def('read_file') }],
     });
@@ -295,7 +303,7 @@ describe('AgentLoop — inventaire changeant', () => {
       ok: true,
       content: '',
     }));
-    await collect(loop.run(log, 'x', new AbortController().signal));
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
     const grammar = registry.grammar()!.grammar;
     expect(grammar).toContain('run_shell');
   });

@@ -14,6 +14,7 @@
  * cache KV saute et le différenciateur produit avec.
  */
 
+import type { ToolOutcome } from '../backend/types.js';
 import type { ToolDef, ToolInventoryDelta } from '../tools/types.js';
 
 export interface SystemPromptOptions {
@@ -74,11 +75,8 @@ export function renderInventoryDelta(delta: ToolInventoryDelta): string | null {
   return parts.join('\n');
 }
 
-export interface ToolOutcome {
-  name: string;
-  ok: boolean;
-  content: string;
-}
+/** Défini une fois pour toutes dans le contrat de backend. */
+export type { ToolOutcome } from '../backend/types.js';
 
 /** Tour « utilisateur » qui rend les résultats d'outils au modèle. */
 export function renderToolResults(outcomes: ToolOutcome[]): string {

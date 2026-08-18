@@ -9,7 +9,6 @@
 import { execFile, spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-export type { ProjectDto };
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import {
@@ -39,6 +38,7 @@ import {
   type ApprovalResponseDto,
   type BackendConfigDto,
   type BackendStatusDto,
+  type ConversationEventDto,
   type ConversationOpenReplyDto,
   type ModelInfoDto,
   type PickFileKind,
@@ -446,19 +446,24 @@ export class Harness {
       conversationId: id,
       modelPath: convModel,
       modelName: modelDisplayName(convModel),
-      // Les messages de service (deltas d'outillage, résultats) restent hors
-      // de l'UI : ils vivent dans le prompt, pas dans la conversation lue.
+      // Service et résultats d'outils restent hors de l'UI : ils vivent dans
+      // le transcript, pas dans la conversation lue.
       events: events
-        .filter((event) => event.type !== 'service')
-        .map((event) =>
-          event.type === 'user'
-            ? { type: 'user' as const, text: event.text, at: event.at }
-            : {
-                type: 'assistant' as const,
-                text: stripThink(event.raw),
+        .flatMap((event): ConversationEventDto[] => {
+          if (event.type === 'user') {
+            return [{ type: 'user', text: event.text, at: event.at }];
+          }
+          if (event.type === 'assistant') {
+            return [
+              {
+                type: 'assistant',
+                text: stripThink(event.entry.text),
                 at: event.at,
               },
-        )
+            ];
+          }
+          return [];
+        })
         .filter((event) => event.text.trim() !== ''),
       restore: restore.restored
         ? { restored: true, nRestored: restore.nRestored }

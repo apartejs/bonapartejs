@@ -2,11 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { PromptLog } from '../wire/qwen-template.js';
 import {
   ConversationStore,
-  rebuildPromptLog,
-  type ConversationEvent,
+  rebuildTranscript,
 } from './store.js';
 
 let dirs: string[] = [];
@@ -43,14 +41,13 @@ describe('ConversationStore', () => {
     });
     await store.appendEvent('conv-1', {
       type: 'assistant',
-      raw: '<think>hm</think>Salut !',
-      thinking: true,
+      entry: { role: 'assistant', text: 'Salut !', thinking: 'hm', raw: '<think>hm</think>Salut !' },
       at: '2026-08-18T10:00:05.000Z',
     });
     const events = await store.loadEvents('conv-1');
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ type: 'user', text: 'Bonjour' });
-    expect(events[1]).toMatchObject({ type: 'assistant', thinking: true });
+    expect(events[1]).toMatchObject({ type: 'assistant' });
   });
 
   it('loadEvents sur une conversation inconnue lève une erreur claire', async () => {
@@ -76,12 +73,14 @@ describe('ConversationStore', () => {
     expect(meta.nCtx).toBe(16384);
   });
 
-  it('fige le prompt système et l’inventaire d’outils', async () => {
+  it('fige l’état backend et l’inventaire d’outils', async () => {
     const store = await makeStore();
     await store.create('conv-1');
-    await store.freezeSystemPrompt('conv-1', 'SYS gelé', ['read_file']);
+    await store.freezeBackendState('conv-1', { systemPrompt: 'SYS gelé' }, [
+      'read_file',
+    ]);
     const meta = await store.meta('conv-1');
-    expect(meta.systemPrompt).toBe('SYS gelé');
+    expect(meta.backendState).toEqual({ systemPrompt: 'SYS gelé' });
     expect(meta.toolNames).toEqual(['read_file']);
   });
 
@@ -104,41 +103,31 @@ describe('ConversationStore', () => {
   });
 });
 
-describe('rebuildPromptLog', () => {
-  it('reproduit un historique gelé OCTET-IDENTIQUE à la session d’origine', () => {
-    const system = 'Tu es bonaparte.';
-    const live = new PromptLog(system);
-    const events: ConversationEvent[] = [];
-
-    const script: Array<{ user: string; raw: string; thinking: boolean }> = [
-      { user: 'Q1', raw: '<think>a</think>R1', thinking: true },
-      { user: 'Q2', raw: 'R2', thinking: false },
-      { user: 'Q3', raw: 'R3 avec <|détails|>', thinking: true },
-    ];
-
-    for (const turn of script) {
-      live.appendUser(turn.user);
-      events.push({ type: 'user', text: turn.user, at: 'x' });
-      live.beginAssistantTurn({ thinking: turn.thinking });
-      live.completeAssistantTurn(turn.raw);
-      events.push({
+describe('rebuildTranscript', () => {
+  it('restitue le transcript sémantique depuis les événements persistés', () => {
+    const transcript = rebuildTranscript([
+      { type: 'user', text: 'Q', at: 'x' },
+      {
         type: 'assistant',
-        raw: turn.raw,
-        thinking: turn.thinking,
+        entry: { role: 'assistant', text: 'R', raw: 'R' },
         at: 'x',
-      });
-    }
-
-    const rebuilt = rebuildPromptLog(system, events);
-    expect(rebuilt.frozen).toBe(live.frozen);
-  });
-
-  it('rejoue un message de service comme un tour utilisateur', () => {
-    const live = new PromptLog('SYS');
-    live.appendUser('[inventaire modifié]');
-    const rebuilt = rebuildPromptLog('SYS', [
-      { type: 'service', text: '[inventaire modifié]', at: 'x' },
+      },
+      {
+        type: 'tool_results',
+        entry: {
+          role: 'tool_results',
+          results: [{ name: 't', ok: true, content: 'r' }],
+        },
+        at: 'x',
+      },
+      { type: 'service', text: '[update]', at: 'x' },
     ]);
-    expect(rebuilt.frozen).toBe(live.frozen);
+
+    expect(transcript).toEqual([
+      { role: 'user', text: 'Q' },
+      { role: 'assistant', text: 'R', raw: 'R' },
+      { role: 'tool_results', results: [{ name: 't', ok: true, content: 'r' }] },
+      { role: 'service', text: '[update]' },
+    ]);
   });
 });
