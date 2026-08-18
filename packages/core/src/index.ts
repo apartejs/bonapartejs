@@ -63,3 +63,6 @@ export type {
 } from './kv/kv-store.js';
 export { canRestore, KvStore } from './kv/kv-store.js';
 export { fingerprintModelFile } from './kv/fingerprint.js';
+
+export type { AssistantTurnOptions } from './wire/qwen-template.js';
+export { PromptLog, renderSystem, renderUser } from './wire/qwen-template.js';
