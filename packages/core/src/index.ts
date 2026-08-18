@@ -85,3 +85,53 @@ export {
 
 export type { ChatSessionOptions, OpenResult } from './session/chat-session.js';
 export { ChatSession } from './session/chat-session.js';
+
+export type {
+  ParsedOutput,
+  ParsedToolCall,
+} from './wire/hermes-parser.js';
+export { parseHermesOutput } from './wire/hermes-parser.js';
+export { HermesStreamDemux } from './wire/stream-demux.js';
+export type { DemuxEvent } from './wire/stream-demux.js';
+export type { SystemPromptOptions, ToolOutcome } from './wire/system-prompt.js';
+export {
+  buildSystemPrompt,
+  renderInventoryDelta,
+  renderToolInventory,
+  renderToolResults,
+} from './wire/system-prompt.js';
+
+export type {
+  RegisteredTool,
+  ToolContext,
+  ToolDef,
+  ToolEffect,
+  ToolHandler,
+  ToolInventoryDelta,
+  ToolInventorySnapshot,
+  ToolResult,
+  ToolSource,
+} from './tools/types.js';
+export { ToolRegistry } from './tools/registry.js';
+export type { GrammarConstraint } from './tools/grammar.js';
+export { buildGrammarConstraint, buildToolCallGrammar } from './tools/grammar.js';
+export type { BuiltinTool } from './tools/builtin/index.js';
+export { builtinTools, MAX_TOOL_OUTPUT_CHARS } from './tools/builtin/index.js';
+
+export type {
+  AllowRule,
+  PermissionDecision,
+  PermissionQuery,
+  PlayMode,
+} from './permissions/engine.js';
+export { PermissionEngine, PLAY_MODES } from './permissions/engine.js';
+
+export type {
+  AgentEvent,
+  AgentLoopOptions,
+  ApprovalRequest,
+  ApprovalResolver,
+} from './agent/loop.js';
+export { AgentLoop } from './agent/loop.js';
+
+export { displayPath, PathOutsideProjectError, resolveInProject } from './project/paths.js';

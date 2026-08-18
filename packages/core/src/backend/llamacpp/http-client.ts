@@ -76,6 +76,13 @@ function toCompletionBody(request: CompletionRequest): Record<string, unknown> {
   if (request.nPredict !== undefined) body['n_predict'] = request.nPredict;
   if (request.grammar !== undefined) body['grammar'] = request.grammar;
   if (request.jsonSchema !== undefined) body['json_schema'] = request.jsonSchema;
+  if (request.grammarLazy !== undefined) body['grammar_lazy'] = request.grammarLazy;
+  if (request.grammarTriggers !== undefined) {
+    body['grammar_triggers'] = request.grammarTriggers;
+  }
+  if (request.preservedTokens !== undefined) {
+    body['preserved_tokens'] = request.preservedTokens;
+  }
   const s = request.sampling;
   if (s?.temperature !== undefined) body['temperature'] = s.temperature;
   if (s?.topK !== undefined) body['top_k'] = s.topK;

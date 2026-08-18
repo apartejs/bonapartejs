@@ -37,6 +37,15 @@ export interface CompletionRequest {
   /** Grammaire GBNF brute (exclusif avec jsonSchema). */
   grammar?: string;
   jsonSchema?: object;
+  /**
+   * Grammaire paresseuse : ne s'applique qu'après un déclencheur. Paramètres
+   * non documentés dans le README de llama.cpp, vérifiés dans
+   * tools/server/server-schema.cpp.
+   */
+  grammarLazy?: boolean;
+  grammarTriggers?: { type: number; value: string }[];
+  /** Mots déclencheurs mono-token à ne pas fragmenter à la tokenisation. */
+  preservedTokens?: string[];
   sampling?: SamplingParams;
   signal?: AbortSignal;
 }
