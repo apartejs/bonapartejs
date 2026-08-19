@@ -44,6 +44,14 @@ Quand une nouvelle version de la lib corrige une entrée, la marquer résolue
 - **`packages/core` n'importe jamais `electron`** (frontière enforcée par lint).
 - Le renderer ne parle jamais directement au llama-server ; pas d'`AparteClient`
   côté renderer (double boucle) — API impérative d'`<AparteChat>` pilotée par IPC.
+  Conséquence à ne pas oublier : c'est donc à NOUS d'appeler
+  `registerDefaultRenderers()` au démarrage du renderer (la lib ne le fait que
+  dans le constructeur d'`AparteClient`), sinon tout segment s'affiche
+  « [Unknown segment type] » — couvert par `aparte-bootstrap.spec.ts`.
+- **Un plugin ne défait jamais ses enregistrements à la main** : tout passe par
+  son contexte, que l'hôte démonte d'un bloc. Une activation qui échoue ne
+  laisse rien derrière elle, et rien de ce qu'un plugin lance ne survit à son
+  démontage (serveur de dev, shell, vue native).
 
 ## Méthode de travail
 
@@ -65,9 +73,10 @@ Quand une nouvelle version de la lib corrige une entrée, la marquer résolue
 ```sh
 pnpm dev          # app Electron (electron-vite)
 pnpm test         # toute la suite (Nx, cache)
-pnpm build        # build 4 paquets
+pnpm build        # build de tous les paquets et plugins
 pnpm lint         # eslint + boundaries
 pnpm typecheck
+pnpm --filter @aparte/bonaparte-app test:e2e   # E2E Electron (après pnpm build)
 node packages/cli/dist/cli.js doctor   # diagnostic machine
 ```
 
@@ -77,10 +86,17 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
 - La machine de Paul a le **CLI unifié `llama`** (WindowsApps) : serveur =
   `llama serve`, mêmes flags que llama-server (`detectServeCommandPrefix()`).
 - Jalons : J1 fondations+KV ✅ (validé en réel par Paul le 2026-08-18) ·
-  J2 boucle agentique/outils/permissions/projet ✅ en CI (288 tests core) —
-  **validation réelle en attente** · J3 shell plugin-first (hub Réglages
-  schema-driven, vraie barre de statut — l'écran de distribution et les
-  boutons de la barre actuels sont des intérimaires assumés) · J4 MCP · J5 npx.
+  J2 boucle agentique/outils/permissions/projet ✅ en CI — **le chemin
+  agentique n'a jamais rencontré un vrai modèle** (smoke prêt :
+  `BONAPARTE_SMOKE_MODEL=...` puis `npx vitest run src/smoke` dans
+  packages/core) · J3 shell plugin-first ✅ (hôte de plugins réversible,
+  panneau droit multi-vues, hub Réglages schema-driven, barre de statut avec
+  jauge de contexte, 4 plugins inclus, E2E Playwright) · J4 MCP · J5 npx.
+- **Plugins tiers hors de l'arbre : pas encore chargeables.** Les vues des
+  plugins inclus sont ramassées par `import.meta.glob` (donc buildées avec
+  l'app, chargées paresseusement) ; un plugin externe demandera le protocole
+  custom Electron + une import map partageant React. Point d'extension
+  identifié, volontairement pas ouvert en v1 (risque « double React »).
 - Grammaire des tool-calls : `grammar_lazy` + `grammar_triggers` +
   `preserved_tokens` sur `/completion` — **non documentés** dans le README de
   llama.cpp, vérifiés dans `tools/server/server-schema.cpp`. Sans la
