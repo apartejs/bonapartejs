@@ -9,20 +9,22 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-plugin-sdk": "workspace:*",
     "@aparte/bonaparte-shared": "workspace:*",
     "@aparte/core": "0.4.0-alpha.0",
     "@aparte/engine": "0.4.0-alpha.0",
     "@aparte/locale-fr": "0.4.0-alpha.0",
     "@aparte/react": "0.4.0-alpha.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "@aparte/bonaparte-plugin-sdk": "workspace:*"
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "catalog:",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
