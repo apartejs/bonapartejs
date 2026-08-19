@@ -11,6 +11,7 @@ import type {
   PlayModeDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { bootstrapHighlighting } from './aparte-bootstrap.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
@@ -241,6 +242,10 @@ export function App() {
     const next = currentTheme() === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-aparte-theme', next);
     document.documentElement.style.colorScheme = next;
+    // shiki fige les couleurs dans le HTML des blocs de code : sans
+    // réinstallation, un thème clair garderait du code sur fond sombre. Les
+    // blocs déjà peints ne se recolorent qu'au prochain rendu.
+    void bootstrapHighlighting(next).catch(() => undefined);
     try {
       localStorage.setItem('bp.theme', next);
     } catch {

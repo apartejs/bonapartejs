@@ -1,6 +1,3 @@
-import { readdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { loadPluginView, pluginsWithViews } from './views.js';
 
@@ -10,18 +7,26 @@ import { loadPluginView, pluginsWithViews } from './views.js';
  * affiche « cette vue n'a pas pu être chargée » à l'exécution. C'est
  * exactement ce qui est arrivé pendant tout J3 — un `../` manquant.
  *
- * Ces tests comparent donc le glob au DISQUE : ils ne peuvent pas passer
- * avec un glob qui ne trouve rien, ni rester verts si un plugin est ajouté
- * sans que le bundle le voie.
+ * On compare donc le bundle aux MANIFESTES, qui sont la source de vérité :
+ * tout plugin déclarant `entry.renderer` doit voir sa vue résolue ici.
+ * Le test « au moins une vue » ancre le chemin de base — sans lui, deux globs
+ * également faux se compareraient à vide et passeraient.
  */
 
-const pluginsDir = fileURLToPath(new URL('../../../../../../plugins', import.meta.url));
+interface Manifest {
+  id: string;
+  entry?: { renderer?: string };
+}
 
-function pluginsWithRendererOnDisk(): string[] {
-  return readdirSync(pluginsDir, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name)
-    .filter((name) => readdirSync(join(pluginsDir, name)).includes('renderer.tsx'))
+const manifests = import.meta.glob('../../../../../../plugins/*/plugin.json', {
+  eager: true,
+  import: 'default',
+}) as Record<string, Manifest>;
+
+function pluginsDeclaringAView(): string[] {
+  return Object.values(manifests)
+    .filter((manifest) => manifest.entry?.renderer)
+    .map((manifest) => manifest.id)
     .sort();
 }
 
@@ -30,8 +35,8 @@ describe('résolution des vues de plugins', () => {
     expect(pluginsWithViews().length).toBeGreaterThan(0);
   });
 
-  it('ramasse exactement les plugins qui ont un renderer.tsx sur le disque', () => {
-    expect(pluginsWithViews().sort()).toEqual(pluginsWithRendererOnDisk());
+  it('ramasse exactement les plugins dont le manifeste déclare une vue', () => {
+    expect(pluginsWithViews().sort()).toEqual(pluginsDeclaringAView());
   });
 
   it('charge réellement le composant de chaque vue', async () => {
