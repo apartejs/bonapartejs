@@ -77,9 +77,9 @@ export function StatusStrip({
   const contextPct =
     usedTokens !== null && nCtx ? Math.min(100, Math.round((usedTokens / nCtx) * 100)) : null;
 
-  // Sauvegarder l'état n'a de sens que si le moteur sait le faire. Un bouton
-  // qui ne peut pas tenir sa promesse ne doit pas être là.
-  const canPersistKv = engine !== undefined && engine.mode !== 'openai-compat';
+  // Le seul moteur est llama.cpp, qui sait toujours persister : il suffit
+  // qu'un moteur soit branché pour que le bouton tienne sa promesse.
+  const canPersistKv = engine !== undefined;
 
   return (
     <footer className="status-strip">

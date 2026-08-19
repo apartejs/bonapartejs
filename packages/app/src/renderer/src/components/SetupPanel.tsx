@@ -14,9 +14,10 @@ interface SetupPanelProps {
 }
 
 /**
- * Deux intentions, pas trois implémentations : « bonaparte s'en occupe » ou
- * « j'ai déjà un serveur ». Dans le second cas le protocole est deviné —
- * llama.cpp ou OpenAI-compatible — plutôt que demandé.
+ * Deux intentions pour un seul moteur : « bonaparte lance llama.cpp » ou
+ * « j'ai déjà un llama-server qui tourne ». Il n'y a pas de protocole à
+ * choisir — bonaparte ne pilote que llama.cpp, seul à persister le contexte.
+ * L'URL est simplement vérifiée avant d'être acceptée.
  */
 type Intent = 'managed' | 'existing';
 
@@ -33,17 +34,10 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   const [binMissing, setBinMissing] = useState(false);
   const [wingetCopied, setWingetCopied] = useState(false);
 
-  const [url, setUrl] = useState(
-    initial?.mode === 'remote'
-      ? initial.url
-      : initial?.mode === 'openai-compat'
-        ? initial.baseUrl
-        : '',
-  );
+  const [url, setUrl] = useState(initial?.mode === 'remote' ? initial.url : '');
   const [probe, setProbe] = useState<EndpointProbeDto | null>(null);
   const [probing, setProbing] = useState(false);
   const [probeFailed, setProbeFailed] = useState(false);
-  const [model, setModel] = useState('');
 
   // Pré-remplit le binaire llama détecté sur la machine (doctor lookup).
   useEffect(() => {
@@ -84,17 +78,13 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
       const found = await window.bonaparte.probeEndpoint(url);
       setProbe(found);
       setProbeFailed(found === null);
-      setModel(found?.model ?? '');
     } finally {
       setProbing(false);
     }
   };
 
   const canSubmit =
-    !busy &&
-    (intent === 'managed'
-      ? binPath.trim() !== ''
-      : probe !== null && (probe.protocol === 'llamacpp' || model !== ''));
+    !busy && (intent === 'managed' ? binPath.trim() !== '' : probe !== null);
 
   const submit = (): void => {
     if (!canSubmit) return;
@@ -103,11 +93,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
       return;
     }
     if (!probe) return;
-    onSubmit(
-      probe.protocol === 'llamacpp'
-        ? { mode: 'remote', url: probe.baseUrl }
-        : { mode: 'openai-compat', baseUrl: probe.baseUrl, model },
-    );
+    onSubmit({ mode: 'remote', url: probe.baseUrl });
   };
 
   return (
@@ -214,32 +200,11 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
             {probe && (
               <div className="probe-result">
                 <p>
-                  <strong>
-                    {probe.protocol === 'llamacpp'
-                      ? t.setup.foundLlama
-                      : t.setup.foundOpenAi}
-                  </strong>
+                  <strong>{t.setup.foundLlama}</strong>
                   {' — '}
-                  {probe.protocol === 'llamacpp'
-                    ? t.setup.persistenceYes
-                    : t.setup.persistenceNo}
+                  {t.setup.persistenceYes}
                 </p>
-                {probe.protocol === 'llamacpp' && probe.model && (
-                  <p className="probe-model">{probe.model}</p>
-                )}
-                {probe.protocol === 'openai-compat' && (
-                  <select
-                    className="field-select"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                  >
-                    {(probe.models ?? []).map((id) => (
-                      <option key={id} value={id}>
-                        {id}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                {probe.model && <p className="probe-model">{probe.model}</p>}
               </div>
             )}
           </>

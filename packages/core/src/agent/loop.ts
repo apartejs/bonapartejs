@@ -3,9 +3,9 @@
  *
  * Elle ne manipule qu'un transcript sémantique et des événements structurés :
  * elle ignore tout du prompt brut, de la grammaire GBNF et du format Hermes.
- * Comment une conversation devient une requête est l'affaire du backend
- * (prompt append-only pour llama.cpp, `messages[]` pour un endpoint
- * OpenAI-compatible ou une API cloud).
+ * Comment une conversation devient une requête est l'affaire du backend —
+ * aujourd'hui un seul, le prompt append-only de llama.cpp. Cette frontière
+ * reste la même : c'est elle qui garde la boucle testable sans serveur.
  *
  * Elle n'est pas bâtie sur `runStreamAgent` (@aparte/engine) : cet engine
  * possède la liste de messages et la re-sérialise à chaque tour, incompatible

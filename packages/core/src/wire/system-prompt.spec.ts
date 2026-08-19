@@ -88,14 +88,6 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('</tool_call>');
   });
 
-  it('tait le format d’appel quand le serveur gère les outils lui-même', () => {
-    // Un backend OpenAI-compatible reçoit des outils structurés : lui décrire
-    // la convention Hermes l’inciterait à écrire des balises en texte au lieu
-    // d’appeler nativement.
-    const prompt = buildSystemPrompt({ ...base, toolCallFormat: false });
-    expect(prompt).not.toContain('<tool_call>');
-  });
-
   it('sans projet, annonce que les outils marchent quand même', () => {
     // Le projet est le périmètre des outils, pas leur condition d'existence.
     // Dire l'inverse produisait un modèle qui refusait de lire un fichier.

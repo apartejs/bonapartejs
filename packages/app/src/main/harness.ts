@@ -18,7 +18,6 @@ import {
   ChatSession,
   ConversationStore,
   createLlamaCppBackend,
-  createOpenAiCompatBackend,
   createSystemDoctorEnv,
   defaultScanRoots,
   detectServeCommandPrefix,
@@ -654,25 +653,6 @@ export class Harness {
         cacheTypeV: 'f16',
         buildTag: 'unknown',
       };
-    } else if (config.mode === 'openai-compat') {
-      const backend = createOpenAiCompatBackend({
-        baseUrl: config.baseUrl,
-        model: config.model,
-        ...(config.apiKey ? { apiKey: config.apiKey } : {}),
-        label: 'endpoint OpenAI-compatible',
-      });
-      this.watchStatus(backend);
-      await backend.start();
-      this.backend = backend;
-      this.loadedModelPath = config.model;
-      // Pas de slots : le manifest n'aura jamais à être comparé.
-      this.live = {
-        modelFingerprint: `openai-compat:${config.baseUrl}:${config.model}`,
-        nCtx: 0,
-        cacheTypeK: 'n/a',
-        cacheTypeV: 'n/a',
-        buildTag: 'n/a',
-      };
     }
 
     return this.status();
@@ -793,10 +773,7 @@ export class Harness {
       convNCtx = nCtx ?? defaults?.nCtx;
     }
 
-    if (this.engine.mode === 'openai-compat') {
-      // Le modèle est celui que sert l'endpoint : rien à choisir ici.
-      convModel = this.engine.model;
-    } else if (this.engine.mode === 'managed') {
+    if (this.engine.mode === 'managed') {
       if (!convModel) return { needsModel: true, conversationId: id };
       await this.ensureManagedBackend(convModel, convNCtx ?? 8192);
     } else if (!convModel) {
@@ -1030,7 +1007,7 @@ export class Harness {
     return scanModels(defaultScanRoots());
   }
 
-  /** Découvre à quoi répond une URL (llama.cpp ou OpenAI-compatible). */
+  /** Vérifie qu'un llama-server répond bien à cette URL (mode distant). */
   async probeEndpointUrl(url: string): Promise<EndpointProbeDto | null> {
     return probeEndpoint(url);
   }

@@ -169,7 +169,5 @@ export function SettingsHub({
 }
 
 function engineLabel(engine: BackendConfigDto): string {
-  if (engine.mode === 'managed') return `llama.cpp — ${engine.binPath}`;
-  if (engine.mode === 'remote') return engine.url;
-  return `${engine.baseUrl} — ${engine.model}`;
+  return engine.mode === 'managed' ? `llama.cpp — ${engine.binPath}` : engine.url;
 }

@@ -67,25 +67,18 @@ export type BackendConfigDto =
       mode: 'managed';
       binPath: string;
       nGpuLayers?: number;
-    }
-  /**
-   * Endpoint OpenAI-compatible : LM Studio, Ollama, vLLM… et le cloud avec une
-   * clé. Pas de persistance de contexte (l'UI le signale honnêtement) ; le
-   * modèle est celui que sert l'endpoint.
-   */
-  | {
-      mode: 'openai-compat';
-      baseUrl: string;
-      model: string;
-      apiKey?: string;
     };
 
-/** Ce qu'une URL d'endpoint s'est révélée être. */
+/**
+ * Ce qu'une URL s'est révélée être. Un seul protocole : bonaparte ne pilote
+ * que llama.cpp, seul à offrir la persistance de contexte qui justifie le
+ * produit. `remote` n'est pas un autre fournisseur — c'est le même serveur,
+ * simplement pas lancé par nous.
+ */
 export interface EndpointProbeDto {
-  protocol: 'llamacpp' | 'openai-compat';
+  protocol: 'llamacpp';
   baseUrl: string;
   model?: string;
-  models?: string[];
   totalSlots?: number;
 }
 
@@ -254,7 +247,7 @@ export interface BonaparteBridge {
   suggestSetup(): Promise<SetupSuggestionDto>;
   pickFile(kind: PickFileKind): Promise<string | null>;
   scanModels(): Promise<ModelInfoDto[]>;
-  /** Découvre à quoi répond une URL : llama.cpp ou OpenAI-compatible. */
+  /** Vérifie qu'un llama-server répond bien à cette URL (mode distant). */
   probeEndpoint(url: string): Promise<EndpointProbeDto | null>;
   /** N'ouvre que des URLs https d'une liste blanche (main process). */
   openExternal(url: string): Promise<void>;

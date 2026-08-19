@@ -25,12 +25,6 @@ export interface SystemPromptOptions {
   replyLanguage?: string;
   /** Consignes de projet (CLAUDE.md & co) — optionnel. */
   projectInstructions?: string;
-  /**
-   * Décrire la convention d'appel Hermes (défaut). À couper pour un serveur
-   * qui gère les outils nativement : lui montrer la syntaxe textuelle
-   * l'inciterait à écrire des balises plutôt qu'à appeler.
-   */
-  toolCallFormat?: boolean;
 }
 
 function renderToolLine(tool: ToolDef): string {
@@ -58,14 +52,10 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
         'Nothing confines them to a folder, so name the exact path you are ' +
         'about to touch when it matters.',
     'Available tools:\n' + renderToolInventory(options.tools),
-    ...(options.toolCallFormat === false
-      ? []
-      : [
-          'To call a tool, emit exactly:\n' +
-            '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
-            'One call per block; emit several blocks for several calls. ' +
-            'Results are returned to you on the next turn.',
-        ]),
+    'To call a tool, emit exactly:\n' +
+      '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
+      'One call per block; emit several blocks for several calls. ' +
+      'Results are returned to you on the next turn.',
     // Sans cette clause, un delta appendé plus tard contredirait ce prompt.
     'This inventory may be amended later: a service message will announce any ' +
       'tool added or removed, and takes precedence over the list above.',

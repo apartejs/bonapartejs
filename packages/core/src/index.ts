@@ -163,9 +163,7 @@ export type {
   ToolingViewContribution,
 } from '@aparte/bonaparte-shared';
 
-export type { OpenAiCompatOptions } from './backend/openai-compat/openai-compat-backend.js';
-export { createOpenAiCompatBackend } from './backend/openai-compat/openai-compat-backend.js';
-export type { EndpointProbe, EndpointProtocol, ProbeOptions } from './backend/detect-endpoint.js';
+export type { EndpointProbe, ProbeOptions } from './backend/detect-endpoint.js';
 export { probeEndpoint } from './backend/detect-endpoint.js';
 export type {
   ResolvedSetting,

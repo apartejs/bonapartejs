@@ -25,9 +25,7 @@ export interface AppTranslations {
     probing: string;
     probeFailed: string;
     foundLlama: string;
-    foundOpenAi: string;
     persistenceYes: string;
-    persistenceNo: string;
     binPath: string;
     binPathPlaceholder: string;
     browse: string;
