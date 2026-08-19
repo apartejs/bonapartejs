@@ -24,11 +24,16 @@
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "@types/react": "^19.2.0",
+    "react": "^19.2.8"
   },
   "nx": {
     "tags": [
       "scope:plugin-sdk"
     ]
+  },
+  "peerDependencies": {
+    "react": "^18 || ^19"
   }
 }

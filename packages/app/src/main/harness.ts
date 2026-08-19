@@ -10,6 +10,7 @@ import { execFile, spawn, spawnSync } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import {
   bonaparteDataDir,
@@ -22,16 +23,25 @@ import {
   defaultScanRoots,
   detectServeCommandPrefix,
   fingerprintModelFile,
+  HARNESS_SETTINGS,
+  KV_INVALIDATING_KEYS,
   KvStore,
   kvSlotsDir,
   PermissionEngine,
+  PluginHost,
   probeEndpoint,
+  resolveSettings,
+  SAMPLING_SETTINGS,
   scanModels,
   ToolRegistry,
   type Backend,
   type LiveBackendConfig,
   type PlayMode,
+  type PluginNodeModule,
   type ProcessHandle,
+  type SamplingParams,
+  type SettingField,
+  type SettingLayers,
 } from '@aparte/bonaparte-core';
 import {
   IPC,
@@ -47,10 +57,13 @@ import {
   type ModelInfoDto,
   type PickFileKind,
   type PlayModeDto,
+  type PluginStatusDto,
   type ProjectDto,
+  type ResolvedSettingDto,
+  type SettingScopeDto,
   type SetupSuggestionDto,
 } from '@aparte/bonaparte-shared';
-import { dialog, shell } from 'electron';
+import { app, dialog, shell } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
 
 /** Seules destinations externes autorisées depuis le renderer. */
@@ -232,6 +245,10 @@ export class Harness {
   private projectRoot: string | null = null;
   private currentConversationId: string | null = null;
   private readonly registry = new ToolRegistry();
+  private readonly pluginHost = new PluginHost({
+    registry: this.registry,
+    logger: (message) => console.log(message),
+  });
   private readonly permissions = new PermissionEngine('repetition');
   private readonly pendingApprovals = new Map<
     string,
@@ -277,6 +294,7 @@ export class Harness {
   async restoreSession(): Promise<void> {
     // Avant tout : un serveur laissé par une session morte brutalement.
     await killOrphanedServer();
+    await this.loadPlugins();
     const config = await this.loadConfig();
     // On rouvre la dernière conversation, et c'est ELLE qui dit s'il y a un
     // projet. Rien n'est chargé en VRAM ici : seulement de la méta.
@@ -333,6 +351,132 @@ export class Harness {
 
   async renameConversation(id: string, title: string): Promise<void> {
     await this.store.setTitle(id, title);
+  }
+
+  // ── Plugins ────────────────────────────────────────────────────────────
+
+  /**
+   * Dossier des plugins. En développement il vit à la racine du dépôt ; une
+   * fois l'app empaquetée, dans les ressources.
+   */
+  private pluginsDir(): string {
+    return app.isPackaged
+      ? join(process.resourcesPath, 'plugins')
+      : join(app.getAppPath(), '..', '..', 'plugins');
+  }
+
+  /**
+   * Découvre puis active les plugins. Un plugin qui échoue est CONSERVÉ avec
+   * son erreur — le hub Réglages doit pouvoir le montrer plutôt que de le
+   * faire disparaître sans explication.
+   */
+  async loadPlugins(): Promise<void> {
+    const found = await this.pluginHost.discover(this.pluginsDir());
+    for (const plugin of found) {
+      if (!plugin.manifest || plugin.error) continue;
+      try {
+        const nodeEntry = plugin.manifest.entry.node;
+        const module: PluginNodeModule = nodeEntry
+          ? ((
+              (await import(pathToFileURL(join(plugin.dir, nodeEntry)).href)) as {
+                default: PluginNodeModule;
+              }
+            ).default)
+          : { activate: () => undefined };
+        await this.pluginHost.activate(plugin.id, module);
+      } catch (error) {
+        console.error(
+          `[plugins] ${plugin.id} n'a pas pu être activé :`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+  }
+
+  listPlugins(): PluginStatusDto[] {
+    return this.pluginHost.status();
+  }
+
+  // ── Réglages ───────────────────────────────────────────────────────────
+
+  /** Champs du harness plus ceux contribués par les plugins actifs. */
+  private settingFields(): SettingField[] {
+    const fromPlugins = this.pluginHost
+      .status()
+      .filter((plugin) => plugin.active)
+      .flatMap(() => [] as SettingField[]);
+    return [...HARNESS_SETTINGS, ...fromPlugins];
+  }
+
+  private async settingLayers(): Promise<SettingLayers> {
+    const config = await this.loadConfig();
+    const conversation = this.currentConversationId
+      ? (await this.store.meta(this.currentConversationId).catch(() => null))?.settings
+      : undefined;
+    return {
+      ...(config.settings ? { global: config.settings } : {}),
+      ...(conversation ? { conversation } : {}),
+    };
+  }
+
+  async getSettings(scope: SettingScopeDto): Promise<ResolvedSettingDto[]> {
+    const resolved = resolveSettings(this.settingFields(), await this.settingLayers(), scope);
+    return resolved.map((setting) => ({
+      key: setting.key,
+      label: setting.field.label,
+      type: setting.field.type,
+      ...(setting.field.description ? { description: setting.field.description } : {}),
+      ...(setting.field.options ? { options: setting.field.options } : {}),
+      ...(setting.field.min !== undefined ? { min: setting.field.min } : {}),
+      ...(setting.field.max !== undefined ? { max: setting.field.max } : {}),
+      ...(setting.field.step !== undefined ? { step: setting.field.step } : {}),
+      ...(setting.field.advanced ? { advanced: true } : {}),
+      value: setting.value,
+      from: setting.from,
+      overridden: setting.overridden,
+      // L'interface doit prévenir AVANT le changement, pas constater après.
+      invalidatesKv: KV_INVALIDATING_KEYS.has(setting.key),
+    }));
+  }
+
+  async setSetting(scope: SettingScopeDto, key: string, value: unknown): Promise<void> {
+    if (scope === 'conversation') {
+      const id = this.currentConversationId;
+      if (!id) return;
+      await this.store.setSetting(id, key, value);
+      // La session porte l'échantillonnage : elle sera rouverte au prochain
+      // message avec les nouvelles valeurs.
+      this.session = null;
+      return;
+    }
+    const config = await this.loadConfig();
+    const settings = { ...(config.settings ?? {}) };
+    if (value === undefined) delete settings[key];
+    else settings[key] = value;
+    await this.saveConfig({ ...config, settings });
+    this.session = null;
+  }
+
+  /** Échantillonnage effectif de la conversation ouverte. */
+  private async currentSampling(): Promise<SamplingParams> {
+    const resolved = resolveSettings(
+      SAMPLING_SETTINGS,
+      await this.settingLayers(),
+      'conversation',
+    );
+    const value = (key: string): number | undefined => {
+      const found = resolved.find((setting) => setting.key === key)?.value;
+      return typeof found === 'number' ? found : undefined;
+    };
+    const seed = value('seed');
+    return {
+      ...(value('temperature') !== undefined ? { temperature: value('temperature') } : {}),
+      ...(value('topP') !== undefined ? { topP: value('topP') } : {}),
+      ...(value('topK') !== undefined ? { topK: value('topK') } : {}),
+      ...(value('minP') !== undefined ? { minP: value('minP') } : {}),
+      // -1 = « aléatoire » : ne pas l'envoyer plutôt qu'envoyer une graine fixe.
+      ...(seed !== undefined && seed >= 0 ? { seed } : {}),
+    };
   }
 
   /**
@@ -673,6 +817,7 @@ export class Harness {
         approve: this.approve,
         // Le fil est anglais ; seule la langue de réponse suit l'utilisateur.
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
+        sampling: await this.currentSampling(),
         live: this.live,
       },
       id,
@@ -684,6 +829,7 @@ export class Harness {
       conversationId: id,
       modelPath: convModel,
       modelName: modelDisplayName(convModel),
+      ...(convNCtx !== undefined ? { nCtx: convNCtx } : {}),
       // Service et résultats d'outils restent hors de l'UI : ils vivent dans
       // le transcript, pas dans la conversation lue.
       events: events
@@ -897,6 +1043,11 @@ export class Harness {
     );
     ipcMain.handle(IPC.conversationHistory, () => this.conversationHistory());
     ipcMain.handle(IPC.conversationList, () => this.listConversations());
+    ipcMain.handle(IPC.pluginsList, () => this.listPlugins());
+    ipcMain.handle(IPC.settingsGet, (_e, scope: SettingScopeDto) => this.getSettings(scope));
+    ipcMain.handle(IPC.settingsSet, (_e, scope: SettingScopeDto, key: string, value: unknown) =>
+      this.setSetting(scope, key, value),
+    );
     ipcMain.handle(IPC.conversationCreate, (_e, projectRoot?: string) =>
       this.createConversation(projectRoot),
     );

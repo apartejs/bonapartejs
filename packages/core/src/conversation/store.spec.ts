@@ -45,6 +45,17 @@ describe('ConversationStore', () => {
     expect((await store.meta('c')).projectRoot).toBe('/projets/gamma');
   });
 
+  it('setSetting pose puis retire une surcharge de conversation', async () => {
+    const store = await makeStore();
+    await store.create('s');
+    await store.setSetting('s', 'temperature', 0.2);
+    expect((await store.meta('s')).settings).toEqual({ temperature: 0.2 });
+
+    // undefined = revenir à l'héritage, pas stocker un trou.
+    await store.setSetting('s', 'temperature', undefined);
+    expect((await store.meta('s')).settings).toEqual({});
+  });
+
   it('setTitle renomme sans toucher au reste', async () => {
     const store = await makeStore();
     await store.create('d', { title: 'Sans titre', projectRoot: '/projets/delta' });

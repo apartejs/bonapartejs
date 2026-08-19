@@ -153,6 +153,15 @@ export type {
   PluginToolResult,
 } from './plugins/host.js';
 export { PLUGIN_MANIFEST_FILE, PluginHost } from './plugins/host.js';
+// La surface publique de l'hôte parle le contrat partagé : le ré-exporter
+// garde les déclarations générées autoportantes.
+export type {
+  AgentToolContribution,
+  PluginConfigField,
+  PluginManifest,
+  PluginStatusDto,
+  ToolingViewContribution,
+} from '@aparte/bonaparte-shared';
 
 export type { OpenAiCompatOptions } from './backend/openai-compat/openai-compat-backend.js';
 export { createOpenAiCompatBackend } from './backend/openai-compat/openai-compat-backend.js';

@@ -19,7 +19,8 @@
     "@aparte/locale-fr": "0.4.0-alpha.0",
     "@aparte/react": "0.4.0-alpha.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "@aparte/bonaparte-plugin-sdk": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

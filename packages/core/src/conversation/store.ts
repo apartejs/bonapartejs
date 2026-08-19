@@ -32,6 +32,11 @@ export interface ConversationMeta {
    * changer de projet ne doit pas réécrire l'historique d'une autre.
    */
   projectRoot?: string;
+  /**
+   * Surcharges de réglages de CETTE conversation — échantillonnage seulement
+   * (les paramètres de lancement entrent au manifest KV et restent globaux).
+   */
+  settings?: Record<string, unknown>;
 }
 
 export interface CreateConversationOptions {
@@ -108,6 +113,17 @@ export class ConversationStore {
   async setProjectRoot(id: string, projectRoot: string): Promise<void> {
     const meta = await this.meta(id);
     meta.projectRoot = projectRoot;
+    meta.updatedAt = new Date().toISOString();
+    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+  }
+
+  /** Pose (ou retire, avec `undefined`) une surcharge de réglage. */
+  async setSetting(id: string, key: string, value: unknown): Promise<void> {
+    const meta = await this.meta(id);
+    const settings = { ...(meta.settings ?? {}) };
+    if (value === undefined) delete settings[key];
+    else settings[key] = value;
+    meta.settings = settings;
     meta.updatedAt = new Date().toISOString();
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }

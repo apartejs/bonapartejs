@@ -7,12 +7,15 @@ import type {
   CompletionStatsDto,
   ConversationOpenResultDto,
   ConversationSummaryDto,
+  PluginStatusDto,
   PlayModeDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
+import { SettingsHub } from './components/SettingsHub.js';
+import { ToolingPanel } from './components/ToolingPanel.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
@@ -27,7 +30,7 @@ function currentTheme(): 'dark' | 'light' {
 }
 
 export function App() {
-  const { locale, setLocale } = useTranslate();
+  const { locale } = useTranslate();
   const [view, setView] = useState<View>('boot');
   const [backendStatus, setBackendStatus] = useState<BackendStatusDto>('stopped');
   const [opened, setOpened] = useState<ConversationOpenResultDto | null>(null);
@@ -43,6 +46,9 @@ export function App() {
   const [projectName, setProjectName] = useState<string | null>(null);
   const [approval, setApproval] = useState<ApprovalRequestDto | null>(null);
   const [conversations, setConversations] = useState<ConversationSummaryDto[]>([]);
+  const [plugins, setPlugins] = useState<PluginStatusDto[]>([]);
+  const [projectRoot, setProjectRoot] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   /** Le menu se relit après chaque événement qui peut le changer. */
   const refreshConversations = useCallback(async () => {
@@ -105,6 +111,7 @@ export function App() {
           // Le dossier suit la conversation ouverte, pas l'application.
           const project = await window.bonaparte.currentProject();
           setProjectName(project?.name ?? null);
+          setProjectRoot(project?.root ?? null);
           await refreshConversations();
         }
         setBackendStatus(await window.bonaparte.getBackendStatus());
@@ -160,6 +167,7 @@ export function App() {
       setOpened(history);
       setView('chat');
       await refreshConversations();
+      setPlugins(await window.bonaparte.listPlugins());
     })();
   }, [startWith, refreshConversations]);
 
@@ -181,6 +189,7 @@ export function App() {
     const project = await window.bonaparte.openProject();
     if (!project) return;
     setProjectName(project.name);
+    setProjectRoot(project.root);
     // Le projet change l'inventaire d'outils : on rouvre la conversation
     // pour que le delta soit annoncé au modèle.
     await tryOpen();
@@ -247,25 +256,43 @@ export function App() {
           />
           ) : null}
         </main>
+        {view === 'chat' && (
+          <ToolingPanel
+            plugins={plugins}
+            projectRoot={projectRoot}
+            conversationId={opened?.conversationId ?? null}
+          />
+        )}
       </div>
+      {settingsOpen && (
+        <SettingsHub
+          engine={config}
+          onChangeEngine={() => {
+            setSettingsOpen(false);
+            setView('setup');
+          }}
+          onToggleTheme={toggleTheme}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {approval && (
         <ApprovalDialog request={approval} onRespond={respondToApproval} />
       )}
       <StatusStrip
         backendStatus={backendStatus}
+        engine={config}
         streaming={streaming}
         mode={mode}
         onModeChange={changeMode}
         projectName={projectName}
         onOpenProject={() => void openProject()}
         modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
+        nCtx={view === 'chat' ? (opened?.nCtx ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
         lastStats={lastStats}
         saveState={saveState}
         onSave={() => void handleSave()}
-        onChangeBackend={() => setView('setup')}
-        onToggleTheme={toggleTheme}
-        onToggleLocale={() => setLocale(locale === 'fr' ? 'en' : 'fr')}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
     </div>
   );

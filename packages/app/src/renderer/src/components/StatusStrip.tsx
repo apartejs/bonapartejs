@@ -1,4 +1,5 @@
 import type {
+  BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
   PlayModeDto,
@@ -12,19 +13,20 @@ const MODES: PlayModeDto[] = ['lecture', 'repetition', 'plume', 'impro'];
 
 interface StatusStripProps {
   backendStatus: BackendStatusDto;
+  engine: BackendConfigDto | undefined;
   streaming: boolean;
   mode: PlayModeDto;
   onModeChange: (mode: PlayModeDto) => void;
   projectName: string | null;
   onOpenProject: () => void;
   modelName: string | null;
+  /** Taille de contexte de la conversation — dénominateur de la jauge. */
+  nCtx: number | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
   saveState: 'idle' | 'saved' | 'failed';
   onSave: () => void;
-  onChangeBackend: () => void;
-  onToggleTheme: () => void;
-  onToggleLocale: () => void;
+  onOpenSettings: () => void;
 }
 
 function mascotteFor(status: BackendStatusDto, streaming: boolean): MascotteState {
@@ -48,19 +50,19 @@ function formatMs(ms: number): string {
 
 export function StatusStrip({
   backendStatus,
+  engine,
   streaming,
   mode,
   onModeChange,
   projectName,
   onOpenProject,
   modelName,
+  nCtx,
   restore,
   lastStats,
   saveState,
   onSave,
-  onChangeBackend,
-  onToggleTheme,
-  onToggleLocale,
+  onOpenSettings,
 }: StatusStripProps) {
   const { t } = useTranslate();
 
@@ -68,6 +70,16 @@ export function StatusStrip({
     lastStats?.progress && lastStats.progress.total > 0
       ? Math.round((lastStats.progress.cache / lastStats.progress.total) * 100)
       : null;
+
+  // Jauge de contexte : ce que le dernier prompt occupait sur ce qu'on peut
+  // tenir. Sans les deux chiffres, on n'affiche rien plutôt qu'une estimation.
+  const usedTokens = lastStats?.progress?.total ?? null;
+  const contextPct =
+    usedTokens !== null && nCtx ? Math.min(100, Math.round((usedTokens / nCtx) * 100)) : null;
+
+  // Sauvegarder l'état n'a de sens que si le moteur sait le faire. Un bouton
+  // qui ne peut pas tenir sa promesse ne doit pas être là.
+  const canPersistKv = engine !== undefined && engine.mode !== 'openai-compat';
 
   return (
     <footer className="status-strip">
@@ -103,6 +115,23 @@ export function StatusStrip({
             </option>
           ))}
         </select>
+
+        {contextPct !== null && (
+          <span
+            className="context-gauge"
+            title={`${usedTokens} / ${nCtx} tokens`}
+            aria-label={`${contextPct}%`}
+          >
+            <span className="context-gauge-track">
+              <span
+                className={`context-gauge-fill${contextPct >= 85 ? ' context-gauge-hot' : ''}`}
+                style={{ width: `${contextPct}%` }}
+              />
+            </span>
+            <span className="context-gauge-text">{contextPct}%</span>
+          </span>
+        )}
+
         {restore && restore.restored === false && restore.reason === 'not-connected' ? (
           <span className="status-chip chip-dim">{t.status.notConnected}</span>
         ) : restore ? (
@@ -119,30 +148,27 @@ export function StatusStrip({
               : `${t.status.notRestored} · ${t.status.reasons[restore.reason] ?? restore.reason}`}
           </span>
         ) : null}
-        {lastStats && (
+        {lastStats && lastStats.promptMs > 0 && (
           <span className="status-chip chip-dim">
             {t.status.prefill} {formatMs(lastStats.promptMs)}
             {cachePct !== null && ` · ${t.status.cacheShare} ${cachePct}%`}
           </span>
         )}
       </div>
+
       <div className="status-right">
         {saveState !== 'idle' && (
           <span className={saveState === 'saved' ? 'chip-ok status-chip' : 'chip-err status-chip'}>
             {saveState === 'saved' ? t.status.saved : t.status.saveFailed}
           </span>
         )}
-        <button type="button" onClick={onSave}>
-          {t.status.save}
-        </button>
-        <button type="button" onClick={onChangeBackend}>
-          {t.status.changeBackend}
-        </button>
-        <button type="button" onClick={onToggleTheme}>
-          {t.actions.toggleTheme}
-        </button>
-        <button type="button" onClick={onToggleLocale}>
-          {t.actions.toggleLocale}
+        {canPersistKv && (
+          <button type="button" onClick={onSave}>
+            {t.status.save}
+          </button>
+        )}
+        <button type="button" onClick={onOpenSettings}>
+          {t.settings.heading}
         </button>
       </div>
     </footer>

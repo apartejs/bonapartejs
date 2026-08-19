@@ -77,6 +77,29 @@ export interface AppTranslations {
     /** Titre du bloc de raisonnement repliable. */
     thinking: string;
   };
+  settings: {
+    heading: string;
+    general: string;
+    sampling: string;
+    launch: string;
+    plugins: string;
+    close: string;
+    advanced: string;
+    inherited: string;
+    reset: string;
+    kvWarning: string;
+    noPlugins: string;
+    pluginActive: string;
+    pluginFailed: string;
+    conversationScope: string;
+  };
+  tooling: {
+    heading: string;
+    empty: string;
+    collapse: string;
+    expand: string;
+    loadFailed: string;
+  };
   conversations: {
     heading: string;
     create: string;

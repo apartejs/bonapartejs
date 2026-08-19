@@ -73,3 +73,6 @@ export interface ToolingViewProps {
   conversationId: string | null;
   locale: 'fr' | 'en';
 }
+
+export { SettingsForm } from './SettingsForm.js';
+export type { SettingsFormLabels } from './SettingsForm.js';

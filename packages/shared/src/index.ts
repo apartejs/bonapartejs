@@ -7,6 +7,9 @@
 
 /** Contrat de plugin : manifeste déclaratif et statuts. */
 export * from './plugins.js';
+// Un `export *` ne met rien dans la portée locale : le contrat du pont, plus
+// bas, a besoin du type lui-même.
+import type { PluginStatusDto } from './plugins.js';
 
 /** Locales supportées par bonaparte (UI et messages du harness). */
 export type BonaparteLocale = 'fr' | 'en';
@@ -41,6 +44,9 @@ export const IPC = {
   modeGet: 'mode.get',
   modeSet: 'mode.set',
   approvalRespond: 'approval.respond',
+  pluginsList: 'plugins.list',
+  settingsGet: 'settings.get',
+  settingsSet: 'settings.set',
   evApproval: 'ev.approval',
   /** Événements poussés main → renderer. */
   evAgent: 'ev.agent',
@@ -107,6 +113,8 @@ export interface AppConfigDto {
   /** Dernière conversation ouverte, rouverte au démarrage suivant. */
   currentConversationId?: string;
   mode?: PlayModeDto;
+  /** Réglages globaux (échantillonnage + lancement), résolus par couches. */
+  settings?: Record<string, unknown>;
   /** Langue de l'utilisateur — pilote l'UI ET la langue de réponse du modèle. */
   locale?: BonaparteLocale;
 }
@@ -132,6 +140,28 @@ export interface ConversationSummaryDto {
   /** Un état KV existe sur disque : la reprise sera instantanée. */
   hasKvState: boolean;
 }
+
+/** Un réglage résolu, tel que l'UI l'affiche : valeur ET provenance. */
+export interface ResolvedSettingDto {
+  key: string;
+  label: string;
+  type: 'string' | 'number' | 'boolean' | 'select';
+  description?: string;
+  options?: { value: string; label: string }[];
+  min?: number;
+  max?: number;
+  step?: number;
+  advanced?: boolean;
+  value: unknown;
+  /** Couche qui fournit la valeur : 'default' | 'global' | 'conversation'. */
+  from: string;
+  /** La portée affichée surcharge-t-elle explicitement ce réglage ? */
+  overridden: boolean;
+  /** Changer ce réglage invalide les états KV sauvegardés. */
+  invalidatesKv: boolean;
+}
+
+export type SettingScopeDto = 'global' | 'conversation';
 
 /** Demande d'autorisation poussée au renderer pendant la boucle. */
 export interface ApprovalRequestDto {
@@ -196,6 +226,8 @@ export interface ConversationOpenResultDto {
   /** Modèle épinglé à la conversation. */
   modelPath?: string;
   modelName?: string;
+  /** Taille de contexte de la conversation — dénominateur de la jauge. */
+  nCtx?: number;
 }
 
 /** L'ouverture exige un choix de modèle (nouvelle conversation en managé). */
@@ -242,6 +274,12 @@ export interface BonaparteBridge {
    */
   createConversation(projectRoot?: string): Promise<string>;
   renameConversation(id: string, title: string): Promise<void>;
+  /** Plugins découverts, avec leurs vues et leurs erreurs éventuelles. */
+  listPlugins(): Promise<PluginStatusDto[]>;
+  /** Réglages d'une portée, valeurs résolues et provenance comprises. */
+  getSettings(scope: SettingScopeDto): Promise<ResolvedSettingDto[]>;
+  /** Pose une surcharge ; `undefined` la retire et rend l'héritage. */
+  setSetting(scope: SettingScopeDto, key: string, value: unknown): Promise<void>;
   openConversation(
     id?: string,
     modelPath?: string,
