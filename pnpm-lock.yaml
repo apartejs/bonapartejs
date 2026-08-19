@@ -54,17 +54,17 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.4.0-alpha.0
-        version: 0.4.0-alpha.0
+        specifier: 0.5.0-alpha.0
+        version: 0.5.0-alpha.0
       '@aparte/engine':
-        specifier: 0.4.0-alpha.0
-        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)
+        specifier: 0.5.0-alpha.0
+        version: 0.5.0-alpha.0(@aparte/core@0.5.0-alpha.0)
       '@aparte/locale-fr':
-        specifier: 0.4.0-alpha.0
-        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)
+        specifier: 0.5.0-alpha.0
+        version: 0.5.0-alpha.0(@aparte/core@0.5.0-alpha.0)
       '@aparte/react':
-        specifier: 0.4.0-alpha.0
-        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.5.0-alpha.0
+        version: 0.5.0-alpha.0(@aparte/core@0.5.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -130,8 +130,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.4.0-alpha.0
-        version: 0.4.0-alpha.0
+        specifier: 0.5.0-alpha.0
+        version: 0.5.0-alpha.0
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -263,30 +263,30 @@ importers:
 
 packages:
 
-  '@aparte/core@0.4.0-alpha.0':
-    resolution: {integrity: sha512-mU7b9ahmd1g/QofBjgri1GkZXfKwxeh7aDqXvj1oEoWY4gJwJKgaQouRvJI2L3/x7msQoihTeAmDX1JIHYCw5Q==}
+  '@aparte/core@0.5.0-alpha.0':
+    resolution: {integrity: sha512-JwCAmA16Q+WgItDCo+guI6/g+BzGRebJyFcNWCJE7iXuwxaO+6RNXd3/Bd9S+y7mDiR5GP0CcqGNTKnWYW3KJA==}
     engines: {node: '>=18'}
 
-  '@aparte/engine@0.4.0-alpha.0':
-    resolution: {integrity: sha512-8uh+Ge2qbsxzTFt82oDsk9FrMlKmVwGd5RBziALUbjdDM9mPezEApwMUqDNb2/MrZ05r2+0jQeWvTmt2UcBeAA==}
+  '@aparte/engine@0.5.0-alpha.0':
+    resolution: {integrity: sha512-v2+lnKO6TVL9I2464KlGfcr7VLCArwZxnVV00YlU4/qDZFi0593jnnCWsNqzGcbqw2koaMTRdIZo8CQLV/pbfg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.4.0-alpha.0
+      '@aparte/core': 0.5.0-alpha.0
     peerDependenciesMeta:
       '@aparte/core':
         optional: true
 
-  '@aparte/locale-fr@0.4.0-alpha.0':
-    resolution: {integrity: sha512-IRox+vPFSnkxdhYDCOh2BXUO3GeGqFmTvO4MXag3rLIuM6Z7Z4pOdSB9xW6xooVqAoT8D2Y4qr1tFI7S3EK/ww==}
+  '@aparte/locale-fr@0.5.0-alpha.0':
+    resolution: {integrity: sha512-aO4+COjc5cPOe5JtMbzGGYjQrl7tscXW8z5UG/catyAzVJqljl8D9zgkGkxyTG4fx89RP+MoeK0n0Fo0QGxNoQ==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.4.0-alpha.0
+      '@aparte/core': 0.5.0-alpha.0
 
-  '@aparte/react@0.4.0-alpha.0':
-    resolution: {integrity: sha512-uwwx2d250fukD20psrl/aXkZu274NdCdXXDdCPAQ55XwL7hgW00X+/a2jC3Wzk7F7nLXsck8gEYdYGjvczxdVw==}
+  '@aparte/react@0.5.0-alpha.0':
+    resolution: {integrity: sha512-7MimCn2yOgguV7/hCQjmiOhUenI5CxxPguwvW5Z772/dhJi9G71gF29tjF69sel4WUlzG/PXDizC3z/Bl6Zlsg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.4.0-alpha.0
+      '@aparte/core': 0.5.0-alpha.0
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -3199,19 +3199,19 @@ packages:
 
 snapshots:
 
-  '@aparte/core@0.4.0-alpha.0': {}
+  '@aparte/core@0.5.0-alpha.0': {}
 
-  '@aparte/engine@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)':
+  '@aparte/engine@0.5.0-alpha.0(@aparte/core@0.5.0-alpha.0)':
     optionalDependencies:
-      '@aparte/core': 0.4.0-alpha.0
+      '@aparte/core': 0.5.0-alpha.0
 
-  '@aparte/locale-fr@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)':
+  '@aparte/locale-fr@0.5.0-alpha.0(@aparte/core@0.5.0-alpha.0)':
     dependencies:
-      '@aparte/core': 0.4.0-alpha.0
+      '@aparte/core': 0.5.0-alpha.0
 
-  '@aparte/react@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@aparte/react@0.5.0-alpha.0(@aparte/core@0.5.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@aparte/core': 0.4.0-alpha.0
+      '@aparte/core': 0.5.0-alpha.0
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
