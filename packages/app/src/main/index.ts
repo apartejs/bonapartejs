@@ -44,7 +44,13 @@ function createWindow(): void {
   });
 
   harness.attachWindow(win);
-  win.once('ready-to-show', () => win.show());
+  // Electron n'a pas de vrai mode headless : ce qu'on peut faire, c'est ne
+  // JAMAIS montrer la fenêtre. Le renderer tourne quand même, le DOM est
+  // vivant, et les tests observent exactement la même chose — sans qu'une
+  // fenêtre surgisse devant l'utilisateur à chaque exécution.
+  if (!process.env['BONAPARTE_E2E']) {
+    win.once('ready-to-show', () => win.show());
+  }
 
   // À la fermeture : sauvegarde de l'état KV et arrêt du serveur AVANT de
   // laisser la fenêtre partir.

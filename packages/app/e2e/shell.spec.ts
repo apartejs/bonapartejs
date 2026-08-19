@@ -32,6 +32,9 @@ test.beforeAll(async () => {
     env[key] = value;
   }
   env['BONAPARTE_DATA_DIR'] = dataDir;
+  // La fenêtre reste masquée : lancer la suite ne doit pas faire surgir
+  // l'application devant celui qui la lance.
+  env['BONAPARTE_E2E'] = '1';
 
   app = await electron.launch({
     args: [join(import.meta.dirname, '..', 'out', 'main', 'index.js')],
@@ -43,7 +46,7 @@ test.afterAll(async () => {
   await app?.close();
 });
 
-test('la fenêtre s’ouvre sur un écran utilisable', async () => {
+test('le shell se monte, barre de statut comprise', async () => {
   const window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
 
