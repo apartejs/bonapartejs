@@ -68,6 +68,12 @@ function createWindow(): void {
   }
 }
 
+// Un harnais pour modèles LOCAUX ne dépense pas de VRAM à composer des pixels.
+// L'interface est du texte, des listes et des diffs : elle n'a rien à demander
+// au GPU, alors que chaque mégaoctet de VRAM rendu au modèle est du contexte en
+// plus. Doit être appelé AVANT `whenReady`.
+app.disableHardwareAcceleration();
+
 app.whenReady().then(async () => {
   // Pas de barre de menu : l'app porte sa propre navigation. Sur macOS on la
   // garde, le système y attache les raccourcis d'édition standard.
