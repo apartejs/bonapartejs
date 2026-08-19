@@ -36,6 +36,8 @@ const api: BonaparteBridge = {
   renameConversation: (id: string, title: string) =>
     ipcRenderer.invoke(IPC.conversationRename, id, title),
   listPlugins: () => ipcRenderer.invoke(IPC.pluginsList),
+  invokePlugin: (pluginId: string, command: string, payload?: unknown) =>
+    ipcRenderer.invoke(IPC.pluginsInvoke, pluginId, command, payload),
   getSettings: (scope) => ipcRenderer.invoke(IPC.settingsGet, scope),
   setSetting: (scope, key, value) => ipcRenderer.invoke(IPC.settingsSet, scope, key, value),
   openConversation: (id?: string, modelPath?: string, nCtx?: number) =>

@@ -45,6 +45,7 @@ export const IPC = {
   modeSet: 'mode.set',
   approvalRespond: 'approval.respond',
   pluginsList: 'plugins.list',
+  pluginsInvoke: 'plugins.invoke',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   evApproval: 'ev.approval',
@@ -276,6 +277,8 @@ export interface BonaparteBridge {
   renameConversation(id: string, title: string): Promise<void>;
   /** Plugins découverts, avec leurs vues et leurs erreurs éventuelles. */
   listPlugins(): Promise<PluginStatusDto[]>;
+  /** Appelle une commande de la moitié Node d'un plugin, depuis sa vue. */
+  invokePlugin(pluginId: string, command: string, payload?: unknown): Promise<unknown>;
   /** Réglages d'une portée, valeurs résolues et provenance comprises. */
   getSettings(scope: SettingScopeDto): Promise<ResolvedSettingDto[]>;
   /** Pose une surcharge ; `undefined` la retire et rend l'héritage. */

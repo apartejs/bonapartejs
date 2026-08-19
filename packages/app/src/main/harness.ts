@@ -1044,6 +1044,11 @@ export class Harness {
     ipcMain.handle(IPC.conversationHistory, () => this.conversationHistory());
     ipcMain.handle(IPC.conversationList, () => this.listConversations());
     ipcMain.handle(IPC.pluginsList, () => this.listPlugins());
+    ipcMain.handle(
+      IPC.pluginsInvoke,
+      (_e, pluginId: string, command: string, payload?: unknown) =>
+        this.pluginHost.invoke(pluginId, command, payload),
+    );
     ipcMain.handle(IPC.settingsGet, (_e, scope: SettingScopeDto) => this.getSettings(scope));
     ipcMain.handle(IPC.settingsSet, (_e, scope: SettingScopeDto, key: string, value: unknown) =>
       this.setSetting(scope, key, value),

@@ -1144,3 +1144,64 @@ button.primary {
 .plugin-state-failed {
   color: var(--aparte-error);
 }
+
+/* ── Lanceur de projet ──────────────────────────────────────────────────── */
+
+.script-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.script-card {
+  border: 1px solid var(--aparte-border);
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: var(--aparte-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.script-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.script-name {
+  font-size: 13.5px;
+}
+
+.script-command {
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  color: var(--aparte-text-muted);
+}
+
+.script-state {
+  font-size: 11.5px;
+}
+
+.script-url {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--aparte-primary);
+  font-family: var(--bp-mono);
+  font-size: 11.5px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-align: left;
+}
+
+.script-pending,
+.script-exited {
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  color: var(--aparte-text-muted);
+}

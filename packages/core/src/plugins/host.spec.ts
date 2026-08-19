@@ -173,6 +173,33 @@ describe('PluginHost — activation réversible', () => {
     expect(status?.error).toContain('boum');
   });
 
+  it('route une commande de la vue vers sa moitié Node', async () => {
+    // Une vue de plugin ne peut pas parler à son propre process Node sans
+    // ceci : elle passerait par des canaux ad hoc, hors du contrat.
+    const root = await makePluginDir('demo', manifest('demo'));
+    const host = new PluginHost({ registry: new ToolRegistry() });
+    await host.discover(root);
+    await host.activate('demo', {
+      activate: (ctx) => {
+        ctx.registerCommand('ping', async (payload) => ({ pong: payload }));
+      },
+    });
+
+    expect(await host.invoke('demo', 'ping', 42)).toEqual({ pong: 42 });
+  });
+
+  it('une commande disparaît avec son plugin', async () => {
+    const root = await makePluginDir('demo', manifest('demo'));
+    const host = new PluginHost({ registry: new ToolRegistry() });
+    await host.discover(root);
+    await host.activate('demo', {
+      activate: (ctx) => ctx.registerCommand('ping', async () => 'ok'),
+    });
+    await host.deactivate('demo');
+
+    await expect(host.invoke('demo', 'ping', null)).rejects.toThrow(/inconnue/i);
+  });
+
   it('expose les vues contribuées par les plugins actifs', async () => {
     const root = await makePluginDir(
       'browser',

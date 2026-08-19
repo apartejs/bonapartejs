@@ -42,9 +42,18 @@ export type PluginToolHandler = (
   invocation: PluginToolInvocation,
 ) => Promise<PluginToolResult>;
 
+/** Commande appelable depuis la vue du plugin (renderer → main). */
+export type PluginCommandHandler = (payload: unknown) => Promise<unknown> | unknown;
+
 export interface PluginNodeContext {
   readonly pluginId: string;
   registerToolHandler(name: string, handler: PluginToolHandler): void;
+  /**
+   * Expose une commande à la VUE du plugin. C'est le seul chemin renderer →
+   * moitié Node : il passe par l'hôte, donc il se démonte avec le plugin et
+   * ne peut pas survivre à sa désactivation.
+   */
+  registerCommand(name: string, handler: PluginCommandHandler): void;
   getConfig<T = unknown>(key: string): T | undefined;
   onDispose(dispose: () => void | Promise<void>): void;
   log(message: string): void;
@@ -73,6 +82,7 @@ export interface PluginHostOptions {
 /** Tout ce qu'une activation a posé, pour pouvoir le retirer d'un bloc. */
 interface ActivationRecord {
   toolNames: string[];
+  commands: Map<string, PluginCommandHandler>;
   disposers: (() => void | Promise<void>)[];
 }
 
@@ -166,7 +176,7 @@ export class PluginHost {
 
     const manifest = plugin.manifest;
     const declared = new Map(manifest.contributes.agentTools.map((t) => [t.name, t]));
-    const record: ActivationRecord = { toolNames: [], disposers: [] };
+    const record: ActivationRecord = { toolNames: [], commands: new Map(), disposers: [] };
 
     const context: PluginNodeContext = {
       pluginId: id,
@@ -186,6 +196,9 @@ export class PluginHost {
         };
         this.options.registry.register(def, this.adapt(handler), 'plugin');
         record.toolNames.push(name);
+      },
+      registerCommand: (name, handler) => {
+        record.commands.set(name, handler);
       },
       getConfig: <T,>(key: string) =>
         this.options.config?.[id]?.[key] as T | undefined,
@@ -230,6 +243,15 @@ export class PluginHost {
 
     const plugin = this.plugins.get(id);
     if (plugin) plugin.active = false;
+  }
+
+  /** Appelle une commande exposée par un plugin actif. */
+  async invoke(pluginId: string, command: string, payload: unknown): Promise<unknown> {
+    const handler = this.activations.get(pluginId)?.commands.get(command);
+    if (!handler) {
+      throw new Error(`Commande inconnue : ${pluginId}.${command}`);
+    }
+    return handler(payload);
   }
 
   /** Démonte tout — appelé à la fermeture de l'app. */

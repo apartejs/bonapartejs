@@ -8,6 +8,18 @@
  * qu'une vue (voire un outil) puisse être remplacée sans redémarrer l'app.
  */
 
+import type { BonaparteBridge } from '@aparte/bonaparte-shared';
+
+/**
+ * Le pont exposé par le preload. Le déclarer ici évite à chaque plugin de
+ * redéclarer le global — et garantit que tous parlent le MÊME contrat.
+ */
+declare global {
+  interface Window {
+    bonaparte: BonaparteBridge;
+  }
+}
+
 export type {
   AgentToolContribution,
   PluginConfigField,
@@ -33,6 +45,9 @@ export type PluginToolHandler = (
   invocation: PluginToolInvocation,
 ) => Promise<PluginToolResult>;
 
+/** Commande appelable depuis la vue du plugin. */
+export type PluginCommandHandler = (payload: unknown) => Promise<unknown> | unknown;
+
 /**
  * Contexte Node d'un plugin actif (main process). Tout enregistrement est
  * réversible : le hôte défait l'ensemble au `deactivate`.
@@ -45,6 +60,11 @@ export interface PluginNodeContext {
    * sans exécuter le plugin.
    */
   registerToolHandler(name: string, handler: PluginToolHandler): void;
+  /**
+   * Expose une commande à la VUE du plugin. C'est le seul chemin renderer →
+   * moitié Node : il passe par l'hôte, donc il se démonte avec le plugin.
+   */
+  registerCommand(name: string, handler: PluginCommandHandler): void;
   /** Valeur d'un réglage du plugin (portée globale). */
   getConfig<T = unknown>(key: string): T | undefined;
   /** Nettoyage supplémentaire à exécuter au démontage. */
