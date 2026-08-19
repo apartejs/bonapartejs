@@ -181,6 +181,13 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
         modelId: options.model,
         messages: toChatMessages(systemPrompt, request.transcript),
         stream: true,
+        // Le dialecte OpenAI n'a ni top_k ni min_p : on ne transmet que ce
+        // qu'il comprend, plutôt que d'inventer des champs que le serveur
+        // ignorerait en silence.
+        ...(request.sampling?.temperature !== undefined
+          ? { temperature: request.sampling.temperature }
+          : {}),
+        ...(request.sampling?.seed !== undefined ? { seed: request.sampling.seed } : {}),
         ...(request.tools.length > 0 ? { tools: toChatTools(request.tools) } : {}),
       });
 

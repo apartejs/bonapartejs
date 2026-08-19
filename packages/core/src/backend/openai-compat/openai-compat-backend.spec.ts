@@ -175,6 +175,23 @@ describe('backend OpenAI-compatible', () => {
     expect(done.stats.progress?.cache).toBe(100);
   });
 
+  it('transmet l’échantillonnage de la conversation jusqu’au serveur', async () => {
+    // Un réglage de température qui n'atteint pas le fil serait une interface
+    // qui ment : le curseur bougerait sans rien changer.
+    const { backend, server } = await rig([{ text: 'ok' }]);
+    for await (const _event of backend.runTurn({
+      conversationId: 'c1',
+      system: {},
+      tools: [],
+      transcript: [{ role: 'user', text: 'x' }],
+      signal: new AbortController().signal,
+      sampling: { temperature: 0.15, seed: 7 },
+    })) {
+      /* on ne consomme que pour dérouler le tour */
+    }
+    expect(server.requests.at(-1)).toMatchObject({ temperature: 0.15, seed: 7 });
+  });
+
   it('ne rattache pas les résultats à un tour assistant sans appel', () => {
     const messages = toChatMessages('SYS', [
       {

@@ -1,0 +1,12 @@
+{
+  "id": "conversation-settings",
+  "name": "Réglages de conversation",
+  "version": "0.1.0",
+  "description": "Température, échantillonnage et modèle de la conversation ouverte.",
+  "entry": { "renderer": "./renderer.tsx" },
+  "contributes": {
+    "toolingViews": [
+      { "id": "settings", "title": "Conversation", "icon": "◐", "order": 10 }
+    ]
+  }
+}

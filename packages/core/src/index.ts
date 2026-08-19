@@ -158,3 +158,18 @@ export type { OpenAiCompatOptions } from './backend/openai-compat/openai-compat-
 export { createOpenAiCompatBackend } from './backend/openai-compat/openai-compat-backend.js';
 export type { EndpointProbe, EndpointProtocol, ProbeOptions } from './backend/detect-endpoint.js';
 export { probeEndpoint } from './backend/detect-endpoint.js';
+export type {
+  ResolvedSetting,
+  SettingField,
+  SettingLayers,
+  SettingOption,
+  SettingScope,
+  SettingsLayer,
+} from './settings/resolve.js';
+export { resolveSettings } from './settings/resolve.js';
+export {
+  HARNESS_SETTINGS,
+  KV_INVALIDATING_KEYS,
+  LAUNCH_SETTINGS,
+  SAMPLING_SETTINGS,
+} from './settings/catalog.js';

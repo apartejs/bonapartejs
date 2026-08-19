@@ -14,6 +14,7 @@
 
 import type {
   Backend,
+  SamplingParams,
   SystemSpec,
   ToolCall,
   ToolOutcome,
@@ -42,6 +43,8 @@ export interface AgentLoopOptions {
   maxTurns?: number;
   approve?: ApprovalResolver;
   idSlot?: number;
+  /** Échantillonnage de la conversation (température & co). */
+  sampling?: SamplingParams;
 }
 
 export type AgentEvent =
@@ -90,6 +93,7 @@ export class AgentLoop {
         transcript,
         signal,
         ...(this.options.idSlot !== undefined ? { idSlot: this.options.idSlot } : {}),
+        ...(this.options.sampling ? { sampling: this.options.sampling } : {}),
       })) {
         switch (event.type) {
           case 'text':

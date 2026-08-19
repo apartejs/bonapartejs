@@ -153,6 +153,12 @@ export interface TurnRequest {
   transcript: TranscriptEntry[];
   signal: AbortSignal;
   idSlot?: number;
+  /**
+   * Échantillonnage de CE tour (température & co). Réglable par conversation :
+   * contrairement aux paramètres de lancement, il ne change rien au préfixe du
+   * prompt, donc il n'invalide aucun état KV.
+   */
+  sampling?: SamplingParams;
 }
 
 /** Forme minimale d'un outil attendue par un backend (cf. tools/types.ts). */

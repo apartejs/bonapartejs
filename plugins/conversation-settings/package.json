@@ -1,0 +1,12 @@
+{
+  "name": "@aparte/bonaparte-plugin-conversation-settings",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo \"vue rendue par le bundle de l'app (import.meta.glob)\"",
+    "typecheck": "echo ok",
+    "test": "echo ok"
+  },
+  "nx": { "tags": ["scope:plugin"] }
+}

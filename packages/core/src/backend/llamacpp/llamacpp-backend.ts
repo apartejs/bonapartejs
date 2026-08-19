@@ -138,6 +138,7 @@ abstract class BaseBackend implements Backend {
         cachePrompt: true,
         returnProgress: true,
         signal: request.signal,
+        ...(request.sampling ? { sampling: request.sampling } : {}),
         ...(constraint
           ? {
               grammar: constraint.grammar,

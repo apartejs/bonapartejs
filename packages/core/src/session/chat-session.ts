@@ -8,7 +8,7 @@
  */
 
 import { AgentLoop, type AgentEvent, type ApprovalResolver } from '../agent/loop.js';
-import type { Backend, TranscriptEntry } from '../backend/types.js';
+import type { Backend, SamplingParams, TranscriptEntry } from '../backend/types.js';
 import {
   rebuildTranscript,
   type ConversationStore,
@@ -37,6 +37,8 @@ export interface ChatSessionOptions {
   approve?: ApprovalResolver;
   maxTurns?: number;
   idSlot?: number;
+  /** Échantillonnage de la conversation, réglable sans invalider le cache. */
+  sampling?: SamplingParams;
 }
 
 export type OpenResult = {
@@ -85,6 +87,7 @@ export class ChatSession {
           : {}),
       },
       ...(options.approve ? { approve: options.approve } : {}),
+      ...(options.sampling ? { sampling: options.sampling } : {}),
       ...(options.maxTurns !== undefined ? { maxTurns: options.maxTurns } : {}),
       ...(options.idSlot !== undefined ? { idSlot: options.idSlot } : {}),
     });
