@@ -86,10 +86,13 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
 - La machine de Paul a le **CLI unifié `llama`** (WindowsApps) : serveur =
   `llama serve`, mêmes flags que llama-server (`detectServeCommandPrefix()`).
 - Jalons : J1 fondations+KV ✅ (validé en réel par Paul le 2026-08-18) ·
-  J2 boucle agentique/outils/permissions/projet ✅ en CI — **le chemin
-  agentique n'a jamais rencontré un vrai modèle** (smoke prêt :
-  `BONAPARTE_SMOKE_MODEL=...` puis `npx vitest run src/smoke` dans
-  packages/core) · J3 shell plugin-first ✅ (hôte de plugins réversible,
+  J2 boucle agentique/outils/permissions/projet ✅ en CI — **premier contact
+  réel le 2026-08-19** : le prefill passe (1295 tokens, 138 tok/s) et le modèle
+  déclenche bien un appel d'outil, mais la grammaire refusait le tag ouvrant
+  (corrigé, voir la grammaire ci-dessous). **Le reste du chemin agentique —
+  exécution d'outil, résultat réinjecté, second tour — n'a toujours pas été vu
+  de bout en bout** (smoke prêt : `BONAPARTE_SMOKE_MODEL=...` puis
+  `npx vitest run src/smoke` dans packages/core) · J3 shell plugin-first ✅ (hôte de plugins réversible,
   panneau droit multi-vues, hub Réglages schema-driven, barre de statut avec
   jauge de contexte, 4 plugins inclus, E2E Playwright) · J4 MCP · J5 npx.
 - **Plugins tiers hors de l'arbre : pas encore chargeables.** Les vues des
@@ -101,6 +104,15 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
   `preserved_tokens` sur `/completion` — **non documentés** dans le README de
   llama.cpp, vérifiés dans `tools/server/server-schema.cpp`. Sans la
   paresse, le modèle serait forcé d'appeler un outil à chaque tour.
+  **Le déclencheur DONNE son texte à la grammaire** : `llama_grammar_accept_impl`
+  (`src/llama-grammar.cpp`) appelle `llama_grammar_accept_token(grammar, token,
+  piece)` quand un token déclencheur tombe, et rejoue les tokens chevauchants
+  pour un motif. La racine doit donc consommer `<tool_call>` elle-même, sinon
+  le serveur lève « Unexpected empty grammar stack after accepting piece:
+  <tool_call> » au premier appel — rencontré en réel le 2026-08-19 (le tag est
+  un token spécial unique, id 248058, sur le modèle de Paul). La racine admet
+  aussi **plusieurs blocs** : à un seul, la grammaire serait satisfaite après le
+  premier appel et les appels parallèles seraient inémettables.
 - La boucle N'utilise PAS `runStreamAgent` (@aparte/engine) : cet engine
   possède la liste de messages, incompatible avec le prompt append-only.
   Boucle maison dans `core/src/agent/loop.ts` (friction consignée).

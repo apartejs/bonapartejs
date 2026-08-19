@@ -37,6 +37,33 @@ describe('buildToolCallGrammar', () => {
     expect(buildToolCallGrammar([tool('a')])).toContain('</tool_call>');
   });
 
+  it('accepte la balise OUVRANTE : le déclencheur la donne à la grammaire', () => {
+    // Vérifié dans src/llama-grammar.cpp (llama_grammar_accept_impl) : quand un
+    // déclencheur tombe, llama.cpp appelle `llama_grammar_accept_token` avec le
+    // TEXTE du déclencheur. La grammaire doit donc pouvoir consommer
+    // `<tool_call>` comme premier littéral, sinon la pile se vide aussitôt et le
+    // serveur lève « Unexpected empty grammar stack after accepting piece:
+    // <tool_call> ». Observé en réel le 2026-08-19 sur le modèle de Paul, où
+    // `<tool_call>` est un token spécial unique (id 248058).
+    // L'invariant : le tout premier littéral que la grammaire peut consommer,
+    // en partant de la racine, est la balise ouvrante.
+    const lines = buildToolCallGrammar([tool('a')]).split('\n');
+    const root = lines.find((line) => line.startsWith('root ::='));
+    expect(root).toMatch(/^root ::=\s*tool-call\b/);
+
+    const call = lines.find((line) => line.startsWith('tool-call ::='));
+    expect(call).toMatch(/^tool-call ::=\s*"<tool_call>"/);
+  });
+
+  it('autorise plusieurs appels d’affilée (appels parallèles Hermes)', () => {
+    // La convention Hermes rend les appels parallèles par blocs multiples, et
+    // notre parseur les gère. Si la racine n'admettait qu'un bloc, la grammaire
+    // serait satisfaite après le premier et le second ferait replonger la pile
+    // à zéro — le modèle ne pourrait littéralement pas appeler deux outils.
+    const grammar = buildToolCallGrammar([tool('a')]);
+    expect(grammar).toMatch(/^root ::=.*[*+]/m);
+  });
+
   it('déclare une règle racine et les règles JSON nécessaires', () => {
     const grammar = buildToolCallGrammar([tool('a')]);
     expect(grammar).toMatch(/^root ::=/m);

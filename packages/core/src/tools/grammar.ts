@@ -51,9 +51,19 @@ export function buildToolCallGrammar(tools: ToolDef[]): string {
     .join(' | ');
 
   return [
-    // La balise fermante fait partie de la racine : sans elle la grammaire
-    // serait satisfaite dès la fin du JSON et l'appel sortirait tronqué.
-    String.raw`root ::= "{" ws "\"name\":" ws tool-name "," ws "\"arguments\":" ws object "}" ws "</tool_call>"`,
+    // Plusieurs blocs d'affilée : la convention Hermes rend les appels
+    // parallèles ainsi, et notre parseur les lit. Une racine à un seul bloc
+    // serait satisfaite après le premier, et le second reviderait la pile.
+    String.raw`root ::= tool-call (ws tool-call)*`,
+    // Les DEUX balises font partie de la racine.
+    // — L'ouvrante parce que le déclencheur paresseux la donne à la grammaire :
+    //   `llama_grammar_accept_impl` (src/llama-grammar.cpp) appelle
+    //   `llama_grammar_accept_token` avec le texte du déclencheur. Sans elle,
+    //   le serveur lève « Unexpected empty grammar stack after accepting
+    //   piece: <tool_call> » dès le premier appel d'outil.
+    // — La fermante parce que sans elle la grammaire serait satisfaite dès la
+    //   fin du JSON et l'appel sortirait tronqué.
+    String.raw`tool-call ::= "<tool_call>" ws "{" ws "\"name\":" ws tool-name "," ws "\"arguments\":" ws object "}" ws "</tool_call>"`,
     `tool-name ::= ${names}`,
     ...JSON_RULES,
   ].join('\n');
