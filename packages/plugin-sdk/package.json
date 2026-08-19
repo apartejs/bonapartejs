@@ -1,0 +1,34 @@
+{
+  "name": "@aparte/bonaparte-plugin-sdk",
+  "version": "0.1.0",
+  "description": "bonaparte — authoring surface for plugins (contexts, view props, helpers)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@types/node": "catalog:"
+  },
+  "nx": {
+    "tags": [
+      "scope:plugin-sdk"
+    ]
+  }
+}

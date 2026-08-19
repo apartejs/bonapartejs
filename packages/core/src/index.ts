@@ -143,6 +143,17 @@ export { AgentLoop } from './agent/loop.js';
 
 export { displayPath, PathOutsideProjectError, resolveInProject } from './project/paths.js';
 
+export type {
+  DiscoveredPlugin,
+  PluginHostOptions,
+  PluginNodeContext,
+  PluginNodeModule,
+  PluginToolHandler,
+  PluginToolInvocation,
+  PluginToolResult,
+} from './plugins/host.js';
+export { PLUGIN_MANIFEST_FILE, PluginHost } from './plugins/host.js';
+
 export type { OpenAiCompatOptions } from './backend/openai-compat/openai-compat-backend.js';
 export { createOpenAiCompatBackend } from './backend/openai-compat/openai-compat-backend.js';
 export type { EndpointProbe, EndpointProtocol, ProbeOptions } from './backend/detect-endpoint.js';

@@ -5,6 +5,9 @@
  * Zéro dépendance workspace : ce paquet est une feuille du graphe.
  */
 
+/** Contrat de plugin : manifeste déclaratif et statuts. */
+export * from './plugins.js';
+
 /** Locales supportées par bonaparte (UI et messages du harness). */
 export type BonaparteLocale = 'fr' | 'en';
 
