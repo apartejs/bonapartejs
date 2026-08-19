@@ -81,12 +81,17 @@ test('l’app tient dans son budget mémoire', async () => {
 test('aucune VRAM n’est dépensée à composer l’interface', async () => {
   // `disableHardwareAcceleration()` (main/index.ts) : notre interface est du
   // texte et des diffs, et chaque mégaoctet de VRAM rendu au modèle est du
-  // contexte en plus. Mesuré : le processus GPU passe de 120 à 60 Mo de RAM,
-  // et cesse d'allouer sur le périphérique.
+  // contexte en plus.
   //
-  // Ce test vérifie la CAUSE, pas l'effet : la VRAM n'est pas interrogeable
-  // depuis Electron, mais l'état de l'accélération l'est. Si quelqu'un
-  // réactive le GPU sans le décider, il le saura ici.
+  // Mesuré le 2026-08-20 sur Windows (compteurs WDDM, fenêtre VISIBLE — une
+  // fenêtre masquée n'est pas composée et rend un zéro qui ne prouve rien) :
+  // même build, accélération active 31,7 Mo de VRAM dédiée, coupée 0 Mo. Côté
+  // RAM, le processus GPU passe de 120 à 60 Mo.
+  //
+  // Ce test vérifie la CAUSE, pas l'effet : la VRAM se mesure depuis le
+  // système (voir la spec), pas depuis Electron — mais l'état de
+  // l'accélération, lui, est lisible ici. Si quelqu'un rallume le GPU sans
+  // l'avoir décidé, il le saura par ce test.
   const accelerationDisabled = await app.evaluate(({ app: a }) =>
     a.commandLine.hasSwitch('disable-gpu-compositing') ||
     a.getGPUFeatureStatus()['gpu_compositing'] !== 'enabled',
