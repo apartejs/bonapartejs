@@ -1,7 +1,14 @@
 import { registerDefaultRenderers } from '@aparte/core';
 import { setupMarkedProvider } from '@aparte/plugin-marked';
+import {
+  setupShikiProviderFromHighlighter,
+  type ShikiHighlighterLike,
+} from '@aparte/plugin-shiki/core';
 import { setupStreamingMarkdownProvider } from '@aparte/plugin-streaming-markdown';
-import { setupShikiProvider } from '@aparte/plugin-shiki';
+import githubDark from '@shikijs/themes/github-dark';
+import githubLight from '@shikijs/themes/github-light';
+import { createHighlighterCore } from 'shiki/core';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 /**
  * Ce que la lib attend du renderer avant le premier rendu.
@@ -30,18 +37,39 @@ function shikiTheme(theme: 'dark' | 'light'): string {
 }
 
 /**
+ * Construit une seule fois : les grammaires sont figées, seul le thème varie
+ * ensuite. Le moteur de regex JS évite le WASM d'oniguruma (~620 ko), et les
+ * grammaires elles-mêmes (~2 Mo) sont importées dynamiquement pour rester
+ * hors du morceau chargé au démarrage.
+ */
+let highlighter: Promise<ShikiHighlighterLike> | null = null;
+
+function ensureHighlighter(): Promise<ShikiHighlighterLike> {
+  highlighter ??= import('./shiki-languages.js').then(({ LANGUAGES }) =>
+    createHighlighterCore({
+      themes: [githubDark, githubLight],
+      langs: LANGUAGES,
+      engine: createJavaScriptRegexEngine(),
+    }),
+  );
+  return highlighter;
+}
+
+/**
  * Coloration syntaxique — séparée parce qu'elle est ASYNCHRONE.
  *
- * shiki importe ses grammaires à la demande : rien n'est embarqué d'avance,
- * on ne paie que les langages réellement affichés, et un langage inconnu
- * retombe en texte brut au lieu de lever. On ne bloque donc PAS le premier
- * rendu là-dessus — et sur un agent local, le premier bloc de code arrive
- * de toute façon des secondes après le démarrage.
+ * On ne bloque PAS le premier rendu là-dessus : sur un agent local, le
+ * premier bloc de code arrive de toute façon des secondes après le
+ * démarrage, et un échec doit donner du code non colorisé, jamais un écran
+ * blanc.
  *
- * Rappelable : changer de thème réinstalle le fournisseur.
+ * Rappelable : changer de thème ré-enregistre le fournisseur sans
+ * reconstruire le highlighter (les deux thèmes y sont déjà).
  */
 export async function bootstrapHighlighting(
   theme: 'dark' | 'light',
 ): Promise<void> {
-  await setupShikiProvider({ theme: shikiTheme(theme) });
+  setupShikiProviderFromHighlighter(await ensureHighlighter(), {
+    theme: shikiTheme(theme),
+  });
 }

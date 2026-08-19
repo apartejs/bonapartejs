@@ -43,10 +43,43 @@ describe('bootstrap aparté', () => {
   });
 
   it('installe la coloration syntaxique, de façon asynchrone', async () => {
-    // shiki charge ses grammaires à la demande : son installation est un
-    // `await`, tenu HORS du chemin de premier rendu.
+    // Construire le highlighter est un `await`, tenu HORS du chemin de
+    // premier rendu.
     await bootstrapHighlighting('dark');
 
     expect(AparteConfig.hasHighlightProvider()).toBe(true);
+  });
+
+  it('colorise les langages qu’on a choisi d’embarquer', async () => {
+    await bootstrapHighlighting('dark');
+
+    for (const lang of ['typescript', 'python', 'rust', 'bash', 'json']) {
+      const html = await AparteConfig.highlightCode('const a = 1;', lang);
+      expect(html, `pas de coloration pour ${lang}`).toContain('shiki');
+    }
+  });
+
+  it('retombe en texte brut sur un langage absent, sans lever', async () => {
+    // Contrepartie ASSUMÉE du bundle maîtrisé : nos grammaires sont figées.
+    // Ce qui n'est pas embarqué ne doit pas casser l'affichage — un modèle
+    // qui répond en Brainfuck reste lisible.
+    await bootstrapHighlighting('dark');
+
+    await expect(
+      AparteConfig.highlightCode('++++[>++++<-]', 'brainfuck'),
+    ).resolves.toBeTypeOf('string');
+  });
+
+  it('suit le thème de l’app sans reconstruire le highlighter', async () => {
+    // Le HTML produit par shiki fige les couleurs : sans ré-enregistrement,
+    // un thème clair garderait du code sur fond sombre.
+    await bootstrapHighlighting('light');
+    const light = await AparteConfig.highlightCode('const a = 1;', 'typescript');
+
+    await bootstrapHighlighting('dark');
+    const dark = await AparteConfig.highlightCode('const a = 1;', 'typescript');
+
+    expect(light).toContain('github-light');
+    expect(dark).toContain('github-dark');
   });
 });
