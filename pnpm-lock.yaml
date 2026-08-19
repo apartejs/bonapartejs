@@ -214,6 +214,28 @@ importers:
         specifier: 'catalog:'
         version: 5.9.3
 
+  plugins/terminal:
+    dependencies:
+      '@aparte/bonaparte-plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.3
+      '@types/react':
+        specifier: ^19.2.0
+        version: 19.2.18
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(postcss@8.5.26)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
 packages:
 
   '@aparte/core@0.4.0-alpha.0':
