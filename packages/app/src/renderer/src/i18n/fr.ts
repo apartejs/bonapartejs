@@ -79,6 +79,15 @@ export const FR: AppTranslations = {
     errorPrefix: 'Erreur',
     thinking: 'Réflexion',
   },
+  conversations: {
+    heading: 'Conversations',
+    create: 'Nouvelle conversation',
+    empty: 'Aucune conversation pour l’instant.',
+    untitled: 'Nouvelle conversation',
+    noProject: 'sans dossier',
+    kvReady: 'reprise instantanée',
+    kvReadyHint: 'Le contexte de cette conversation est sauvegardé : la reprise évite le re-calcul.',
+  },
   status: {
     stopped: 'arrêté',
     starting: 'démarrage…',

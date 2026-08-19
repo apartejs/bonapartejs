@@ -78,6 +78,15 @@ export const EN: AppTranslations = {
     errorPrefix: 'Error',
     thinking: 'Reasoning',
   },
+  conversations: {
+    heading: 'Conversations',
+    create: 'New conversation',
+    empty: 'No conversation yet.',
+    untitled: 'New conversation',
+    noProject: 'no folder',
+    kvReady: 'instant resume',
+    kvReadyHint: 'This conversation’s context is saved: resuming skips the re-computation.',
+  },
   status: {
     stopped: 'stopped',
     starting: 'starting…',

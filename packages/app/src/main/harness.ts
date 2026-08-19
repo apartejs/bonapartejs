@@ -335,6 +335,24 @@ export class Harness {
     await this.store.setTitle(id, title);
   }
 
+  /**
+   * Titre tiré du premier message, et de lui seul : renommer plus tard
+   * écraserait un titre que l'utilisateur a pu choisir lui-même.
+   */
+  private async titleFromFirstMessage(text: string): Promise<void> {
+    const id = this.currentConversationId;
+    if (!id) return;
+    try {
+      const events = await this.store.loadEvents(id);
+      if (events.some((event) => event.type === 'user')) return;
+      const line = text.trim().replace(/\s+/g, ' ');
+      if (!line) return;
+      await this.store.setTitle(id, line.length > 60 ? `${line.slice(0, 57)}…` : line);
+    } catch {
+      /* un titre est un confort : jamais de quoi faire échouer un envoi */
+    }
+  }
+
   private project(recents: string[] = []): ProjectDto | null {
     if (!this.projectRoot) return null;
     return {
@@ -748,6 +766,10 @@ export class Harness {
       } satisfies AgentEventDto);
       return;
     }
+    // Le premier message donne son titre à la conversation : un menu où tout
+    // s'appelle « Nouvelle conversation » ne sert à rien.
+    await this.titleFromFirstMessage(text);
+
     try {
       for await (const event of this.session.send(text)) {
         switch (event.type) {

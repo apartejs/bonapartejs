@@ -676,3 +676,156 @@ button.primary {
     animation: none;
   }
 }
+
+/* ── Menu des conversations ─────────────────────────────────────────────── */
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.conv-sidebar {
+  width: 248px;
+  flex: 0 0 248px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-1);
+}
+
+.conv-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 8px;
+}
+
+.conv-sidebar-title {
+  font-family: var(--bp-serif);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--aparte-text-muted);
+}
+
+.conv-new {
+  font-family: var(--bp-sans);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--aparte-border);
+  background: transparent;
+  color: var(--aparte-text);
+  cursor: pointer;
+}
+
+.conv-new:hover:not(:disabled) {
+  border-color: var(--aparte-primary);
+  background: var(--aparte-surface-2);
+}
+
+.conv-new:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* L'intitulé disparaît sous 1100 px : le « + » reste, l'action aussi. */
+@media (max-width: 1100px) {
+  .conv-new-label {
+    display: none;
+  }
+}
+
+.conv-empty {
+  margin: 0;
+  padding: 4px 14px 14px;
+  font-size: 12.5px;
+  color: var(--aparte-text-muted);
+}
+
+.conv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.conv-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.conv-item:hover:not(:disabled) {
+  background: var(--aparte-surface-2);
+}
+
+.conv-item-active {
+  background: var(--aparte-surface-2);
+  border-color: var(--aparte-primary);
+  cursor: default;
+}
+
+.conv-item:disabled:not(.conv-item-active) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.conv-item-title {
+  font-size: 13.5px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-item-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--aparte-text-muted);
+}
+
+.conv-project {
+  font-family: var(--bp-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-noproject {
+  font-style: italic;
+}
+
+.conv-date {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* Le différenciateur, dit sobrement — et seulement quand il est vrai. */
+.conv-kv {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-family: var(--bp-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--aparte-success);
+  border: 1px solid color-mix(in srgb, var(--aparte-success) 40%, transparent);
+  background: color-mix(in srgb, var(--aparte-success) 8%, transparent);
+}

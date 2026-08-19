@@ -6,11 +6,13 @@ import type {
   BackendStatusDto,
   CompletionStatsDto,
   ConversationOpenResultDto,
+  ConversationSummaryDto,
   PlayModeDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
+import { ConversationSidebar } from './components/ConversationSidebar.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
@@ -40,6 +42,12 @@ export function App() {
   const [mode, setModeState] = useState<PlayModeDto>('repetition');
   const [projectName, setProjectName] = useState<string | null>(null);
   const [approval, setApproval] = useState<ApprovalRequestDto | null>(null);
+  const [conversations, setConversations] = useState<ConversationSummaryDto[]>([]);
+
+  /** Le menu se relit après chaque événement qui peut le changer. */
+  const refreshConversations = useCallback(async () => {
+    setConversations(await window.bonaparte.listConversations());
+  }, []);
 
   useEffect(() => window.bonaparte.onApprovalRequest(setApproval), []);
 
@@ -94,6 +102,10 @@ export function App() {
           setOpened(reply);
           setLastStats(null);
           setView('chat');
+          // Le dossier suit la conversation ouverte, pas l'application.
+          const project = await window.bonaparte.currentProject();
+          setProjectName(project?.name ?? null);
+          await refreshConversations();
         }
         setBackendStatus(await window.bonaparte.getBackendStatus());
       } catch (err) {
@@ -102,7 +114,7 @@ export function App() {
         setBusy(false);
       }
     },
-    [fail],
+    [fail, refreshConversations],
   );
 
   const startWith = useCallback(
@@ -147,8 +159,23 @@ export function App() {
       }
       setOpened(history);
       setView('chat');
+      await refreshConversations();
     })();
-  }, [startWith]);
+  }, [startWith, refreshConversations]);
+
+  /** Nouvelle conversation : elle hérite du dossier courant s'il y en a un —
+   *  discuter sans dossier reste possible en n'en attachant simplement pas. */
+  const createConversation = useCallback(async () => {
+    setBusy(true);
+    try {
+      const project = await window.bonaparte.currentProject();
+      const id = await window.bonaparte.createConversation(project?.root);
+      await refreshConversations();
+      await tryOpen(id);
+    } finally {
+      setBusy(false);
+    }
+  }, [refreshConversations, tryOpen]);
 
   const openProject = useCallback(async () => {
     const project = await window.bonaparte.openProject();
@@ -178,7 +205,17 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <main className="app-main">
+      <div className="app-body">
+        {view === 'chat' && (
+          <ConversationSidebar
+            conversations={conversations}
+            currentId={opened?.conversationId ?? null}
+            busy={busy || streaming}
+            onSelect={(id) => void tryOpen(id)}
+            onCreate={() => void createConversation()}
+          />
+        )}
+        <main className="app-main">
         {view === 'setup' || view === 'boot' ? (
           <SetupPanel
             {...(config ? { initial: config } : {})}
@@ -208,8 +245,9 @@ export function App() {
             onStats={setLastStats}
             onStreamingChange={setStreaming}
           />
-        ) : null}
-      </main>
+          ) : null}
+        </main>
+      </div>
       {approval && (
         <ApprovalDialog request={approval} onRespond={respondToApproval} />
       )}

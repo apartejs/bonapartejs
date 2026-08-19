@@ -77,6 +77,17 @@ export interface AppTranslations {
     /** Titre du bloc de raisonnement repliable. */
     thinking: string;
   };
+  conversations: {
+    heading: string;
+    create: string;
+    empty: string;
+    untitled: string;
+    /** Aucun dossier rattaché — un usage normal, pas un manque. */
+    noProject: string;
+    /** Un état KV existe : la reprise sera instantanée. */
+    kvReady: string;
+    kvReadyHint: string;
+  };
   status: {
     stopped: string;
     starting: string;
