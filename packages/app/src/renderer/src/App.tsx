@@ -124,6 +124,39 @@ export function App() {
     [fail, refreshConversations],
   );
 
+  /**
+   * Bascule de conversation : LECTURE SEULE. L'historique vient du log sur
+   * disque ; le cache KV n'accélère que la génération suivante, donc consulter
+   * ses conversations ne doit charger aucun modèle. Le moteur se réveille au
+   * premier message, et pas avant.
+   */
+  const selectConversation = useCallback(
+    async (id?: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const history = await window.bonaparte.conversationHistory(id);
+        if ('needsModel' in history) {
+          pendingConv.current = history.conversationId;
+          setView('pickModel');
+          return;
+        }
+        setOpened(history);
+        setLastStats(null);
+        setView('chat');
+        const project = await window.bonaparte.currentProject();
+        setProjectName(project?.name ?? null);
+        setProjectRoot(project?.root ?? null);
+        await refreshConversations();
+      } catch (err) {
+        fail(err, 'setup');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [fail, refreshConversations],
+  );
+
   const startWith = useCallback(
     async (engine: BackendConfigDto) => {
       setBusy(true);
@@ -134,13 +167,13 @@ export function App() {
         await window.bonaparte.setConfig({ ...existing, backend: engine });
         setConfig(engine);
         setBusy(false);
-        await tryOpen();
+        await selectConversation();
       } catch (err) {
         setBusy(false);
         fail(err, 'setup');
       }
     },
-    [fail, tryOpen],
+    [fail, selectConversation],
   );
 
   // Boot : si un moteur est configuré, on le démarre et on ouvre la
@@ -171,28 +204,31 @@ export function App() {
     })();
   }, [startWith, refreshConversations]);
 
+
   /** Nouvelle conversation : elle hérite du dossier courant s'il y en a un —
-   *  discuter sans dossier reste possible en n'en attachant simplement pas. */
+   *  discuter sans dossier reste possible en n'en attachant simplement pas.
+   *  Elle non plus ne charge rien : elle est vide, il n'y a rien à générer. */
   const createConversation = useCallback(async () => {
     setBusy(true);
     try {
       const project = await window.bonaparte.currentProject();
       const id = await window.bonaparte.createConversation(project?.root);
       await refreshConversations();
-      await tryOpen(id);
+      await selectConversation(id);
     } finally {
       setBusy(false);
     }
-  }, [refreshConversations, tryOpen]);
+  }, [refreshConversations, selectConversation]);
 
   const openProject = useCallback(async () => {
     const project = await window.bonaparte.openProject();
     if (!project) return;
     setProjectName(project.name);
     setProjectRoot(project.root);
-    // Le projet change l'inventaire d'outils : on rouvre la conversation
-    // pour que le delta soit annoncé au modèle.
-    await tryOpen();
+    // Le projet change l'inventaire d'outils. Inutile de réveiller le moteur
+    // pour autant : le delta sera annoncé à l'ouverture de la session, au
+    // premier message.
+    await selectConversation();
   }, [tryOpen]);
 
   const handleSave = useCallback(async () => {
@@ -220,7 +256,7 @@ export function App() {
             conversations={conversations}
             currentId={opened?.conversationId ?? null}
             busy={busy || streaming}
-            onSelect={(id) => void tryOpen(id)}
+            onSelect={(id) => void selectConversation(id)}
             onCreate={() => void createConversation()}
           />
         )}

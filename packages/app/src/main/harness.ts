@@ -837,7 +837,9 @@ export class Harness {
           if (event.type === 'user') {
             return [{ type: 'user', text: event.text, at: event.at }];
           }
-          if (event.type === 'assistant') {
+          // Une ligne de log abîmée saute, elle n'emporte pas l'ouverture
+          // de la conversation avec elle.
+          if (event.type === 'assistant' && event.entry) {
             return [
               {
                 type: 'assistant',
@@ -860,7 +862,21 @@ export class Harness {
    * doit ni réveiller un serveur, ni charger un modèle en VRAM. La connexion
    * n'a lieu qu'au premier message.
    */
-  async conversationHistory(): Promise<ConversationOpenReplyDto> {
+  async conversationHistory(select?: string): Promise<ConversationOpenReplyDto> {
+    // Basculer de conversation est une opération de LECTURE : l'historique
+    // vient du log sur disque, jamais du cache KV — celui-ci n'accélère que la
+    // génération suivante. Consulter ses conversations ne doit donc charger
+    // aucun modèle ni réveiller le moteur.
+    if (select && select !== this.currentConversationId) {
+      // L'état de celle qu'on quitte est sauvegardé si une session tournait :
+      // sinon son cache serait perdu et y revenir coûterait un re-prefill.
+      if (this.session) {
+        await this.session.save().catch(() => false);
+        this.session = null;
+      }
+      if (await this.store.exists(select)) await this.setCurrentConversation(select);
+    }
+
     const id = this.currentConversationId;
     if (!id || !(await this.store.exists(id))) {
       return {
@@ -881,7 +897,9 @@ export class Harness {
           if (event.type === 'user') {
             return [{ type: 'user', text: event.text, at: event.at }];
           }
-          if (event.type === 'assistant') {
+          // Une ligne de log abîmée saute, elle n'emporte pas l'ouverture
+          // de la conversation avec elle.
+          if (event.type === 'assistant' && event.entry) {
             return [
               { type: 'assistant', text: stripThink(event.entry.text), at: event.at },
             ];
@@ -1044,7 +1062,9 @@ export class Harness {
     ipcMain.handle(IPC.backendRegister, (_e, config: BackendConfigDto) =>
       this.registerEngine(config),
     );
-    ipcMain.handle(IPC.conversationHistory, () => this.conversationHistory());
+    ipcMain.handle(IPC.conversationHistory, (_e, select?: string) =>
+      this.conversationHistory(select),
+    );
     ipcMain.handle(IPC.conversationList, () => this.listConversations());
     ipcMain.handle(IPC.pluginsList, () => this.listPlugins());
     ipcMain.handle(

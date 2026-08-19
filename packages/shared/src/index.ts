@@ -265,8 +265,12 @@ export interface BonaparteBridge {
   startBackend(config: BackendConfigDto): Promise<BackendStatusDto>;
   /** Enregistre le moteur sans s'y connecter (démarrage à froid). */
   registerBackend(config: BackendConfigDto): Promise<void>;
-  /** Historique seul, sans réveiller le moteur. */
-  conversationHistory(): Promise<ConversationOpenReplyDto>;
+  /**
+   * Historique d'une conversation, SANS réveiller le moteur. C'est le chemin
+   * de la consultation et de la bascule : lire n'a jamais besoin du cache KV,
+   * qui ne sert qu'à la génération suivante.
+   */
+  conversationHistory(select?: string): Promise<ConversationOpenReplyDto>;
   /** Toutes les conversations, la plus récemment touchée en tête. */
   listConversations(): Promise<ConversationSummaryDto[]>;
   /**
