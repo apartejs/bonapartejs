@@ -76,8 +76,6 @@ export interface AppTranslations {
     errorPrefix: string;
     /** Titre du bloc de raisonnement repliable. */
     thinking: string;
-    /** Indicateur affiché entre l'envoi et le premier signe de vie. */
-    waiting: string;
   };
   status: {
     stopped: string;

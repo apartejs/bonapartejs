@@ -19,8 +19,8 @@
   },
   "dependencies": {
     "@aparte/bonaparte-shared": "workspace:*",
-    "@aparte/core": "0.3.0-alpha.0",
-    "@aparte/provider-openai-compat": "0.3.0-alpha.0",
+    "@aparte/core": "0.4.0-alpha.0",
+    "@aparte/provider-openai-compat": "0.4.0-alpha.0",
     "zod": "catalog:"
   },
   "devDependencies": {

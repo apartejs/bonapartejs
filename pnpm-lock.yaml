@@ -51,17 +51,17 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.3.0-alpha.0
-        version: 0.3.0-alpha.0
+        specifier: 0.4.0-alpha.0
+        version: 0.4.0-alpha.0
       '@aparte/engine':
-        specifier: 0.3.0-alpha.0
-        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)
+        specifier: 0.4.0-alpha.0
+        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)
       '@aparte/locale-fr':
-        specifier: 0.3.0-alpha.0
-        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)
+        specifier: 0.4.0-alpha.0
+        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)
       '@aparte/react':
-        specifier: 0.3.0-alpha.0
-        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.4.0-alpha.0
+        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -124,11 +124,11 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.3.0-alpha.0
-        version: 0.3.0-alpha.0
+        specifier: 0.4.0-alpha.0
+        version: 0.4.0-alpha.0
       '@aparte/provider-openai-compat':
-        specifier: 0.3.0-alpha.0
-        version: 0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)
+        specifier: 0.4.0-alpha.0
+        version: 0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -164,36 +164,36 @@ importers:
 
 packages:
 
-  '@aparte/core@0.3.0-alpha.0':
-    resolution: {integrity: sha512-ge9xNoJpgW1sbVXbx2pQjZNJ8XGF88hLByOutdXu0B1pAezVjh7V35tKPBk2qznp3Sp4S0QrWpDSZbTJBsPv7Q==}
+  '@aparte/core@0.4.0-alpha.0':
+    resolution: {integrity: sha512-mU7b9ahmd1g/QofBjgri1GkZXfKwxeh7aDqXvj1oEoWY4gJwJKgaQouRvJI2L3/x7msQoihTeAmDX1JIHYCw5Q==}
     engines: {node: '>=18'}
 
-  '@aparte/engine@0.3.0-alpha.0':
-    resolution: {integrity: sha512-F6cs04q0caE6qgkf36eNjU/gVbVfq0LFbGcPu+WLxiqj1q4LrqgduKUdBeIzgr4xIbZgC18e9I5zdiCJ8/w4Ig==}
+  '@aparte/engine@0.4.0-alpha.0':
+    resolution: {integrity: sha512-8uh+Ge2qbsxzTFt82oDsk9FrMlKmVwGd5RBziALUbjdDM9mPezEApwMUqDNb2/MrZ05r2+0jQeWvTmt2UcBeAA==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
     peerDependenciesMeta:
       '@aparte/core':
         optional: true
 
-  '@aparte/locale-fr@0.3.0-alpha.0':
-    resolution: {integrity: sha512-QI0b4rjGEimny7qM+s12/XjvcQUBRx5hw8sb0fLyy4C67Az28u4hesE6F58W2QjiJTwcGLJcc59UrC1icLLxsw==}
+  '@aparte/locale-fr@0.4.0-alpha.0':
+    resolution: {integrity: sha512-IRox+vPFSnkxdhYDCOh2BXUO3GeGqFmTvO4MXag3rLIuM6Z7Z4pOdSB9xW6xooVqAoT8D2Y4qr1tFI7S3EK/ww==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
 
-  '@aparte/provider-openai-compat@0.3.0-alpha.0':
-    resolution: {integrity: sha512-72+JSqhOVBo0JUDnEWsphF1z0TW9tZPIundW7g3+IbjnFKwUla0XI9gMwF1uv8AuIH1mGEJoG+DAq4PPqQVxZA==}
+  '@aparte/provider-openai-compat@0.4.0-alpha.0':
+    resolution: {integrity: sha512-CWM4q3LIig2oLO519ckX0OcQ3Vmx9zYMifuSZ+qVHFjTKmOPkrhtSUy5yayQBj4ryqe8Ve2gO8fy8byCJQ20Wg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
 
-  '@aparte/react@0.3.0-alpha.0':
-    resolution: {integrity: sha512-pcbs5sEHPY9n2loMswae8HN/hkd1qwcz3R87e4oiq4KZxJZiodVwk9Xvk+l34BkvALZOLSTjpNAc8e5pqZIauw==}
+  '@aparte/react@0.4.0-alpha.0':
+    resolution: {integrity: sha512-uwwx2d250fukD20psrl/aXkZu274NdCdXXDdCPAQ55XwL7hgW00X+/a2jC3Wzk7F7nLXsck8gEYdYGjvczxdVw==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -3086,23 +3086,23 @@ packages:
 
 snapshots:
 
-  '@aparte/core@0.3.0-alpha.0': {}
+  '@aparte/core@0.4.0-alpha.0': {}
 
-  '@aparte/engine@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
+  '@aparte/engine@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)':
     optionalDependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
 
-  '@aparte/locale-fr@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
+  '@aparte/locale-fr@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)':
     dependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
 
-  '@aparte/provider-openai-compat@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)':
+  '@aparte/provider-openai-compat@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)':
     dependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
 
-  '@aparte/react@0.3.0-alpha.0(@aparte/core@0.3.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@aparte/react@0.4.0-alpha.0(@aparte/core@0.4.0-alpha.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@aparte/core': 0.3.0-alpha.0
+      '@aparte/core': 0.4.0-alpha.0
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 

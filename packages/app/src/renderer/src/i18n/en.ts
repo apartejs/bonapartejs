@@ -77,7 +77,6 @@ export const EN: AppTranslations = {
     placeholder: 'Write to bonaparte…',
     errorPrefix: 'Error',
     thinking: 'Reasoning',
-    waiting: 'bonaparte is preparing an answer…',
   },
   status: {
     stopped: 'stopped',

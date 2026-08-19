@@ -123,24 +123,11 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
     isLocal: !options.apiKey,
   });
 
-  // `AparteAIProvider` déclare la surface d'adaptateur de format en optionnel
-  // (un provider peut, à la place, faire ses I/O lui-même) — la factory, elle,
-  // la fournit toujours. On vérifie une fois, avec un message utile, plutôt
-  // que de semer des `!` qui mentiraient le jour où ça changerait.
-  const { buildRequest, parseStream } = provider;
-  if (!buildRequest || !parseStream) {
-    throw new Error(
-      'Le provider OpenAI-compatible n’expose plus buildRequest/parseStream : ' +
-        'la surface d’adaptateur de format d’@aparte/provider-openai-compat a changé.',
-    );
-  }
 
   const headers = (): Record<string, string> => ({
     'content-type': 'application/json',
     ...(options.apiKey
-      ? (provider.authHeaders?.(options.apiKey) ?? {
-          Authorization: `Bearer ${options.apiKey}`,
-        })
+      ? provider.authHeaders(options.apiKey)
       : {}),
   });
 
@@ -190,7 +177,7 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
           : {}),
       });
 
-      const built = buildRequest({
+      const built = provider.buildRequest({
         modelId: options.model,
         messages: toChatMessages(systemPrompt, request.transcript),
         stream: true,
@@ -221,17 +208,8 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
       // serait une bizarrerie du modèle et la masquer ferait disparaître une
       // intention sans laisser de trace.
       const demux = new HermesStreamDemux({ keepToolCalls: true });
-      // CONTOURNEMENT (à retirer dès correction de la lib) : `parseStream`
-      // sort dès `finish_reason: "tool_calls"`, donc AVANT le chunk d'usage
-      // que `include_usage` — demandé par son propre `buildRequest` — envoie
-      // ensuite. Sur un agent, la plupart des tours finissent par un appel :
-      // sans cette dérivation, la barre de statut afficherait zéro token la
-      // moitié du temps. On duplique donc le flux et on relit la queue nous-
-      // mêmes uniquement si l'usage manque.
-      const [forParser, forUsage] = res.body.tee();
-      const reader = parseStream(forParser).getReader();
+      const reader = provider.parseStream(res.body).getReader();
       let usage: AparteUsage | undefined;
-      let drained = false;
 
       try {
         for (;;) {
@@ -260,16 +238,11 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
               throw new Error(value.message);
           }
         }
-        drained = true;
       } finally {
         // Annuler propage jusqu'au corps de la réponse : un `stop` utilisateur
-        // ne doit pas laisser le serveur générer dans le vide. La branche de
-        // secours doit partir avec, sinon elle reste verrouillée pour rien.
+        // ne doit pas laisser le serveur générer dans le vide.
         await reader.cancel().catch(() => undefined);
-        if (!drained) await forUsage.cancel().catch(() => undefined);
       }
-
-      usage ??= await readTrailingUsage(forUsage);
 
       // Un fragment de balise retenu en fin de flux doit ressortir.
       for (const event of demux.flush()) yield event;
@@ -321,59 +294,4 @@ export function createOpenAiCompatBackend(options: OpenAiCompatOptions): Backend
   const noSlots: SlotApi | undefined = undefined;
   backend.slots = noSlots;
   return backend;
-}
-
-/**
- * Dernier objet `usage` d'un flux SSE, ou `undefined`. Filet de secours pour
- * le tour qui finit par un appel d'outil — disparaît avec le contournement.
- */
-async function readTrailingUsage(
-  stream: ReadableStream<Uint8Array>,
-): Promise<AparteUsage | undefined> {
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let found: AparteUsage | undefined;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-    }
-    for (const line of buffer.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('data:')) continue;
-      const raw = trimmed.slice(5).trim();
-      if (raw === '[DONE]') continue;
-      try {
-        const usage = (
-          JSON.parse(raw) as {
-            usage?: {
-              prompt_tokens?: number;
-              completion_tokens?: number;
-              total_tokens?: number;
-              prompt_tokens_details?: { cached_tokens?: number };
-            };
-          }
-        ).usage;
-        if (!usage) continue;
-        found = {
-          inputTokens: usage.prompt_tokens ?? 0,
-          outputTokens: usage.completion_tokens ?? 0,
-          ...(usage.total_tokens !== undefined ? { totalTokens: usage.total_tokens } : {}),
-          ...(usage.prompt_tokens_details?.cached_tokens !== undefined
-            ? { cacheReadTokens: usage.prompt_tokens_details.cached_tokens }
-            : {}),
-        };
-      } catch {
-        // Ligne inexploitable : le filet de secours ne doit jamais faire
-        // échouer un tour par ailleurs réussi.
-      }
-    }
-  } catch {
-    // idem : pas d'usage vaut mieux qu'un tour perdu.
-  } finally {
-    reader.releaseLock();
-  }
-  return found;
 }

@@ -4,9 +4,8 @@ import type {
   CompletionStatsDto,
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
-import { SegmentWriter } from '../lib/segment-writer.js';
 
 interface ChatScreenProps {
   initialEvents: ConversationEventDto[];
@@ -52,18 +51,6 @@ export function ChatScreen({
 
   const chat = useAparteChat(initialMessages);
   const turn = useRef<TurnState | null>(null);
-  // Entre l'envoi et le premier signe de vie il peut s'écouler une minute
-  // (prefill d'un gros contexte) : sans indicateur, l'app a l'air figée.
-  // Le miroir en ref évite un setState par token pour rien.
-  const [waiting, setWaiting] = useState(false);
-  const waitingRef = useRef(false);
-  const stopWaiting = (): void => {
-    if (!waitingRef.current) return;
-    waitingRef.current = false;
-    setWaiting(false);
-  };
-  const stopWaitingRef = useRef(stopWaiting);
-  stopWaitingRef.current = stopWaiting;
 
   // La ref suit `chat` sans le mettre en dépendance de l'effet : le hook
   // renvoie un objet neuf à chaque rendu, et l'abonnement IPC ne doit se
@@ -72,10 +59,6 @@ export function ChatScreen({
   chatRef.current = chat;
 
   useEffect(() => {
-    const writer = new SegmentWriter((segmentId, content) =>
-      chatRef.current.appendToSegment(segmentId, content),
-    );
-
     const ensureThinking = (state: TurnState): string => {
       if (state.thinking) return state.thinking;
       const id = `seg-think-${state.seq++}`;
@@ -91,7 +74,6 @@ export function ChatScreen({
 
     const ensureText = (state: TurnState): string => {
       if (state.text) return state.text;
-      writer.flush();
       // La réflexion se replie dès que la réponse commence : visible pendant
       // qu'elle sert, discrète ensuite — mais jamais effacée.
       if (state.thinking) {
@@ -104,9 +86,8 @@ export function ChatScreen({
       return id;
     };
 
-    /** Fin de tour : rien ne doit rester en attente ni tourner dans le vide. */
+    /** Fin de tour : rien ne doit rester à tourner dans le vide. */
     const finish = (state: TurnState): void => {
-      writer.flush();
       if (state.thinking) chatRef.current.updateSegment(state.thinking, { collapsed: true });
       // Un outil resté « pending » afficherait un spinner éternel : on dit
       // plutôt qu'il n'a pas abouti.
@@ -114,28 +95,25 @@ export function ChatScreen({
         chatRef.current.updateSegment(call.segmentId, { status: 'aborted' });
       }
       turn.current = null;
-      stopWaitingRef.current();
       onStreamingChange(false);
     };
 
     const unsubscribe = window.bonaparte.onAgentEvent((event: AgentEventDto) => {
       const state = turn.current;
       if (!state) return;
-      stopWaitingRef.current();
 
       switch (event.type) {
         case 'token':
-          writer.append(ensureText(state), event.text);
+          chatRef.current.appendToSegment(ensureText(state), event.text);
           break;
 
         case 'thinking':
           // Le raisonnement a sa place dans le fil : un modèle qui réfléchit
           // une minute sans rien afficher passe pour une app plantée.
-          writer.append(ensureThinking(state), event.text);
+          chatRef.current.appendToSegment(ensureThinking(state), event.text);
           break;
 
         case 'tool_call': {
-          writer.flush();
           if (state.thinking) {
             chatRef.current.updateSegment(state.thinking, { collapsed: true });
             state.thinking = null;
@@ -153,7 +131,6 @@ export function ChatScreen({
         }
 
         case 'tool_result': {
-          writer.flush();
           // Les résultats reviennent dans l'ordre des appels ; à nom égal, le
           // plus ancien en attente est le bon.
           const index = state.pendingCalls.findIndex((c) => c.name === event.name);
@@ -173,7 +150,6 @@ export function ChatScreen({
           break;
 
         case 'error':
-          writer.flush();
           chatRef.current.addSegment({
             id: `seg-error-${state.seq++}`,
             type: 'error',
@@ -184,13 +160,13 @@ export function ChatScreen({
       }
     });
 
-    return () => {
-      unsubscribe();
-      writer.dispose();
-    };
+    return unsubscribe;
   }, [onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
 
   const handleSent = (detail: { content: string }): void => {
+    // Bulle assistante vide : la lib la rend « en attente » (points animés,
+    // aria-busy, pas de barre d'actions) tant que rien n'y est écrit. Entre
+    // l'envoi et le premier token il peut s'écouler une minute de prefill.
     chat.appendMessage({
       id: freshId(),
       role: 'assistant',
@@ -198,8 +174,6 @@ export function ChatScreen({
       timestamp: Date.now(),
     });
     turn.current = { thinking: null, text: null, pendingCalls: [], seq: 0 };
-    waitingRef.current = true;
-    setWaiting(true);
     onStreamingChange(true);
     void window.bonaparte.sendMessage(detail.content);
   };
@@ -212,20 +186,10 @@ export function ChatScreen({
         onMessagesChange={chat.setMessages}
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
-        isTyping={waiting}
-        typingText={t.chat.waiting}
         centerWhenEmpty
-        // Composer sans pièces jointes : le défaut de la lib monte un bouton
-        // d'attachement, or notre boucle ne consomme pas encore detail.files —
-        // mieux vaut ne rien promettre que jeter les fichiers en silence.
-        composer={
-          <div className="aparte-composer-shell">
-            <div className="aparte-composer-row">
-              <aparte-composer-input />
-              <aparte-composer-send />
-            </div>
-          </div>
-        }
+        // Pas de pièces jointes : la lib les coupe par défaut, et notre boucle
+        // ne consomme pas encore `detail.files` — mieux vaut ne rien promettre
+        // que jeter les fichiers en silence.
       />
     </div>
   );
