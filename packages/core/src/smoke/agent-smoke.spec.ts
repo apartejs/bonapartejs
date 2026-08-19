@@ -52,6 +52,35 @@ const SECRET = 'ORANGE-42-VERMILLON';
 /** Une minute de marge par tour : un gros modèle prend son temps au premier. */
 const TURN_TIMEOUT_MS = 900_000;
 
+/**
+ * Filet anti-orphelin. `afterAll` ne suffit pas : un Ctrl-C au mauvais moment,
+ * un crash de vitest, et le serveur — donc le modèle en VRAM — survit au test.
+ * On garde une poignée sur l'enfant et on l'abat depuis les chemins de sortie
+ * du process, y compris `exit` (qui n'autorise que du synchrone — notre kill
+ * l'est, par construction).
+ */
+let spawned: ProcessHandle | null = null;
+let guardsInstalled = false;
+
+function installExitGuards(): void {
+  if (guardsInstalled) return;
+  guardsInstalled = true;
+  const killNow = (): void => {
+    const handle = spawned;
+    spawned = null;
+    handle?.kill();
+  };
+  process.on('exit', killNow);
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      killNow();
+      // On a intercepté le signal : c'est à nous de sortir, sinon Ctrl-C
+      // n'aurait plus d'effet.
+      process.exit(130);
+    });
+  }
+}
+
 function spawnServer(binPath: string, args: string[]): ProcessHandle {
   const child = spawn(binPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],
@@ -63,9 +92,12 @@ function spawnServer(binPath: string, args: string[]): ProcessHandle {
     // Seulement ce qui compte : le reste noierait le verdict.
     if (/error|failed|invalid|unknown argument/i.test(line)) console.log(`[llama] ${line}`);
   });
-  return {
+  const handle: ProcessHandle = {
     onExit: (cb) => {
-      child.on('exit', (code) => cb(code));
+      child.on('exit', (code) => {
+        spawned = null;
+        cb(code);
+      });
     },
     kill: () => {
       if (process.platform === 'win32' && child.pid) {
@@ -80,8 +112,13 @@ function spawnServer(binPath: string, args: string[]): ProcessHandle {
           child.kill();
         }
       }
+      spawned = null;
     },
   };
+
+  spawned = handle;
+  installExitGuards();
+  return handle;
 }
 
 interface Collected {
