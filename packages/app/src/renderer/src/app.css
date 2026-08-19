@@ -1253,3 +1253,64 @@ button.primary {
   font-family: var(--bp-mono);
   font-size: 12px;
 }
+
+/* ── Navigateur outillé ─────────────────────────────────────────────────── */
+
+.browser-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 8px;
+}
+
+.browser-bar {
+  display: flex;
+  gap: 6px;
+}
+
+.browser-url {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-1);
+  color: var(--aparte-text);
+  font-family: var(--bp-mono);
+  font-size: 12px;
+}
+
+/* La vue native se pose EXACTEMENT sur cette zone : elle n'est pas dans le
+   DOM, donc ce bloc n'est qu'une réservation de place. */
+.browser-slot {
+  flex: 1;
+  min-height: 140px;
+  border: 1px dashed var(--aparte-border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.browser-console summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.browser-console-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 140px;
+  overflow-y: auto;
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.console-error {
+  color: var(--aparte-error);
+}
+
+.console-warning {
+  color: var(--aparte-secondary);
+}

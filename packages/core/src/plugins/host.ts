@@ -191,7 +191,7 @@ export class PluginHost {
         const def: ToolDef = {
           name,
           description: contribution.description,
-          inputSchema: { type: 'object', properties: {} },
+          inputSchema: contribution.inputSchema ?? { type: 'object', properties: {} },
           effect: contribution.effect,
         };
         this.options.registry.register(def, this.adapt(handler), 'plugin');

@@ -987,6 +987,9 @@ export class Harness {
 
   async shutdown(): Promise<void> {
     await this.saveKv();
+    // Les plugins d'abord : ils tiennent des serveurs de dev, un shell, une
+    // vue native. Tout ça doit tomber avec l'app, pas lui survivre.
+    await this.pluginHost.deactivateAll().catch(() => undefined);
     await this.backend?.stop().catch(() => undefined);
   }
 

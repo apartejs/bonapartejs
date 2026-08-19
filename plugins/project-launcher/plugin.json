@@ -3,16 +3,28 @@
   "name": "Lanceur de projet",
   "version": "0.1.0",
   "description": "Scripts du projet ouvert, lançables d'un clic, avec détection du port.",
-  "entry": { "node": "./dist/node.js", "renderer": "./renderer.tsx" },
+  "entry": {
+    "node": "./dist/node.js",
+    "renderer": "./renderer.tsx"
+  },
   "contributes": {
     "toolingViews": [
-      { "id": "launcher", "title": "Projet", "icon": "▶", "order": 20 }
+      {
+        "id": "launcher",
+        "title": "Projet",
+        "icon": "▶",
+        "order": 20
+      }
     ],
     "agentTools": [
       {
         "name": "list_project_scripts",
         "description": "List the runnable scripts declared in the open project (package.json). Use it before suggesting a command to run.",
-        "effect": "read"
+        "effect": "read",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
       }
     ]
   }

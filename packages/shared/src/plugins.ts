@@ -40,6 +40,12 @@ export const agentToolContributionSchema = z.object({
   description: z.string().min(1).max(400),
   /** Effet dominant — pilote le moteur de permissions. */
   effect: z.enum(['read', 'write', 'execute']),
+  /**
+   * Schéma JSON des arguments. Il n'est PAS décoratif : la grammaire des
+   * appels d'outils en est dérivée, donc un outil sans schéma est un outil
+   * que le modèle ne peut appeler qu'avec un objet vide.
+   */
+  inputSchema: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** Un réglage exposé par le plugin dans le hub Réglages. */
