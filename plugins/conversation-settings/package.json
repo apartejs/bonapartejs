@@ -8,5 +8,12 @@
     "typecheck": "echo ok",
     "test": "echo ok"
   },
+  "dependencies": {
+    "@aparte/bonaparte-plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "react": "^19.2.8"
+  },
   "nx": { "tags": ["scope:plugin"] }
 }

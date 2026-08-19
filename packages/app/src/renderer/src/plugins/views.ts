@@ -15,7 +15,11 @@ import type { ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
  * une import map partageant React — le point d'extension est identifié, il
  * n'est pas ouvert en v1 (cf. plan, risque « double React »).
  */
-const modules = import.meta.glob('../../../../../plugins/*/renderer.tsx');
+// SIX niveaux : ce fichier est dans packages/app/src/renderer/src/plugins/,
+// et `plugins/` est à la RACINE du dépôt. À cinq, on vise `packages/plugins/`,
+// qui n'existe pas — le glob ne ramasse alors rien, en silence, et chaque vue
+// s'affiche « n'a pas pu être chargée ».
+const modules = import.meta.glob('../../../../../../plugins/*/renderer.tsx');
 
 export type ToolingViewComponent = ComponentType<ToolingViewProps>;
 
