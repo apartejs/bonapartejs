@@ -77,6 +77,20 @@ export class KvStore {
     return join(this.manifestDir, `${conversationId}.manifest.json`);
   }
 
+  /**
+   * Un état existe-t-il pour cette conversation ? Sert au listing : promettre
+   * une reprise instantanée dans le menu sans avoir de quoi la tenir serait
+   * un mensonge — et c'est justement notre argument produit.
+   */
+  async has(conversationId: string): Promise<boolean> {
+    try {
+      await readFile(this.manifestPath(conversationId), 'utf8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async saveState(
     slots: SlotApi,
     idSlot: number,

@@ -23,6 +23,9 @@ export const IPC = {
   conversationHistory: 'conversation.history',
   backendStatus: 'backend.status',
   conversationOpen: 'conversation.open',
+  conversationList: 'conversation.list',
+  conversationCreate: 'conversation.create',
+  conversationRename: 'conversation.rename',
   agentSend: 'agent.send',
   kvSave: 'kv.save',
   setupSuggest: 'setup.suggest',
@@ -92,9 +95,14 @@ export interface AppConfigDto {
     path: string;
     nCtx?: number;
   };
-  /** Dernier projet ouvert, et l'historique récent. */
-  projectRoot?: string;
+  /**
+   * Historique des dossiers récents — de l'app, pas d'une conversation. Le
+   * projet lui-même appartient à la conversation ouverte : on doit pouvoir
+   * discuter sans dossier, et tenir deux conversations sur deux dossiers.
+   */
   recentProjects?: string[];
+  /** Dernière conversation ouverte, rouverte au démarrage suivant. */
+  currentConversationId?: string;
   mode?: PlayModeDto;
   /** Langue de l'utilisateur — pilote l'UI ET la langue de réponse du modèle. */
   locale?: BonaparteLocale;
@@ -107,6 +115,19 @@ export interface ProjectDto {
   root: string;
   name: string;
   recents: string[];
+}
+
+/** Une conversation dans la liste du menu — assez pour l'afficher et choisir. */
+export interface ConversationSummaryDto {
+  id: string;
+  title: string;
+  updatedAt: string;
+  /** Nom du dossier de projet, si la conversation en a un. */
+  projectName?: string;
+  /** Modèle épinglé, s'il l'est. */
+  modelName?: string;
+  /** Un état KV existe sur disque : la reprise sera instantanée. */
+  hasKvState: boolean;
 }
 
 /** Demande d'autorisation poussée au renderer pendant la boucle. */
@@ -210,6 +231,14 @@ export interface BonaparteBridge {
   registerBackend(config: BackendConfigDto): Promise<void>;
   /** Historique seul, sans réveiller le moteur. */
   conversationHistory(): Promise<ConversationOpenReplyDto>;
+  /** Toutes les conversations, la plus récemment touchée en tête. */
+  listConversations(): Promise<ConversationSummaryDto[]>;
+  /**
+   * Crée une conversation et rend son id. Le projet est optionnel : discuter
+   * sans dossier est un usage normal, pas un état dégradé.
+   */
+  createConversation(projectRoot?: string): Promise<string>;
+  renameConversation(id: string, title: string): Promise<void>;
   openConversation(
     id?: string,
     modelPath?: string,

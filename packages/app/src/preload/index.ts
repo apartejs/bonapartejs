@@ -30,6 +30,11 @@ const api: BonaparteBridge = {
     ipcRenderer.invoke(IPC.backendStart, config),
   registerBackend: (config) => ipcRenderer.invoke(IPC.backendRegister, config),
   conversationHistory: () => ipcRenderer.invoke(IPC.conversationHistory),
+  listConversations: () => ipcRenderer.invoke(IPC.conversationList),
+  createConversation: (projectRoot?: string) =>
+    ipcRenderer.invoke(IPC.conversationCreate, projectRoot),
+  renameConversation: (id: string, title: string) =>
+    ipcRenderer.invoke(IPC.conversationRename, id, title),
   openConversation: (id?: string, modelPath?: string, nCtx?: number) =>
     ipcRenderer.invoke(IPC.conversationOpen, id, modelPath, nCtx),
   sendMessage: (text: string): Promise<void> =>

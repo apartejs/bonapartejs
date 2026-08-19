@@ -21,6 +21,39 @@ afterEach(async () => {
 });
 
 describe('ConversationStore', () => {
+  it('rattache le projet à la conversation, pas à l’application', async () => {
+    // Le projet appartient à la conversation : deux conversations ouvertes
+    // sur deux dossiers différents doivent coexister sans se marcher dessus.
+    const store = await makeStore();
+    await store.create('a', { projectRoot: '/projets/alpha' });
+    await store.create('b', { projectRoot: '/projets/beta' });
+
+    expect((await store.meta('a')).projectRoot).toBe('/projets/alpha');
+    expect((await store.meta('b')).projectRoot).toBe('/projets/beta');
+  });
+
+  it('une conversation sans projet reste licite', async () => {
+    const store = await makeStore();
+    await store.create('libre');
+    expect((await store.meta('libre')).projectRoot).toBeUndefined();
+  });
+
+  it('setProjectRoot attache un dossier après coup', async () => {
+    const store = await makeStore();
+    await store.create('c');
+    await store.setProjectRoot('c', '/projets/gamma');
+    expect((await store.meta('c')).projectRoot).toBe('/projets/gamma');
+  });
+
+  it('setTitle renomme sans toucher au reste', async () => {
+    const store = await makeStore();
+    await store.create('d', { title: 'Sans titre', projectRoot: '/projets/delta' });
+    await store.setTitle('d', 'Refonte du parser');
+    const meta = await store.meta('d');
+    expect(meta.title).toBe('Refonte du parser');
+    expect(meta.projectRoot).toBe('/projets/delta');
+  });
+
   it('create puis listMeta expose la conversation', async () => {
     const store = await makeStore();
     await store.create('conv-1', { title: 'Ma conversation' });

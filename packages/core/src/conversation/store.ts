@@ -25,12 +25,20 @@ export interface ConversationMeta {
   backendState?: unknown;
   /** Inventaire d'outils au moment du figeage (base des deltas). */
   toolNames?: string[];
+  /**
+   * Dossier de projet de CETTE conversation — absent = discussion sans outils
+   * disque. Le projet appartient à la conversation, pas à l'application : on
+   * doit pouvoir tenir deux conversations sur deux dossiers différents, et
+   * changer de projet ne doit pas réécrire l'historique d'une autre.
+   */
+  projectRoot?: string;
 }
 
 export interface CreateConversationOptions {
   title?: string;
   modelPath?: string;
   nCtx?: number;
+  projectRoot?: string;
 }
 
 /**
@@ -80,6 +88,7 @@ export class ConversationStore {
       updatedAt: now,
       ...(options.modelPath ? { modelPath: options.modelPath } : {}),
       ...(options.nCtx !== undefined ? { nCtx: options.nCtx } : {}),
+      ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
     };
     await mkdir(this.convDir(id), { recursive: true });
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
@@ -93,6 +102,22 @@ export class ConversationStore {
     } catch {
       throw new Error(`Conversation inconnue : ${id}`);
     }
+  }
+
+  /** Rattache (ou remplace) le dossier de projet de la conversation. */
+  async setProjectRoot(id: string, projectRoot: string): Promise<void> {
+    const meta = await this.meta(id);
+    meta.projectRoot = projectRoot;
+    meta.updatedAt = new Date().toISOString();
+    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+  }
+
+  /** Renomme la conversation (le reste de la méta est préservé). */
+  async setTitle(id: string, title: string): Promise<void> {
+    const meta = await this.meta(id);
+    meta.title = title;
+    meta.updatedAt = new Date().toISOString();
+    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }
 
   async setModel(id: string, modelPath: string, nCtx?: number): Promise<void> {

@@ -10,7 +10,7 @@ import { execFile, spawn, spawnSync } from 'node:child_process';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import { createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import {
   bonaparteDataDir,
   builtinTools,
@@ -41,6 +41,7 @@ import {
   type BackendConfigDto,
   type BackendStatusDto,
   type ConversationEventDto,
+  type ConversationSummaryDto,
   type ConversationOpenReplyDto,
   type EndpointProbeDto,
   type ModelInfoDto,
@@ -55,9 +56,6 @@ import type { BrowserWindow, IpcMain } from 'electron';
 /** Seules destinations externes autorisées depuis le renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
-const DEFAULT_CONVERSATION = 'default';
-/** Conversation hors projet : discuter ne doit jamais exiger un dossier. */
-const NO_PROJECT_CONVERSATION = 'no-project-default';
 const MANAGED_PORT = 8763;
 
 // Le prompt système est désormais construit par ChatSession depuis
@@ -214,16 +212,25 @@ async function killOrphanedServer(): Promise<void> {
   }
 }
 
-/** Identifiant de conversation propre au projet (les slots KV sont globaux). */
-function conversationIdFor(projectRoot: string, name = 'default'): string {
-  const hash = createHash('sha256').update(projectRoot).digest('hex').slice(0, 8);
-  return `${hash}-${name}`;
+/**
+ * Identifiant de conversation. Il ne dérive PLUS du projet : une conversation
+ * existe pour elle-même, avec ou sans dossier, et on doit pouvoir en tenir
+ * plusieurs sur le même projet. L'horodatage en tête garde les dossiers
+ * lisibles et triés sur disque.
+ */
+function newConversationId(): string {
+  return `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
 }
 
 export class Harness {
   private window: BrowserWindow | null = null;
   private engine: BackendConfigDto | null = null;
+  /**
+   * Projet de la conversation OUVERTE — pas de l'application. Miroir en
+   * mémoire de `meta.projectRoot`, tenu à jour à chaque bascule.
+   */
   private projectRoot: string | null = null;
+  private currentConversationId: string | null = null;
   private readonly registry = new ToolRegistry();
   private readonly permissions = new PermissionEngine('repetition');
   private readonly pendingApprovals = new Map<
@@ -271,9 +278,61 @@ export class Harness {
     // Avant tout : un serveur laissé par une session morte brutalement.
     await killOrphanedServer();
     const config = await this.loadConfig();
-    if (config.projectRoot) this.projectRoot = config.projectRoot;
+    // On rouvre la dernière conversation, et c'est ELLE qui dit s'il y a un
+    // projet. Rien n'est chargé en VRAM ici : seulement de la méta.
+    if (config.currentConversationId && (await this.store.exists(config.currentConversationId))) {
+      this.currentConversationId = config.currentConversationId;
+      this.projectRoot = (await this.store.meta(config.currentConversationId)).projectRoot ?? null;
+    }
     this.syncToolsWithProject();
     if (config.mode) this.permissions.setMode(config.mode as PlayMode);
+  }
+
+  /** Conversation courante, créée à la volée si l'app n'en a encore aucune. */
+  private async ensureConversationId(): Promise<string> {
+    if (this.currentConversationId) return this.currentConversationId;
+    const metas = await this.store.listMeta();
+    const id = metas[0]?.id ?? (await this.createConversation());
+    await this.setCurrentConversation(id);
+    return id;
+  }
+
+  private async setCurrentConversation(id: string): Promise<void> {
+    this.currentConversationId = id;
+    this.projectRoot = (await this.store.meta(id)).projectRoot ?? null;
+    this.syncToolsWithProject();
+    const config = await this.loadConfig();
+    await this.saveConfig({ ...config, currentConversationId: id });
+  }
+
+  async listConversations(): Promise<ConversationSummaryDto[]> {
+    const metas = await this.store.listMeta();
+    return Promise.all(
+      metas.map(async (meta) => ({
+        id: meta.id,
+        title: meta.title,
+        updatedAt: meta.updatedAt,
+        ...(meta.projectRoot ? { projectName: basename(meta.projectRoot) } : {}),
+        ...(meta.modelPath ? { modelName: modelDisplayName(meta.modelPath) } : {}),
+        // Une reprise instantanée se promet sur pièce : l'état doit exister.
+        hasKvState: await this.kv.has(meta.id),
+      })),
+    );
+  }
+
+  async createConversation(projectRoot?: string): Promise<string> {
+    const id = newConversationId();
+    const defaults = (await this.loadConfig()).defaultModel;
+    await this.store.create(id, {
+      ...(projectRoot ? { projectRoot } : {}),
+      ...(defaults?.path ? { modelPath: defaults.path } : {}),
+      ...(defaults?.nCtx !== undefined ? { nCtx: defaults.nCtx } : {}),
+    });
+    return id;
+  }
+
+  async renameConversation(id: string, title: string): Promise<void> {
+    await this.store.setTitle(id, title);
   }
 
   private project(recents: string[] = []): ProjectDto | null {
@@ -298,6 +357,10 @@ export class Harness {
     const picked = result.canceled ? null : (result.filePaths[0] ?? null);
     if (!picked) return null;
 
+    // Le dossier est attaché à la CONVERSATION ouverte, pas à l'application :
+    // une autre conversation garde le sien, ou n'en a pas.
+    const id = await this.ensureConversationId();
+    await this.store.setProjectRoot(id, picked);
     this.projectRoot = picked;
     this.session = null;
     this.syncToolsWithProject();
@@ -305,7 +368,7 @@ export class Harness {
     const config = await this.loadConfig();
     const recents = [picked, ...(config.recentProjects ?? []).filter((p) => p !== picked)]
       .slice(0, 8);
-    await this.saveConfig({ ...config, projectRoot: picked, recentProjects: recents });
+    await this.saveConfig({ ...config, recentProjects: recents });
     return this.project(recents);
   }
 
@@ -534,10 +597,16 @@ export class Harness {
     nCtx?: number,
   ): Promise<ConversationOpenReplyDto> {
     if (!this.engine) throw new Error('Moteur non configuré.');
-    // Sans projet on discute quand même : seuls les outils disque manquent.
-    id ??= this.projectRoot
-      ? conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION)
-      : NO_PROJECT_CONVERSATION;
+    id ??= await this.ensureConversationId();
+
+    // Bascule : l'état de la conversation qu'on quitte doit être sauvegardé
+    // AVANT d'en ouvrir une autre, sinon son cache est perdu et la reprise
+    // coûtera un re-prefill complet — exactement ce qu'on prétend éviter.
+    if (this.session && this.currentConversationId && this.currentConversationId !== id) {
+      await this.session.save().catch(() => false);
+      this.session = null;
+    }
+    if (await this.store.exists(id)) await this.setCurrentConversation(id);
 
     // Résout modèle + nCtx : méta épinglée > paramètres > défaut des Réglages.
     const defaults = (await this.loadConfig()).defaultModel;
@@ -628,11 +697,13 @@ export class Harness {
    * n'a lieu qu'au premier message.
    */
   async conversationHistory(): Promise<ConversationOpenReplyDto> {
-    const id = this.projectRoot
-      ? conversationIdFor(this.projectRoot, DEFAULT_CONVERSATION)
-      : NO_PROJECT_CONVERSATION;
-    if (!(await this.store.exists(id))) {
-      return { conversationId: id, events: [], restore: { restored: false, reason: 'missing' } };
+    const id = this.currentConversationId;
+    if (!id || !(await this.store.exists(id))) {
+      return {
+        conversationId: id ?? '',
+        events: [],
+        restore: { restored: false, reason: 'missing' },
+      };
     }
     const meta = await this.store.meta(id);
     const events = await this.store.loadEvents(id);
@@ -803,6 +874,13 @@ export class Harness {
       this.registerEngine(config),
     );
     ipcMain.handle(IPC.conversationHistory, () => this.conversationHistory());
+    ipcMain.handle(IPC.conversationList, () => this.listConversations());
+    ipcMain.handle(IPC.conversationCreate, (_e, projectRoot?: string) =>
+      this.createConversation(projectRoot),
+    );
+    ipcMain.handle(IPC.conversationRename, (_e, id: string, title: string) =>
+      this.renameConversation(id, title),
+    );
     ipcMain.handle(
       IPC.conversationOpen,
       (_e, id?: string, modelPath?: string, nCtx?: number) =>
