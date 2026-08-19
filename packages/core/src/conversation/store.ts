@@ -33,6 +33,11 @@ export interface ConversationMeta {
    */
   projectRoot?: string;
   /**
+   * Projet en vigueur au moment où le prompt système a été FIGÉ. Comparé au
+   * projet courant pour savoir s'il faut annoncer un changement de décor.
+   */
+  frozenProjectRoot?: string;
+  /**
    * Surcharges de réglages de CETTE conversation — échantillonnage seulement
    * (les paramètres de lancement entrent au manifest KV et restent globaux).
    */
@@ -152,6 +157,14 @@ export class ConversationStore {
     const meta = await this.meta(id);
     meta.backendState = backendState;
     meta.toolNames = [...toolNames];
+    await this.writeMeta(meta);
+  }
+
+  /** Mémorise le projet en vigueur au figeage (ou après annonce du delta). */
+  async setFrozenProjectRoot(id: string, projectRoot: string | undefined): Promise<void> {
+    const meta = await this.meta(id);
+    if (projectRoot === undefined) delete meta.frozenProjectRoot;
+    else meta.frozenProjectRoot = projectRoot;
     await this.writeMeta(meta);
   }
 

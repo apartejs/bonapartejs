@@ -49,12 +49,14 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     options.projectRoot
       ? `Open project: ${options.projectRoot}\n` +
         'All tool paths are relative to this root, and you cannot step outside it.'
-      : // Discuter sans projet est un usage normal, pas un état dégradé : le
-        // modèle ne doit pas ouvrir la conversation en réclamant un dossier.
-        'No project folder is open, so file and shell tools are unavailable ' +
-        'here. This is a normal way to work: answer, explain and reason ' +
-        'directly. Bring up opening a project only if the user asks for ' +
-        'something that actually requires touching their files.',
+      : // Le projet est le PÉRIMÈTRE des outils, pas leur condition
+        // d'existence : sans dossier ils marchent toujours, simplement sans
+        // confinement. Le modèle ne doit ni réclamer un dossier, ni croire
+        // qu'il ne peut rien lire.
+        'No project folder is open. Your tools still work: use absolute paths, ' +
+        'or relative ones, which resolve from the user home directory. ' +
+        'Nothing confines them to a folder, so name the exact path you are ' +
+        'about to touch when it matters.',
     'Available tools:\n' + renderToolInventory(options.tools),
     ...(options.toolCallFormat === false
       ? []
@@ -77,6 +79,36 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   }
 
   return blocks.join('\n\n');
+}
+
+/**
+ * Message appendé quand le PROJET change en cours de conversation.
+ *
+ * Le prompt système est figé à la création : s'il a été figé sans projet et
+ * qu'un dossier est ouvert ensuite, le modèle continuerait de répondre qu'il
+ * ne peut pas lire de fichiers — alors que les outils sont bel et bien là.
+ * Le delta d'inventaire annonce les outils ; il fallait aussi annoncer le
+ * décor dans lequel ils travaillent.
+ */
+export function renderProjectDelta(
+  previous: string | undefined,
+  current: string | undefined,
+): string | null {
+  if (previous === current) return null;
+
+  if (current) {
+    return (
+      '[project update]\n' +
+      `A project folder is now open: ${current}\n` +
+      'All tool paths resolve inside this root, and you cannot step outside ' +
+      'it. This supersedes anything said earlier about no project being open.'
+    );
+  }
+  return (
+    '[project update]\n' +
+    'The project folder was closed, so file and shell tools are no longer ' +
+    'available. You can still discuss and reason.'
+  );
 }
 
 /** Message appendé quand l'outillage change en cours de conversation. */

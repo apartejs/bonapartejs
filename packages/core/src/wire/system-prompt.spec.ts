@@ -3,6 +3,7 @@ import type { ToolDef } from '../tools/types.js';
 import {
   buildSystemPrompt,
   renderInventoryDelta,
+  renderProjectDelta,
   renderToolInventory,
   renderToolResults,
 } from './system-prompt.js';
@@ -37,6 +38,39 @@ describe('renderToolInventory', () => {
   });
 });
 
+describe('renderProjectDelta', () => {
+  it('annonce un projet ouvert APRÈS le figeage du prompt', () => {
+    // Le prompt système est figé à la création : s'il disait « aucun projet »
+    // et qu'un dossier est ouvert ensuite, le modèle n'a aucun moyen de
+    // l'apprendre — il continuera de répondre qu'il ne peut pas lire de
+    // fichiers, alors que les outils sont là.
+    const message = renderProjectDelta(undefined, 'D:/projets/app');
+    expect(message).toBeTruthy();
+    expect(message).toContain('D:/projets/app');
+    expect(message).toMatch(/now open/i);
+  });
+
+  it('annonce la fermeture du projet', () => {
+    const message = renderProjectDelta('D:/projets/app', undefined);
+    expect(message).toMatch(/no longer/i);
+  });
+
+  it('annonce un changement de dossier', () => {
+    const message = renderProjectDelta('D:/a', 'D:/b');
+    expect(message).toContain('D:/b');
+  });
+
+  it('ne dit rien quand rien n’a changé', () => {
+    expect(renderProjectDelta('D:/a', 'D:/a')).toBeNull();
+    expect(renderProjectDelta(undefined, undefined)).toBeNull();
+  });
+
+  it('reste en anglais : c’est du protocole, pas de l’interface', () => {
+    const message = renderProjectDelta(undefined, 'D:/projets/app') ?? '';
+    expect(message).not.toMatch(/[éèàçù]/);
+  });
+});
+
 describe('buildSystemPrompt', () => {
   const base = { projectRoot: 'D:\\projets\\app', tools: [tool('read_file')] };
 
@@ -62,10 +96,12 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('<tool_call>');
   });
 
-  it('n’invite pas le modèle à réclamer un dossier quand il n’y en a pas', () => {
-    // Discuter sans projet est un usage normal, pas un état dégradé à corriger.
-    const prompt = buildSystemPrompt({ tools: [] });
-    expect(prompt).toMatch(/unavailable/i);
+  it('sans projet, annonce que les outils marchent quand même', () => {
+    // Le projet est le périmètre des outils, pas leur condition d'existence.
+    // Dire l'inverse produisait un modèle qui refusait de lire un fichier.
+    const prompt = buildSystemPrompt({ tools: [tool('read_file')] });
+    expect(prompt).toMatch(/tools still work/i);
+    expect(prompt).not.toMatch(/unavailable/i);
     expect(prompt).not.toMatch(/ask (them|the user) to open/i);
   });
 

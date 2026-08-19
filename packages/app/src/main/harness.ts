@@ -275,14 +275,21 @@ export class Harness {
    * l'inventaire (donc inémettables), et en ouvrir un les annonce par un
    * delta d'inventaire dans les conversations en cours.
    */
-  private syncToolsWithProject(): void {
-    const registered = this.registry.list().length > 0;
-    if (this.projectRoot && !registered) {
-      for (const tool of builtinTools()) {
+  /**
+   * Les outils intégrés sont TOUJOURS disponibles. Le projet est leur
+   * périmètre — avec lui, les chemins y sont confinés ; sans lui, ils partent
+   * du dossier personnel — mais il n'a jamais été leur condition d'existence.
+   *
+   * (L'ancienne version conditionnait l'enregistrement à « le registre est
+   * vide », ce que les outils de plugins rendaient faux : les outils fichiers
+   * ne s'enregistraient plus jamais, en silence.)
+   */
+  private registerBuiltinTools(): void {
+    const present = new Set(this.registry.list().map((tool) => tool.name));
+    for (const tool of builtinTools()) {
+      if (!present.has(tool.def.name)) {
         this.registry.register(tool.def, tool.handler, 'builtin');
       }
-    } else if (!this.projectRoot && registered) {
-      for (const tool of builtinTools()) this.registry.unregister(tool.def.name);
     }
   }
 
@@ -302,7 +309,7 @@ export class Harness {
       this.currentConversationId = config.currentConversationId;
       this.projectRoot = (await this.store.meta(config.currentConversationId)).projectRoot ?? null;
     }
-    this.syncToolsWithProject();
+    this.registerBuiltinTools();
     if (config.mode) this.permissions.setMode(config.mode as PlayMode);
   }
 
@@ -318,7 +325,7 @@ export class Harness {
   private async setCurrentConversation(id: string): Promise<void> {
     this.currentConversationId = id;
     this.projectRoot = (await this.store.meta(id)).projectRoot ?? null;
-    this.syncToolsWithProject();
+    this.registerBuiltinTools();
     const config = await this.loadConfig();
     await this.saveConfig({ ...config, currentConversationId: id });
   }
@@ -525,7 +532,7 @@ export class Harness {
     await this.store.setProjectRoot(id, picked);
     this.projectRoot = picked;
     this.session = null;
-    this.syncToolsWithProject();
+    this.registerBuiltinTools();
 
     const config = await this.loadConfig();
     const recents = [picked, ...(config.recentProjects ?? []).filter((p) => p !== picked)]

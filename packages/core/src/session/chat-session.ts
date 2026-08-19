@@ -20,7 +20,7 @@ import type {
 } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import { renderInventoryDelta } from '../wire/system-prompt.js';
+import { renderInventoryDelta, renderProjectDelta } from '../wire/system-prompt.js';
 
 export interface ChatSessionOptions {
   backend: Backend;
@@ -111,6 +111,10 @@ export class ChatSession {
     // L'outillage a-t-il bougé depuis le figeage ? Si oui : message de
     // service APPENDÉ (jamais de re-rendu du prompt système).
     await session.announceInventoryDelta(meta.toolNames);
+    // Le décor a-t-il changé depuis le figeage ? Même règle : on appende.
+    if (meta.toolNames !== undefined) {
+      await session.announceProjectDelta(meta.frozenProjectRoot);
+    }
 
     if (!backend.slots) {
       return { session, restore: { restored: false, reason: 'unsupported' } };
@@ -140,6 +144,10 @@ export class ChatSession {
         backend.exportState?.(this.conversationId),
         names,
       );
+      // Le décor est figé en même temps que l'inventaire : sans ça, la
+      // réouverture croirait qu'un projet vient d'apparaître et annoncerait
+      // un changement qui n'a pas eu lieu.
+      await store.setFrozenProjectRoot(this.conversationId, this.options.projectRoot);
       return;
     }
 
@@ -148,13 +156,32 @@ export class ChatSession {
     );
     if (!message) return;
 
-    this.transcript.push({ role: 'service', text: message });
-    await store.appendEvent(this.conversationId, {
+    await this.appendService(message);
+    await store.setFrozenTools(this.conversationId, names);
+  }
+
+  /**
+   * Le prompt système est figé à la création : s'il a été figé sans projet et
+   * qu'un dossier est ouvert ensuite, le modèle croirait encore travailler
+   * sans décor. On l'annonce par un message APPENDÉ — jamais de re-rendu.
+   */
+  private async announceProjectDelta(frozen: string | undefined): Promise<void> {
+    const current = this.options.projectRoot;
+    const message = renderProjectDelta(frozen, current);
+    if (!message) return;
+
+    await this.appendService(message);
+    await this.options.store.setFrozenProjectRoot(this.conversationId, current);
+  }
+
+  /** Message de service : dans le transcript ET dans le log, jamais dans l'UI. */
+  private async appendService(text: string): Promise<void> {
+    this.transcript.push({ role: 'service', text });
+    await this.options.store.appendEvent(this.conversationId, {
       type: 'service',
-      text: message,
+      text,
       at: new Date().toISOString(),
     });
-    await store.setFrozenTools(this.conversationId, names);
   }
 
   /**

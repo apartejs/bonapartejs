@@ -9,7 +9,8 @@
 
 import { exec } from 'node:child_process';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { displayPath, resolveInProject } from '../../project/paths.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolResult } from '../types.js';
 
@@ -50,12 +51,27 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Racine de travail : le projet s'il y en a un, sinon le dossier personnel.
+ * Les outils ne disparaissent pas faute de projet — ils cessent seulement
+ * d'être confinés.
+ */
+function workRoot(ctx: ToolContext): string {
+  return ctx.projectRoot ?? homedir();
+}
+
 /** Résout un chemin ou rend le message d'erreur destiné au modèle. */
 function inProject(
   ctx: ToolContext,
   requested: string,
 ): { path: string } | { error: string } {
   try {
+    if (!ctx.projectRoot) {
+      // Sans projet : un chemin absolu passe tel quel, un relatif part du
+      // dossier personnel. Rien ne confine — c'est le mode de jeu qui décide
+      // de ce qui se fait sans demander.
+      return { path: resolve(homedir(), requested.replace(/\\/g, '/')) };
+    }
     return { path: resolveInProject(ctx.projectRoot, requested) };
   } catch (error) {
     return { error: describeError(error) };
@@ -164,7 +180,7 @@ const writeFileTool: BuiltinTool = {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
     return ok(
-      `Wrote: ${displayPath(ctx.projectRoot, resolved.path)} (${content.length} characters)`,
+      `Wrote: ${displayPath(workRoot(ctx), resolved.path)} (${content.length} characters)`,
     );
   },
 };
@@ -224,7 +240,7 @@ const editFileTool: BuiltinTool = {
     } catch (error) {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
-    return ok(`Edited: ${displayPath(ctx.projectRoot, resolved.path)}`);
+    return ok(`Edited: ${displayPath(workRoot(ctx), resolved.path)}`);
   },
 };
 
@@ -291,7 +307,7 @@ const grepFilesTool: BuiltinTool = {
     if ('error' in resolved) return ko(resolved.error);
 
     const hits: string[] = [];
-    for (const file of await walkFiles(ctx.projectRoot, resolved.path)) {
+    for (const file of await walkFiles(workRoot(ctx), resolved.path)) {
       if (ctx.signal.aborted) break;
       let content: string;
       try {
@@ -299,7 +315,7 @@ const grepFilesTool: BuiltinTool = {
       } catch {
         continue; // binaire ou illisible : ignoré
       }
-      const rel = displayPath(ctx.projectRoot, file);
+      const rel = displayPath(workRoot(ctx), file);
       content.split('\n').forEach((line, index) => {
         if (regex.test(line)) hits.push(`${rel}:${index + 1}: ${line.trim()}`);
       });
@@ -342,7 +358,7 @@ const runShellTool: BuiltinTool = {
       exec(
         command,
         {
-          cwd: ctx.projectRoot,
+          cwd: workRoot(ctx),
           timeout,
           windowsHide: true,
           maxBuffer: 10 * 1024 * 1024,

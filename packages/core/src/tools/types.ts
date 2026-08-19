@@ -18,8 +18,13 @@ export interface ToolDef {
 }
 
 export interface ToolContext {
-  /** Racine du projet ouvert : tout chemin d'outil s'y résout. */
-  projectRoot: string;
+  /**
+   * Projet ouvert. ABSENT est un cas normal : les outils existent quand même,
+   * le projet n'est pas leur condition d'existence mais leur PÉRIMÈTRE. Avec
+   * un projet, tout chemin y est confiné ; sans, les chemins relatifs partent
+   * du dossier personnel et rien n'est confiné.
+   */
+  projectRoot?: string;
   signal: AbortSignal;
 }
 

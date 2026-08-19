@@ -271,3 +271,21 @@ describe('run_shell', () => {
     expect(res.ok).toBe(false);
   });
 });
+
+describe('sans projet ouvert', () => {
+  it('les outils existent quand même et lisent un chemin absolu', async () => {
+    // Le projet est le PÉRIMÈTRE des outils, pas leur condition d'existence :
+    // discuter sans dossier ne doit pas priver l'agent de savoir lire.
+    const dir = await project({ 'note.txt': 'contenu hors projet' });
+    const file = join(dir, 'note.txt');
+
+    const read = builtinTools().find((t) => t.def.name === 'read_file')!;
+    const result = await read.handler(
+      { path: file },
+      { signal: new AbortController().signal },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.content).toContain('contenu hors projet');
+  });
+});
