@@ -20,8 +20,8 @@
  * Ces éléments sont montés dans les slots `footerLeft` / `footerRight`
  * d'`<AparteChat>` : la lib place et aligne la rangée, on ne fournit que le
  * contenu. Une barre séparée sous le composeur avait d'abord été bricolée —
- * les slots existaient, ils n'étaient simplement documentés que dans les
- * typings (friction consignée).
+ * les slots existaient et sont bel et bien documentés, mais en une clause au
+ * milieu d'une phrase, sans exemple (friction consignée).
  */
 
 .mode-wrap {
