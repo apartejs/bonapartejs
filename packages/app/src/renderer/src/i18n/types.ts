@@ -155,6 +155,11 @@ export interface AppTranslations {
     save: string;
     cancel: string;
   };
+  temperature: {
+    label: string;
+    /** La conversation surcharge le défaut global. */
+    thisConversation: string;
+  };
   /** Disposition du shell : flancs repliables et redimensionnables. */
   layout: {
     collapseSidebar: string;

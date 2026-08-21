@@ -127,3 +127,92 @@
   line-height: 1.45;
   color: var(--aparte-text-secondary);
 }
+
+/* ── Température, dans la rangée du composeur ──────────────────────────── */
+
+.temp-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.temp-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-family: var(--bp-mono);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--aparte-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.temp-button:hover {
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+  border-color: var(--aparte-border);
+}
+
+/* Réglée POUR cette conversation : elle se distingue d'une valeur héritée,
+   sinon on ne sait pas si on lit un défaut ou un choix. */
+.temp-button-set {
+  color: var(--aparte-text);
+  border-color: var(--aparte-border);
+}
+
+.temp-glyph {
+  opacity: 0.65;
+}
+
+.temp-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 248px;
+  padding: 8px 10px 10px;
+  background: var(--aparte-surface-1);
+  border: 1px solid var(--aparte-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 38px rgb(0 0 0 / 42%);
+}
+
+.temp-menu input[type='range'] {
+  width: 100%;
+  margin: 2px 0 6px;
+  accent-color: var(--aparte-primary);
+}
+
+.temp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.temp-value {
+  font-family: var(--bp-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--aparte-text);
+}
+
+.temp-origin {
+  flex: 1;
+  font-size: 10.5px;
+  color: var(--aparte-text-muted);
+}
+
+.temp-reset {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.temp-help {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--aparte-text-muted);
+}

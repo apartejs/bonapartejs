@@ -427,6 +427,7 @@ export function App() {
               mode={mode}
               onModeChange={changeMode}
               modelName={opened.modelName ?? null}
+              conversationId={opened.conversationId}
             />
           </div>
           ) : null}

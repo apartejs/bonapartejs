@@ -153,6 +153,10 @@ export const EN: AppTranslations = {
     save: 'Save',
     cancel: 'Cancel',
   },
+  temperature: {
+    label: 'Temperature',
+    thisConversation: 'set for this conversation',
+  },
   layout: {
     collapseSidebar: 'Collapse conversations',
     expandSidebar: 'Show conversations',

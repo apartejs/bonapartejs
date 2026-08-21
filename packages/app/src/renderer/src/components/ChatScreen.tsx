@@ -8,6 +8,7 @@ import type {
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { ModeSelector } from './ModeSelector.js';
+import { TemperatureControl } from './TemperatureControl.js';
 
 interface ChatScreenProps {
   initialEvents: ConversationEventDto[];
@@ -16,8 +17,10 @@ interface ChatScreenProps {
   /** Mode de jeu, monté dans le pied du composeur : il décide du prochain tour. */
   mode: PlayModeDto;
   onModeChange: (mode: PlayModeDto) => void;
-  /** Modèle de la conversation — pied droit, comme le suggère la lib. */
+  /** Modèle de la conversation — poussé en fin de rangée. */
   modelName: string | null;
+  /** La température est portée par la conversation : elle se relit au changement. */
+  conversationId: string | null;
 }
 
 let nextId = 0;
@@ -45,6 +48,7 @@ export function ChatScreen({
   mode,
   onModeChange,
   modelName,
+  conversationId,
 }: ChatScreenProps) {
   const { t } = useTranslate();
 
@@ -212,6 +216,7 @@ export function ChatScreen({
         toolbar={
           <>
             <ModeSelector mode={mode} onModeChange={onModeChange} />
+            <TemperatureControl conversationId={conversationId} />
             {modelName && (
               <span className="composer-model" title={modelName}>
                 {modelName}

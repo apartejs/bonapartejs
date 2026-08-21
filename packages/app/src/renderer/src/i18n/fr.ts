@@ -154,6 +154,10 @@ export const FR: AppTranslations = {
     save: 'Enregistrer',
     cancel: 'Annuler',
   },
+  temperature: {
+    label: 'Température',
+    thisConversation: 'propre à cette conversation',
+  },
   layout: {
     collapseSidebar: 'Replier les conversations',
     expandSidebar: 'Afficher les conversations',
