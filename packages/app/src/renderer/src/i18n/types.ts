@@ -155,6 +155,13 @@ export interface AppTranslations {
     save: string;
     cancel: string;
   };
+  /** Disposition du shell : flancs repliables et redimensionnables. */
+  layout: {
+    collapseSidebar: string;
+    expandSidebar: string;
+    resizeSidebar: string;
+    resizePanel: string;
+  };
   status: {
     stopped: string;
     starting: string;

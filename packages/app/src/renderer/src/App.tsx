@@ -26,6 +26,8 @@ import { ModelPicker } from './components/ModelPicker.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
 import { useTranslate } from './i18n/LocaleProvider.js';
+import { ResizeHandle } from './layout/ResizeHandle.js';
+import { PANEL_BOUNDS, SIDEBAR_BOUNDS, useLayout } from './layout/use-layout.js';
 
 type View = 'boot' | 'setup' | 'pickModel' | 'chat';
 
@@ -36,7 +38,8 @@ function currentTheme(): 'dark' | 'light' {
 }
 
 export function App() {
-  const { locale } = useTranslate();
+  const { locale, t } = useTranslate();
+  const layout = useLayout();
   const [view, setView] = useState<View>('boot');
   const [backendStatus, setBackendStatus] = useState<BackendStatusDto>('stopped');
   const [opened, setOpened] = useState<ConversationOpenResultDto | null>(null);
@@ -338,25 +341,52 @@ export function App() {
   return (
     <div className="app-shell">
       <div className="app-body">
-        {view === 'chat' && (
-          <ConversationSidebar
-            conversations={conversations}
-            projects={projects}
-            currentId={opened?.conversationId ?? null}
-            busy={busy || streaming}
-            grouping={grouping}
-            sort={sort}
-            onSelect={(id) => void selectConversation(id)}
-            onCreate={() => void createConversation()}
-            onCreateProject={() => setProjectDialog({ project: null })}
-            onEditProject={(id) => {
-              const found = projects.find((p) => p.id === id);
-              if (found) setProjectDialog({ project: found });
-            }}
-            onGroupingChange={changeGrouping}
-            onSortChange={changeSort}
-          />
-        )}
+        {view === 'chat' &&
+          (layout.sidebarCollapsed ? (
+            /* Replié, le flanc laisse un rail : sans lui, rien ne dirait
+               qu'il existe encore, et le raccourci serait la seule issue. */
+            <div className="side-rail">
+              <button
+                type="button"
+                className="side-rail-button"
+                onClick={layout.toggleSidebar}
+                title={`${t.layout.expandSidebar} (Ctrl+B)`}
+                aria-label={t.layout.expandSidebar}
+              >
+                ›
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="side-slot" style={{ width: layout.sidebarWidth }}>
+                <ConversationSidebar
+                  conversations={conversations}
+                  projects={projects}
+                  currentId={opened?.conversationId ?? null}
+                  busy={busy || streaming}
+                  grouping={grouping}
+                  sort={sort}
+                  onSelect={(id) => void selectConversation(id)}
+                  onCreate={() => void createConversation()}
+                  onCreateProject={() => setProjectDialog({ project: null })}
+                  onEditProject={(id) => {
+                    const found = projects.find((p) => p.id === id);
+                    if (found) setProjectDialog({ project: found });
+                  }}
+                  onGroupingChange={changeGrouping}
+                  onSortChange={changeSort}
+                  onCollapse={layout.toggleSidebar}
+                />
+              </div>
+              <ResizeHandle
+                width={layout.sidebarWidth}
+                bounds={SIDEBAR_BOUNDS}
+                side="end"
+                label={t.layout.resizeSidebar}
+                onResize={layout.setSidebarWidth}
+              />
+            </>
+          ))}
         <main className="app-main">
         {view === 'setup' || view === 'boot' ? (
           <SetupPanel
@@ -413,11 +443,29 @@ export function App() {
           ) : null}
         </main>
         {view === 'chat' && (
-          <ToolingPanel
-            plugins={plugins}
-            projectRoot={projectRoot}
-            conversationId={opened?.conversationId ?? null}
-          />
+          <>
+            {!layout.panelCollapsed && (
+              <ResizeHandle
+                width={layout.panelWidth}
+                bounds={PANEL_BOUNDS}
+                side="start"
+                label={t.layout.resizePanel}
+                onResize={layout.setPanelWidth}
+              />
+            )}
+            <div
+              className="side-slot"
+              style={layout.panelCollapsed ? undefined : { width: layout.panelWidth }}
+            >
+              <ToolingPanel
+                plugins={plugins}
+                projectRoot={projectRoot}
+                conversationId={opened?.conversationId ?? null}
+                collapsed={layout.panelCollapsed}
+                onToggleCollapsed={layout.togglePanel}
+              />
+            </div>
+          </>
         )}
       </div>
       {settingsOpen && (

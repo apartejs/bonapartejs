@@ -20,6 +20,7 @@ interface ConversationSidebarProps {
   onEditProject: (projectId: string) => void;
   onGroupingChange: (grouping: SidebarGroupingDto) => void;
   onSortChange: (sort: SidebarSortDto) => void;
+  onCollapse: () => void;
 }
 
 /** « il y a 3 min », « hier »… — repère grossier, jamais une horloge. */
@@ -55,6 +56,7 @@ export function ConversationSidebar({
   onEditProject,
   onGroupingChange,
   onSortChange,
+  onCollapse,
 }: ConversationSidebarProps) {
   const { t, locale } = useTranslate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -154,6 +156,14 @@ export function ConversationSidebar({
             title={t.conversations.create}
           >
             +
+          </button>
+          <button
+            type="button"
+            className="conv-icon-button"
+            onClick={onCollapse}
+            title={`${t.layout.collapseSidebar} (Ctrl+B)`}
+          >
+            ‹
           </button>
 
           {menuOpen && (

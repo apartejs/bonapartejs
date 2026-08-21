@@ -1,0 +1,97 @@
+/*
+ * Disposition du shell : flancs redimensionnables et repliables.
+ *
+ * Les largeurs viennent d'un style inline (l'état vit dans React), donc rien
+ * ici ne fixe de dimension — ce fichier ne s'occupe que de la mécanique et de
+ * l'affordance.
+ */
+
+.side-slot {
+  flex: 0 0 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Les enfants d'un flanc prennent la largeur que le slot leur donne, au lieu
+   de la leur imposer — c'est le slot qui est redimensionné. */
+.side-slot > * {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+/*
+ * La poignée : 5 px de surface réelle, mais une zone de saisie élargie par
+ * `::after`. Une cible de 1 px se rate, et se rater sur un séparateur donne
+ * l'impression que l'interface ne répond pas.
+ */
+.resize-handle {
+  position: relative;
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background-color 120ms ease;
+  touch-action: none;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+}
+
+.resize-handle:hover,
+.resize-handle:focus-visible {
+  background: var(--aparte-primary);
+  outline: none;
+}
+
+/* Au clavier, la poignée doit se VOIR : elle n'a pas de contour naturel. */
+.resize-handle:focus-visible {
+  box-shadow: 0 0 0 1px var(--aparte-bg);
+}
+
+/* Pendant un glissement, le curseur reste celui du redimensionnement partout
+   et rien ne se sélectionne — sinon tirer surligne la moitié de l'écran. */
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/*
+ * Rail d'un flanc replié. Sans lui, un panneau fermé disparaîtrait sans laisser
+ * de trace et le raccourci serait la seule façon de le retrouver.
+ */
+.side-rail {
+  flex: 0 0 28px;
+  display: flex;
+  justify-content: center;
+  padding-top: 10px;
+  border-right: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-1);
+}
+
+.side-rail-button {
+  padding: 2px 6px;
+  line-height: 1;
+  font-size: 15px;
+  color: var(--aparte-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.side-rail-button:hover {
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+  border-color: var(--aparte-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resize-handle {
+    transition: none;
+  }
+}

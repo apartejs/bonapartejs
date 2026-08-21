@@ -154,6 +154,12 @@ export const FR: AppTranslations = {
     save: 'Enregistrer',
     cancel: 'Annuler',
   },
+  layout: {
+    collapseSidebar: 'Replier les conversations',
+    expandSidebar: 'Afficher les conversations',
+    resizeSidebar: 'Largeur des conversations — flèches pour ajuster, double-clic pour rétablir',
+    resizePanel: 'Largeur de l’outillage — flèches pour ajuster, double-clic pour rétablir',
+  },
   status: {
     stopped: 'arrêté',
     starting: 'démarrage…',

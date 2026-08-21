@@ -7,6 +7,13 @@ interface ToolingPanelProps {
   plugins: PluginStatusDto[];
   projectRoot: string | null;
   conversationId: string | null;
+  /**
+   * Le repli est REMONTÉ au shell : il se persiste et se pilote au clavier
+   * (Ctrl+Alt+B) avec le reste de la disposition. Un état local ici serait
+   * oublié à chaque rechargement, et invisible du raccourci.
+   */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }
 
 interface Tab {
@@ -22,9 +29,14 @@ interface Tab {
  * Chaque plugin actif y monte ses onglets ; le panneau ne fournit que
  * l'onglet et la place, la vue est souveraine sur son contenu.
  */
-export function ToolingPanel({ plugins, projectRoot, conversationId }: ToolingPanelProps) {
+export function ToolingPanel({
+  plugins,
+  projectRoot,
+  conversationId,
+  collapsed,
+  onToggleCollapsed,
+}: ToolingPanelProps) {
   const { t, locale } = useTranslate();
-  const [collapsed, setCollapsed] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [View, setView] = useState<ToolingViewComponent | null>(null);
   const [failed, setFailed] = useState(false);
@@ -73,7 +85,7 @@ export function ToolingPanel({ plugins, projectRoot, conversationId }: ToolingPa
         <button
           type="button"
           className="tooling-handle"
-          onClick={() => setCollapsed(false)}
+          onClick={onToggleCollapsed}
           title={t.tooling.expand}
         >
           ‹
@@ -101,7 +113,7 @@ export function ToolingPanel({ plugins, projectRoot, conversationId }: ToolingPa
         <button
           type="button"
           className="tooling-handle"
-          onClick={() => setCollapsed(true)}
+          onClick={onToggleCollapsed}
           title={t.tooling.collapse}
         >
           ›

@@ -3,6 +3,7 @@ import './app.css';
 import './projects.css';
 import './composer.css';
 import './terminal.css';
+import './layout.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

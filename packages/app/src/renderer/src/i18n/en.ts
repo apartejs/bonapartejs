@@ -153,6 +153,12 @@ export const EN: AppTranslations = {
     save: 'Save',
     cancel: 'Cancel',
   },
+  layout: {
+    collapseSidebar: 'Collapse conversations',
+    expandSidebar: 'Show conversations',
+    resizeSidebar: 'Conversations width — arrows to adjust, double-click to reset',
+    resizePanel: 'Tooling width — arrows to adjust, double-click to reset',
+  },
   status: {
     stopped: 'stopped',
     starting: 'starting…',
