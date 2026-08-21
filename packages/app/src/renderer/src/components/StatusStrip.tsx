@@ -17,8 +17,6 @@ interface StatusStripProps {
   streaming: boolean;
   mode: PlayModeDto;
   onModeChange: (mode: PlayModeDto) => void;
-  projectName: string | null;
-  onOpenProject: () => void;
   modelName: string | null;
   /** Taille de contexte de la conversation — dénominateur de la jauge. */
   nCtx: number | null;
@@ -54,8 +52,6 @@ export function StatusStrip({
   streaming,
   mode,
   onModeChange,
-  projectName,
-  onOpenProject,
   modelName,
   nCtx,
   restore,
@@ -88,16 +84,9 @@ export function StatusStrip({
         <span className={`status-pill status-${backendStatus}`}>
           {t.status[backendStatus]}
         </span>
-        {/* Le projet n'est jamais un prérequis : on discute sans, et l'ouvrir
-            donne accès aux outils disque (annoncés par un delta). */}
-        <button
-          type="button"
-          className={`chip-button ${projectName ? 'chip-project' : 'chip-dim'}`}
-          title={projectName ?? t.status.openProjectHint}
-          onClick={onOpenProject}
-        >
-          {projectName ?? t.status.noProject}
-        </button>
+        {/* Le dossier a QUITTÉ cette barre : il appartient au projet, donc à la
+            conversation, et s'affiche dans son en-tête. Ici on ne garde que le
+            global — état du moteur, jauge de contexte, mode de jeu. */}
         {modelName && (
           <span className="status-chip chip-model" title={modelName}>
             {modelName}

@@ -59,6 +59,7 @@ import {
   type PlayModeDto,
   type PluginStatusDto,
   type ProjectDto,
+  type ProjectSummaryDto,
   type ResolvedSettingDto,
   type SettingScopeDto,
   type SetupSuggestionDto,
@@ -398,6 +399,7 @@ export class Harness {
         id: meta.id,
         title: meta.title,
         updatedAt: meta.updatedAt,
+        ...(meta.projectId ? { projectId: meta.projectId } : {}),
         ...(await this.projectNameOf(meta.projectId)),
         ...(meta.modelPath ? { modelName: modelDisplayName(meta.modelPath) } : {}),
         // Une reprise instantanée se promet sur pièce : l'état doit exister.
@@ -585,6 +587,74 @@ export class Harness {
   async currentProject(): Promise<ProjectDto | null> {
     const config = await this.loadConfig();
     return this.project(config.recentProjects ?? []);
+  }
+
+  // ── Projets ────────────────────────────────────────────────────────────
+
+  async listProjects(): Promise<ProjectSummaryDto[]> {
+    const projects = await this.projects.list();
+    return projects.map(({ id, name, roots }) => ({ id, name, roots }));
+  }
+
+  async createProject(name: string, roots: string[] = []): Promise<ProjectSummaryDto> {
+    const { id, roots: saved } = await this.projects.create({ name, roots });
+    return { id, name, roots: saved };
+  }
+
+  async renameProject(id: string, name: string): Promise<ProjectSummaryDto> {
+    const project = await this.projects.rename(id, name);
+    await this.refreshRoots();
+    return { id: project.id, name: project.name, roots: project.roots };
+  }
+
+  async setProjectRoots(id: string, roots: string[]): Promise<ProjectSummaryDto> {
+    const project = await this.projects.setRoots(id, roots);
+    // Le périmètre a bougé : la session en cours porte l'ancien, il faut la
+    // reconstruire pour que le delta soit annoncé au modèle à la réouverture.
+    await this.refreshRoots();
+    return { id: project.id, name: project.name, roots: project.roots };
+  }
+
+  async removeProject(id: string): Promise<void> {
+    // Les conversations du projet ne sont PAS supprimées : elles deviennent
+    // « sans projet », donc sans confinement. Perdre un dossier ne doit jamais
+    // perdre un historique.
+    for (const meta of await this.store.listMeta()) {
+      if (meta.projectId === id) await this.store.setProjectId(meta.id, undefined);
+    }
+    await this.projects.remove(id);
+    await this.refreshRoots();
+  }
+
+  async setConversationProject(
+    conversationId: string,
+    projectId: string | null,
+  ): Promise<void> {
+    await this.store.setProjectId(conversationId, projectId ?? undefined);
+    await this.refreshRoots();
+  }
+
+  /** Sélecteur de dossier pur : aucun effet de bord, juste le chemin. */
+  async pickDirectory(): Promise<string | null> {
+    if (!this.window) return null;
+    const result = await dialog.showOpenDialog(this.window, {
+      properties: ['openDirectory'],
+    });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  }
+
+  /**
+   * Recalcule le périmètre de la conversation ouverte et invalide la session.
+   *
+   * La session porte le périmètre avec lequel elle a été construite : la
+   * laisser en place ferait travailler le modèle sur un décor périmé. La
+   * reconstruire déclenche le delta au prochain envoi.
+   */
+  private async refreshRoots(): Promise<void> {
+    if (!this.currentConversationId) return;
+    this.roots = await this.rootsOf(this.currentConversationId);
+    this.session = null;
+    this.registerBuiltinTools();
   }
 
   async openProject(): Promise<ProjectDto | null> {
@@ -1168,6 +1238,23 @@ export class Harness {
     );
     ipcMain.handle(IPC.projectOpen, () => this.openProject());
     ipcMain.handle(IPC.projectCurrent, () => this.currentProject());
+    ipcMain.handle(IPC.projectsList, () => this.listProjects());
+    ipcMain.handle(IPC.projectCreate, (_e, name: string, roots?: string[]) =>
+      this.createProject(name, roots),
+    );
+    ipcMain.handle(IPC.projectRename, (_e, id: string, name: string) =>
+      this.renameProject(id, name),
+    );
+    ipcMain.handle(IPC.projectSetRoots, (_e, id: string, roots: string[]) =>
+      this.setProjectRoots(id, roots),
+    );
+    ipcMain.handle(IPC.projectRemove, (_e, id: string) => this.removeProject(id));
+    ipcMain.handle(IPC.dialogPickDirectory, () => this.pickDirectory());
+    ipcMain.handle(
+      IPC.conversationSetProject,
+      (_e, conversationId: string, projectId: string | null) =>
+        this.setConversationProject(conversationId, projectId),
+    );
     ipcMain.handle(IPC.modeGet, () => this.getMode());
     ipcMain.handle(IPC.modeSet, (_e, mode: PlayModeDto) => this.setMode(mode));
     ipcMain.handle(IPC.approvalRespond, (_e, response: ApprovalResponseDto) =>

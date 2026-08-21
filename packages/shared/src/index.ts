@@ -41,6 +41,13 @@ export const IPC = {
   openExternal: 'shell.openExternal',
   projectOpen: 'project.open',
   projectCurrent: 'project.current',
+  projectsList: 'projects.list',
+  projectCreate: 'projects.create',
+  projectRename: 'projects.rename',
+  projectSetRoots: 'projects.setRoots',
+  projectRemove: 'projects.remove',
+  dialogPickDirectory: 'dialog.pickDirectory',
+  conversationSetProject: 'conversation.setProject',
   modeGet: 'mode.get',
   modeSet: 'mode.set',
   approvalRespond: 'approval.respond',
@@ -122,18 +129,37 @@ export interface ProjectDto {
   recents: string[];
 }
 
+/**
+ * Un projet : une entité NOMMÉE portant un ensemble ORDONNÉ de racines.
+ *
+ * Le projet définit ce que le modèle peut VOIR ; la conversation définit
+ * comment un tour s'exécute. La première racine est le défaut des chemins
+ * relatifs — l'ordre est donc porteur de sens, pas cosmétique.
+ */
+export interface ProjectSummaryDto {
+  id: string;
+  name: string;
+  roots: string[];
+}
+
 /** Une conversation dans la liste du menu — assez pour l'afficher et choisir. */
 export interface ConversationSummaryDto {
   id: string;
   title: string;
   updatedAt: string;
-  /** Nom du dossier de projet, si la conversation en a un. */
+  /** Projet de rattachement — absent = « sans projet », cas licite. */
+  projectId?: string;
+  /** Nom du projet, si la conversation en a un. */
   projectName?: string;
   /** Modèle épinglé, s'il l'est. */
   modelName?: string;
   /** Un état KV existe sur disque : la reprise sera instantanée. */
   hasKvState: boolean;
 }
+
+/** Comment le menu latéral s'organise — préférence persistée en global. */
+export type SidebarGroupingDto = 'project' | 'flat';
+export type SidebarSortDto = 'updated' | 'title';
 
 /** Un réglage résolu, tel que l'UI l'affiche : valeur ET provenance. */
 export interface ResolvedSettingDto {
@@ -293,6 +319,21 @@ export interface BonaparteBridge {
   /** Ouvre un dossier de projet (dialogue natif) ; null si annulé. */
   openProject(): Promise<ProjectDto | null>;
   currentProject(): Promise<ProjectDto | null>;
+
+  /** Tous les projets, pour grouper le menu et proposer un déplacement. */
+  listProjects(): Promise<ProjectSummaryDto[]>;
+  createProject(name: string, roots?: string[]): Promise<ProjectSummaryDto>;
+  renameProject(id: string, name: string): Promise<ProjectSummaryDto>;
+  /** Remplace les racines EN CONSERVANT l'ordre donné (il est sémantique). */
+  setProjectRoots(id: string, roots: string[]): Promise<ProjectSummaryDto>;
+  removeProject(id: string): Promise<void>;
+  /** Sélecteur de dossier, sans effet de bord : rend juste le chemin choisi. */
+  pickDirectory(): Promise<string | null>;
+  /** Rattache une conversation à un projet, ou l'en détache avec `null`. */
+  setConversationProject(
+    conversationId: string,
+    projectId: string | null,
+  ): Promise<void>;
   getMode(): Promise<PlayModeDto>;
   setMode(mode: PlayModeDto): Promise<void>;
   respondToApproval(response: ApprovalResponseDto): Promise<void>;

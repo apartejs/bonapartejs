@@ -9,12 +9,17 @@ import type {
   ConversationSummaryDto,
   PluginStatusDto,
   PlayModeDto,
+  ProjectSummaryDto,
+  SidebarGroupingDto,
+  SidebarSortDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { bootstrapHighlighting } from './aparte-bootstrap.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
+import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
+import { ProjectDialog } from './components/ProjectDialog.js';
 import { SettingsHub } from './components/SettingsHub.js';
 import { ToolingPanel } from './components/ToolingPanel.js';
 import { ModelPicker } from './components/ModelPicker.js';
@@ -44,25 +49,114 @@ export function App() {
   const pendingConv = useRef<string | undefined>(undefined);
   const bootAttempted = useRef(false);
   const [mode, setModeState] = useState<PlayModeDto>('repetition');
-  const [projectName, setProjectName] = useState<string | null>(null);
   const [approval, setApproval] = useState<ApprovalRequestDto | null>(null);
   const [conversations, setConversations] = useState<ConversationSummaryDto[]>([]);
   const [plugins, setPlugins] = useState<PluginStatusDto[]>([]);
   const [projectRoot, setProjectRoot] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [projects, setProjects] = useState<ProjectSummaryDto[]>([]);
+  /** null = fermé ; { project: null } = création. */
+  const [projectDialog, setProjectDialog] = useState<{
+    project: ProjectSummaryDto | null;
+  } | null>(null);
+  // Organisation du menu : pure préférence d'affichage, donc locale — la
+  // remonter au main process ferait redémarrer l'app pour un réglage cosmétique.
+  const [grouping, setGrouping] = useState<SidebarGroupingDto>(
+    () => (localStorage.getItem('bp.sidebar.grouping') as SidebarGroupingDto) || 'project',
+  );
+  const [sort, setSort] = useState<SidebarSortDto>(
+    () => (localStorage.getItem('bp.sidebar.sort') as SidebarSortDto) || 'updated',
+  );
 
   /** Le menu se relit après chaque événement qui peut le changer. */
   const refreshConversations = useCallback(async () => {
     setConversations(await window.bonaparte.listConversations());
+    setProjects(await window.bonaparte.listProjects());
   }, []);
+
+  const changeGrouping = useCallback((next: SidebarGroupingDto) => {
+    setGrouping(next);
+    try {
+      localStorage.setItem('bp.sidebar.grouping', next);
+    } catch {
+      /* non bloquant */
+    }
+  }, []);
+
+  const changeSort = useCallback((next: SidebarSortDto) => {
+    setSort(next);
+    try {
+      localStorage.setItem('bp.sidebar.sort', next);
+    } catch {
+      /* non bloquant */
+    }
+  }, []);
+
+  /**
+   * Enregistre un projet — création ou édition — puis rafraîchit tout : le
+   * périmètre a pu changer, donc le menu ET l'en-tête.
+   */
+  const saveProject = useCallback(
+    async (name: string, roots: string[]) => {
+      const editing = projectDialog?.project ?? null;
+      if (editing) {
+        await window.bonaparte.renameProject(editing.id, name);
+        await window.bonaparte.setProjectRoots(editing.id, roots);
+      } else {
+        const created = await window.bonaparte.createProject(name, roots);
+        // Un projet créé depuis une conversation sans projet l'adopte : sinon
+        // l'utilisateur créerait un projet qui ne sert à rien dans l'instant.
+        const current = opened?.conversationId;
+        if (current) {
+          await window.bonaparte.setConversationProject(current, created.id);
+        }
+      }
+      setProjectDialog(null);
+      await refreshConversations();
+    },
+    [projectDialog, opened, refreshConversations],
+  );
+
+  const deleteProject = useCallback(async () => {
+    const editing = projectDialog?.project;
+    if (!editing) return;
+    await window.bonaparte.removeProject(editing.id);
+    setProjectDialog(null);
+    await refreshConversations();
+  }, [projectDialog, refreshConversations]);
+
+  const moveConversation = useCallback(
+    async (projectId: string | null) => {
+      const current = opened?.conversationId;
+      if (!current) return;
+      await window.bonaparte.setConversationProject(current, projectId);
+      await refreshConversations();
+    },
+    [opened, refreshConversations],
+  );
+
+  const renameCurrent = useCallback(
+    async (title: string) => {
+      const current = opened?.conversationId;
+      if (!current) return;
+      await window.bonaparte.renameConversation(current, title);
+      await refreshConversations();
+    },
+    [opened, refreshConversations],
+  );
+
+  /** Projet de la conversation ouverte, tiré de l'index déjà chargé. */
+  const currentProjectSummary =
+    projects.find(
+      (p) =>
+        p.id ===
+        conversations.find((c) => c.id === opened?.conversationId)?.projectId,
+    ) ?? null;
 
   useEffect(() => window.bonaparte.onApprovalRequest(setApproval), []);
 
   useEffect(() => {
     void window.bonaparte.getMode().then(setModeState);
-    void window.bonaparte
-      .currentProject()
-      .then((project) => setProjectName(project?.name ?? null));
   }, []);
 
   const changeMode = useCallback((next: PlayModeDto) => {
@@ -109,9 +203,9 @@ export function App() {
           setOpened(reply);
           setLastStats(null);
           setView('chat');
-          // Le dossier suit la conversation ouverte, pas l'application.
+          // Le périmètre suit la conversation ouverte, via son projet. Le
+          // panneau d'outillage n'a besoin que de la racine par défaut.
           const project = await window.bonaparte.currentProject();
-          setProjectName(project?.name ?? null);
           setProjectRoot(project?.root ?? null);
           await refreshConversations();
         }
@@ -146,7 +240,6 @@ export function App() {
         setLastStats(null);
         setView('chat');
         const project = await window.bonaparte.currentProject();
-        setProjectName(project?.name ?? null);
         setProjectRoot(project?.root ?? null);
         await refreshConversations();
       } catch (err) {
@@ -221,17 +314,6 @@ export function App() {
     }
   }, [refreshConversations, selectConversation]);
 
-  const openProject = useCallback(async () => {
-    const project = await window.bonaparte.openProject();
-    if (!project) return;
-    setProjectName(project.name);
-    setProjectRoot(project.root);
-    // Le projet change l'inventaire d'outils. Inutile de réveiller le moteur
-    // pour autant : le delta sera annoncé à l'ouverture de la session, au
-    // premier message.
-    await selectConversation();
-  }, [tryOpen]);
-
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');
@@ -259,10 +341,20 @@ export function App() {
         {view === 'chat' && (
           <ConversationSidebar
             conversations={conversations}
+            projects={projects}
             currentId={opened?.conversationId ?? null}
             busy={busy || streaming}
+            grouping={grouping}
+            sort={sort}
             onSelect={(id) => void selectConversation(id)}
             onCreate={() => void createConversation()}
+            onCreateProject={() => setProjectDialog({ project: null })}
+            onEditProject={(id) => {
+              const found = projects.find((p) => p.id === id);
+              if (found) setProjectDialog({ project: found });
+            }}
+            onGroupingChange={changeGrouping}
+            onSortChange={changeSort}
           />
         )}
         <main className="app-main">
@@ -290,11 +382,29 @@ export function App() {
             }}
           />
         ) : opened ? (
-          <ChatScreen
-            initialEvents={opened.events}
-            onStats={setLastStats}
-            onStreamingChange={setStreaming}
-          />
+          <>
+            <ConversationHeader
+              title={
+                conversations.find((c) => c.id === opened.conversationId)?.title ?? ''
+              }
+              project={currentProjectSummary}
+              projects={projects}
+              busy={busy}
+              onRename={(title) => void renameCurrent(title)}
+              onEditProject={() => {
+                if (currentProjectSummary) {
+                  setProjectDialog({ project: currentProjectSummary });
+                }
+              }}
+              onCreateProject={() => setProjectDialog({ project: null })}
+              onMoveToProject={(id) => void moveConversation(id)}
+            />
+            <ChatScreen
+              initialEvents={opened.events}
+              onStats={setLastStats}
+              onStreamingChange={setStreaming}
+            />
+          </>
           ) : null}
         </main>
         {view === 'chat' && (
@@ -316,6 +426,15 @@ export function App() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+      {projectDialog && (
+        <ProjectDialog
+          project={projectDialog.project}
+          busy={busy}
+          onSave={(name, roots) => void saveProject(name, roots)}
+          {...(projectDialog.project ? { onDelete: () => void deleteProject() } : {})}
+          onCancel={() => setProjectDialog(null)}
+        />
+      )}
       {approval && (
         <ApprovalDialog request={approval} onRespond={respondToApproval} />
       )}
@@ -325,8 +444,6 @@ export function App() {
         streaming={streaming}
         mode={mode}
         onModeChange={changeMode}
-        projectName={projectName}
-        onOpenProject={() => void openProject()}
         modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
         nCtx={view === 'chat' ? (opened?.nCtx ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}

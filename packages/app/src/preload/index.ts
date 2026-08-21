@@ -64,6 +64,14 @@ const api: BonaparteBridge = {
 
   openProject: () => ipcRenderer.invoke(IPC.projectOpen),
   currentProject: () => ipcRenderer.invoke(IPC.projectCurrent),
+  listProjects: () => ipcRenderer.invoke(IPC.projectsList),
+  createProject: (name, roots) => ipcRenderer.invoke(IPC.projectCreate, name, roots),
+  renameProject: (id, name) => ipcRenderer.invoke(IPC.projectRename, id, name),
+  setProjectRoots: (id, roots) => ipcRenderer.invoke(IPC.projectSetRoots, id, roots),
+  removeProject: (id) => ipcRenderer.invoke(IPC.projectRemove, id),
+  pickDirectory: () => ipcRenderer.invoke(IPC.dialogPickDirectory),
+  setConversationProject: (conversationId, projectId) =>
+    ipcRenderer.invoke(IPC.conversationSetProject, conversationId, projectId),
   getMode: () => ipcRenderer.invoke(IPC.modeGet),
   setMode: (mode) => ipcRenderer.invoke(IPC.modeSet, mode),
   respondToApproval: (response) =>

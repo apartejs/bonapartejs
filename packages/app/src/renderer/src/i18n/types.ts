@@ -108,6 +108,48 @@ export interface AppTranslations {
     /** Un état KV existe : la reprise sera instantanée. */
     kvReady: string;
     kvReadyHint: string;
+    organise: string;
+    byProject: string;
+    oneList: string;
+    sortBy: string;
+    sortUpdated: string;
+    sortTitle: string;
+    projects: string;
+    newProject: string;
+    editProject: string;
+    groupEmpty: string;
+  };
+  header: {
+    noProject: string;
+    noProjectHint: string;
+    noProjectExplain: string;
+    createProject: string;
+    editProject: string;
+    projectPanel: string;
+    noRoots: string;
+    /** Racine contre laquelle le modèle résout ses chemins relatifs. */
+    defaultRoot: string;
+    rename: string;
+    actions: string;
+    moveTo: string;
+    detach: string;
+  };
+  /** Dialogue de création/édition d'un projet (distinct de l'écran `project`). */
+  projectDialog: {
+    createTitle: string;
+    editTitle: string;
+    name: string;
+    namePlaceholder: string;
+    roots: string;
+    addRoot: string;
+    removeRoot: string;
+    moveUp: string;
+    moveDown: string;
+    defaultRoot: string;
+    noRootsNote: string;
+    delete: string;
+    save: string;
+    cancel: string;
   };
   status: {
     stopped: string;
