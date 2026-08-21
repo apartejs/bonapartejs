@@ -1,6 +1,7 @@
 import '@aparte/core/styles.css';
 import './app.css';
 import './projects.css';
+import './composer.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

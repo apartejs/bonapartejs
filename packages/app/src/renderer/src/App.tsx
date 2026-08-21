@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { bootstrapHighlighting } from './aparte-bootstrap.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
+import { ComposerBar } from './components/ComposerBar.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
 import { ProjectDialog } from './components/ProjectDialog.js';
@@ -382,7 +383,9 @@ export function App() {
             }}
           />
         ) : opened ? (
-          <>
+          /* `app-main` est un flex ROW (il centre les cartes de configuration) :
+             sans cette colonne, l'en-tête et le chat se retrouvent côte à côte. */
+          <div className="chat-view">
             <ConversationHeader
               title={
                 conversations.find((c) => c.id === opened.conversationId)?.title ?? ''
@@ -404,7 +407,12 @@ export function App() {
               onStats={setLastStats}
               onStreamingChange={setStreaming}
             />
-          </>
+            <ComposerBar
+              mode={mode}
+              modelName={opened.modelName ?? null}
+              onModeChange={changeMode}
+            />
+          </div>
           ) : null}
         </main>
         {view === 'chat' && (
@@ -442,8 +450,6 @@ export function App() {
         backendStatus={backendStatus}
         engine={config}
         streaming={streaming}
-        mode={mode}
-        onModeChange={changeMode}
         modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
         nCtx={view === 'chat' ? (opened?.nCtx ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}

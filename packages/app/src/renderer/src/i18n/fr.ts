@@ -71,6 +71,12 @@ export const FR: AppTranslations = {
     repetition: 'Répétition',
     plume: 'Plume',
     impro: 'Impro',
+    descriptions: {
+      lecture: 'Il lit, il n’écrit rien et ne lance rien.',
+      repetition: 'Il demande avant chaque écriture et chaque commande.',
+      plume: 'Il écrit les fichiers librement ; les commandes demandent.',
+      impro: 'Il agit sans rien demander. À réserver à ce que vous surveillez.',
+    },
   },
   chat: {
     placeholder: 'Écrivez à bonaparte…',

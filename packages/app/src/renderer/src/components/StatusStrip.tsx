@@ -2,21 +2,16 @@ import type {
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
-  PlayModeDto,
   RestoreDto,
 } from '@aparte/bonaparte-shared';
 import { Mascotte } from '../mascotte/Mascotte.js';
 import type { MascotteState } from '../mascotte/mascotte-states.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
-const MODES: PlayModeDto[] = ['lecture', 'repetition', 'plume', 'impro'];
-
 interface StatusStripProps {
   backendStatus: BackendStatusDto;
   engine: BackendConfigDto | undefined;
   streaming: boolean;
-  mode: PlayModeDto;
-  onModeChange: (mode: PlayModeDto) => void;
   modelName: string | null;
   /** Taille de contexte de la conversation — dénominateur de la jauge. */
   nCtx: number | null;
@@ -50,8 +45,6 @@ export function StatusStrip({
   backendStatus,
   engine,
   streaming,
-  mode,
-  onModeChange,
   modelName,
   nCtx,
   restore,
@@ -84,27 +77,16 @@ export function StatusStrip({
         <span className={`status-pill status-${backendStatus}`}>
           {t.status[backendStatus]}
         </span>
-        {/* Le dossier a QUITTÉ cette barre : il appartient au projet, donc à la
-            conversation, et s'affiche dans son en-tête. Ici on ne garde que le
-            global — état du moteur, jauge de contexte, mode de jeu. */}
+        {/* Cette barre ne porte plus que du GLOBAL : état du moteur, modèle
+            chargé, jauge de contexte, mesures. Le dossier est parti dans
+            l'en-tête de la conversation, et le mode de jeu dans le composeur —
+            il décide de ce que l'agent s'autorise au prochain message, il
+            appartient donc au geste d'envoyer. */}
         {modelName && (
           <span className="status-chip chip-model" title={modelName}>
             {modelName}
           </span>
         )}
-        <select
-          className={`mode-select mode-${mode}`}
-          value={mode}
-          onChange={(e) => onModeChange(e.target.value as PlayModeDto)}
-          title={t.modes.hint}
-        >
-          {MODES.map((value) => (
-            <option key={value} value={value}>
-              {t.modes[value]}
-            </option>
-          ))}
-        </select>
-
         {contextPct !== null && (
           <span
             className="context-gauge"

@@ -68,6 +68,13 @@ export interface AppTranslations {
     repetition: string;
     plume: string;
     impro: string;
+    /** Ce que chaque mode autorise — le nom seul ne le dit pas. */
+    descriptions: {
+      lecture: string;
+      repetition: string;
+      plume: string;
+      impro: string;
+    };
   };
   chat: {
     placeholder: string;

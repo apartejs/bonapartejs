@@ -1,0 +1,125 @@
+/*
+ * Colonne de chat et rangée basse du composeur.
+ *
+ * `app-main` est un flex ROW — il centre les cartes de configuration. La vue de
+ * chat a donc besoin de sa propre colonne, sinon l'en-tête, le chat et la barre
+ * du composeur se rangent côte à côte au lieu de s'empiler.
+ */
+
+.chat-view {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Rangée basse du composeur ─────────────────────────────────────────── */
+
+.composer-bar {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: 0 16px 12px;
+}
+
+.composer-bar-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 780px;
+}
+
+.mode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--bp-sans);
+  font-size: 12px;
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+  border: 1px solid var(--aparte-border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.mode-button:hover {
+  border-color: var(--aparte-text-secondary);
+}
+
+.mode-caret {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* La pastille reprend la couleur du mode : le coup d'œil suffit à savoir si
+   l'agent a la main libre. */
+.mode-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+
+.composer-model {
+  overflow: hidden;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--bp-mono);
+  font-size: 10.5px;
+  color: var(--aparte-text-secondary);
+}
+
+.mode-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: min(360px, calc(100vw - 48px));
+  padding: 6px;
+  background: var(--aparte-surface-1);
+  border: 1px solid var(--aparte-border);
+  border-radius: 12px;
+  box-shadow: 0 16px 38px rgb(0 0 0 / 42%);
+}
+
+.mode-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 9px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.mode-option:hover {
+  background: var(--aparte-surface-2);
+}
+
+.mode-option-active {
+  background: var(--aparte-surface-2);
+}
+
+.mode-option-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--aparte-text);
+}
+
+.mode-option-desc {
+  padding-left: 14px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--aparte-text-secondary);
+}

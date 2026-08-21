@@ -70,6 +70,12 @@ export const EN: AppTranslations = {
     repetition: 'Rehearsal',
     plume: 'Quill',
     impro: 'Improv',
+    descriptions: {
+      lecture: 'It reads. It writes nothing and runs nothing.',
+      repetition: 'It asks before every write and every command.',
+      plume: 'It writes files freely; commands still ask.',
+      impro: 'It acts without asking. Keep it for what you are watching.',
+    },
   },
   chat: {
     placeholder: 'Write to bonaparte…',
