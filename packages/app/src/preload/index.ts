@@ -38,6 +38,17 @@ const api: BonaparteBridge = {
     ipcRenderer.invoke(IPC.conversationRename, id, title),
   listPlugins: () => ipcRenderer.invoke(IPC.pluginsList),
   reloadPlugins: () => ipcRenderer.invoke(IPC.pluginsReload),
+  onPluginEvent: (listener) => {
+    const wrapped = (
+      _e: unknown,
+      payload: { pluginId: string; event: string; payload: unknown },
+    ): void => listener(payload);
+    ipcRenderer.on(IPC.evPlugin, wrapped);
+    return () => ipcRenderer.removeListener(IPC.evPlugin, wrapped);
+  },
+  ackPluginData: (pluginId, bytes) => {
+    void ipcRenderer.invoke(IPC.pluginsAck, pluginId, bytes);
+  },
   invokePlugin: (pluginId: string, command: string, payload?: unknown) =>
     ipcRenderer.invoke(IPC.pluginsInvoke, pluginId, command, payload),
   getSettings: (scope) => ipcRenderer.invoke(IPC.settingsGet, scope),

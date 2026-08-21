@@ -54,11 +54,13 @@ export const IPC = {
   pluginsList: 'plugins.list',
   pluginsInvoke: 'plugins.invoke',
   pluginsReload: 'plugins.reload',
+  pluginsAck: 'plugins.ack',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   evApproval: 'ev.approval',
   /** Événements poussés main → renderer. */
   evAgent: 'ev.agent',
+  evPlugin: 'ev.plugin',
   evBackendStatus: 'ev.backendStatus',
 } as const;
 
@@ -306,6 +308,18 @@ export interface BonaparteBridge {
    * recharger le modèle. Rend l'inventaire à jour.
    */
   reloadPlugins(): Promise<PluginStatusDto[]>;
+  /**
+   * S'abonne aux événements POUSSÉS par la moitié Node d'un plugin.
+   *
+   * La vue doit acquitter ce qu'elle a consommé (`ackPluginData`) : sans
+   * acquittement, l'hôte met le producteur en pause au seuil haut et il ne
+   * repart jamais. C'est le prix de ne rien perdre.
+   */
+  onPluginEvent(
+    listener: (e: { pluginId: string; event: string; payload: unknown }) => void,
+  ): () => void;
+  /** Déclare `bytes` octets consommés, pour laisser le producteur repartir. */
+  ackPluginData(pluginId: string, bytes: number): void;
   /** Appelle une commande de la moitié Node d'un plugin, depuis sa vue. */
   invokePlugin(pluginId: string, command: string, payload?: unknown): Promise<unknown>;
   /** Réglages d'une portée, valeurs résolues et provenance comprises. */

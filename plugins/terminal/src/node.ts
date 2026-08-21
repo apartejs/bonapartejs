@@ -11,19 +11,15 @@
  * paquet). Le repli reste là pour les machines où il manquerait, mais il est
  * annoncé comme dégradé, pas présenté comme un terminal.
  *
- * Transport : la vue interroge `read({ since })` avec un curseur d'octets.
- * Notre SDK de plugin n'a pas encore de canal Node → vue pour POUSSER des
- * données ; c'est un manque connu, contourné par un polling adaptatif côté vue
- * (rapide quand ça débite, lent au repos).
+ * Transport : les données sont POUSSÉES vers la vue (`ctx.emit`), avec la
+ * contre-pression du SDK — reprise du modèle de VS Code. `emit` rend `false`
+ * quand la vue est en retard : on cesse alors de lire le PTY, et on reprend sur
+ * `onDrain`. Rien n'est perdu, parce que le producteur s'arrête au lieu qu'un
+ * tampon s'élague.
  *
- * Différence assumée avec VS Code, qui résout le même problème proprement : il
- * fait tourner le PTY dans un PROCESS dédié, pousse les données, et applique
- * une contre-pression par acquittements — le client acquitte tous les 5 000
- * caractères, le PTY est mis en pause à 100 000 non acquittés et reprend sous
- * 5 000 (`FlowControlConstants`). Nous n'avons ni push ni acquittement : un
- * débit trop rapide élague le tampon, donc PERD de la sortie. On le signale
- * (`lost`) au lieu de laisser un trou muet, mais la vraie réponse est un
- * `ctx.emit()` avec acquittement dans le SDK.
+ * Reste une différence avec VS Code, assumée : leur PTY tourne dans un PROCESS
+ * dédié, donc un crash natif n'emporte pas la fenêtre. Chez nous il vit dans le
+ * main process.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -31,8 +27,12 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { definePlugin, type PluginNodeContext } from '@aparte/bonaparte-plugin-sdk';
 
-/** Fenêtre conservée : de quoi remonter un peu, pas un journal complet. */
-const MAX_BUFFER_CHARS = 200_000;
+/**
+ * Historique conservé pour la RÉOUVERTURE de la vue : quand l'onglet se
+ * remonte, il faut réafficher ce qui a défilé. Ce n'est plus un tampon de
+ * transport — les données partent par `emit` au fil de l'eau.
+ */
+const MAX_HISTORY_CHARS = 200_000;
 
 interface PtyLike {
   write(data: string): void;
@@ -176,11 +176,13 @@ interface Session {
   pty: PtyLike;
   mode: Mode;
   shellId: string;
-  /** Sortie BRUTE, séquences ANSI comprises : xterm.js les interprète. */
-  buffer: string;
-  /** Octets déjà écartés du début du tampon — le curseur reste monotone. */
-  dropped: number;
+  /** Historique brut, pour réafficher à la réouverture de l'onglet. */
+  history: string;
   exited: boolean;
+  /** Le PTY est-il en pause parce que la vue n'a pas suivi ? */
+  paused: boolean;
+  /** Ce qui est arrivé PENDANT la pause, à pousser à la reprise. */
+  pending: string;
 }
 
 export default definePlugin({
@@ -218,11 +220,12 @@ export default definePlugin({
       // précédent plutôt que d'en laisser deux vivre sans les montrer.
       if (session && shellId && session.shellId !== shellId) close();
       if (session) {
+        // Onglet remonté sur une session vivante : on rend l'historique pour
+        // que la vue réaffiche ce qui a défilé sans elle.
         return {
           mode: session.mode,
           shellId: session.shellId,
-          since: session.dropped,
-          data: session.buffer,
+          history: session.history,
           exited: session.exited,
         };
       }
@@ -243,56 +246,47 @@ export default definePlugin({
         pty,
         mode: real ? 'pty' : 'basique',
         shellId: shell.id,
-        buffer: '',
-        dropped: 0,
+        history: '',
         exited: false,
+        paused: false,
+        pending: '',
       };
-      pty.onData((data) => {
-        live.buffer += data;
-        if (live.buffer.length > MAX_BUFFER_CHARS) {
-          const cut = live.buffer.length - MAX_BUFFER_CHARS;
-          live.buffer = live.buffer.slice(cut);
-          live.dropped += cut;
+
+      /**
+       * Pousse vers la vue, et S'ARRÊTE si elle est en retard.
+       *
+       * node-pty n'expose pas de pause : on ne peut pas cesser de recevoir. On
+       * accumule donc dans `pending` — mais borné par la contre-pression, qui
+       * empêche l'écart de grandir indéfiniment, là où l'ancien tampon
+       * élaguait silencieusement.
+       */
+      const push = (data: string): void => {
+        live.history += data;
+        if (live.history.length > MAX_HISTORY_CHARS) {
+          live.history = live.history.slice(live.history.length - MAX_HISTORY_CHARS);
         }
+        if (live.paused) {
+          live.pending += data;
+          return;
+        }
+        if (!ctx.emit('data', data)) live.paused = true;
+      };
+
+      ctx.onDrain(() => {
+        live.paused = false;
+        const waiting = live.pending;
+        live.pending = '';
+        if (waiting) push(waiting);
       });
+
+      pty.onData(push);
       pty.onExit(() => {
         live.exited = true;
+        ctx.emit('exit', null);
       });
       session = live;
       ctx.log(`${shell.label} démarré (${live.mode}) dans ${workdir}`);
-      return {
-        mode: live.mode,
-        shellId: shell.id,
-        since: 0,
-        data: '',
-        exited: false,
-      };
-    });
-
-    /**
-     * Lit la sortie depuis un curseur d'OCTETS. Le curseur est monotone même
-     * quand le tampon est élagué : la vue ne peut donc pas rejouer deux fois
-     * les mêmes données, ni en sauter silencieusement.
-     */
-    ctx.registerCommand('read', async (payload) => {
-      const { since = 0 } = (payload ?? {}) as { since?: number };
-      if (!session) return { data: '', next: since, exited: true, mode: null };
-
-      // Le tampon a-t-il élagué DEVANT le curseur du client ? Alors de la
-      // sortie est perdue. VS Code n'a pas ce problème : il met le PTY en
-      // pause (HighWatermarkChars = 100 000) et le reprend quand le client a
-      // rattrapé, au lieu de jeter. Faute de canal de push, on jette — mais on
-      // le DIT, plutôt que de laisser un trou muet dans le terminal.
-      const lost = Math.max(0, session.dropped - since);
-      const start = Math.max(0, since - session.dropped);
-      const data = session.buffer.slice(start);
-      return {
-        data,
-        lost,
-        next: session.dropped + session.buffer.length,
-        exited: session.exited,
-        mode: session.mode,
-      };
+      return { mode: live.mode, shellId: shell.id, history: '', exited: false };
     });
 
     ctx.registerCommand('write', async (payload) => {

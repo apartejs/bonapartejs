@@ -9,9 +9,11 @@ interface ShellChoice {
   label: string;
 }
 
-/** Rythme de lecture : nerveux quand ça débite, économe au repos. */
-const POLL_ACTIVE_MS = 30;
-const POLL_IDLE_MS = 200;
+/**
+ * Paquet d'acquittement. Doit rester <= au seuil bas de l'hôte, sinon le
+ * producteur, mis en pause, ne repartirait jamais.
+ */
+const ACK_SIZE = 5_000;
 
 const LABELS = {
   fr: {
@@ -21,7 +23,6 @@ const LABELS = {
     exited: 'Le shell s’est terminé.',
     restart: 'Relancer',
     noShell: 'Aucun shell trouvé sur cette machine.',
-    lost: (n: number) => `[… ${n} caractères perdus : sortie trop rapide …]`,
   },
   en: {
     shell: 'Shell',
@@ -30,7 +31,6 @@ const LABELS = {
     exited: 'The shell exited.',
     restart: 'Restart',
     noShell: 'No shell found on this machine.',
-    lost: (n: number) => `[… ${n} characters lost: output too fast …]`,
   },
 } as const;
 
@@ -45,6 +45,12 @@ const LABELS = {
  * Le shell se choisit parmi ceux réellement installés (PowerShell, Git Bash,
  * WSL…), comme dans VS Code : proposer un shell absent, c'est promettre un
  * terminal qui ne s'ouvrira pas.
+ *
+ * Les données sont POUSSÉES par la moitié Node, et cette vue ACQUITTE ce
+ * qu'elle a écrit. L'acquittement se fait dans le callback de `term.write`,
+ * c'est-à-dire quand xterm a réellement analysé les octets — pas quand on les a
+ * reçus. C'est ce qui rend la contre-pression honnête : le producteur s'arrête
+ * parce que l'écran est en retard, pas parce que le réseau l'est.
  */
 export default function TerminalView({ locale, projectRoot }: ToolingViewProps) {
   const t = LABELS[locale === 'en' ? 'en' : 'fr'];
@@ -59,7 +65,6 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
-  const cursorRef = useRef(0);
   const [shells, setShells] = useState<ShellChoice[]>([]);
   const [shellId, setShellId] = useState<string | null>(null);
   const [mode, setMode] = useState<'pty' | 'basique' | null>(null);
@@ -71,7 +76,6 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       const term = termRef.current;
       if (!term) return;
       term.reset();
-      cursorRef.current = 0;
       setExited(false);
 
       const reply = (await invoke('open', {
@@ -82,8 +86,7 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       })) as {
         mode?: 'pty' | 'basique';
         shellId?: string;
-        since?: number;
-        data?: string;
+        history?: string;
         error?: string;
       };
 
@@ -93,8 +96,9 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       }
       setMode(reply.mode ?? null);
       if (reply.shellId) setShellId(reply.shellId);
-      if (reply.data) term.write(reply.data);
-      cursorRef.current = (reply.since ?? 0) + (reply.data?.length ?? 0);
+      // Session déjà vivante : on réaffiche ce qui a défilé sans la vue.
+      // L'historique n'est PAS acquitté — il n'a jamais été compté comme poussé.
+      if (reply.history) term.write(reply.history);
     },
     [invoke, projectRoot],
   );
@@ -155,42 +159,31 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
     // par le sélecteur.
   }, [invoke]);
 
-  // Lecture : un curseur d'octets, un rythme qui s'adapte au débit.
+  // Abonnement aux données poussées. On acquitte par paquets, pour ne pas
+  // faire un aller-retour IPC par octet — même logique que le CharCountAckSize
+  // de VS Code.
   useEffect(() => {
-    let alive = true;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const tick = async (): Promise<void> => {
-      if (!alive) return;
-      const reply = (await invoke('read', { since: cursorRef.current })) as {
-        data?: string;
-        lost?: number;
-        next?: number;
-        exited?: boolean;
-      };
-      if (!alive) return;
-      const chunk = reply.data ?? '';
-      // De la sortie a été perdue (tampon élagué plus vite qu'on ne lit) : on
-      // le DIT. Un trou muet dans un terminal ferait douter de tout le reste.
-      if (reply.lost && reply.lost > 0) {
-        termRef.current?.write(`
-[33m${t.lost(reply.lost)}[0m
-`);
+    let unacked = 0;
+    const unsubscribe = window.bonaparte.onPluginEvent(({ pluginId, event, payload }) => {
+      if (pluginId !== 'terminal') return;
+      if (event === 'exit') {
+        setExited(true);
+        return;
       }
-      if (chunk) {
-        termRef.current?.write(chunk);
-        cursorRef.current = reply.next ?? cursorRef.current + chunk.length;
-      }
-      if (reply.exited) setExited(true);
-      timer = setTimeout(() => void tick(), chunk ? POLL_ACTIVE_MS : POLL_IDLE_MS);
-    };
-
-    timer = setTimeout(() => void tick(), POLL_ACTIVE_MS);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
-  }, [invoke]);
+      if (event !== 'data' || typeof payload !== 'string') return;
+      const chunk = payload;
+      // L'acquittement part du callback de xterm : il signifie « affiché »,
+      // pas « reçu ». Sans ça, on relancerait le producteur trop tôt.
+      termRef.current?.write(chunk, () => {
+        unacked += chunk.length;
+        if (unacked >= ACK_SIZE) {
+          window.bonaparte.ackPluginData('terminal', unacked);
+          unacked = 0;
+        }
+      });
+    });
+    return unsubscribe;
+  }, []);
 
   return (
     <div className="pty-view">

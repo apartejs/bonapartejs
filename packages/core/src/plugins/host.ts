@@ -55,6 +55,14 @@ export interface PluginNodeContext {
    */
   registerCommand(name: string, handler: PluginCommandHandler): void;
   getConfig<T = unknown>(key: string): T | undefined;
+  /**
+   * Pousse un événement vers la VUE du plugin. Rend `false` quand la vue est en
+   * retard : l'appelant doit cesser de lire sa source jusqu'à `onDrain`.
+   * Convention des flux Node — `write()` puis `'drain'`.
+   */
+  emit(event: string, payload: unknown): boolean;
+  /** La vue a rattrapé : le producteur peut reprendre. */
+  onDrain(listener: () => void): void;
   onDispose(dispose: () => void | Promise<void>): void;
   log(message: string): void;
 }
@@ -77,6 +85,47 @@ export interface PluginHostOptions {
   /** Réglages globaux des plugins, par id puis par clé. */
   config?: Record<string, Record<string, unknown>>;
   logger?: (message: string) => void;
+  /**
+   * Achemine un événement poussé par un plugin vers SA vue. `core` ne connaît
+   * pas Electron : c'est l'hôte applicatif qui fournit le transport.
+   */
+  emit?: (pluginId: string, event: string, payload: unknown) => void;
+}
+
+/**
+ * Seuils de contre-pression, repris TELS QUELS de VS Code
+ * (`FlowControlConstants`, src/vs/platform/terminal/common/terminal.ts).
+ *
+ * Le problème est le même que le leur : un producteur natif — un PTY — débite
+ * plus vite que la vue ne consomme. Agrandir le tampon ne fait que retarder la
+ * perte ; la seule réponse correcte est de METTRE LE PRODUCTEUR EN PAUSE.
+ *
+ * `ackSize` doit rester <= `lowWatermark`, sinon le client n'atteindrait jamais
+ * le seuil qui déclenche la reprise et le producteur resterait bloqué.
+ */
+export const FLOW_CONTROL = {
+  /** Non-acquittés au-delà desquels le producteur doit s'arrêter. */
+  highWatermark: 100_000,
+  /** Non-acquittés en-dessous desquels il peut reprendre. */
+  lowWatermark: 5_000,
+  /** Taille du paquet d'acquittement côté vue. */
+  ackSize: 5_000,
+} as const;
+
+/**
+ * Poids d'une charge utile, en caractères.
+ *
+ * Les données d'un terminal sont des chaînes : on mesure directement. Pour le
+ * reste, la sérialisation JSON donne un ordre de grandeur suffisant — il s'agit
+ * de réguler un débit, pas de facturer des octets.
+ */
+function sizeOf(payload: unknown): number {
+  if (typeof payload === 'string') return payload.length;
+  try {
+    return JSON.stringify(payload)?.length ?? 0;
+  } catch {
+    return 0;
+  }
 }
 
 /** Tout ce qu'une activation a posé, pour pouvoir le retirer d'un bloc. */
@@ -84,6 +133,11 @@ interface ActivationRecord {
   toolNames: string[];
   commands: Map<string, PluginCommandHandler>;
   disposers: (() => void | Promise<void>)[];
+  /** Octets poussés et pas encore acquittés par la vue. */
+  unacknowledged: number;
+  /** Le producteur a-t-il été prié de s'arrêter ? */
+  paused: boolean;
+  drainListeners: (() => void)[];
 }
 
 export class PluginHost {
@@ -176,7 +230,14 @@ export class PluginHost {
 
     const manifest = plugin.manifest;
     const declared = new Map(manifest.contributes.agentTools.map((t) => [t.name, t]));
-    const record: ActivationRecord = { toolNames: [], commands: new Map(), disposers: [] };
+    const record: ActivationRecord = {
+      toolNames: [],
+      commands: new Map(),
+      disposers: [],
+      unacknowledged: 0,
+      paused: false,
+      drainListeners: [],
+    };
 
     const context: PluginNodeContext = {
       pluginId: id,
@@ -204,6 +265,24 @@ export class PluginHost {
         this.options.config?.[id]?.[key] as T | undefined,
       onDispose: (dispose) => record.disposers.push(dispose),
       log: (message) => this.options.logger?.(`[plugin:${id}] ${message}`),
+
+      /**
+       * Pousse un événement vers la vue. Rend `false` quand la vue est en
+       * retard : l'appelant DOIT alors cesser de lire sa source jusqu'à
+       * `onDrain`. C'est la convention des flux Node (`write` puis `drain`),
+       * choisie parce qu'elle est déjà connue de tout le monde.
+       *
+       * Un plugin démonté ne pousse plus rien : son enregistrement a disparu,
+       * et une vue morte ne doit pas recevoir d'événements.
+       */
+      emit: (event, payload) => {
+        if (this.activations.get(id) !== record) return false;
+        this.options.emit?.(id, event, payload);
+        record.unacknowledged += sizeOf(payload);
+        if (record.unacknowledged >= FLOW_CONTROL.highWatermark) record.paused = true;
+        return !record.paused;
+      },
+      onDrain: (listener) => record.drainListeners.push(listener),
     };
 
     this.activations.set(id, record);
@@ -255,6 +334,23 @@ export class PluginHost {
   }
 
   /** Démonte tout — appelé à la fermeture de l'app. */
+  /**
+   * La vue signale qu'elle a CONSOMMÉ `bytes` octets.
+   *
+   * Le compte redescend ; en repassant sous le seuil bas, on réveille le
+   * producteur. Un plugin inconnu est ignoré : un acquittement en retard, après
+   * un démontage, ne doit pas lever.
+   */
+  acknowledge(pluginId: string, bytes: number): void {
+    const record = this.activations.get(pluginId);
+    if (!record || bytes <= 0) return;
+    record.unacknowledged = Math.max(0, record.unacknowledged - bytes);
+    if (record.paused && record.unacknowledged < FLOW_CONTROL.lowWatermark) {
+      record.paused = false;
+      for (const listener of record.drainListeners) listener();
+    }
+  }
+
   async deactivateAll(): Promise<void> {
     for (const id of [...this.activations.keys()]) await this.deactivate(id);
   }

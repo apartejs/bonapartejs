@@ -103,11 +103,17 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
   suffit. Le plugin terminal est donc un VRAI terminal : xterm.js côté vue,
   PTY côté Node, octets bruts entre les deux — surtout ne pas re-filtrer l'ANSI,
   c'est l'émulateur qui l'interprète.
-- **Notre SDK de plugin n'a pas de canal Node → vue** : `registerCommand` est
-  requête/réponse. Le terminal contourne par un curseur d'octets et un polling
-  adaptatif (30 ms quand ça débite, 200 ms au repos). Un `ctx.emit()` serait le
-  vrai correctif, utile aussi à la console du navigateur et aux logs de serveur
-  de dev.
+- **Le SDK de plugin POUSSE, avec contre-pression** (`ctx.emit()` +
+  `ctx.onDrain()`), modèle repris de VS Code. `emit` rend `false` quand la vue
+  est en retard : le producteur doit alors s'arrêter — convention des flux Node
+  (`write` puis `drain`). Seuils dans `FLOW_CONTROL` (host.ts), identiques aux
+  siens : pause à 100 000 non acquittés, reprise sous 5 000, acquittement par
+  paquets de 5 000. **La vue acquitte dans le callback de `term.write`**, donc
+  quand xterm a AFFICHÉ, pas quand l'IPC a livré — sinon on relancerait le
+  producteur trop tôt. Sans ça on perdait de la sortie en élaguant un tampon.
+- **Reste à faire, et c'est la leçon que VS Code a payée** : leurs moitiés Node
+  natives tournent dans un PROCESS dédié. Chez nous node-pty vit dans le main
+  process, donc un segfault emporte l'application.
 - **Plugins tiers hors de l'arbre : pas encore chargeables.** Les vues des
   plugins inclus sont ramassées par `import.meta.glob` (donc buildées avec
   l'app, chargées paresseusement) ; un plugin externe demandera le protocole

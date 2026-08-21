@@ -253,6 +253,11 @@ export class Harness {
   private readonly pluginHost = new PluginHost({
     registry: this.registry,
     logger: (message) => console.log(message),
+    // `core` ne connaît pas Electron : c'est ici qu'un événement de plugin
+    // devient un message IPC vers la fenêtre.
+    emit: (pluginId, event, payload) => {
+      this.emit(IPC.evPlugin, { pluginId, event, payload });
+    },
   });
   private readonly permissions = new PermissionEngine('repetition');
   private readonly pendingApprovals = new Map<
@@ -1239,6 +1244,9 @@ export class Harness {
     ipcMain.handle(IPC.conversationList, () => this.listConversations());
     ipcMain.handle(IPC.pluginsList, () => this.listPlugins());
     ipcMain.handle(IPC.pluginsReload, () => this.reloadPlugins());
+    ipcMain.handle(IPC.pluginsAck, (_e, pluginId: string, bytes: number) => {
+      this.pluginHost.acknowledge(pluginId, bytes);
+    });
     ipcMain.handle(
       IPC.pluginsInvoke,
       (_e, pluginId: string, command: string, payload?: unknown) =>

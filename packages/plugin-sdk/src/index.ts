@@ -67,6 +67,20 @@ export interface PluginNodeContext {
   registerCommand(name: string, handler: PluginCommandHandler): void;
   /** Valeur d'un réglage du plugin (portée globale). */
   getConfig<T = unknown>(key: string): T | undefined;
+  /**
+   * Pousse un événement vers la VUE du plugin, sans qu'elle ait à interroger.
+   *
+   * Rend `false` quand la vue est en RETARD : l'appelant doit alors cesser de
+   * lire sa source (mettre son PTY en pause, par exemple) jusqu'à ce que
+   * `onDrain` se déclenche. Même convention que les flux Node — `write()` puis
+   * `'drain'` — parce qu'elle est déjà connue.
+   *
+   * Sans cette contre-pression, un producteur rapide fait perdre des données :
+   * c'est la leçon que VS Code a tirée pour son terminal.
+   */
+  emit(event: string, payload: unknown): boolean;
+  /** La vue a rattrapé : le producteur peut reprendre. */
+  onDrain(listener: () => void): void;
   /** Nettoyage supplémentaire à exécuter au démontage. */
   onDispose(dispose: () => void | Promise<void>): void;
   /** Journalise en préfixant par l'id du plugin. */
