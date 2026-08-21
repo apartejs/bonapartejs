@@ -69,3 +69,19 @@
 .pty-host .xterm-viewport {
   height: 100% !important;
 }
+
+/* ── Actions de la section Plugins ─────────────────────────────────────── */
+
+.plugin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--aparte-border);
+}
+
+.plugin-actions .setting-help {
+  margin: 0;
+  flex: 1;
+}

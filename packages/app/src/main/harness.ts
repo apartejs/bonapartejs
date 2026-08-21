@@ -436,6 +436,34 @@ export class Harness {
   }
 
   /**
+   * Compteur de rechargement, utilisé comme cache-buster d'import ESM.
+   *
+   * `import()` mémoïse par URL : sans ce paramètre, réactiver un plugin
+   * re-jouerait l'ANCIEN module même après recompilation. C'est le seul moyen
+   * d'oublier un module ESM déjà chargé.
+   */
+  private pluginGeneration = 0;
+
+  /**
+   * Recharge les plugins À CHAUD : démontage complet puis re-découverte.
+   *
+   * C'est exactement ce pour quoi l'hôte a été rendu réversible — tout ce qu'un
+   * plugin a enregistré part avec son contexte. Sans ça, retoucher la moitié
+   * Node d'un plugin imposait de redémarrer l'app, donc de recharger le modèle
+   * en VRAM : plusieurs dizaines de secondes pour trois lignes de plugin.
+   */
+  async reloadPlugins(): Promise<PluginStatusDto[]> {
+    await this.pluginHost.deactivateAll();
+    this.pluginGeneration += 1;
+    await this.loadPlugins();
+    // L'inventaire d'outils a pu changer : les conversations en cours
+    // l'apprendront par un delta à leur prochaine ouverture.
+    this.registerBuiltinTools();
+    this.session = null;
+    return this.listPlugins();
+  }
+
+  /**
    * Découvre puis active les plugins. Un plugin qui échoue est CONSERVÉ avec
    * son erreur — le hub Réglages doit pouvoir le montrer plutôt que de le
    * faire disparaître sans explication.
@@ -448,7 +476,9 @@ export class Harness {
         const nodeEntry = plugin.manifest.entry.node;
         const module: PluginNodeModule = nodeEntry
           ? ((
-              (await import(pathToFileURL(join(plugin.dir, nodeEntry)).href)) as {
+              (await import(
+                `${pathToFileURL(join(plugin.dir, nodeEntry)).href}?v=${this.pluginGeneration}`,
+              )) as {
                 default: PluginNodeModule;
               }
             ).default)
@@ -1208,6 +1238,7 @@ export class Harness {
     );
     ipcMain.handle(IPC.conversationList, () => this.listConversations());
     ipcMain.handle(IPC.pluginsList, () => this.listPlugins());
+    ipcMain.handle(IPC.pluginsReload, () => this.reloadPlugins());
     ipcMain.handle(
       IPC.pluginsInvoke,
       (_e, pluginId: string, command: string, payload?: unknown) =>

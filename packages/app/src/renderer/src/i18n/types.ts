@@ -91,6 +91,9 @@ export interface AppTranslations {
     pluginActive: string;
     pluginFailed: string;
     conversationScope: string;
+    pluginReload: string;
+    pluginReloading: string;
+    pluginReloadHint: string;
   };
   tooling: {
     heading: string;

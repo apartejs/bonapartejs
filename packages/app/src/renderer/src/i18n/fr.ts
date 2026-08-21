@@ -91,6 +91,10 @@ export const FR: AppTranslations = {
     pluginActive: 'actif',
     pluginFailed: 'en échec',
     conversationScope: 'Cette conversation',
+    pluginReload: 'Recharger les plugins',
+    pluginReloading: 'Rechargement…',
+    pluginReloadHint:
+      'Démonte et réactive les plugins sans redémarrer bonaparte — le modèle reste chargé.',
   },
   tooling: {
     heading: 'Outillage',

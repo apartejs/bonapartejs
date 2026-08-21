@@ -34,6 +34,7 @@ export function SettingsHub({
   const [section, setSection] = useState<Section>('general');
   const [settings, setSettings] = useState<ResolvedSettingDto[]>([]);
   const [plugins, setPlugins] = useState<PluginStatusDto[]>([]);
+  const [reloading, setReloading] = useState(false);
 
   const refresh = useCallback(async () => {
     setSettings(await window.bonaparte.getSettings('global'));
@@ -141,7 +142,27 @@ export function SettingsHub({
           )}
 
           {section === 'plugins' && (
-            <ul className="plugin-list">
+            <>
+              {/* Recharger à chaud plutôt que redémarrer : la moitié Node d'un
+                  plugin est chargée une fois au démarrage, et redémarrer l'app
+                  recharge le modèle en VRAM. L'hôte est réversible pour ça. */}
+              <div className="plugin-actions">
+                <button
+                  type="button"
+                  disabled={reloading}
+                  onClick={() => {
+                    setReloading(true);
+                    void window.bonaparte
+                      .reloadPlugins()
+                      .then(setPlugins)
+                      .finally(() => setReloading(false));
+                  }}
+                >
+                  {reloading ? t.settings.pluginReloading : t.settings.pluginReload}
+                </button>
+                <span className="setting-help">{t.settings.pluginReloadHint}</span>
+              </div>
+              <ul className="plugin-list">
               {plugins.length === 0 && <li className="setting-help">{t.settings.noPlugins}</li>}
               {plugins.map((plugin) => (
                 <li key={plugin.id} className="plugin-row">
@@ -160,7 +181,8 @@ export function SettingsHub({
                   {plugin.error && <p className="setting-warning">{plugin.error}</p>}
                 </li>
               ))}
-            </ul>
+              </ul>
+            </>
           )}
         </div>
       </div>
