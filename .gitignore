@@ -17,3 +17,7 @@ Thumbs.db
 
 # Notes privées — ne JAMAIS retirer (repo public)
 docs/superpowers/
+
+# Artefacts Playwright
+packages/app/test-results/
+packages/app/playwright-report/
