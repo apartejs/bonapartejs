@@ -22,14 +22,12 @@ import { ConversationSidebar } from './components/ConversationSidebar.js';
 import { ProjectDialog } from './components/ProjectDialog.js';
 import { SettingsHub } from './components/SettingsHub.js';
 import { ToolingPanel } from './components/ToolingPanel.js';
-import { ToolingTabs } from './components/ToolingTabs.js';
 import { ModelPicker } from './components/ModelPicker.js';
 import { SetupPanel } from './components/SetupPanel.js';
 import { StatusStrip } from './components/StatusStrip.js';
 import { useTranslate } from './i18n/LocaleProvider.js';
 import { ResizeHandle } from './layout/ResizeHandle.js';
 import { PANEL_BOUNDS, SIDEBAR_BOUNDS, useLayout } from './layout/use-layout.js';
-import { useCollapseTransition } from './layout/use-collapse-transition.js';
 import { useToolingTabs } from './tooling/use-tooling-tabs.js';
 
 type View = 'boot' | 'setup' | 'pickModel' | 'chat';
@@ -68,10 +66,6 @@ export function App() {
     plugins,
     onOpen: layout.expandPanel,
   });
-  // Les flancs se replient en GLISSANT : ils restent montés le temps que leur
-  // largeur descende à zéro, puis s'en vont.
-  const sidebar = useCollapseTransition(!layout.sidebarCollapsed);
-  const panel = useCollapseTransition(!layout.panelCollapsed);
   const [projectRoot, setProjectRoot] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectSummaryDto[]>([]);
@@ -357,42 +351,11 @@ export function App() {
 
   return (
     <div className="app-shell">
-      {/*
-        L'en-tête coiffe TOUTE la coquille, flancs compris — pas seulement la
-        colonne du chat. C'est ce qui rend vraie la phrase « la bascule est à
-        l'extrémité droite de la barre » quoi qu'il y ait d'ouvert, et ce qui
-        permet à la bande d'onglets de s'aligner au pixel sur le panneau.
-      */}
-      {view === 'chat' && opened && (
-        <ConversationHeader
-          title={conversations.find((c) => c.id === opened.conversationId)?.title ?? ''}
-          project={currentProjectSummary}
-          projects={projects}
-          busy={busy}
-          onRename={(title) => void renameCurrent(title)}
-          onEditProject={() => {
-            if (currentProjectSummary) {
-              setProjectDialog({ project: currentProjectSummary });
-            }
-          }}
-          onCreateProject={() => setProjectDialog({ project: null })}
-          onMoveToProject={(id) => void moveConversation(id)}
-          sidebarCollapsed={layout.sidebarCollapsed}
-          panelCollapsed={layout.panelCollapsed}
-          onToggleSidebar={layout.toggleSidebar}
-          onTogglePanel={layout.togglePanel}
-          sideWidth={panel.entered ? layout.panelWidth : 0}
-          tabs={<ToolingTabs tooling={tooling} />}
-        />
-      )}
       <div className="app-body">
         {view === 'chat' &&
-          sidebar.mounted && (
+          !layout.sidebarCollapsed && (
             <>
-              <div
-                className="side-slot"
-                style={{ width: sidebar.entered ? layout.sidebarWidth : 0 }}
-              >
+              <div className="side-slot" style={{ width: layout.sidebarWidth }}>
                 <ConversationSidebar
                   conversations={conversations}
                   projects={projects}
@@ -448,6 +411,24 @@ export function App() {
           /* `app-main` est un flex ROW (il centre les cartes de configuration) :
              sans cette colonne, le chat ne prendrait pas toute la place. */
           <div className="chat-view">
+            <ConversationHeader
+              title={conversations.find((c) => c.id === opened.conversationId)?.title ?? ''}
+              project={currentProjectSummary}
+              projects={projects}
+              busy={busy}
+              onRename={(title) => void renameCurrent(title)}
+              onEditProject={() => {
+                if (currentProjectSummary) {
+                  setProjectDialog({ project: currentProjectSummary });
+                }
+              }}
+              onCreateProject={() => setProjectDialog({ project: null })}
+              onMoveToProject={(id) => void moveConversation(id)}
+              sidebarCollapsed={layout.sidebarCollapsed}
+              panelCollapsed={layout.panelCollapsed}
+              onToggleSidebar={layout.toggleSidebar}
+              onTogglePanel={layout.togglePanel}
+            />
             <ChatScreen
               initialEvents={opened.events}
               onStats={setLastStats}
@@ -461,11 +442,8 @@ export function App() {
           ) : null}
         </main>
         {view === 'chat' && (
-          panel.mounted && (
-            <div
-              className="side-slot"
-              style={{ width: panel.entered ? layout.panelWidth : 0 }}
-            >
+          !layout.panelCollapsed && (
+            <div className="side-slot" style={{ width: layout.panelWidth }}>
               <ResizeHandle
                 width={layout.panelWidth}
                 bounds={PANEL_BOUNDS}
@@ -477,6 +455,7 @@ export function App() {
                 tooling={tooling}
                 projectRoot={projectRoot}
                 conversationId={opened?.conversationId ?? null}
+                onClose={layout.togglePanel}
               />
             </div>
           )

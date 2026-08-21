@@ -11,21 +11,6 @@
   display: flex;
   min-width: 0;
   min-height: 0;
-  /*
-   * Le repli GLISSE : le flanc reste monté le temps que sa largeur descende à
-   * zéro (cf. use-collapse-transition).
-   *
-   * Le découpage du contenu est posé sur les ENFANTS, pas ici : le séparateur
-   * de redimensionnement chevauche volontairement la bordure du slot, et un
-   * `overflow: hidden` à ce niveau lui mangeait la moitié de sa cible.
-   */
-  transition: width var(--bp-slow) var(--bp-ease);
-}
-
-/* Pendant un glissé de séparateur, la largeur suit le doigt : une transition
-   ferait traîner le flanc derrière le curseur. */
-body.resizing .side-slot {
-  transition: none;
 }
 
 /* Les enfants d'un flanc prennent la largeur que le slot leur donne, au lieu
@@ -34,9 +19,6 @@ body.resizing .side-slot {
   flex: 1;
   width: auto;
   min-width: 0;
-  /* Pendant le repli, le contenu reste DANS le flanc — sans ça, la liste des
-     conversations déborde sur le chat le temps du trajet. */
-  overflow: hidden;
 }
 
 /*

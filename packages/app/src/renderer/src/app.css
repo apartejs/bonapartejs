@@ -22,7 +22,13 @@
   --bp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --bp-fast: 150ms;
   --bp-base: 260ms;
-  --bp-slow: 420ms;
+
+  /*
+   * Hauteur des deux barres du haut — celle de la conversation et celle du
+   * panneau. Elles appartiennent à des colonnes différentes, mais doivent se
+   * lire comme une seule ligne : la valeur est donc partagée, pas recopiée.
+   */
+  --bp-bar: 44px;
 }
 
 /*
@@ -954,8 +960,20 @@ button.primary {
   background: var(--aparte-surface-1);
 }
 
-/* La bande d'onglets vit maintenant dans la barre du haut : elle en occupe
-   toute la hauteur, sans bordure propre. */
+/*
+ * Barre du panneau : même hauteur que celle de la conversation, même bordure
+ * basse. Le flanc des conversations monte donc jusqu'en haut de la fenêtre,
+ * tandis que ces deux barres n'occupent que leurs colonnes.
+ */
+.tooling-bar {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  height: var(--bp-bar);
+  padding-inline-end: 8px;
+  border-bottom: 1px solid var(--aparte-border);
+}
+
 .tooling-tabs {
   display: flex;
   align-items: stretch;
@@ -963,7 +981,6 @@ button.primary {
   flex: 1;
   min-width: 0;
   padding: 6px 2px 0 8px;
-  transition: opacity var(--bp-base) var(--bp-ease);
 }
 
 /* La bande d'onglets défile ; le bouton `+` reste, lui, toujours atteignable. */
@@ -1536,6 +1553,15 @@ button.primary {
 
 /* La vue native se pose EXACTEMENT sur cette zone : elle n'est pas dans le
    DOM, donc ce bloc n'est qu'une réservation de place. */
+/* Un chargement qui échoue le dit DANS la zone de la page : c'est là que
+   l'utilisateur regarde, et la vue native, elle, n'affichera rien. */
+.browser-failed {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--aparte-error);
+}
+
 .browser-slot {
   flex: 1;
   min-height: 140px;

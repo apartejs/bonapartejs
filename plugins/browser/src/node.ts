@@ -15,6 +15,14 @@
  * retire donc de la fenêtre au démontage, sans la détruire — l'onglet garde
  * son URL, sa console et son historique de navigation.
  *
+ * RÈGLE : une page ne rejoint la fenêtre qu'une fois qu'on sait OÙ la mettre.
+ * Une vue posée sans rectangle occupe toute la fenêtre et masque l'application
+ * entière — c'est arrivé, et ça s'est vu : une URL qui ne se chargeait pas
+ * faisait échouer la commande d'ouverture, donc la vue React n'apprenait
+ * jamais qu'elle devait envoyer son rectangle, et la page restait sur toute la
+ * fenêtre. Poser la vue seulement quand un rectangle arrive supprime cette
+ * classe de panne au lieu de la rattraper.
+ *
  * Les outils de l'agent visent la page VISIBLE (le dernier onglet attaché) :
  * c'est ce que « la page ouverte dans le navigateur latéral » veut dire pour
  * l'utilisateur qui la regarde.
@@ -95,7 +103,6 @@ export default definePlugin({
     const ensurePage = (instanceId: string): Page => {
       const existing = pages.get(instanceId);
       if (existing) {
-        attach(existing);
         visibleId = instanceId;
         return existing;
       }
@@ -109,6 +116,10 @@ export default definePlugin({
           sandbox: true,
         },
       });
+      // Rectangle vide d'emblée : si quoi que ce soit posait cette vue sur la
+      // fenêtre avant que la vue React n'ait donné sa place, elle serait
+      // invisible plutôt qu'envahissante.
+      created.setBounds({ x: 0, y: 0, width: 0, height: 0 });
       const page: Page = { view: created, url: null, messages: [], attached: false };
       created.webContents.on('console-message', (_event, level, message) => {
         page.messages.push({
@@ -119,7 +130,7 @@ export default definePlugin({
         if (page.messages.length > MAX_MESSAGES) page.messages.shift();
       });
       pages.set(instanceId, page);
-      attach(page);
+      // Pas d'`attach` ici : c'est l'arrivée d'un rectangle qui pose la vue.
       visibleId = instanceId;
       return page;
     };
@@ -151,9 +162,19 @@ export default definePlugin({
       const target = /^https?:\/\//i.test(url) ? url : `http://${url}`;
       const page = ensurePage(idOf(payload));
       page.messages.length = 0;
-      await page.view.webContents.loadURL(target);
       page.url = target;
-      return { url: target };
+      // Un chargement qui échoue ne doit PAS faire échouer la commande : la vue
+      // React attend une réponse pour savoir qu'elle a une page à placer. Sans
+      // ça, une URL injoignable laissait une vue native sans rectangle.
+      try {
+        await page.view.webContents.loadURL(target);
+        return { url: target };
+      } catch (error) {
+        return {
+          url: target,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
     });
 
     /** Rectangle envoyé par la vue React : la vue native n'est pas dans le DOM. */
@@ -161,9 +182,14 @@ export default definePlugin({
       const { x, y, width, height } = (payload ?? {}) as Record<string, number>;
       const instanceId = idOf(payload);
       const page = pages.get(instanceId);
-      if (!page || width === undefined || height === undefined) return { placed: false };
-      // Recevoir un rectangle veut dire « je suis a l'écran » : la page
-      // remonte sur la fenêtre et devient la cible des outils de l'agent.
+      if (!page || !width || !height) {
+        // Rectangle absent ou vide : on ne pose rien, et on RETIRE ce qui l'est
+        // déjà. Une vue sans place n'a aucune raison d'être sur la fenêtre.
+        if (page) detach(page);
+        return { placed: false };
+      }
+      // Recevoir un rectangle veut dire « je suis à l'écran » : la page
+      // rejoint la fenêtre et devient la cible des outils de l'agent.
       attach(page);
       visibleId = instanceId;
       page.view.setBounds({
@@ -211,8 +237,8 @@ export default definePlugin({
       const target = /^https?:\/\//i.test(url) ? url : `http://${url}`;
       try {
         // L'agent charge dans la page VISIBLE. Il n'ouvre pas d'onglet : les
-        // onglets appartiennent à l'utilisateur, et une page posée sur la
-        // fenêtre sans onglet pour la porter serait invisible et immobile.
+        // onglets appartiennent à l'utilisateur, et une page sans onglet pour
+        // la porter n'aurait ni place sur la fenêtre ni personne pour la voir.
         const page = requirePage();
         page.messages.length = 0;
         await page.view.webContents.loadURL(target);

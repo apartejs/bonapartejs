@@ -5,6 +5,8 @@ interface BrowserState {
   url: string | null;
   open: boolean;
   messages: { level: string; text: string; at: string }[];
+  /** Message du dernier chargement qui a échoué, s'il y en a un. */
+  error?: string;
 }
 
 const LABELS = {
@@ -14,6 +16,7 @@ const LABELS = {
     go: 'Ouvrir',
     close: 'Fermer',
     hint: 'La page s’affiche par-dessus ce panneau. L’agent peut en lire la console et le DOM.',
+    failed: 'Chargement impossible :',
     console: 'Console',
     quiet: 'Rien dans la console.',
   },
@@ -23,6 +26,7 @@ const LABELS = {
     go: 'Open',
     close: 'Close',
     hint: 'The page renders on top of this panel. The agent can read its console and DOM.',
+    failed: 'Could not load:',
     console: 'Console',
     quiet: 'Nothing in the console.',
   },
@@ -33,8 +37,14 @@ const LABELS = {
  *
  * La page est une vue NATIVE : elle n'est pas dans le DOM, donc rien ne la
  * suit quand la fenêtre bouge. Ce composant réserve une zone et envoie son
- * rectangle au main à chaque changement de taille ; sans ça, la page se
- * retrouverait posée n'importe où sur la fenêtre.
+ * rectangle au main à chaque changement de taille.
+ *
+ * Le rectangle part dès le MONTAGE, sans attendre qu'une page soit chargée.
+ * C'est la moitié Node qui décide de poser la vue quand elle en reçoit un — et
+ * elle ne pose rien sans. L'inverse (n'envoyer le rectangle qu'une fois la page
+ * ouverte) laissait une vue sans place dès que l'ouverture échouait, et une vue
+ * sans place occupe toute la fenêtre : l'application disparaissait derrière
+ * une page blanche.
  */
 export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   const labels = LABELS[locale] ?? LABELS.en;
@@ -64,7 +74,6 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   }, [invoke]);
 
   useEffect(() => {
-    if (!state.open) return;
     sendBounds();
     const observer = new ResizeObserver(sendBounds);
     if (slotRef.current) observer.observe(slotRef.current);
@@ -77,11 +86,16 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
       window.removeEventListener('resize', sendBounds);
       clearInterval(timer);
     };
-  }, [state.open, sendBounds]);
+  }, [sendBounds]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      void invoke('state').then((next) => setState(next as BrowserState));
+      void invoke('state').then((next) =>
+        // Le message d'échec survit à la scrutation : c'est la seule trace
+        // qu'a l'utilisateur, et elle ne doit pas s'effacer au bout d'une
+        // seconde. Une ouverture réussie la remplace.
+        setState((current) => ({ ...(next as BrowserState), error: current.error })),
+      );
     }, 1000);
     return () => clearInterval(timer);
   }, [invoke]);
@@ -98,10 +112,16 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
 
   const open = useCallback(async () => {
     if (!url.trim()) return;
-    setState((await invoke('open', { url })) as BrowserState);
-    // L'état complet arrive au tour de scrutation suivant ; ce qui compte
-    // ici est que la zone existe pour recevoir la vue native.
-    setState((current) => ({ ...current, open: true }));
+    const reply = (await invoke('open', { url })) as { url?: string; error?: string };
+    // L'état complet arrive au tour de scrutation suivant ; ce qui compte ici
+    // est que la zone existe pour recevoir la vue native, et que l'échec
+    // éventuel se dise.
+    setState((current) => ({
+      ...current,
+      url: reply.url ?? current.url,
+      open: true,
+      ...(reply.error ? { error: reply.error } : { error: undefined }),
+    }));
   }, [invoke, url]);
 
   const close = useCallback(async () => {
@@ -134,7 +154,13 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
 
       {/* Zone réservée : la vue native vient se poser exactement ici. */}
       <div className="browser-slot" ref={slotRef}>
-        {!state.open && <p className="setting-help">{labels.hint}</p>}
+        {state.error ? (
+          <p className="browser-failed">
+            {labels.failed} {state.error}
+          </p>
+        ) : (
+          !state.open && <p className="setting-help">{labels.hint}</p>
+        )}
       </div>
 
       {state.open && (

@@ -148,80 +148,24 @@
 /* ── En-tête de conversation ───────────────────────────────────────────── */
 
 /*
- * La barre du haut coiffe TOUTE la fenêtre, flancs compris (modèle Codex,
- * VS Code) : c'est ce qui permet à la bascule du panneau de finir la barre
- * plutôt que de finir une colonne, et à la bande d'onglets de se poser
- * exactement au-dessus du panneau.
+ * Barre de la conversation. Elle appartient à la COLONNE de la conversation,
+ * pas à la fenêtre : le flanc des conversations monte donc jusqu'en haut, et
+ * cette barre ne parle que de ce qu'elle coiffe — projet, titre, actions.
+ *
+ * Sa hauteur et sa bordure basse sont celles de la barre du panneau (jeton
+ * `--bp-bar`) : les deux se lisent comme une seule ligne qui traverse la
+ * fenêtre, alors que chacune appartient à sa colonne.
  */
 .conv-header {
   position: relative;
   display: flex;
-  align-items: stretch;
-  flex: 0 0 auto;
-  /*
-   * AUCUN rembourrage à la fin. La moitié droite fait la largeur du panneau et
-   * doit finir AU BORD de la fenêtre, comme lui : avec 8 px ici, tout le bloc
-   * était poussé vers l'intérieur et son refend tombait 8 px à gauche de la
-   * bordure du panneau. Le rembourrage de la bascule est porté par la moitié
-   * droite elle-même, à l'intérieur de cette largeur.
-   */
-  padding-block: 0;
-  padding-inline: 8px 0;
-  border-bottom: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-1);
-}
-
-.conv-header-main {
-  display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 8px 6px;
-}
-
-/*
- * Moitié droite de la barre : elle fait EXACTEMENT la largeur du panneau,
- * bascule comprise, donc son refend tombe pile sur le bord du panneau. Elle
- * est alignée par la fin (`flex-end`) : la bascule reste collée au bord de la
- * fenêtre pendant que les onglets entrent et sortent par la droite, en suivant
- * l'ouverture du panneau.
- *
- * `overflow: hidden` est ce qui rend le repli propre — sans lui, les onglets
- * déborderaient sur le titre pendant la transition. C'est aussi pourquoi le
- * menu du `+` est en position fixe : posé en absolu, il se ferait couper ici.
- */
-.conv-header-right {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  justify-content: flex-end;
   flex: 0 0 auto;
-  min-width: 0;
-  padding-inline-end: 8px;
-  overflow: hidden;
-  border-inline-start: 1px solid transparent;
-  transition:
-    width var(--bp-slow) var(--bp-ease),
-    border-color var(--bp-slow) var(--bp-ease);
-}
-
-/* Le refend ne se montre que s'il sépare quelque chose. */
-.conv-header-right[data-open='true'] {
-  border-inline-start-color: var(--aparte-border);
-}
-
-/* Panneau fermé, il ne reste que la bascule : la bande d'onglets s'efface au
-   lieu de se tasser, sinon on verrait un `+` orphelin flotter. */
-.conv-header-right[data-open='false'] .tooling-tabs {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Pendant un glissé de séparateur, la largeur est pilotée au doigt : une
-   transition ferait traîner la barre derrière le curseur. */
-body.resizing .conv-header-right {
-  transition: none;
+  height: var(--bp-bar);
+  padding-inline: 8px;
+  border-bottom: 1px solid var(--aparte-border);
+  background: var(--aparte-surface-1);
 }
 
 .conv-chip {

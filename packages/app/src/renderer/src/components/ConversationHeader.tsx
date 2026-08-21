@@ -1,5 +1,5 @@
 import type { ProjectSummaryDto } from '@aparte/bonaparte-shared';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { FlankToggle } from './FlankToggle.js';
 
@@ -23,21 +23,6 @@ interface ConversationHeaderProps {
   panelCollapsed: boolean;
   onToggleSidebar: () => void;
   onTogglePanel: () => void;
-  /**
-   * Bande d'onglets du panneau d'outillage, posée dans la MOITIÉ DROITE de
-   * cette même barre — donc juste au-dessus du panneau, à sa largeur exacte.
-   * C'est l'arrangement de Codex : une seule barre en haut, quoi qu'il y ait
-   * d'ouvert.
-   */
-  tabs: ReactNode;
-  /**
-   * Largeur de la moitié droite de la barre, celle qui coiffe le panneau.
-   *
-   * Elle vaut la largeur du panneau quand il est ouvert, zéro quand il est
-   * fermé, et transite entre les deux : la bande d'onglets SUIT donc
-   * l'ouverture du panneau, comme chez Codex.
-   */
-  sideWidth: number;
 }
 
 /**
@@ -49,7 +34,6 @@ interface ConversationHeaderProps {
  * COMPRISE : c'est ce qui aligne son refend sur la bordure du panneau. Sans en
  * tenir compte, il tombait un bouton trop à gauche.
  */
-const TOGGLE_SLOT = 37;
 
 /**
  * En-tête de la conversation : ce qui la NOMME et ce qu'elle VOIT.
@@ -75,8 +59,6 @@ export function ConversationHeader({
   panelCollapsed,
   onToggleSidebar,
   onTogglePanel,
-  tabs,
-  sideWidth,
 }: ConversationHeaderProps) {
   const { t } = useTranslate();
   const [editing, setEditing] = useState(false);
@@ -108,7 +90,6 @@ export function ConversationHeader({
 
   return (
     <header className="conv-header" ref={wrapRef}>
-      <div className="conv-header-main">
       <FlankToggle
         side="start"
         collapsed={sidebarCollapsed}
@@ -168,30 +149,6 @@ export function ConversationHeader({
       >
         ···
       </button>
-
-      </div>
-
-      {/*
-        Moitié droite : elle fait la largeur du panneau, bascule comprise, et
-        elle est alignée par la FIN. La bascule est donc collée au bord de la
-        fenêtre et n'en bouge jamais — panneau ouvert comme fermé, c'est le
-        même bouton au même pixel — tandis que les onglets entrent et sortent
-        par la droite en suivant le panneau.
-      */}
-      <div
-        className="conv-header-right"
-        data-open={panelCollapsed ? 'false' : 'true'}
-        style={{ width: Math.max(sideWidth, TOGGLE_SLOT) }}
-      >
-        {tabs}
-        <FlankToggle
-          side="end"
-          collapsed={panelCollapsed}
-          label={panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel}
-          shortcut="Ctrl+Alt+B"
-          onToggle={onTogglePanel}
-        />
-      </div>
 
       {panel === 'project' && (
         <div className="conv-popover popover" role="dialog" aria-label={t.header.projectPanel}>
@@ -266,6 +223,21 @@ export function ConversationHeader({
             </button>
           )}
         </div>
+      )}
+
+      {/*
+        Panneau fermé, sa bascule termine CETTE barre ; ouvert, elle termine la
+        barre du panneau. Les deux finissent au bord de la fenêtre : le bouton
+        est au même pixel dans les deux cas, avec la même icône.
+      */}
+      {panelCollapsed && (
+        <FlankToggle
+          side="end"
+          collapsed
+          label={t.layout.expandPanel}
+          shortcut="Ctrl+Alt+B"
+          onToggle={onTogglePanel}
+        />
       )}
     </header>
   );
