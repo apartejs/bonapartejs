@@ -50,13 +50,6 @@ export const EN: AppTranslations = {
     manual: 'Browse…',
     confirm: 'Cast this role',
   },
-  project: {
-    eyebrow: 'the set',
-    title: 'Open a project',
-    intro:
-      'bonaparte works on a folder: its tools are confined to it and cannot step outside.',
-    choose: 'Choose a folder…',
-  },
   approval: {
     eyebrow: 'approval needed',
     title: 'bonaparte wants to act on your machine',
@@ -110,7 +103,7 @@ export const EN: AppTranslations = {
     create: 'New conversation',
     empty: 'No conversation yet.',
     untitled: 'New conversation',
-    noProject: 'no folder',
+    noProject: 'no project',
     kvReady: 'instant resume',
     kvReadyHint: 'This conversation’s context is saved: resuming skips the re-computation.',
     organise: 'Organise',
@@ -163,8 +156,6 @@ export const EN: AppTranslations = {
     crashed: 'crashed',
     restarting: 'restarting…',
     notConnected: 'engine not connected',
-    noProject: 'no project',
-    openProjectHint: 'Opening a project gives the agent its file and shell tools',
     restored: 'context restored',
     notRestored: 'cold start',
     reasons: {

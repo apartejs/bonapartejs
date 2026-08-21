@@ -51,13 +51,6 @@ export const FR: AppTranslations = {
     manual: 'Parcourir…',
     confirm: 'Distribuer ce rôle',
   },
-  project: {
-    eyebrow: 'le décor',
-    title: 'Ouvrir un projet',
-    intro:
-      'bonaparte travaille sur un dossier : ses outils y sont confinés et ne peuvent pas en sortir.',
-    choose: 'Choisir un dossier…',
-  },
   approval: {
     eyebrow: 'demande d’accord',
     title: 'bonaparte veut agir sur votre machine',
@@ -111,7 +104,7 @@ export const FR: AppTranslations = {
     create: 'Nouvelle conversation',
     empty: 'Aucune conversation pour l’instant.',
     untitled: 'Nouvelle conversation',
-    noProject: 'sans dossier',
+    noProject: 'sans projet',
     kvReady: 'reprise instantanée',
     kvReadyHint: 'Le contexte de cette conversation est sauvegardé : la reprise évite le re-calcul.',
     organise: 'Organiser',
@@ -164,8 +157,6 @@ export const FR: AppTranslations = {
     crashed: 'en panne',
     restarting: 'redémarrage…',
     notConnected: 'moteur non connecté',
-    noProject: 'aucun projet',
-    openProjectHint: 'Ouvrir un projet donne à l’agent ses outils fichiers et shell',
     restored: 'contexte restauré',
     notRestored: 'reprise à froid',
     reasons: {

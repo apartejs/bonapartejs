@@ -17,7 +17,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { bootstrapHighlighting } from './aparte-bootstrap.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
-import { ComposerBar } from './components/ComposerBar.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
 import { ProjectDialog } from './components/ProjectDialog.js';
@@ -406,11 +405,9 @@ export function App() {
               initialEvents={opened.events}
               onStats={setLastStats}
               onStreamingChange={setStreaming}
-            />
-            <ComposerBar
               mode={mode}
-              modelName={opened.modelName ?? null}
               onModeChange={changeMode}
+              modelName={opened.modelName ?? null}
             />
           </div>
           ) : null}

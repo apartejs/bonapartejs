@@ -49,12 +49,6 @@ export interface AppTranslations {
     manual: string;
     confirm: string;
   };
-  project: {
-    eyebrow: string;
-    title: string;
-    intro: string;
-    choose: string;
-  };
   approval: {
     eyebrow: string;
     title: string;
@@ -165,8 +159,6 @@ export interface AppTranslations {
     crashed: string;
     restarting: string;
     notConnected: string;
-    noProject: string;
-    openProjectHint: string;
     restored: string;
     notRestored: string;
     reasons: Record<string, string>;

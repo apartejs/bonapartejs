@@ -14,22 +14,19 @@
   flex-direction: column;
 }
 
-/* ── Rangée basse du composeur ─────────────────────────────────────────── */
+/*
+ * ── Pied du composeur ─────────────────────────────────────────────────────
+ *
+ * Ces éléments sont montés dans les slots `footerLeft` / `footerRight`
+ * d'`<AparteChat>` : la lib place et aligne la rangée, on ne fournit que le
+ * contenu. Une barre séparée sous le composeur avait d'abord été bricolée —
+ * les slots existaient, ils n'étaient simplement documentés que dans les
+ * typings (friction consignée).
+ */
 
-.composer-bar {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: center;
-  padding: 0 16px 12px;
-}
-
-.composer-bar-inner {
+.mode-wrap {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  max-width: 780px;
+  display: inline-flex;
 }
 
 .mode-button {

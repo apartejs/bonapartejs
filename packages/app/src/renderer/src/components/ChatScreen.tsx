@@ -2,15 +2,22 @@ import { AparteChat, useAparteChat } from '@aparte/react';
 import type {
   AgentEventDto,
   CompletionStatsDto,
+  PlayModeDto,
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { ModeSelector } from './ModeSelector.js';
 
 interface ChatScreenProps {
   initialEvents: ConversationEventDto[];
   onStats: (stats: CompletionStatsDto) => void;
   onStreamingChange: (streaming: boolean) => void;
+  /** Mode de jeu, monté dans le pied du composeur : il décide du prochain tour. */
+  mode: PlayModeDto;
+  onModeChange: (mode: PlayModeDto) => void;
+  /** Modèle de la conversation — pied droit, comme le suggère la lib. */
+  modelName: string | null;
 }
 
 let nextId = 0;
@@ -35,6 +42,9 @@ export function ChatScreen({
   initialEvents,
   onStats,
   onStreamingChange,
+  mode,
+  onModeChange,
+  modelName,
 }: ChatScreenProps) {
   const { t } = useTranslate();
 
@@ -190,6 +200,17 @@ export function ChatScreen({
         // Pas de pièces jointes : la lib les coupe par défaut, et notre boucle
         // ne consomme pas encore `detail.files` — mieux vaut ne rien promettre
         // que jeter les fichiers en silence.
+        //
+        // Le pied du composeur porte ce qui conditionne le PROCHAIN message :
+        // à gauche ce que l'agent s'autorise, à droite qui va répondre.
+        footerLeft={<ModeSelector mode={mode} onModeChange={onModeChange} />}
+        footerRight={
+          modelName ? (
+            <span className="composer-model" title={modelName}>
+              {modelName}
+            </span>
+          ) : undefined
+        }
       />
     </div>
   );
