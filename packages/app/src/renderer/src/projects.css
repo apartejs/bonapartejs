@@ -358,7 +358,7 @@
 }
 
 .conv-popover-danger {
-  color: #e2795f;
+  color: var(--aparte-error, #c0392b);
 }
 
 /* ── Modale et dialogue de projet ──────────────────────────────────────── */
@@ -404,9 +404,9 @@
 }
 
 .modal-actions .danger {
-  color: #e2795f;
+  color: var(--aparte-error, #c0392b);
   background: transparent;
-  border-color: color-mix(in srgb, #e2795f 40%, transparent);
+  border-color: color-mix(in srgb, var(--aparte-error, #c0392b) 40%, transparent);
 }
 
 /*
@@ -484,8 +484,8 @@
 }
 
 .root-actions .root-remove:hover {
-  color: #e2795f;
-  border-color: color-mix(in srgb, #e2795f 40%, transparent);
+  color: var(--aparte-error, #c0392b);
+  border-color: color-mix(in srgb, var(--aparte-error, #c0392b) 40%, transparent);
 }
 
 .root-add {

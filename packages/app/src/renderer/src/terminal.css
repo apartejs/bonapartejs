@@ -59,7 +59,8 @@
   min-height: 0;
   overflow: hidden;
   padding: 6px 8px;
-  background: #17141c;
+  /* Le fond SUIT le thème : en dur, le terminal restait noir en thème clair. */
+  background: var(--aparte-bg);
   border: 1px solid var(--aparte-border);
   border-radius: 9px;
 }

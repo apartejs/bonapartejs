@@ -35,6 +35,23 @@ const LABELS = {
 } as const;
 
 /**
+ * Couleurs du terminal, LUES dans le thème de l'app.
+ *
+ * xterm veut des valeurs concrètes en JavaScript, pas des `var()` : on résout
+ * donc les tokens à la main. Les coder en dur laissait un rectangle noir en
+ * thème clair — un terminal illisible est pire qu'un terminal absent.
+ */
+function readTheme(): { background: string; foreground: string } {
+  const styles = getComputedStyle(document.documentElement);
+  const token = (name: string, fallback: string): string =>
+    styles.getPropertyValue(name).trim() || fallback;
+  return {
+    background: token('--aparte-bg', '#17141c'),
+    foreground: token('--aparte-text', '#e8e4ee'),
+  };
+}
+
+/**
  * Terminal : xterm.js branché sur un vrai PTY.
  *
  * L'ancienne vue était un champ de commande et un `<div>` de sortie, avec les
@@ -115,9 +132,7 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       fontSize: 12.5,
       cursorBlink: true,
       allowProposedApi: true,
-      // Le terminal suit le thème de l'app : lire du texte clair sur fond
-      // clair serait pire que pas de terminal.
-      theme: { background: '#17141c', foreground: '#e8e4ee' },
+      theme: readTheme(),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -128,6 +143,17 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
 
     const onData = term.onData((data) => {
       void invoke('write', { data });
+    });
+
+    // Le thème se change à chaud (attribut sur <html>) : xterm ayant COPIÉ les
+    // couleurs à sa construction, il faut les lui redonner. Sans ça, basculer
+    // en clair laisse un terminal sombre au milieu d'une interface claire.
+    const themeWatcher = new MutationObserver(() => {
+      term.options.theme = readTheme();
+    });
+    themeWatcher.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-aparte-theme'],
     });
 
     const observer = new ResizeObserver(() => {
@@ -147,6 +173,7 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
     })();
 
     return () => {
+      themeWatcher.disconnect();
       observer.disconnect();
       onData.dispose();
       term.dispose();
