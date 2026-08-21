@@ -17,11 +17,16 @@
 /*
  * ── Pied du composeur ─────────────────────────────────────────────────────
  *
- * Ces éléments sont montés dans les slots `footerLeft` / `footerRight`
- * d'`<AparteChat>` : la lib place et aligne la rangée, on ne fournit que le
- * contenu. Une barre séparée sous le composeur avait d'abord été bricolée —
- * les slots existaient et sont bel et bien documentés, mais en une clause au
- * milieu d'une phrase, sans exemple (friction consignée).
+ * Ces éléments sont montés dans le slot `toolbar` d'`<AparteChat>` : la lib
+ * dessine la rangée, on ne fournit que le contenu ET son ordre.
+ *
+ * L'ordre est celui du DOM. Ce qui doit finir la ligne se pousse avec
+ * `margin-inline-start: auto` — propriété LOGIQUE, donc correcte en RTL, là où
+ * l'ancien `footerRight` nommait une position physique.
+ *
+ * (Une barre séparée sous le composeur avait d'abord été bricolée : les slots
+ * existaient et étaient documentés, mais en une clause au milieu d'une phrase,
+ * sans exemple. Friction consignée.)
  */
 
 .mode-wrap {
@@ -63,6 +68,8 @@
 }
 
 .composer-model {
+  /* Pousse ce modèle — et tout ce qui suivrait — à la fin de la rangée. */
+  margin-inline-start: auto;
   overflow: hidden;
   max-width: 220px;
   text-overflow: ellipsis;

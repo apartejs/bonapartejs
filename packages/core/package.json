@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@aparte/bonaparte-shared": "workspace:*",
-    "@aparte/core": "0.6.0",
+    "@aparte/core": "0.7.0",
     "zod": "catalog:"
   },
   "devDependencies": {

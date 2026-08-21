@@ -201,15 +201,23 @@ export function ChatScreen({
         // ne consomme pas encore `detail.files` — mieux vaut ne rien promettre
         // que jeter les fichiers en silence.
         //
-        // Le pied du composeur porte ce qui conditionne le PROCHAIN message :
-        // à gauche ce que l'agent s'autorise, à droite qui va répondre.
-        footerLeft={<ModeSelector mode={mode} onModeChange={onModeChange} />}
-        footerRight={
-          modelName ? (
-            <span className="composer-model" title={modelName}>
-              {modelName}
-            </span>
-          ) : undefined
+        // La barre d'outils du composeur porte ce qui conditionne le PROCHAIN
+        // message : ce que l'agent s'autorise, et qui va répondre.
+        //
+        // Un seul slot depuis 0.7.0, et l'ordre est celui du DOM : les trois
+        // slots positionnels d'avant nommaient une position PHYSIQUE
+        // (« right »), ce qui contredit le sens de lecture en RTL. Le modèle
+        // pousse sa fin de ligne avec `margin-inline-start: auto`, propriété
+        // LOGIQUE — donc juste dans les deux sens.
+        toolbar={
+          <>
+            <ModeSelector mode={mode} onModeChange={onModeChange} />
+            {modelName && (
+              <span className="composer-model" title={modelName}>
+                {modelName}
+              </span>
+            )}
+          </>
         }
       />
     </div>
