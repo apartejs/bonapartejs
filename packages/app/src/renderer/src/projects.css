@@ -409,8 +409,23 @@
   border-color: color-mix(in srgb, #e2795f 40%, transparent);
 }
 
+/*
+ * Dans le dialogue, `.field-label` sert de TITRE DE SECTION et non d'étiquette
+ * de champ : il lui faut l'air d'un titre au-dessus, sinon « Dossiers sources »
+ * se lit comme la légende du champ précédent.
+ */
+.modal-card > .field-label {
+  margin-top: 20px;
+}
+
+/* La note explique la liste : elle s'en détache, mais reste rattachée à elle
+   plutôt que de flotter à mi-chemin des boutons. */
+.modal-card .setup-note {
+  margin: 10px 0 0;
+}
+
 .root-list {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
