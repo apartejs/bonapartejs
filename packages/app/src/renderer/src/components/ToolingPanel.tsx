@@ -7,13 +7,6 @@ interface ToolingPanelProps {
   plugins: PluginStatusDto[];
   projectRoot: string | null;
   conversationId: string | null;
-  /**
-   * Le repli est REMONTÉ au shell : il se persiste et se pilote au clavier
-   * (Ctrl+Alt+B) avec le reste de la disposition. Un état local ici serait
-   * oublié à chaque rechargement, et invisible du raccourci.
-   */
-  collapsed: boolean;
-  onToggleCollapsed: () => void;
 }
 
 interface Tab {
@@ -33,8 +26,6 @@ export function ToolingPanel({
   plugins,
   projectRoot,
   conversationId,
-  collapsed,
-  onToggleCollapsed,
 }: ToolingPanelProps) {
   const { t, locale } = useTranslate();
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -79,21 +70,6 @@ export function ToolingPanel({
 
   if (tabs.length === 0) return null;
 
-  if (collapsed) {
-    return (
-      <aside className="tooling-panel tooling-collapsed">
-        <button
-          type="button"
-          className="tooling-handle"
-          onClick={onToggleCollapsed}
-          title={t.tooling.expand}
-        >
-          ‹
-        </button>
-      </aside>
-    );
-  }
-
   return (
     <aside className="tooling-panel" aria-label={t.tooling.heading}>
       <div className="tooling-tabs" role="tablist">
@@ -110,14 +86,6 @@ export function ToolingPanel({
             {tab.title}
           </button>
         ))}
-        <button
-          type="button"
-          className="tooling-handle"
-          onClick={onToggleCollapsed}
-          title={t.tooling.collapse}
-        >
-          ›
-        </button>
       </div>
 
       <div className="tooling-body" role="tabpanel">

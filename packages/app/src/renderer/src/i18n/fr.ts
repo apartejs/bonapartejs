@@ -157,6 +157,8 @@ export const FR: AppTranslations = {
   layout: {
     collapseSidebar: 'Replier les conversations',
     expandSidebar: 'Afficher les conversations',
+    collapsePanel: 'Replier l’outillage',
+    expandPanel: 'Afficher l’outillage',
     resizeSidebar: 'Largeur des conversations — flèches pour ajuster, double-clic pour rétablir',
     resizePanel: 'Largeur de l’outillage — flèches pour ajuster, double-clic pour rétablir',
   },

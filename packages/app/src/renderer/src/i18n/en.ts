@@ -156,6 +156,8 @@ export const EN: AppTranslations = {
   layout: {
     collapseSidebar: 'Collapse conversations',
     expandSidebar: 'Show conversations',
+    collapsePanel: 'Collapse tooling',
+    expandPanel: 'Show tooling',
     resizeSidebar: 'Conversations width — arrows to adjust, double-click to reset',
     resizePanel: 'Tooling width — arrows to adjust, double-click to reset',
   },

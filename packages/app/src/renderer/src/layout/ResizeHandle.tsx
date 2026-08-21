@@ -5,7 +5,7 @@ interface ResizeHandleProps {
   /** Largeur courante du panneau que cette poignée redimensionne. */
   width: number;
   bounds: LayoutBounds;
-  /** `end` = la poignée est à DROITE du panneau (flanc gauche), et inversement. */
+  /** Bord du panneau où la poignée se pose : `end` = à droite, `start` = à gauche. */
   side: 'end' | 'start';
   label: string;
   onResize: (width: number) => void;
@@ -16,16 +16,25 @@ const STEP = 16;
 const BIG_STEP = 64;
 
 /**
- * Poignée de redimensionnement entre deux zones du shell.
+ * Séparateur redimensionnable entre deux zones du shell.
  *
- * Elle est utilisable à la SOURIS et au CLAVIER. Une poignée qui n'existe qu'à
- * la souris exclut une partie des gens et rend la disposition irrattrapable
- * dès qu'un panneau est tiré trop loin — c'est le plancher de qualité, pas une
- * option.
+ * Il est positionné en ABSOLU, à cheval sur la bordure du panneau, et
+ * n'occupe donc AUCUNE place dans la mise en page — c'est ainsi que font
+ * VS Code, Slack ou Linear. Une gouttière permanente de quelques pixels se
+ * voit, décale tout, et se paie sur chaque écran alors qu'elle ne sert qu'au
+ * moment du survol.
+ *
+ * Il reste large de 8 px pour la SAISIE tout en ne peignant qu'un filet de
+ * 1 px au survol : une cible de 1 px se rate, et se rater sur un séparateur
+ * donne l'impression que l'interface ne répond pas.
+ *
+ * Utilisable au clavier, parce qu'une poignée réservée à la souris exclut du
+ * monde et rend la disposition irrattrapable dès qu'un panneau est tiré trop
+ * loin.
  *
  * `setPointerCapture` plutôt qu'un écouteur sur `window` : le glissement suit
- * le pointeur même quand il sort de la fenêtre ou passe au-dessus d'un iframe,
- * et il s'arrête proprement si le navigateur l'annule.
+ * le pointeur même hors de la fenêtre, et s'arrête proprement si le navigateur
+ * l'annule.
  */
 export function ResizeHandle({
   width,
@@ -42,8 +51,6 @@ export function ResizeHandle({
       if (event.button !== 0) return;
       origin.current = { x: event.clientX, width };
       event.currentTarget.setPointerCapture(event.pointerId);
-      // Pendant le glissement, empêcher la sélection de texte : sans ça, tirer
-      // la poignée surligne la moitié de l'interface.
       document.body.classList.add('resizing');
     },
     [width],
@@ -72,7 +79,7 @@ export function ResizeHandle({
       const step = event.shiftKey ? BIG_STEP : STEP;
       // Les flèches suivent l'ÉCRAN, pas le panneau : « droite » élargit ce qui
       // est à gauche et rétrécit ce qui est à droite. C'est ce que la main
-      // attend en regardant la poignée bouger.
+      // attend en regardant le séparateur bouger.
       const towardsEnd = event.key === 'ArrowRight';
       const towardsStart = event.key === 'ArrowLeft';
       if (!towardsEnd && !towardsStart) {
@@ -92,7 +99,7 @@ export function ResizeHandle({
 
   return (
     <div
-      className="resize-handle"
+      className={`resize-handle resize-handle-${side}`}
       role="separator"
       aria-orientation="vertical"
       aria-label={label}

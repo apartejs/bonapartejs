@@ -221,6 +221,36 @@
   background: var(--aparte-surface-2);
 }
 
+/*
+ * Bascules des flancs : discrètes au repos, franches quand le flanc est
+ * fermé. Elles occupent une position FIXE de l'en-tête — c'est ce qui permet
+ * de rouvrir un panneau depuis un bouton qui n'a pas bougé.
+ */
+.conv-header-toggle {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  line-height: 1;
+  font-size: 11px;
+  letter-spacing: -1px;
+  color: var(--aparte-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.conv-header-toggle:hover {
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+  border-color: var(--aparte-border);
+}
+
+/* Flanc fermé : la bascule se signale, sinon rien ne dit qu'il manque
+   quelque chose. */
+.conv-header-toggle[aria-pressed='false'] {
+  color: var(--aparte-primary);
+}
+
 .conv-header-spacer {
   flex: 0 0 4px;
 }

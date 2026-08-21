@@ -2,55 +2,84 @@
  * Disposition du shell : flancs redimensionnables et repliables.
  *
  * Les largeurs viennent d'un style inline (l'état vit dans React), donc rien
- * ici ne fixe de dimension — ce fichier ne s'occupe que de la mécanique et de
- * l'affordance.
+ * ici ne fixe de dimension — ce fichier ne s'occupe que de la mécanique.
  */
 
 .side-slot {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
 }
 
 /* Les enfants d'un flanc prennent la largeur que le slot leur donne, au lieu
    de la leur imposer — c'est le slot qui est redimensionné. */
-.side-slot > * {
+.side-slot > *:not(.resize-handle) {
   flex: 1;
   width: auto;
   min-width: 0;
 }
 
 /*
- * La poignée : 5 px de surface réelle, mais une zone de saisie élargie par
- * `::after`. Une cible de 1 px se rate, et se rater sur un séparateur donne
- * l'impression que l'interface ne répond pas.
+ * Le séparateur est POSÉ SUR la bordure, en absolu : il n'occupe aucune place
+ * dans la mise en page. Une gouttière permanente se verrait et décalerait tout
+ * alors qu'elle ne sert qu'au survol — VS Code, Slack et Linear font tous
+ * ainsi.
+ *
+ * 8 px de large pour la SAISIE, mais rien de peint au repos.
  */
 .resize-handle {
-  position: relative;
-  flex: 0 0 5px;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  z-index: 5;
   cursor: col-resize;
   background: transparent;
-  transition: background-color 120ms ease;
   touch-action: none;
 }
 
+.resize-handle-end {
+  right: -4px;
+}
+
+.resize-handle-start {
+  left: -4px;
+}
+
+/*
+ * Au survol, un filet de 1 px centré — pas un bloc de 8 px. La zone sensible
+ * est large, la marque est fine : on garde la facilité de visée sans ajouter
+ * de bruit visuel.
+ */
 .resize-handle::after {
   content: '';
   position: absolute;
-  inset: 0 -3px;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background: var(--aparte-primary);
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 
-.resize-handle:hover,
+.resize-handle:hover::after,
+.resize-handle:focus-visible::after,
+body.resizing .resize-handle:focus-visible::after {
+  opacity: 1;
+}
+
+/* Au clavier, la marque doit être franche : sans contour naturel, un filet
+   discret ne suffirait pas à dire où est le focus. */
 .resize-handle:focus-visible {
-  background: var(--aparte-primary);
   outline: none;
 }
 
-/* Au clavier, la poignée doit se VOIR : elle n'a pas de contour naturel. */
-.resize-handle:focus-visible {
-  box-shadow: 0 0 0 1px var(--aparte-bg);
+.resize-handle:focus-visible::after {
+  width: 2px;
 }
 
 /* Pendant un glissement, le curseur reste celui du redimensionnement partout
@@ -60,38 +89,8 @@ body.resizing {
   user-select: none;
 }
 
-/*
- * Rail d'un flanc replié. Sans lui, un panneau fermé disparaîtrait sans laisser
- * de trace et le raccourci serait la seule façon de le retrouver.
- */
-.side-rail {
-  flex: 0 0 28px;
-  display: flex;
-  justify-content: center;
-  padding-top: 10px;
-  border-right: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-1);
-}
-
-.side-rail-button {
-  padding: 2px 6px;
-  line-height: 1;
-  font-size: 15px;
-  color: var(--aparte-text-muted);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
-.side-rail-button:hover {
-  color: var(--aparte-text);
-  background: var(--aparte-surface-2);
-  border-color: var(--aparte-border);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .resize-handle {
+  .resize-handle::after {
     transition: none;
   }
 }

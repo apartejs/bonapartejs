@@ -11,6 +11,17 @@ interface ConversationHeaderProps {
   onEditProject: () => void;
   onCreateProject: () => void;
   onMoveToProject: (projectId: string | null) => void;
+  /**
+   * Bascules des deux flancs. Elles vivent ICI, dans une position fixe de la
+   * chrome, et non dans les panneaux qu'elles masquent : un bouton placé dans
+   * le panneau qu'il ferme disparaît avec lui — c'est ce qui obligeait à
+   * inventer un rail pour le retrouver. Codex, Slack et Linear les gardent
+   * tous dans la barre du haut.
+   */
+  sidebarCollapsed: boolean;
+  panelCollapsed: boolean;
+  onToggleSidebar: () => void;
+  onTogglePanel: () => void;
 }
 
 /**
@@ -33,6 +44,10 @@ export function ConversationHeader({
   onEditProject,
   onCreateProject,
   onMoveToProject,
+  sidebarCollapsed,
+  panelCollapsed,
+  onToggleSidebar,
+  onTogglePanel,
 }: ConversationHeaderProps) {
   const { t } = useTranslate();
   const [editing, setEditing] = useState(false);
@@ -64,6 +79,17 @@ export function ConversationHeader({
 
   return (
     <header className="conv-header" ref={wrapRef}>
+      <button
+        type="button"
+        className="conv-header-toggle"
+        onClick={onToggleSidebar}
+        aria-pressed={!sidebarCollapsed}
+        title={`${sidebarCollapsed ? t.layout.expandSidebar : t.layout.collapseSidebar} (Ctrl+B)`}
+        aria-label={sidebarCollapsed ? t.layout.expandSidebar : t.layout.collapseSidebar}
+      >
+        <span aria-hidden="true">{sidebarCollapsed ? '▊ ' : '▊▎'}</span>
+      </button>
+
       <button
         type="button"
         className={`conv-chip ${project ? 'conv-chip-project' : 'conv-chip-dim'}`}
@@ -114,6 +140,17 @@ export function ConversationHeader({
         title={t.header.actions}
       >
         ···
+      </button>
+
+      <button
+        type="button"
+        className="conv-header-toggle"
+        onClick={onTogglePanel}
+        aria-pressed={!panelCollapsed}
+        title={`${panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel} (Ctrl+Alt+B)`}
+        aria-label={panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel}
+      >
+        <span aria-hidden="true">{panelCollapsed ? ' ▊' : '▎▊'}</span>
       </button>
 
       {panel === 'project' && (

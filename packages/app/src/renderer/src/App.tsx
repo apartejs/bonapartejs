@@ -342,21 +342,7 @@ export function App() {
     <div className="app-shell">
       <div className="app-body">
         {view === 'chat' &&
-          (layout.sidebarCollapsed ? (
-            /* Replié, le flanc laisse un rail : sans lui, rien ne dirait
-               qu'il existe encore, et le raccourci serait la seule issue. */
-            <div className="side-rail">
-              <button
-                type="button"
-                className="side-rail-button"
-                onClick={layout.toggleSidebar}
-                title={`${t.layout.expandSidebar} (Ctrl+B)`}
-                aria-label={t.layout.expandSidebar}
-              >
-                ›
-              </button>
-            </div>
-          ) : (
+          !layout.sidebarCollapsed && (
             <>
               <div className="side-slot" style={{ width: layout.sidebarWidth }}>
                 <ConversationSidebar
@@ -375,18 +361,17 @@ export function App() {
                   }}
                   onGroupingChange={changeGrouping}
                   onSortChange={changeSort}
-                  onCollapse={layout.toggleSidebar}
+                />
+                <ResizeHandle
+                  width={layout.sidebarWidth}
+                  bounds={SIDEBAR_BOUNDS}
+                  side="end"
+                  label={t.layout.resizeSidebar}
+                  onResize={layout.setSidebarWidth}
                 />
               </div>
-              <ResizeHandle
-                width={layout.sidebarWidth}
-                bounds={SIDEBAR_BOUNDS}
-                side="end"
-                label={t.layout.resizeSidebar}
-                onResize={layout.setSidebarWidth}
-              />
             </>
-          ))}
+          )}
         <main className="app-main">
         {view === 'setup' || view === 'boot' ? (
           <SetupPanel
@@ -430,6 +415,10 @@ export function App() {
               }}
               onCreateProject={() => setProjectDialog({ project: null })}
               onMoveToProject={(id) => void moveConversation(id)}
+              sidebarCollapsed={layout.sidebarCollapsed}
+              panelCollapsed={layout.panelCollapsed}
+              onToggleSidebar={layout.toggleSidebar}
+              onTogglePanel={layout.togglePanel}
             />
             <ChatScreen
               initialEvents={opened.events}
@@ -443,8 +432,8 @@ export function App() {
           ) : null}
         </main>
         {view === 'chat' && (
-          <>
-            {!layout.panelCollapsed && (
+          !layout.panelCollapsed && (
+            <div className="side-slot" style={{ width: layout.panelWidth }}>
               <ResizeHandle
                 width={layout.panelWidth}
                 bounds={PANEL_BOUNDS}
@@ -452,20 +441,13 @@ export function App() {
                 label={t.layout.resizePanel}
                 onResize={layout.setPanelWidth}
               />
-            )}
-            <div
-              className="side-slot"
-              style={layout.panelCollapsed ? undefined : { width: layout.panelWidth }}
-            >
               <ToolingPanel
                 plugins={plugins}
                 projectRoot={projectRoot}
                 conversationId={opened?.conversationId ?? null}
-                collapsed={layout.panelCollapsed}
-                onToggleCollapsed={layout.togglePanel}
               />
             </div>
-          </>
+          )
         )}
       </div>
       {settingsOpen && (

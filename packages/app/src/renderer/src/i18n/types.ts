@@ -159,6 +159,8 @@ export interface AppTranslations {
   layout: {
     collapseSidebar: string;
     expandSidebar: string;
+    collapsePanel: string;
+    expandPanel: string;
     resizeSidebar: string;
     resizePanel: string;
   };

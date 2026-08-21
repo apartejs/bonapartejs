@@ -686,8 +686,7 @@ button.primary {
 }
 
 .conv-sidebar {
-  width: 248px;
-  flex: 0 0 248px;
+  /* La largeur vient du slot, qui est redimensionnable. */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -833,20 +832,12 @@ button.primary {
 /* ── Panneau d'outillage (droite) ───────────────────────────────────────── */
 
 .tooling-panel {
-  width: 340px;
-  flex: 0 0 340px;
+  /* La largeur vient du slot, qui est redimensionnable. */
   display: flex;
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid var(--aparte-border);
   background: var(--aparte-surface-1);
-}
-
-.tooling-panel.tooling-collapsed {
-  width: 28px;
-  flex: 0 0 28px;
-  align-items: center;
-  padding-top: 10px;
 }
 
 .tooling-tabs {
@@ -886,16 +877,6 @@ button.primary {
 
 .tooling-tab-icon {
   font-family: var(--bp-mono);
-}
-
-.tooling-handle {
-  margin-left: auto;
-  border: none;
-  background: transparent;
-  color: var(--aparte-text-muted);
-  cursor: pointer;
-  font-size: 15px;
-  padding: 2px 6px;
 }
 
 .tooling-body {
