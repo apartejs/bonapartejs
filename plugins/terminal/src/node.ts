@@ -1,21 +1,29 @@
 /**
  * Terminal — moitié Node.
  *
- * `node-pty` donne un vrai pseudo-terminal (programmes interactifs, taille de
- * fenêtre), mais c'est un binding NATIF : il doit être recompilé pour l'ABI
- * d'Electron, et sur une machine où ça n'a pas été fait, `import` échoue.
+ * Un VRAI pseudo-terminal via `node-pty` : programmes interactifs, couleurs,
+ * taille de fenêtre, plein écran. On ne filtre PLUS les séquences ANSI — c'est
+ * xterm.js qui les interprète côté vue. Les retirer, c'était afficher du texte
+ * en prétendant que c'était un terminal.
  *
- * Le plugin ne parie donc pas dessus. Il le tente, et à défaut retombe sur un
- * shell lancé en process ordinaire : on y exécute des commandes et on lit leur
- * sortie, sans les programmes plein écran. La vue le DIT, plutôt que de
- * laisser croire à un terminal complet qui se comporterait bizarrement.
+ * `node-pty` est un binding natif. Vérifié le 2026-08-20 : il charge sous
+ * Electron 43 SANS recompilation (ABI compatible, ConPTY livré avec le
+ * paquet). Le repli reste là pour les machines où il manquerait, mais il est
+ * annoncé comme dégradé, pas présenté comme un terminal.
+ *
+ * Transport : la vue interroge `read({ since })` avec un curseur d'octets.
+ * Notre SDK de plugin n'a pas encore de canal Node → vue pour POUSSER des
+ * données ; c'est un manque connu, contourné par un polling adaptatif côté vue
+ * (rapide quand ça débite, lent au repos).
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { definePlugin, type PluginNodeContext } from '@aparte/bonaparte-plugin-sdk';
 
-/** Lignes conservées : de quoi suivre, pas un journal complet. */
-const MAX_LINES = 500;
+/** Fenêtre conservée : de quoi remonter un peu, pas un journal complet. */
+const MAX_BUFFER_CHARS = 200_000;
 
 interface PtyLike {
   write(data: string): void;
@@ -27,11 +35,76 @@ interface PtyLike {
 
 type Mode = 'pty' | 'basique';
 
-function defaultShell(): { command: string; args: string[] } {
+export interface ShellChoice {
+  /** Identifiant stable, utilisé par la vue pour demander ce shell. */
+  id: string;
+  label: string;
+  command: string;
+  args: string[];
+}
+
+/**
+ * Shells réellement présents sur la machine.
+ *
+ * On ne propose que ce qui existe : une liste qui offre « pwsh » sur une
+ * machine sans PowerShell 7 promet un terminal qui ne s'ouvrira pas.
+ */
+function availableShells(): ShellChoice[] {
+  const found: ShellChoice[] = [];
+
   if (process.platform === 'win32') {
-    return { command: process.env['COMSPEC'] ?? 'powershell.exe', args: [] };
+    const system = process.env['SystemRoot'] ?? 'C:\\Windows';
+    const powershell = join(system, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    if (existsSync(powershell)) {
+      found.push({ id: 'powershell', label: 'Windows PowerShell', command: powershell, args: [] });
+    }
+    // PowerShell 7+ s'installe hors System32 et n'est pas toujours là.
+    for (const candidate of [
+      join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
+    ]) {
+      if (existsSync(candidate)) {
+        found.push({ id: 'pwsh', label: 'PowerShell 7', command: candidate, args: [] });
+      }
+    }
+    const cmd = process.env['COMSPEC'] ?? join(system, 'System32', 'cmd.exe');
+    if (existsSync(cmd)) {
+      found.push({ id: 'cmd', label: 'Invite de commandes', command: cmd, args: [] });
+    }
+    for (const candidate of [
+      join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+      join(process.env['ProgramW6432'] ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+    ]) {
+      if (existsSync(candidate) && !found.some((s) => s.id === 'gitbash')) {
+        found.push({ id: 'gitbash', label: 'Git Bash', command: candidate, args: ['-i'] });
+      }
+    }
+    const wsl = join(system, 'System32', 'wsl.exe');
+    if (existsSync(wsl)) {
+      found.push({ id: 'wsl', label: 'WSL', command: wsl, args: [] });
+    }
+    return found;
   }
-  return { command: process.env['SHELL'] ?? '/bin/bash', args: ['-i'] };
+
+  const preferred = process.env['SHELL'];
+  if (preferred && existsSync(preferred)) {
+    found.push({
+      id: 'default',
+      label: preferred.split('/').pop() ?? 'shell',
+      command: preferred,
+      args: ['-i'],
+    });
+  }
+  for (const candidate of ['/bin/zsh', '/bin/bash', '/usr/bin/fish', '/bin/sh']) {
+    if (existsSync(candidate) && candidate !== preferred) {
+      found.push({
+        id: candidate.split('/').pop() as string,
+        label: candidate.split('/').pop() as string,
+        command: candidate,
+        args: ['-i'],
+      });
+    }
+  }
+  return found;
 }
 
 /** Enveloppe un process ordinaire dans la même forme qu'un PTY. */
@@ -49,11 +122,14 @@ function wrapChild(child: ChildProcess): PtyLike {
 
 /** Le vrai PTY s'il est chargeable ; sinon `null`, sans faire de bruit. */
 async function tryPty(
+  shell: ShellChoice,
   cwd: string,
-): Promise<{ pty: PtyLike; mode: Mode } | null> {
+  cols: number,
+  rows: number,
+): Promise<PtyLike | null> {
   try {
-    // Spécificateur calculé : le compilateur ne doit pas exiger que le
-    // paquet existe, puisque tout l'intérêt est qu'il puisse manquer.
+    // Spécificateur calculé : le compilateur ne doit pas exiger que le paquet
+    // existe, puisque tout l'intérêt est qu'il puisse manquer.
     const optional = 'node-pty';
     const nodePty = (await import(optional)) as unknown as {
       spawn: (
@@ -68,52 +144,39 @@ async function tryPty(
         onExit(cb: (event: { exitCode: number }) => void): void;
       };
     };
-    const shell = defaultShell();
     const process_ = nodePty.spawn(shell.command, shell.args, {
-      name: 'xterm-color',
-      cols: 80,
-      rows: 24,
+      name: 'xterm-256color',
+      cols,
+      rows,
       cwd,
+      env: process.env,
     });
     return {
-      mode: 'pty',
-      pty: {
-        write: (data) => process_.write(data),
-        resize: (cols, rows) => process_.resize(cols, rows),
-        kill: () => process_.kill(),
-        onData: (listener) => process_.onData(listener),
-        onExit: (listener) => process_.onExit((event) => listener(event.exitCode)),
-      },
+      write: (data) => process_.write(data),
+      resize: (c, r) => process_.resize(c, r),
+      kill: () => process_.kill(),
+      onData: (listener) => process_.onData(listener),
+      onExit: (listener) => process_.onExit(({ exitCode }) => listener(exitCode)),
     };
   } catch {
     return null;
   }
 }
 
-/**
- * Séquences ANSI retirées côté Node : la vue affiche du texte, pas un
- * émulateur VT. Les garder produirait des caractères parasites à l'écran.
- */
-// Les motifs sont construits plutôt qu'écrits en littéral : un caractère de
-// contrôle dans un fichier source ne survit pas aux allers-retours d'édition,
-// et un littéral corrompu donnerait un filtre silencieusement faux.
-const ESC = String.fromCharCode(27);
-const BEL = String.fromCharCode(7);
-/** Séquences CSI : couleurs et déplacements — ESC [ … lettre. */
-const csi = new RegExp(`${ESC}\\[[0-9;?]*[A-Za-z]`, 'g');
-/** Séquences OSC : titre de fenêtre & co — ESC ] … BEL. */
-const osc = new RegExp(`${ESC}\\][^${BEL}]*${BEL}`, 'g');
-/**
- * Séquences ANSI retirées côté Node : la vue affiche du texte, pas un
- * émulateur VT. Les garder produirait des caractères parasites à l'écran.
- */
-function stripAnsi(text: string): string {
-  return text.replace(csi, '').replace(osc, '');
+interface Session {
+  pty: PtyLike;
+  mode: Mode;
+  shellId: string;
+  /** Sortie BRUTE, séquences ANSI comprises : xterm.js les interprète. */
+  buffer: string;
+  /** Octets déjà écartés du début du tampon — le curseur reste monotone. */
+  dropped: number;
+  exited: boolean;
 }
 
 export default definePlugin({
   activate(ctx: PluginNodeContext) {
-    let session: { pty: PtyLike; mode: Mode; lines: string[]; exited: boolean } | null = null;
+    let session: Session | null = null;
 
     const close = (): void => {
       try {
@@ -127,51 +190,98 @@ export default definePlugin({
     // Le shell meurt avec le plugin : pas de process qui traîne.
     ctx.onDispose(close);
 
+    ctx.registerCommand('shells', async () => ({ shells: availableShells() }));
+
     ctx.registerCommand('open', async (payload) => {
-      const { cwd } = (payload ?? {}) as { cwd?: string };
-      if (session) return { mode: session.mode, lines: session.lines };
+      const {
+        cwd,
+        shellId,
+        cols = 80,
+        rows = 24,
+      } = (payload ?? {}) as {
+        cwd?: string;
+        shellId?: string;
+        cols?: number;
+        rows?: number;
+      };
+
+      // Changer de shell veut dire ouvrir un autre terminal : on ferme le
+      // précédent plutôt que d'en laisser deux vivre sans les montrer.
+      if (session && shellId && session.shellId !== shellId) close();
+      if (session) {
+        return {
+          mode: session.mode,
+          shellId: session.shellId,
+          since: session.dropped,
+          data: session.buffer,
+          exited: session.exited,
+        };
+      }
+
+      const shells = availableShells();
+      const shell = shells.find((s) => s.id === shellId) ?? shells[0];
+      if (!shell) return { error: 'No shell found on this machine.' };
 
       const workdir = cwd ?? process.cwd();
-      const attempt = await tryPty(workdir);
-      const started =
-        attempt ??
-        (() => {
-          const shell = defaultShell();
-          const child = spawn(shell.command, shell.args, {
-            cwd: workdir,
-            windowsHide: true,
-          });
-          return { pty: wrapChild(child), mode: 'basique' as const };
-        })();
+      const real = await tryPty(shell, workdir, cols, rows);
+      const pty =
+        real ??
+        wrapChild(
+          spawn(shell.command, shell.args, { cwd: workdir, windowsHide: true }),
+        );
 
-      const lines: string[] = [];
-      const live = { pty: started.pty, mode: started.mode, lines, exited: false };
-      started.pty.onData((data) => {
-        for (const line of stripAnsi(data).split(/\r?\n/)) {
-          lines.push(line);
-          if (lines.length > MAX_LINES) lines.shift();
+      const live: Session = {
+        pty,
+        mode: real ? 'pty' : 'basique',
+        shellId: shell.id,
+        buffer: '',
+        dropped: 0,
+        exited: false,
+      };
+      pty.onData((data) => {
+        live.buffer += data;
+        if (live.buffer.length > MAX_BUFFER_CHARS) {
+          const cut = live.buffer.length - MAX_BUFFER_CHARS;
+          live.buffer = live.buffer.slice(cut);
+          live.dropped += cut;
         }
       });
-      started.pty.onExit(() => {
+      pty.onExit(() => {
         live.exited = true;
       });
       session = live;
-      ctx.log(`shell démarré (${started.mode}) dans ${workdir}`);
-      return { mode: started.mode, lines };
+      ctx.log(`${shell.label} démarré (${live.mode}) dans ${workdir}`);
+      return {
+        mode: live.mode,
+        shellId: shell.id,
+        since: 0,
+        data: '',
+        exited: false,
+      };
     });
 
-    ctx.registerCommand('read', async () =>
-      session
-        ? { mode: session.mode, lines: session.lines, exited: session.exited }
-        : { mode: null, lines: [], exited: true },
-    );
+    /**
+     * Lit la sortie depuis un curseur d'OCTETS. Le curseur est monotone même
+     * quand le tampon est élagué : la vue ne peut donc pas rejouer deux fois
+     * les mêmes données, ni en sauter silencieusement.
+     */
+    ctx.registerCommand('read', async (payload) => {
+      const { since = 0 } = (payload ?? {}) as { since?: number };
+      if (!session) return { data: '', next: since, exited: true, mode: null };
+
+      const start = Math.max(0, since - session.dropped);
+      const data = session.buffer.slice(start);
+      return {
+        data,
+        next: session.dropped + session.buffer.length,
+        exited: session.exited,
+        mode: session.mode,
+      };
+    });
 
     ctx.registerCommand('write', async (payload) => {
       const { data } = (payload ?? {}) as { data?: string };
       if (!session || data === undefined) return { written: false };
-      // Ce que l'utilisateur tape est aussi affiché : sans PTY il n'y a pas
-      // d'écho, et une commande envoyée dans le vide serait déroutante.
-      if (session.mode === 'basique') session.lines.push(`$ ${data.trimEnd()}`);
       session.pty.write(data);
       return { written: true };
     });

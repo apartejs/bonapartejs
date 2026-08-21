@@ -95,6 +95,19 @@ node packages/cli/dist/cli.js doctor   # diagnostic machine
   `npx vitest run src/smoke` dans packages/core) · J3 shell plugin-first ✅ (hôte de plugins réversible,
   panneau droit multi-vues, hub Réglages schema-driven, barre de statut avec
   jauge de contexte, 4 plugins inclus, E2E Playwright) · J4 MCP · J5 npx.
+- **node-pty charge sous Electron 43 SANS recompilation** (vérifié le
+  2026-08-20 : `pty.spawn(cmd.exe)` répond avec ses séquences ConPTY). Il faut
+  seulement l'autoriser dans `pnpm.onlyBuiltDependencies` — pnpm bloque les
+  scripts de build par défaut, et sans ça le module s'installe sans binaire.
+  Le toolchain de la machine de Paul (VS Build Tools 2022+2026, Python 3.14)
+  suffit. Le plugin terminal est donc un VRAI terminal : xterm.js côté vue,
+  PTY côté Node, octets bruts entre les deux — surtout ne pas re-filtrer l'ANSI,
+  c'est l'émulateur qui l'interprète.
+- **Notre SDK de plugin n'a pas de canal Node → vue** : `registerCommand` est
+  requête/réponse. Le terminal contourne par un curseur d'octets et un polling
+  adaptatif (30 ms quand ça débite, 200 ms au repos). Un `ctx.emit()` serait le
+  vrai correctif, utile aussi à la console du navigateur et aux logs de serveur
+  de dev.
 - **Plugins tiers hors de l'arbre : pas encore chargeables.** Les vues des
   plugins inclus sont ramassées par `import.meta.glob` (donc buildées avec
   l'app, chargées paresseusement) ; un plugin externe demandera le protocole
