@@ -83,7 +83,7 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
       </button>
 
       {open && (
-        <div className="temp-menu" role="dialog" aria-label={t.temperature.label}>
+        <div className="temp-menu popover" role="dialog" aria-label={t.temperature.label}>
           <p className="conv-menu-label">{t.temperature.label}</p>
           <input
             type="range"

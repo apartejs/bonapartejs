@@ -60,6 +60,11 @@ export interface LayoutState {
   setPanelWidth: (width: number) => void;
   toggleSidebar: () => void;
   togglePanel: () => void;
+  /**
+   * Déplie le panneau s'il est replié. Ouvrir un onglet doit le montrer :
+   * un terminal ouvert derrière un panneau fermé n'existe pas pour l'œil.
+   */
+  expandPanel: () => void;
 }
 
 export function useLayout(): LayoutState {
@@ -102,6 +107,14 @@ export function useLayout(): LayoutState {
     });
   }, []);
 
+  const expandPanel = useCallback(() => {
+    setPanelCollapsed((current) => {
+      if (!current) return current;
+      persist('bp.layout.panelCollapsed', '0');
+      return false;
+    });
+  }, []);
+
   // Raccourcis de VS Code, parce qu'ils sont déjà dans les doigts de tout le
   // monde : Ctrl+B pour le flanc principal, Ctrl+Alt+B pour le secondaire.
   useEffect(() => {
@@ -124,5 +137,6 @@ export function useLayout(): LayoutState {
     setPanelWidth,
     toggleSidebar,
     togglePanel,
+    expandPanel,
   };
 }

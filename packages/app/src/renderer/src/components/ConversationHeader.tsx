@@ -1,6 +1,7 @@
 import type { ProjectSummaryDto } from '@aparte/bonaparte-shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { FlankToggle } from './FlankToggle.js';
 
 interface ConversationHeaderProps {
   title: string;
@@ -22,6 +23,23 @@ interface ConversationHeaderProps {
   panelCollapsed: boolean;
   onToggleSidebar: () => void;
   onTogglePanel: () => void;
+  /**
+   * Bande d'onglets du panneau d'outillage, posée dans la MOITIÉ DROITE de
+   * cette même barre — donc juste au-dessus du panneau, à sa largeur exacte.
+   * C'est l'arrangement de Codex : une seule barre en haut, quoi qu'il y ait
+   * d'ouvert.
+   */
+  tabs: ReactNode;
+  /**
+   * La zone des onglets est-elle montée, et à quelle largeur ?
+   *
+   * Deux valeurs et non un booléen, parce que le repli est ANIMÉ : la zone
+   * reste montée le temps que sa largeur descende à zéro. Sans ça, le panneau
+   * disparaîtrait d'un coup — ce qui se lit comme un défaut, pas comme une
+   * action.
+   */
+  sideVisible: boolean;
+  sideWidth: number;
 }
 
 /**
@@ -48,6 +66,9 @@ export function ConversationHeader({
   panelCollapsed,
   onToggleSidebar,
   onTogglePanel,
+  tabs,
+  sideVisible,
+  sideWidth,
 }: ConversationHeaderProps) {
   const { t } = useTranslate();
   const [editing, setEditing] = useState(false);
@@ -79,16 +100,14 @@ export function ConversationHeader({
 
   return (
     <header className="conv-header" ref={wrapRef}>
-      <button
-        type="button"
-        className="conv-header-toggle"
-        onClick={onToggleSidebar}
-        aria-pressed={!sidebarCollapsed}
-        title={`${sidebarCollapsed ? t.layout.expandSidebar : t.layout.collapseSidebar} (Ctrl+B)`}
-        aria-label={sidebarCollapsed ? t.layout.expandSidebar : t.layout.collapseSidebar}
-      >
-        <span aria-hidden="true">{sidebarCollapsed ? '▊ ' : '▊▎'}</span>
-      </button>
+      <div className="conv-header-main">
+      <FlankToggle
+        side="start"
+        collapsed={sidebarCollapsed}
+        label={sidebarCollapsed ? t.layout.expandSidebar : t.layout.collapseSidebar}
+        shortcut="Ctrl+B"
+        onToggle={onToggleSidebar}
+      />
 
       <button
         type="button"
@@ -142,19 +161,31 @@ export function ConversationHeader({
         ···
       </button>
 
-      <button
-        type="button"
-        className="conv-header-toggle"
-        onClick={onTogglePanel}
-        aria-pressed={!panelCollapsed}
-        title={`${panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel} (Ctrl+Alt+B)`}
-        aria-label={panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel}
-      >
-        <span aria-hidden="true">{panelCollapsed ? ' ▊' : '▎▊'}</span>
-      </button>
+      </div>
+
+      {sideVisible && (
+        <div className="conv-header-side" style={{ width: sideWidth }}>
+          {tabs}
+        </div>
+      )}
+
+      {/*
+        La bascule du panneau est le DERNIER enfant de la barre, toujours : ni
+        dans la zone des onglets (qui apparaît et disparaît), ni dans la zone
+        du titre (qui s'étire). Elle ne bouge donc jamais d'un pixel, ouvert ou
+        fermé — c'est ce que Paul a remarqué chez Codex : « on dirait que c'est
+        la même icône ». C'en est une seule.
+      */}
+      <FlankToggle
+        side="end"
+        collapsed={panelCollapsed}
+        label={panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel}
+        shortcut="Ctrl+Alt+B"
+        onToggle={onTogglePanel}
+      />
 
       {panel === 'project' && (
-        <div className="conv-popover" role="dialog" aria-label={t.header.projectPanel}>
+        <div className="conv-popover popover" role="dialog" aria-label={t.header.projectPanel}>
           {project ? (
             <>
               <p className="conv-popover-name">{project.name}</p>
@@ -195,7 +226,7 @@ export function ConversationHeader({
       )}
 
       {panel === 'move' && (
-        <div className="conv-popover conv-popover-right" role="menu">
+        <div className="conv-popover conv-popover-right popover" role="menu">
           <p className="conv-popover-label">{t.header.moveTo}</p>
           {projects.map((candidate) => (
             <button

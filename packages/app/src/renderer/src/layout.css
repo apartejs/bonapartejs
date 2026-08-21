@@ -11,6 +11,20 @@
   display: flex;
   min-width: 0;
   min-height: 0;
+  /*
+   * Le repli GLISSE. Le flanc reste monté le temps que sa largeur descende à
+   * zéro (cf. use-collapse-transition), et `overflow: hidden` garde son
+   * contenu à l'intérieur pendant le trajet — sinon la liste des
+   * conversations déborde sur le chat.
+   */
+  overflow: hidden;
+  transition: width var(--bp-slow) var(--bp-ease);
+}
+
+/* Pendant un glissé de séparateur, la largeur suit le doigt : une transition
+   ferait traîner le flanc derrière le curseur. */
+body.resizing .side-slot {
+  transition: none;
 }
 
 /* Les enfants d'un flanc prennent la largeur que le slot leur donne, au lieu

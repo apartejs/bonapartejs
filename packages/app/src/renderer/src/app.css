@@ -3,6 +3,120 @@
   --bp-serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
   --bp-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --bp-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+
+  /*
+   * ── Mouvement ─────────────────────────────────────────────────────────
+   *
+   * Une seule échelle, pour toute l'app. Ce qui manquait n'était pas de la
+   * vitesse : c'était de la COURBE. Une transition linéaire de 120 ms se voit
+   * comme un saut ; la même durée avec un départ vif et une arrivée longue se
+   * lit comme un mouvement. `--bp-ease` part fort et se pose (c'est la courbe
+   * des feuilles iOS et de Codex) ; `--bp-ease-out` ne fait que se poser, pour
+   * ce qui apparaît.
+   *
+   * Trois durées, et pas plus : ce qui répond au doigt (survol, focus), ce qui
+   * s'ouvre (menus, bulles), ce qui déplace la mise en page (flancs). Passé
+   * 400 ms on attend l'interface ; en dessous de 100 ms on ne voit rien.
+   */
+  --bp-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --bp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --bp-fast: 130ms;
+  --bp-base: 240ms;
+  --bp-slow: 380ms;
+}
+
+/*
+ * Tout ce qui réagit au pointeur le fait en fondu. La liste est explicite —
+ * un `* { transition: all }` animerait aussi la mise en page, ce qui donne des
+ * interfaces qui traînent.
+ */
+button,
+a,
+input,
+select,
+textarea,
+summary,
+.conv-chip,
+.conv-title,
+.tooling-tab,
+.flank-toggle,
+.tooling-menu-item,
+.conv-popover-item {
+  transition:
+    background-color var(--bp-fast) var(--bp-ease),
+    border-color var(--bp-fast) var(--bp-ease),
+    color var(--bp-fast) var(--bp-ease),
+    box-shadow var(--bp-fast) var(--bp-ease),
+    opacity var(--bp-fast) var(--bp-ease);
+}
+
+/*
+ * Ce qui s'ouvre par-dessus le reste : menus, bulles, panneaux volants. Un
+ * léger recul et une échelle de 97 % suffisent à donner une origine au
+ * mouvement — l'élément vient de son bouton, il n'apparaît pas de nulle part.
+ */
+@keyframes bp-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.popover {
+  transform-origin: top center;
+  animation: bp-popover-in var(--bp-base) var(--bp-ease-out);
+}
+
+/*
+ * Les modales, elles, viennent du centre : elles n'ont pas de bouton d'origine.
+ * Le voile monte en fondu pendant que la carte se pose — décaler les deux
+ * suffit à donner de la profondeur, sans rien de spectaculaire.
+ */
+@keyframes bp-veil-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bp-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.modal-backdrop {
+  animation: bp-veil-in var(--bp-fast) var(--bp-ease-out);
+}
+
+.modal-card {
+  animation: bp-card-in var(--bp-base) var(--bp-ease-out);
+}
+
+/*
+ * Le respect de `prefers-reduced-motion` n'est pas une option : pour une
+ * partie des gens, ces mouvements donnent la nausée. On coupe tout, sans rien
+ * casser d'autre (les états finaux sont les mêmes).
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 * {
@@ -259,7 +373,7 @@ button.primary {
 .field-row button {
   white-space: nowrap;
   border: none;
-  border-left: 1px solid var(--aparte-border);
+  border-inline-start: 1px solid var(--aparte-border);
   border-radius: 0;
   background: var(--aparte-surface-1);
   padding: 0 14px;
@@ -449,7 +563,7 @@ button.primary {
 .recent-row {
   display: block;
   width: 100%;
-  text-align: left;
+  text-align: start;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -690,7 +804,7 @@ button.primary {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-right: 1px solid var(--aparte-border);
+  border-inline-end: 1px solid var(--aparte-border);
   background: var(--aparte-surface-1);
 }
 
@@ -763,7 +877,7 @@ button.primary {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   color: inherit;
 }
@@ -811,7 +925,7 @@ button.primary {
 }
 
 .conv-date {
-  margin-left: auto;
+  margin-inline-start: auto;
   white-space: nowrap;
 }
 
@@ -836,16 +950,19 @@ button.primary {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid var(--aparte-border);
+  border-inline-start: 1px solid var(--aparte-border);
   background: var(--aparte-surface-1);
 }
 
+/* La bande d'onglets vit maintenant dans la barre du haut : elle en occupe
+   toute la hauteur, sans bordure propre. */
 .tooling-tabs {
   display: flex;
   align-items: stretch;
   gap: 2px;
-  padding: 6px 6px 0;
-  border-bottom: 1px solid var(--aparte-border);
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px 0 8px;
 }
 
 /* La bande d'onglets défile ; le bouton `+` reste, lui, toujours atteignable. */
@@ -877,6 +994,8 @@ button.primary {
   color: var(--aparte-text);
 }
 
+/* L'onglet actif se raccroche au panneau qu'il ouvre : il partage son fond et
+   mord d'un pixel sur la bordure de la barre. */
 .tooling-tab-active {
   background: var(--aparte-bg);
   border-color: var(--aparte-border);
@@ -963,6 +1082,8 @@ button.primary {
 
 .tooling-menu {
   position: absolute;
+  /* Le menu s'ouvre sous un bouton collé au bord droit de la fenêtre : il
+     s'aligne donc par la fin, sinon il déborderait. */
   top: calc(100% + 6px);
   inset-inline-end: 0;
   z-index: 30;
@@ -1109,14 +1230,14 @@ button.primary {
   width: 200px;
   flex: 0 0 200px;
   padding: 12px 8px;
-  border-right: 1px solid var(--aparte-border);
+  border-inline-end: 1px solid var(--aparte-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
 .settings-nav-item {
-  text-align: left;
+  text-align: start;
   padding: 7px 10px;
   border: 1px solid transparent;
   border-radius: 7px;
@@ -1178,7 +1299,7 @@ button.primary {
 }
 
 .setting-reset {
-  margin-left: auto;
+  margin-inline-start: auto;
   border: none;
   background: transparent;
   color: var(--aparte-secondary);
@@ -1323,7 +1444,7 @@ button.primary {
   font-size: 11.5px;
   cursor: pointer;
   text-decoration: underline;
-  text-align: left;
+  text-align: start;
 }
 
 .script-pending,

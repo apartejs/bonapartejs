@@ -157,7 +157,7 @@ export function ConversationSidebar({
           </button>
 
           {menuOpen && (
-            <div className="conv-menu" role="menu">
+            <div className="conv-menu popover" role="menu">
               <p className="conv-menu-label">{t.conversations.organise}</p>
               <button
                 type="button"

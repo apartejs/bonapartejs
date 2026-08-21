@@ -61,7 +61,7 @@
   display: block;
   width: 100%;
   padding: 6px 8px;
-  text-align: left;
+  text-align: start;
   font-size: 12.5px;
   color: var(--aparte-text-primary);
   background: transparent;
@@ -98,7 +98,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0;
-  text-align: left;
+  text-align: start;
   font-family: var(--bp-serif);
   font-size: 12.5px;
   color: var(--aparte-text-primary);
@@ -147,15 +147,50 @@
 
 /* ── En-tête de conversation ───────────────────────────────────────────── */
 
+/*
+ * La barre du haut coiffe TOUTE la fenêtre, flancs compris (modèle Codex,
+ * VS Code) : c'est ce qui permet à la bascule du panneau de finir la barre
+ * plutôt que de finir une colonne, et à la bande d'onglets de se poser
+ * exactement au-dessus du panneau.
+ */
 .conv-header {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: stretch;
   flex: 0 0 auto;
-  padding: 10px 16px;
+  padding: 0 8px 0 8px;
   border-bottom: 1px solid var(--aparte-border);
   background: var(--aparte-surface-1);
+}
+
+.conv-header-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 8px 6px;
+}
+
+/*
+ * Zone des onglets : sa largeur suit celle du panneau, et se replie en
+ * glissant. `overflow: hidden` est ce qui rend le repli propre — sans lui, les
+ * onglets débordent sur le titre pendant la transition.
+ */
+.conv-header-side {
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  border-inline-start: 1px solid var(--aparte-border);
+  transition: width var(--bp-slow) var(--bp-ease);
+}
+
+/* Pendant un glissé de séparateur, la largeur est pilotée au doigt : une
+   transition ferait traîner le panneau derrière le curseur. */
+body.resizing .conv-header-side {
+  transition: none;
 }
 
 .conv-chip {
@@ -199,7 +234,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: left;
+  text-align: start;
   font-family: var(--bp-serif);
   font-size: 15px;
   color: var(--aparte-text-primary);
@@ -222,33 +257,58 @@
 }
 
 /*
- * Bascules des flancs : discrètes au repos, franches quand le flanc est
- * fermé. Elles occupent une position FIXE de l'en-tête — c'est ce qui permet
- * de rouvrir un panneau depuis un bouton qui n'a pas bougé.
+ * Bascules des flancs : UNE icône, deux états. Le cadre ne change jamais ;
+ * seul le pavé du côté concerné se remplit quand le flanc est ouvert. C'est
+ * plus lisible que deux dessins différents, et ça permet d'animer le passage.
  */
-.conv-header-toggle {
+.flank-toggle {
   flex: 0 0 auto;
-  padding: 3px 7px;
-  line-height: 1;
-  font-size: 11px;
-  letter-spacing: -1px;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   color: var(--aparte-text-muted);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
-.conv-header-toggle:hover {
-  color: var(--aparte-text);
-  background: var(--aparte-surface-2);
-  border-color: var(--aparte-border);
+.flank-toggle svg {
+  width: 16px;
+  height: 16px;
 }
 
-/* Flanc fermé : la bascule se signale, sinon rien ne dit qu'il manque
-   quelque chose. */
-.conv-header-toggle[aria-pressed='false'] {
+/* Le flanc de gauche est le même dessin, retourné : un seul chemin à tenir. */
+.flank-toggle-start svg {
+  transform: scaleX(-1);
+}
+
+.flank-toggle .flank-fill {
+  fill: currentColor;
+  opacity: 0;
+  transition: opacity var(--bp-base) var(--bp-ease);
+}
+
+.flank-toggle[aria-pressed='true'] {
   color: var(--aparte-primary);
+  background: color-mix(in srgb, var(--aparte-primary) 12%, transparent);
+}
+
+.flank-toggle[aria-pressed='true'] .flank-fill {
+  opacity: 0.85;
+}
+
+.flank-toggle:hover {
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+}
+
+.flank-toggle[aria-pressed='true']:hover {
+  color: var(--aparte-primary);
+  background: color-mix(in srgb, var(--aparte-primary) 18%, transparent);
 }
 
 .conv-header-spacer {
@@ -332,7 +392,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
-  text-align: left;
+  text-align: start;
   font-family: var(--bp-mono);
   font-size: 11px;
   color: var(--aparte-text-secondary);
@@ -369,7 +429,7 @@
   display: block;
   width: 100%;
   padding: 6px 8px;
-  text-align: left;
+  text-align: start;
   font-size: 12.5px;
   color: var(--aparte-text-primary);
   background: transparent;
@@ -481,7 +541,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
-  text-align: left;
+  text-align: start;
   font-family: var(--bp-mono);
   font-size: 11.5px;
 }
