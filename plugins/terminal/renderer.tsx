@@ -69,15 +69,22 @@ function readTheme(): { background: string; foreground: string } {
  * reçus. C'est ce qui rend la contre-pression honnête : le producteur s'arrête
  * parce que l'écran est en retard, pas parce que le réseau l'est.
  */
-export default function TerminalView({ locale, projectRoot }: ToolingViewProps) {
+export default function TerminalView({
+  locale,
+  projectRoot,
+  instanceId,
+}: ToolingViewProps) {
   const t = LABELS[locale === 'en' ? 'en' : 'fr'];
   // Les vues de plugins passent par le pont typé de l'app, pas par une prop :
   // c'est le chemin unique renderer → moitié Node, et il se démonte avec le
   // plugin (cf. le plugin navigateur).
+  //
+  // Chaque commande porte l'`instanceId` : plusieurs terminaux peuvent être
+  // ouverts, et rien ne doit laisser croire à la moitié Node qu'ils sont un.
   const invoke = useCallback(
-    (command: string, payload?: unknown) =>
-      window.bonaparte.invokePlugin('terminal', command, payload),
-    [],
+    (command: string, payload?: Record<string, unknown>) =>
+      window.bonaparte.invokePlugin('terminal', command, { ...payload, instanceId }),
+    [instanceId],
   );
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -179,6 +186,11 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
+      // On quitte l'onglet sans le fermer : le shell doit CONTINUER (c'est ce
+      // qu'on attend d'un terminal) mais cesser de pousser vers une vue morte.
+      // Sans ce signal, la contre-pression mettrait le PTY en pause, l'écart
+      // ne redescendrait jamais, et le shell resterait figé au retour.
+      void invoke('detach');
     };
     // Volontairement hors des dépendances : `open` change avec projectRoot,
     // et remonter l'émulateur à chaque changement de dossier tuerait la
@@ -191,8 +203,11 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
   // de VS Code.
   useEffect(() => {
     let unacked = 0;
-    const unsubscribe = window.bonaparte.onPluginEvent(({ pluginId, event, payload }) => {
-      if (pluginId !== 'terminal') return;
+    const unsubscribe = window.bonaparte.onPluginEvent((message) => {
+      const { pluginId, event, payload } = message;
+      // Le filtre porte sur l'INSTANCE : sans lui, deux terminaux ouverts
+      // afficheraient chacun la sortie de l'autre.
+      if (pluginId !== 'terminal' || message.instanceId !== instanceId) return;
       if (event === 'exit') {
         setExited(true);
         return;
@@ -204,13 +219,13 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       termRef.current?.write(chunk, () => {
         unacked += chunk.length;
         if (unacked >= ACK_SIZE) {
-          window.bonaparte.ackPluginData('terminal', unacked);
+          window.bonaparte.ackPluginData('terminal', instanceId, unacked);
           unacked = 0;
         }
       });
     });
     return unsubscribe;
-  }, []);
+  }, [instanceId]);
 
   return (
     <div className="pty-view">

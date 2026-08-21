@@ -316,10 +316,19 @@ export interface BonaparteBridge {
    * repart jamais. C'est le prix de ne rien perdre.
    */
   onPluginEvent(
-    listener: (e: { pluginId: string; event: string; payload: unknown }) => void,
+    listener: (e: {
+      pluginId: string;
+      /** Instance de vue visée — chaîne vide pour un plugin à vue unique. */
+      instanceId: string;
+      event: string;
+      payload: unknown;
+    }) => void,
   ): () => void;
-  /** Déclare `bytes` octets consommés, pour laisser le producteur repartir. */
-  ackPluginData(pluginId: string, bytes: number): void;
+  /**
+   * Déclare `bytes` octets consommés par UNE instance, pour la laisser
+   * repartir. Les autres onglets ne sont pas touchés.
+   */
+  ackPluginData(pluginId: string, instanceId: string, bytes: number): void;
   /** Appelle une commande de la moitié Node d'un plugin, depuis sa vue. */
   invokePlugin(pluginId: string, command: string, payload?: unknown): Promise<unknown>;
   /** Réglages d'une portée, valeurs résolues et provenance comprises. */

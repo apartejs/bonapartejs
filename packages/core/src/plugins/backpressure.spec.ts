@@ -53,7 +53,15 @@ async function hostWithTerm(
 /** Plugin minimal qui expose son contexte pour que le test l'utilise. */
 function capturing(): {
   module: PluginNodeModule;
-  ctx: () => { emit: (e: string, p: unknown) => boolean; onDrain: (cb: () => void) => void };
+  ctx: () => {
+    emit: (e: string, p: unknown) => boolean;
+    onDrain: (cb: () => void) => void;
+    channel: (id: string) => {
+      emit: (e: string, p: unknown) => boolean;
+      onDrain: (cb: () => void) => void;
+      dispose: () => void;
+    };
+  };
 } {
   let captured: unknown;
   return {
@@ -75,14 +83,16 @@ describe('contre-pression des événements de plugin', () => {
     expect(FLOW_CONTROL.lowWatermark).toBeLessThan(FLOW_CONTROL.highWatermark);
   });
 
-  it('transmet l’événement à l’hôte, avec l’id du plugin', async () => {
+  it('transmet l’événement à l’hôte, sur le canal par défaut', async () => {
+    // Un plugin à vue unique n'a pas d'instance à nommer : `emit` passe par le
+    // canal par défaut, dont l'identifiant est la chaîne vide.
     const { host: h, emit } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
 
     plugin.ctx().emit('data', 'bonjour');
 
-    expect(emit).toHaveBeenCalledWith('term', 'data', 'bonjour');
+    expect(emit).toHaveBeenCalledWith('term', '', 'data', 'bonjour');
   });
 
   it('rend true tant que la vue suit', async () => {
@@ -123,18 +133,18 @@ describe('contre-pression des événements de plugin', () => {
     expect(plugin.ctx().emit('data', chunk)).toBe(false);
 
     // Un acquittement partiel ne suffit pas : on reste au-dessus du seuil bas.
-    h.acknowledge('term', chunk.length - FLOW_CONTROL.lowWatermark - 1);
+    h.acknowledge('term', '', chunk.length - FLOW_CONTROL.lowWatermark - 1);
     expect(drained).not.toHaveBeenCalled();
 
     // Celui qui fait passer sous le seuil bas déclenche la reprise.
-    h.acknowledge('term', 2);
+    h.acknowledge('term', '', 2);
     expect(drained).toHaveBeenCalledTimes(1);
     expect(plugin.ctx().emit('data', 'x')).toBe(true);
   });
 
   it('ignore un acquittement d’un plugin inconnu, sans lever', async () => {
     const { host: h } = await hostWithTerm();
-    expect(() => h.acknowledge('fantome', 100)).not.toThrow();
+    expect(() => h.acknowledge('fantome', '', 100)).not.toThrow();
   });
 
   it('oublie le compteur au démontage : un plugin réactivé repart à zéro', async () => {
@@ -160,6 +170,96 @@ describe('contre-pression des événements de plugin', () => {
 
     emit.mockClear();
     expect(orphan.emit('data', 'x')).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('contre-pression PAR INSTANCE', () => {
+  it('achemine l’événement avec l’instance visée', async () => {
+    const { host: h, emit } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    plugin.ctx().channel('t1').emit('data', 'bonjour');
+
+    expect(emit).toHaveBeenCalledWith('term', 't1', 'data', 'bonjour');
+  });
+
+  it('compte séparément : un onglet qui déborde n’arrête pas les autres', async () => {
+    // C'est TOUT l'intérêt du découpage. Avec un compteur unique par plugin,
+    // un `cat` d'un gros fichier dans un terminal figerait le terminal voisin.
+    const { host: h } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    const noisy = plugin.ctx().channel('t1');
+    const quiet = plugin.ctx().channel('t2');
+
+    expect(noisy.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
+    expect(quiet.emit('data', 'x')).toBe(true);
+  });
+
+  it('acquitte l’instance visée, et elle seule', async () => {
+    const { host: h } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    const one = plugin.ctx().channel('t1');
+    const two = plugin.ctx().channel('t2');
+    expect(one.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
+    expect(two.emit('data', 'y'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
+
+    h.acknowledge('term', 't1', FLOW_CONTROL.highWatermark);
+
+    expect(one.emit('data', 'x')).toBe(true);
+    // t2 n'a rien acquitté : elle reste en pause.
+    expect(two.emit('data', 'y')).toBe(false);
+  });
+
+  it('réveille la bonne instance', async () => {
+    const { host: h } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    const one = plugin.ctx().channel('t1');
+    const two = plugin.ctx().channel('t2');
+    const drainedOne = vi.fn();
+    const drainedTwo = vi.fn();
+    one.onDrain(drainedOne);
+    two.onDrain(drainedTwo);
+
+    one.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark));
+    two.emit('data', 'y'.repeat(FLOW_CONTROL.highWatermark));
+    h.acknowledge('term', 't1', FLOW_CONTROL.highWatermark);
+
+    expect(drainedOne).toHaveBeenCalledTimes(1);
+    expect(drainedTwo).not.toHaveBeenCalled();
+  });
+
+  it('un canal jeté oublie son compteur : rouvrir un onglet repart libre', async () => {
+    const { host: h } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    const channel = plugin.ctx().channel('t1');
+    expect(channel.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
+    channel.dispose();
+
+    // Même identifiant réutilisé : sans remise à zéro, le nouvel onglet
+    // naîtrait bloqué par le trafic de l'ancien.
+    expect(plugin.ctx().channel('t1').emit('data', 'x')).toBe(true);
+  });
+
+  it('un canal jeté ne pousse plus rien', async () => {
+    const { host: h, emit } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    const channel = plugin.ctx().channel('t1');
+    channel.dispose();
+    emit.mockClear();
+
+    expect(channel.emit('data', 'x')).toBe(false);
     expect(emit).not.toHaveBeenCalled();
   });
 });

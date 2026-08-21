@@ -26,8 +26,19 @@ export const toolingViewSchema = z.object({
   title: z.string().min(1).max(48),
   /** Glyphe court affiché dans l'onglet — un caractère ou deux. */
   icon: z.string().max(4).optional(),
-  /** Ordre indicatif entre onglets ; à défaut, ordre de découverte. */
+  /** Ordre indicatif dans le menu d'ouverture ; à défaut, ordre de découverte. */
   order: z.number().int().optional(),
+  /**
+   * Plusieurs instances simultanées autorisées.
+   *
+   * Deux terminaux ou deux pages ont un sens : ce sont deux sessions. Deux fois
+   * les réglages de la conversation, non — le second n'aurait rien de plus à
+   * montrer. Le défaut est donc `false` : une vue s'ouvre en un exemplaire tant
+   * qu'elle n'a pas dit le contraire.
+   */
+  multiple: z.boolean().default(false),
+  /** Accélérateur suggéré, affiché dans le menu d'ouverture (ex. « Ctrl+T »). */
+  shortcut: z.string().max(24).optional(),
 });
 
 /** Un outil que le plugin ajoute à l'inventaire de l'agent. */

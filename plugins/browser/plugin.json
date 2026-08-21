@@ -13,7 +13,9 @@
         "id": "page",
         "title": "Navigateur",
         "icon": "◫",
-        "order": 40
+        "order": 40,
+        "multiple": true,
+        "shortcut": "Ctrl+T"
       }
     ],
     "agentTools": [

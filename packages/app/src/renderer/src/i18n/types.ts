@@ -101,6 +101,16 @@ export interface AppTranslations {
     collapse: string;
     expand: string;
     loadFailed: string;
+    /** Bouton `+` : ouvrir une vue dans le panneau. */
+    open: string;
+    /** Titre du menu d'ouverture. */
+    openMenu: string;
+    /** Fermer un onglet. */
+    close: string;
+    /** Aucun plugin actif n'offre de vue à ouvrir. */
+    nothingToOpen: string;
+    /** Invitation quand le panneau est ouvert mais vide. */
+    emptyHint: string;
   };
   conversations: {
     heading: string;

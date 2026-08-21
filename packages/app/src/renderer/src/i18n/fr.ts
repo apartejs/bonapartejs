@@ -97,6 +97,11 @@ export const FR: AppTranslations = {
       'Démonte et réactive les plugins sans redémarrer bonaparte — le modèle reste chargé.',
   },
   tooling: {
+    open: 'Ouvrir une vue',
+    openMenu: 'Ouvrir',
+    close: 'Fermer l’onglet',
+    nothingToOpen: 'Aucun plugin actif n’offre de vue.',
+    emptyHint: 'Ouvrez un terminal, un navigateur ou les réglages de la conversation.',
     heading: 'Outillage',
     empty: 'Aucune vue : les plugins actifs en ajoutent ici.',
     collapse: 'Replier le panneau',

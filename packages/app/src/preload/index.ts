@@ -41,13 +41,18 @@ const api: BonaparteBridge = {
   onPluginEvent: (listener) => {
     const wrapped = (
       _e: unknown,
-      payload: { pluginId: string; event: string; payload: unknown },
+      payload: {
+        pluginId: string;
+        instanceId: string;
+        event: string;
+        payload: unknown;
+      },
     ): void => listener(payload);
     ipcRenderer.on(IPC.evPlugin, wrapped);
     return () => ipcRenderer.removeListener(IPC.evPlugin, wrapped);
   },
-  ackPluginData: (pluginId, bytes) => {
-    void ipcRenderer.invoke(IPC.pluginsAck, pluginId, bytes);
+  ackPluginData: (pluginId, instanceId, bytes) => {
+    void ipcRenderer.invoke(IPC.pluginsAck, pluginId, instanceId, bytes);
   },
   invokePlugin: (pluginId: string, command: string, payload?: unknown) =>
     ipcRenderer.invoke(IPC.pluginsInvoke, pluginId, command, payload),

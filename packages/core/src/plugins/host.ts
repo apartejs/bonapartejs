@@ -45,6 +45,23 @@ export type PluginToolHandler = (
 /** Commande appelable depuis la vue du plugin (renderer → main). */
 export type PluginCommandHandler = (payload: unknown) => Promise<unknown> | unknown;
 
+/**
+ * Canal vers UNE instance de vue — un onglet du panneau d'outillage.
+ *
+ * Le panneau permettant d'ouvrir plusieurs onglets du même type (deux
+ * terminaux, trois navigateurs), la contre-pression doit être comptée par
+ * instance : avec un compteur unique par plugin, un `cat` d'un gros fichier
+ * dans un terminal figerait le terminal voisin.
+ */
+export interface PluginInstanceChannel {
+  /** Pousse vers CETTE instance. `false` = elle est en retard, arrête-toi. */
+  emit(event: string, payload: unknown): boolean;
+  /** Cette instance a rattrapé. */
+  onDrain(listener: () => void): void;
+  /** L'onglet est fermé : on oublie son compteur et on cesse d'émettre. */
+  dispose(): void;
+}
+
 export interface PluginNodeContext {
   readonly pluginId: string;
   registerToolHandler(name: string, handler: PluginToolHandler): void;
@@ -63,6 +80,11 @@ export interface PluginNodeContext {
   emit(event: string, payload: unknown): boolean;
   /** La vue a rattrapé : le producteur peut reprendre. */
   onDrain(listener: () => void): void;
+  /**
+   * Canal vers une instance de vue précise. Un plugin qui gère plusieurs
+   * onglets en ouvre un par session et le garde à côté d'elle.
+   */
+  channel(instanceId: string): PluginInstanceChannel;
   onDispose(dispose: () => void | Promise<void>): void;
   log(message: string): void;
 }
@@ -89,7 +111,12 @@ export interface PluginHostOptions {
    * Achemine un événement poussé par un plugin vers SA vue. `core` ne connaît
    * pas Electron : c'est l'hôte applicatif qui fournit le transport.
    */
-  emit?: (pluginId: string, event: string, payload: unknown) => void;
+  emit?: (
+    pluginId: string,
+    instanceId: string,
+    event: string,
+    payload: unknown,
+  ) => void;
 }
 
 /**
@@ -133,9 +160,13 @@ interface ActivationRecord {
   toolNames: string[];
   commands: Map<string, PluginCommandHandler>;
   disposers: (() => void | Promise<void>)[];
-  /** Octets poussés et pas encore acquittés par la vue. */
+  /** Un flux par instance de vue, plus un canal par défaut (clé vide). */
+  flows: Map<string, InstanceFlow>;
+}
+
+/** Compteur de contre-pression d'UNE instance. */
+interface InstanceFlow {
   unacknowledged: number;
-  /** Le producteur a-t-il été prié de s'arrêter ? */
   paused: boolean;
   drainListeners: (() => void)[];
 }
@@ -234,9 +265,7 @@ export class PluginHost {
       toolNames: [],
       commands: new Map(),
       disposers: [],
-      unacknowledged: 0,
-      paused: false,
-      drainListeners: [],
+      flows: new Map(),
     };
 
     const context: PluginNodeContext = {
@@ -272,18 +301,15 @@ export class PluginHost {
        * `onDrain`. C'est la convention des flux Node (`write` puis `drain`),
        * choisie parce qu'elle est déjà connue de tout le monde.
        *
-       * Un plugin démonté ne pousse plus rien : son enregistrement a disparu,
-       * et une vue morte ne doit pas recevoir d'événements.
+       * Sans instance visée : le canal par défaut, pour un plugin à vue unique.
        */
-      emit: (event, payload) => {
-        if (this.activations.get(id) !== record) return false;
-        this.options.emit?.(id, event, payload);
-        record.unacknowledged += sizeOf(payload);
-        if (record.unacknowledged >= FLOW_CONTROL.highWatermark) record.paused = true;
-        return !record.paused;
-      },
-      onDrain: (listener) => record.drainListeners.push(listener),
+      emit: (event, payload) => defaultChannel().emit(event, payload),
+      onDrain: (listener) => defaultChannel().onDrain(listener),
+      channel: (instanceId) => this.channelFor(id, record, instanceId),
     };
+
+    const defaultChannel = (): PluginInstanceChannel =>
+      this.channelFor(id, record, '');
 
     this.activations.set(id, record);
     try {
@@ -335,19 +361,67 @@ export class PluginHost {
 
   /** Démonte tout — appelé à la fermeture de l'app. */
   /**
-   * La vue signale qu'elle a CONSOMMÉ `bytes` octets.
-   *
-   * Le compte redescend ; en repassant sous le seuil bas, on réveille le
-   * producteur. Un plugin inconnu est ignoré : un acquittement en retard, après
-   * un démontage, ne doit pas lever.
+   * Canal vers une instance. Le compteur est créé à la demande et vit dans
+   * l'activation, donc il disparaît avec le plugin.
    */
-  acknowledge(pluginId: string, bytes: number): void {
-    const record = this.activations.get(pluginId);
-    if (!record || bytes <= 0) return;
-    record.unacknowledged = Math.max(0, record.unacknowledged - bytes);
-    if (record.paused && record.unacknowledged < FLOW_CONTROL.lowWatermark) {
-      record.paused = false;
-      for (const listener of record.drainListeners) listener();
+  private channelFor(
+    pluginId: string,
+    record: ActivationRecord,
+    instanceId: string,
+  ): PluginInstanceChannel {
+    // `disposed` appartient au CANAL, pas au compteur : rouvrir un onglet du
+    // même identifiant doit rendre un canal neuf et libre, tandis que
+    // l'ancien objet, s'il traîne encore dans une fermeture, doit rester muet.
+    let disposed = false;
+
+    const ensure = (): InstanceFlow => {
+      const existing = record.flows.get(instanceId);
+      if (existing) return existing;
+      const created: InstanceFlow = {
+        unacknowledged: 0,
+        paused: false,
+        drainListeners: [],
+      };
+      record.flows.set(instanceId, created);
+      return created;
+    };
+
+    return {
+      emit: (event, payload) => {
+        // Plugin démonté, ou canal jeté : une vue morte ne reçoit rien.
+        if (disposed || this.activations.get(pluginId) !== record) return false;
+        const flow = ensure();
+        this.options.emit?.(pluginId, instanceId, event, payload);
+        flow.unacknowledged += sizeOf(payload);
+        if (flow.unacknowledged >= FLOW_CONTROL.highWatermark) flow.paused = true;
+        return !flow.paused;
+      },
+      onDrain: (listener) => {
+        if (disposed) return;
+        ensure().drainListeners.push(listener);
+      },
+      dispose: () => {
+        disposed = true;
+        record.flows.delete(instanceId);
+      },
+    };
+  }
+
+  /**
+   * La vue signale qu'elle a CONSOMMÉ `bytes` octets pour une instance.
+   *
+   * Le compte de CETTE instance redescend ; en repassant sous le seuil bas, on
+   * la réveille — les autres onglets ne sont pas touchés. Un plugin ou une
+   * instance inconnus sont ignorés : un acquittement en retard, après une
+   * fermeture d'onglet, ne doit pas lever.
+   */
+  acknowledge(pluginId: string, instanceId: string, bytes: number): void {
+    const flow = this.activations.get(pluginId)?.flows.get(instanceId);
+    if (!flow || bytes <= 0) return;
+    flow.unacknowledged = Math.max(0, flow.unacknowledged - bytes);
+    if (flow.paused && flow.unacknowledged < FLOW_CONTROL.lowWatermark) {
+      flow.paused = false;
+      for (const listener of flow.drainListeners) listener();
     }
   }
 

@@ -9,6 +9,15 @@
  * L'intérêt n'est pas d'avoir un navigateur, c'est que l'AGENT puisse lire ce
  * qu'il affiche : console, DOM, capture. Un aller-retour « lance le serveur,
  * ouvre la page, dis-moi l'erreur » devient possible sans copier-coller.
+ *
+ * Une page PAR ONGLET du panneau. Comme la vue native se pose PAR-DESSUS la
+ * fenêtre, la page d'un onglet inactif recouvrirait l'onglet visible : on la
+ * retire donc de la fenêtre au démontage, sans la détruire — l'onglet garde
+ * son URL, sa console et son historique de navigation.
+ *
+ * Les outils de l'agent visent la page VISIBLE (le dernier onglet attaché) :
+ * c'est ce que « la page ouverte dans le navigateur latéral » veut dire pour
+ * l'utilisateur qui la regarde.
  */
 
 import { writeFile } from 'node:fs/promises';
@@ -30,33 +39,67 @@ interface ConsoleEntry {
 
 const LEVELS = ['debug', 'info', 'warning', 'error'];
 
+interface Page {
+  view: WebContentsView;
+  url: string | null;
+  messages: ConsoleEntry[];
+  /** La vue native est-elle actuellement posée sur la fenêtre ? */
+  attached: boolean;
+}
+
 export default definePlugin({
   activate(ctx: PluginNodeContext) {
-    let view: WebContentsView | null = null;
-    let currentUrl: string | null = null;
-    const messages: ConsoleEntry[] = [];
+    /** Une page par onglet, indexée par son `instanceId`. */
+    const pages = new Map<string, Page>();
+    /** L'onglet visible — la cible des outils de l'agent. */
+    let visibleId: string | null = null;
 
     const host = (): BrowserWindow | null => BrowserWindow.getAllWindows()[0] ?? null;
 
-    const destroy = (): void => {
-      const window = host();
-      if (view && window) {
-        try {
-          window.contentView.removeChildView(view);
-        } catch {
-          /* fenêtre déjà partie */
-        }
+    /** L'onglet, tel que chaque commande le nomme. */
+    const idOf = (payload: unknown): string =>
+      typeof (payload as { instanceId?: unknown } | null)?.instanceId === 'string'
+        ? (payload as { instanceId: string }).instanceId
+        : '';
+
+    const detach = (page: Page): void => {
+      if (!page.attached) return;
+      try {
+        host()?.contentView.removeChildView(page.view);
+      } catch {
+        /* fenêtre déjà partie */
       }
-      view = null;
-      currentUrl = null;
+      page.attached = false;
     };
 
-    // La vue native meurt avec le plugin : sinon elle resterait posée sur la
-    // fenêtre, sans plus personne pour la déplacer ni la fermer.
-    ctx.onDispose(destroy);
+    const attach = (page: Page): void => {
+      if (page.attached) return;
+      host()?.contentView.addChildView(page.view);
+      page.attached = true;
+    };
 
-    const ensureView = (): WebContentsView => {
-      if (view) return view;
+    const destroy = (instanceId: string): void => {
+      const page = pages.get(instanceId);
+      if (!page) return;
+      detach(page);
+      pages.delete(instanceId);
+      if (visibleId === instanceId) visibleId = null;
+    };
+
+    // Les vues natives meurent avec le plugin : sinon elles resteraient posées
+    // sur la fenêtre, sans plus personne pour les déplacer ni les fermer.
+    ctx.onDispose(() => {
+      for (const instanceId of [...pages.keys()]) destroy(instanceId);
+    });
+
+    const ensurePage = (instanceId: string): Page => {
+      const existing = pages.get(instanceId);
+      if (existing) {
+        attach(existing);
+        visibleId = instanceId;
+        return existing;
+      }
+
       const created = new WebContentsView({
         webPreferences: {
           // Une page tierce n'a aucune raison d'accéder à Node : le
@@ -66,40 +109,64 @@ export default definePlugin({
           sandbox: true,
         },
       });
+      const page: Page = { view: created, url: null, messages: [], attached: false };
       created.webContents.on('console-message', (_event, level, message) => {
-        messages.push({
+        page.messages.push({
           level: LEVELS[level] ?? String(level),
           text: message,
           at: new Date().toISOString(),
         });
-        if (messages.length > MAX_MESSAGES) messages.shift();
+        if (page.messages.length > MAX_MESSAGES) page.messages.shift();
       });
-      host()?.contentView.addChildView(created);
-      view = created;
-      return created;
+      pages.set(instanceId, page);
+      attach(page);
+      visibleId = instanceId;
+      return page;
     };
 
-    const requireView = (): WebContentsView => {
-      if (!view) throw new Error('Aucune page ouverte dans le navigateur latéral.');
-      return view;
+    /**
+     * La page que l'agent observe : celle qu'on regarde. À défaut d'onglet
+     * visible, la seule ouverte — au-delà, l'ambiguïté est réelle et on le dit
+     * plutôt que de tirer au sort.
+     */
+    const agentPage = (): Page | null => {
+      if (visibleId) return pages.get(visibleId) ?? null;
+      if (pages.size === 1) return [...pages.values()][0] ?? null;
+      return null;
+    };
+
+    const requirePage = (): Page => {
+      const page = agentPage();
+      if (!page) {
+        throw new Error(
+          'No page is open in the side browser. Ask the user to open a Browser tab in the tooling panel.',
+        );
+      }
+      return page;
     };
 
     ctx.registerCommand('open', async (payload) => {
       const { url } = (payload ?? {}) as { url?: string };
       if (!url) throw new Error('url requise');
       const target = /^https?:\/\//i.test(url) ? url : `http://${url}`;
-      messages.length = 0;
-      const created = ensureView();
-      await created.webContents.loadURL(target);
-      currentUrl = target;
+      const page = ensurePage(idOf(payload));
+      page.messages.length = 0;
+      await page.view.webContents.loadURL(target);
+      page.url = target;
       return { url: target };
     });
 
     /** Rectangle envoyé par la vue React : la vue native n'est pas dans le DOM. */
     ctx.registerCommand('bounds', async (payload) => {
       const { x, y, width, height } = (payload ?? {}) as Record<string, number>;
-      if (!view || width === undefined || height === undefined) return { placed: false };
-      view.setBounds({
+      const instanceId = idOf(payload);
+      const page = pages.get(instanceId);
+      if (!page || width === undefined || height === undefined) return { placed: false };
+      // Recevoir un rectangle veut dire « je suis a l'écran » : la page
+      // remonte sur la fenêtre et devient la cible des outils de l'agent.
+      attach(page);
+      visibleId = instanceId;
+      page.view.setBounds({
         x: Math.round(x ?? 0),
         y: Math.round(y ?? 0),
         width: Math.round(width),
@@ -108,14 +175,31 @@ export default definePlugin({
       return { placed: true };
     });
 
-    ctx.registerCommand('state', async () => ({
-      url: currentUrl,
-      open: view !== null,
-      messages: messages.slice(-40),
-    }));
+    ctx.registerCommand('state', async (payload) => {
+      const page = pages.get(idOf(payload));
+      return {
+        url: page?.url ?? null,
+        open: page !== undefined,
+        messages: page?.messages.slice(-40) ?? [],
+      };
+    });
 
-    ctx.registerCommand('close', async () => {
-      destroy();
+    /**
+     * On quitte l'onglet sans le fermer : la page reste chargée, mais elle
+     * QUITTE la fenêtre — sinon elle recouvrirait l'onglet qu'on vient
+     * d'afficher, puisqu'une vue native ignore le DOM.
+     */
+    ctx.registerCommand('detach', async (payload) => {
+      const instanceId = idOf(payload);
+      const page = pages.get(instanceId);
+      if (!page) return { detached: false };
+      detach(page);
+      if (visibleId === instanceId) visibleId = null;
+      return { detached: true };
+    });
+
+    ctx.registerCommand('close', async (payload) => {
+      destroy(idOf(payload));
       return { closed: true };
     });
 
@@ -126,10 +210,13 @@ export default definePlugin({
       if (!url) return { ok: false, content: 'Argument "url" is required.' };
       const target = /^https?:\/\//i.test(url) ? url : `http://${url}`;
       try {
-        messages.length = 0;
-        const created = ensureView();
-        await created.webContents.loadURL(target);
-        currentUrl = target;
+        // L'agent charge dans la page VISIBLE. Il n'ouvre pas d'onglet : les
+        // onglets appartiennent à l'utilisateur, et une page posée sur la
+        // fenêtre sans onglet pour la porter serait invisible et immobile.
+        const page = requirePage();
+        page.messages.length = 0;
+        await page.view.webContents.loadURL(target);
+        page.url = target;
         return { ok: true, content: `Opened ${target} in the side browser.` };
       } catch (error) {
         return {
@@ -142,15 +229,20 @@ export default definePlugin({
     });
 
     ctx.registerToolHandler('browser_console', async () => {
-      if (!view) {
-        return { ok: false, content: 'No page is open in the side browser yet.' };
+      const page = agentPage();
+      if (!page) {
+        return {
+          ok: false,
+          content:
+            'No page is open in the side browser. Ask the user to open a Browser tab in the tooling panel.',
+        };
       }
-      if (messages.length === 0) {
+      if (page.messages.length === 0) {
         return { ok: true, content: 'The page logged nothing to the console.' };
       }
       return {
         ok: true,
-        content: messages
+        content: page.messages
           .map((entry) => `[${entry.level}] ${entry.text}`)
           .join('\n'),
       };
@@ -159,10 +251,10 @@ export default definePlugin({
     ctx.registerToolHandler('browser_dom', async ({ args }) => {
       const selector = typeof args['selector'] === 'string' ? args['selector'] : 'body';
       try {
-        const page = requireView();
+        const page = requirePage();
         // Le sélecteur est injecté en JSON : une apostrophe dans un sélecteur
         // ne doit pas pouvoir refermer la chaîne et exécuter autre chose.
-        const html = (await page.webContents.executeJavaScript(
+        const html = (await page.view.webContents.executeJavaScript(
           `(() => { const el = document.querySelector(${JSON.stringify(selector)});
             return el ? el.outerHTML : null; })()`,
         )) as string | null;
@@ -186,8 +278,8 @@ export default definePlugin({
 
     ctx.registerToolHandler('browser_screenshot', async () => {
       try {
-        const page = requireView();
-        const image = await page.webContents.capturePage();
+        const page = requirePage();
+        const image = await page.view.webContents.capturePage();
         const file = join(tmpdir(), `bonaparte-capture-${Date.now()}.png`);
         await writeFile(file, image.toPNG());
         const size = image.getSize();

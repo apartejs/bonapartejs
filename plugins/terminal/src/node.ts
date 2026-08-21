@@ -17,6 +17,11 @@
  * `onDrain`. Rien n'est perdu, parce que le producteur s'arrête au lieu qu'un
  * tampon s'élague.
  *
+ * Un terminal PAR ONGLET : le panneau d'outillage permet d'en ouvrir autant
+ * qu'on veut, chacun avec son shell, son dossier et son propre canal de
+ * contre-pression — un `cat` d'un gros fichier ne doit pas figer le voisin.
+ * L'`instanceId` que la vue transmet EST l'identité de la session.
+ *
  * Reste une différence avec VS Code, assumée : leur PTY tourne dans un PROCESS
  * dédié, donc un crash natif n'emporte pas la fenêtre. Chez nous il vit dans le
  * main process.
@@ -25,7 +30,11 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { definePlugin, type PluginNodeContext } from '@aparte/bonaparte-plugin-sdk';
+import {
+  definePlugin,
+  type PluginInstanceChannel,
+  type PluginNodeContext,
+} from '@aparte/bonaparte-plugin-sdk';
 
 /**
  * Historique conservé pour la RÉOUVERTURE de la vue : quand l'onglet se
@@ -174,6 +183,8 @@ async function tryPty(
 
 interface Session {
   pty: PtyLike;
+  /** Canal de contre-pression PROPRE à cet onglet. */
+  channel: PluginInstanceChannel;
   mode: Mode;
   shellId: string;
   /** Historique brut, pour réafficher à la réouverture de l'onglet. */
@@ -183,23 +194,43 @@ interface Session {
   paused: boolean;
   /** Ce qui est arrivé PENDANT la pause, à pousser à la reprise. */
   pending: string;
+  /**
+   * L'onglet est-il DÉMONTÉ ? Le panneau ne monte que la vue active : un
+   * terminal d'arrière-plan continue de produire, mais personne ne l'affiche
+   * ni ne l'acquitte. Détaché, on n'émet plus rien et on ne garde que
+   * l'historique (borné) — sinon `pending` grossirait sans fin derrière une
+   * vue qui n'existe plus.
+   */
+  detached: boolean;
 }
 
 export default definePlugin({
   activate(ctx: PluginNodeContext) {
-    let session: Session | null = null;
+    /** Une session par onglet ouvert, indexée par son `instanceId`. */
+    const sessions = new Map<string, Session>();
 
-    const close = (): void => {
+    const close = (instanceId: string): void => {
+      const session = sessions.get(instanceId);
+      if (!session) return;
       try {
-        session?.pty.kill();
+        session.pty.kill();
       } catch {
         /* déjà parti */
       }
-      session = null;
+      session.channel.dispose();
+      sessions.delete(instanceId);
     };
 
-    // Le shell meurt avec le plugin : pas de process qui traîne.
-    ctx.onDispose(close);
+    // Les shells meurent avec le plugin : pas de process qui traîne.
+    ctx.onDispose(() => {
+      for (const instanceId of [...sessions.keys()]) close(instanceId);
+    });
+
+    /** L'onglet, tel que chaque commande le nomme. */
+    const idOf = (payload: unknown): string =>
+      typeof (payload as { instanceId?: unknown } | null)?.instanceId === 'string'
+        ? (payload as { instanceId: string }).instanceId
+        : '';
 
     ctx.registerCommand('shells', async () => ({ shells: availableShells() }));
 
@@ -215,18 +246,21 @@ export default definePlugin({
         cols?: number;
         rows?: number;
       };
+      const instanceId = idOf(payload);
 
-      // Changer de shell veut dire ouvrir un autre terminal : on ferme le
-      // précédent plutôt que d'en laisser deux vivre sans les montrer.
-      if (session && shellId && session.shellId !== shellId) close();
-      if (session) {
-        // Onglet remonté sur une session vivante : on rend l'historique pour
-        // que la vue réaffiche ce qui a défilé sans elle.
+      const existing = sessions.get(instanceId);
+      // Changer de shell DANS le même onglet veut dire remplacer son terminal.
+      if (existing && shellId && existing.shellId !== shellId) close(instanceId);
+      const live = sessions.get(instanceId);
+      if (live) {
+        // La vue se remonte sur une session vivante : elle se rattache et
+        // reçoit l'historique pour réafficher ce qui a défilé sans elle.
+        live.detached = false;
         return {
-          mode: session.mode,
-          shellId: session.shellId,
-          history: session.history,
-          exited: session.exited,
+          mode: live.mode,
+          shellId: live.shellId,
+          history: live.history,
+          exited: live.exited,
         };
       }
 
@@ -237,23 +271,22 @@ export default definePlugin({
       const workdir = cwd ?? process.cwd();
       const real = await tryPty(shell, workdir, cols, rows);
       const pty =
-        real ??
-        wrapChild(
-          spawn(shell.command, shell.args, { cwd: workdir, windowsHide: true }),
-        );
+        real ?? wrapChild(spawn(shell.command, shell.args, { cwd: workdir, windowsHide: true }));
 
-      const live: Session = {
+      const session: Session = {
         pty,
+        channel: ctx.channel(instanceId),
         mode: real ? 'pty' : 'basique',
         shellId: shell.id,
         history: '',
         exited: false,
         paused: false,
         pending: '',
+        detached: false,
       };
 
       /**
-       * Pousse vers la vue, et S'ARRÊTE si elle est en retard.
+       * Pousse vers CET onglet, et s'arrête s'il est en retard.
        *
        * node-pty n'expose pas de pause : on ne peut pas cesser de recevoir. On
        * accumule donc dans `pending` — mais borné par la contre-pression, qui
@@ -261,36 +294,42 @@ export default definePlugin({
        * élaguait silencieusement.
        */
       const push = (data: string): void => {
-        live.history += data;
-        if (live.history.length > MAX_HISTORY_CHARS) {
-          live.history = live.history.slice(live.history.length - MAX_HISTORY_CHARS);
+        session.history += data;
+        if (session.history.length > MAX_HISTORY_CHARS) {
+          session.history = session.history.slice(session.history.length - MAX_HISTORY_CHARS);
         }
-        if (live.paused) {
-          live.pending += data;
+        // Onglet démonté : l'historique suffit, il sera rejoué au remontage.
+        if (session.detached) {
+          session.pending = '';
           return;
         }
-        if (!ctx.emit('data', data)) live.paused = true;
+        if (session.paused) {
+          session.pending += data;
+          return;
+        }
+        if (!session.channel.emit('data', data)) session.paused = true;
       };
 
-      ctx.onDrain(() => {
-        live.paused = false;
-        const waiting = live.pending;
-        live.pending = '';
+      session.channel.onDrain(() => {
+        session.paused = false;
+        const waiting = session.pending;
+        session.pending = '';
         if (waiting) push(waiting);
       });
 
       pty.onData(push);
       pty.onExit(() => {
-        live.exited = true;
-        ctx.emit('exit', null);
+        session.exited = true;
+        session.channel.emit('exit', null);
       });
-      session = live;
-      ctx.log(`${shell.label} démarré (${live.mode}) dans ${workdir}`);
-      return { mode: live.mode, shellId: shell.id, history: '', exited: false };
+      sessions.set(instanceId, session);
+      ctx.log(`${shell.label} démarré (${session.mode}) dans ${workdir}`);
+      return { mode: session.mode, shellId: shell.id, history: '', exited: false };
     });
 
     ctx.registerCommand('write', async (payload) => {
       const { data } = (payload ?? {}) as { data?: string };
+      const session = sessions.get(idOf(payload));
       if (!session || data === undefined) return { written: false };
       session.pty.write(data);
       return { written: true };
@@ -298,12 +337,26 @@ export default definePlugin({
 
     ctx.registerCommand('resize', async (payload) => {
       const { cols, rows } = (payload ?? {}) as { cols?: number; rows?: number };
+      const session = sessions.get(idOf(payload));
       if (session?.pty.resize && cols && rows) session.pty.resize(cols, rows);
       return { resized: Boolean(session?.pty.resize) };
     });
 
-    ctx.registerCommand('close', async () => {
-      close();
+    /**
+     * La vue s'en va sans que l'onglet soit fermé (on passe à un autre onglet).
+     * Le shell CONTINUE de tourner — c'est ce qu'on attend d'un terminal — mais
+     * il cesse d'émettre vers une vue qui n'écoute plus.
+     */
+    ctx.registerCommand('detach', async (payload) => {
+      const session = sessions.get(idOf(payload));
+      if (!session) return { detached: false };
+      session.detached = true;
+      session.pending = '';
+      return { detached: true };
+    });
+
+    ctx.registerCommand('close', async (payload) => {
+      close(idOf(payload));
       return { closed: true };
     });
   },

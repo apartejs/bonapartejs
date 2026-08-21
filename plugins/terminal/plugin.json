@@ -3,10 +3,20 @@
   "name": "Terminal",
   "version": "0.1.0",
   "description": "Un shell dans le projet ouvert, à côté du chat.",
-  "entry": { "node": "./dist/node.js", "renderer": "./renderer.tsx" },
+  "entry": {
+    "node": "./dist/node.js",
+    "renderer": "./renderer.tsx"
+  },
   "contributes": {
     "toolingViews": [
-      { "id": "shell", "title": "Terminal", "icon": "▮", "order": 30 }
+      {
+        "id": "shell",
+        "title": "Terminal",
+        "icon": "▮",
+        "order": 30,
+        "multiple": true,
+        "shortcut": "Ctrl+`"
+      }
     ]
   }
 }

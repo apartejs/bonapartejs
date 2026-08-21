@@ -96,6 +96,11 @@ export const EN: AppTranslations = {
       'Tears down and re-activates plugins without restarting bonaparte — the model stays loaded.'
   },
   tooling: {
+    open: 'Open a view',
+    openMenu: 'Open',
+    close: 'Close tab',
+    nothingToOpen: 'No active plugin offers a view.',
+    emptyHint: 'Open a terminal, a browser, or this conversation’s settings.',
     heading: 'Tooling',
     empty: 'No view yet: active plugins add theirs here.',
     collapse: 'Collapse the panel',

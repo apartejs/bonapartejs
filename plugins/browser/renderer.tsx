@@ -36,23 +36,32 @@ const LABELS = {
  * rectangle au main à chaque changement de taille ; sans ça, la page se
  * retrouverait posée n'importe où sur la fenêtre.
  */
-export default function BrowserView({ locale }: ToolingViewProps) {
+export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   const labels = LABELS[locale] ?? LABELS.en;
   const [url, setUrl] = useState('');
   const [state, setState] = useState<BrowserState>({ url: null, open: false, messages: [] });
   const slotRef = useRef<HTMLDivElement>(null);
 
+  // Chaque commande porte l'onglet : le panneau permet d'ouvrir plusieurs
+  // navigateurs, et deux pages natives sur la même fenêtre doivent savoir
+  // laquelle est laquelle.
+  const invoke = useCallback(
+    (command: string, payload?: Record<string, unknown>) =>
+      window.bonaparte.invokePlugin('browser', command, { ...payload, instanceId }),
+    [instanceId],
+  );
+
   const sendBounds = useCallback(() => {
     const element = slotRef.current;
     if (!element) return;
     const rect = element.getBoundingClientRect();
-    void window.bonaparte.invokePlugin('browser', 'bounds', {
+    void invoke('bounds', {
       x: rect.left,
       y: rect.top,
       width: rect.width,
       height: rect.height,
     });
-  }, []);
+  }, [invoke]);
 
   useEffect(() => {
     if (!state.open) return;
@@ -72,27 +81,33 @@ export default function BrowserView({ locale }: ToolingViewProps) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      void window.bonaparte
-        .invokePlugin('browser', 'state')
-        .then((next) => setState(next as BrowserState));
+      void invoke('state').then((next) => setState(next as BrowserState));
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [invoke]);
+
+  // On quitte l'onglet : la page reste chargée mais QUITTE la fenêtre. Sans
+  // ça, une vue native — qui n'est pas dans le DOM — resterait posée par-dessus
+  // l'onglet suivant.
+  useEffect(
+    () => () => {
+      void invoke('detach');
+    },
+    [invoke],
+  );
 
   const open = useCallback(async () => {
     if (!url.trim()) return;
-    setState(
-      (await window.bonaparte.invokePlugin('browser', 'open', { url })) as BrowserState,
-    );
+    setState((await invoke('open', { url })) as BrowserState);
     // L'état complet arrive au tour de scrutation suivant ; ce qui compte
     // ici est que la zone existe pour recevoir la vue native.
     setState((current) => ({ ...current, open: true }));
-  }, [url]);
+  }, [invoke, url]);
 
   const close = useCallback(async () => {
-    await window.bonaparte.invokePlugin('browser', 'close');
+    await invoke('close');
     setState({ url: null, open: false, messages: [] });
-  }, []);
+  }, [invoke]);
 
   return (
     <div className="plugin-view browser-view">

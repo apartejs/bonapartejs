@@ -81,6 +81,15 @@ export interface PluginNodeContext {
   emit(event: string, payload: unknown): boolean;
   /** La vue a rattrapé : le producteur peut reprendre. */
   onDrain(listener: () => void): void;
+  /**
+   * Canal vers UNE instance de vue — un onglet du panneau.
+   *
+   * Le panneau permet d'ouvrir plusieurs onglets du même type : deux
+   * terminaux, trois navigateurs. La contre-pression est donc comptée par
+   * instance, sinon un onglet qui déborde figerait ses voisins. Un plugin
+   * multi-instances ouvre un canal par session et le garde à côté d'elle.
+   */
+  channel(instanceId: string): PluginInstanceChannel;
   /** Nettoyage supplémentaire à exécuter au démontage. */
   onDispose(dispose: () => void | Promise<void>): void;
   /** Journalise en préfixant par l'id du plugin. */
@@ -88,6 +97,14 @@ export interface PluginNodeContext {
 }
 
 /** Point d'entrée Node d'un plugin : `export default definePlugin({...})`. */
+/** Canal vers une instance de vue. Même contrat que `emit`/`onDrain`, ciblé. */
+export interface PluginInstanceChannel {
+  emit(event: string, payload: unknown): boolean;
+  onDrain(listener: () => void): void;
+  /** L'onglet est fermé : le compteur est oublié et le canal devient muet. */
+  dispose(): void;
+}
+
 export interface PluginNodeModule {
   activate(context: PluginNodeContext): void | Promise<void>;
 }
@@ -105,6 +122,14 @@ export interface ToolingViewProps {
   projectRoot: string | null;
   /** Conversation ouverte, pour les vues qui s'y rattachent. */
   conversationId: string | null;
+  /**
+   * Identité de CET onglet.
+   *
+   * Le panneau permettant d'ouvrir plusieurs onglets du même type, la vue ne
+   * peut plus supposer qu'elle est seule : elle passe cet identifiant à chaque
+   * commande, et ne retient que les événements qui le portent.
+   */
+  instanceId: string;
   locale: 'fr' | 'en';
 }
 

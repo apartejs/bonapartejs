@@ -842,25 +842,34 @@ button.primary {
 
 .tooling-tabs {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 2px;
   padding: 6px 6px 0;
   border-bottom: 1px solid var(--aparte-border);
+}
+
+/* La bande d'onglets défile ; le bouton `+` reste, lui, toujours atteignable. */
+.tooling-tablist {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tooling-tablist::-webkit-scrollbar {
+  display: none;
 }
 
 .tooling-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 10px;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 7px 7px 0 0;
   background: transparent;
   color: var(--aparte-text-muted);
-  font-size: 12.5px;
-  cursor: pointer;
   white-space: nowrap;
 }
 
@@ -875,8 +884,145 @@ button.primary {
   margin-bottom: -1px;
 }
 
+.tooling-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 4px 6px 10px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * La croix ne se montre que sur l'onglet actif ou au survol : une rangée de
+ * croix permanentes fait un panneau bruyant, et l'occasion de fermer un onglet
+ * par mégarde. Elle garde sa PLACE dans les deux cas (opacité, pas display),
+ * pour que les onglets ne sautent pas au passage de la souris.
+ */
+.tooling-tab-close {
+  padding: 6px 8px 6px 2px;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.tooling-tab:hover .tooling-tab-close,
+.tooling-tab-active .tooling-tab-close,
+.tooling-tab-close:focus-visible {
+  opacity: 0.55;
+}
+
+.tooling-tab-close:hover {
+  opacity: 1;
+  color: var(--aparte-error);
+}
+
 .tooling-tab-icon {
   font-family: var(--bp-mono);
+}
+
+.tooling-add {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-inline-start: auto;
+  padding-bottom: 6px;
+}
+
+.tooling-add-button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--aparte-text-muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tooling-add-button:hover {
+  border-color: var(--aparte-border);
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+}
+
+.tooling-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 30;
+  min-width: 232px;
+  padding: 5px;
+  border: 1px solid var(--aparte-border);
+  border-radius: 10px;
+  background: var(--aparte-surface-1);
+  box-shadow: 0 14px 32px rgb(0 0 0 / 28%);
+}
+
+.tooling-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--aparte-text);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.tooling-menu-item:hover {
+  background: var(--aparte-surface-2);
+}
+
+.tooling-menu-icon {
+  font-family: var(--bp-mono);
+  color: var(--aparte-text-muted);
+}
+
+.tooling-menu-title {
+  flex: 1;
+}
+
+.tooling-menu-shortcut {
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  color: var(--aparte-text-muted);
+  border: 1px solid var(--aparte-border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.tooling-menu-empty,
+.tooling-empty {
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: 12.5px;
+}
+
+.tooling-empty {
+  padding: 18px 4px;
+  text-align: center;
+  line-height: 1.55;
 }
 
 .tooling-body {
