@@ -21,28 +21,51 @@ afterEach(async () => {
 });
 
 describe('ConversationStore', () => {
-  it('rattache le projet à la conversation, pas à l’application', async () => {
-    // Le projet appartient à la conversation : deux conversations ouvertes
-    // sur deux dossiers différents doivent coexister sans se marcher dessus.
+  it('rattache la conversation à un projet, pas à l’application', async () => {
+    // La conversation référence un PROJET ; c'est le projet qui porte les
+    // racines. Deux conversations sur deux projets différents doivent
+    // coexister sans se marcher dessus.
     const store = await makeStore();
-    await store.create('a', { projectRoot: '/projets/alpha' });
-    await store.create('b', { projectRoot: '/projets/beta' });
+    await store.create('a', { projectId: 'proj-alpha' });
+    await store.create('b', { projectId: 'proj-beta' });
 
-    expect((await store.meta('a')).projectRoot).toBe('/projets/alpha');
-    expect((await store.meta('b')).projectRoot).toBe('/projets/beta');
+    expect((await store.meta('a')).projectId).toBe('proj-alpha');
+    expect((await store.meta('b')).projectId).toBe('proj-beta');
   });
 
   it('une conversation sans projet reste licite', async () => {
+    // Invariant acquis : on discute sans dossier, et les outils marchent
+    // quand même — sans confinement.
     const store = await makeStore();
     await store.create('libre');
-    expect((await store.meta('libre')).projectRoot).toBeUndefined();
+    expect((await store.meta('libre')).projectId).toBeUndefined();
   });
 
-  it('setProjectRoot attache un dossier après coup', async () => {
+  it('setProjectId rattache puis détache après coup', async () => {
     const store = await makeStore();
     await store.create('c');
-    await store.setProjectRoot('c', '/projets/gamma');
-    expect((await store.meta('c')).projectRoot).toBe('/projets/gamma');
+
+    await store.setProjectId('c', 'proj-gamma');
+    expect((await store.meta('c')).projectId).toBe('proj-gamma');
+
+    // Retirer du projet doit rendre la conversation « sans projet », pas
+    // laisser un identifiant orphelin qui pointerait dans le vide.
+    await store.setProjectId('c', undefined);
+    expect((await store.meta('c')).projectId).toBeUndefined();
+  });
+
+  it('setFrozenRoots retient le périmètre en vigueur au figeage', async () => {
+    // C'est la base du delta : sans lui, réouvrir une conversation croirait
+    // que le périmètre vient d'apparaître et l'annoncerait pour rien.
+    const store = await makeStore();
+    await store.create('f');
+
+    await store.setFrozenRoots('f', ['/a', '/b']);
+    expect((await store.meta('f')).frozenRoots).toEqual(['/a', '/b']);
+
+    // L'ordre est sémantique : il doit être retenu tel quel.
+    await store.setFrozenRoots('f', ['/b', '/a']);
+    expect((await store.meta('f')).frozenRoots).toEqual(['/b', '/a']);
   });
 
   it('setSetting pose puis retire une surcharge de conversation', async () => {
@@ -58,11 +81,11 @@ describe('ConversationStore', () => {
 
   it('setTitle renomme sans toucher au reste', async () => {
     const store = await makeStore();
-    await store.create('d', { title: 'Sans titre', projectRoot: '/projets/delta' });
+    await store.create('d', { title: 'Sans titre', projectId: 'proj-delta' });
     await store.setTitle('d', 'Refonte du parser');
     const meta = await store.meta('d');
     expect(meta.title).toBe('Refonte du parser');
-    expect(meta.projectRoot).toBe('/projets/delta');
+    expect(meta.projectId).toBe('proj-delta');
   });
 
   it('create puis listMeta expose la conversation', async () => {

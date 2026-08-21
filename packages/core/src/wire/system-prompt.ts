@@ -18,8 +18,11 @@ import type { ToolOutcome } from '../backend/types.js';
 import type { ToolDef, ToolInventoryDelta } from '../tools/types.js';
 
 export interface SystemPromptOptions {
-  /** Absent = aucun projet ouvert (les outils disque sont indisponibles). */
-  projectRoot?: string;
+  /**
+   * Racines du projet, ORDONNÉES. Vide = aucun projet : les outils marchent
+   * quand même, sans confinement.
+   */
+  roots?: string[];
   tools: ToolDef[];
   /** Langue attendue des réponses, en clair (ex. « French »). */
   replyLanguage?: string;
@@ -36,21 +39,53 @@ export function renderToolInventory(tools: ToolDef[]): string {
   return tools.map(renderToolLine).join('\n');
 }
 
+/**
+ * Bloc de décor : ce que le modèle peut voir.
+ *
+ * Avec plusieurs racines, il faut les NOMMER toutes et dire laquelle sert de
+ * défaut aux chemins relatifs. Sans cette information, le modèle ne peut
+ * atteindre les autres racines que par tâtonnement — l'ambiguïté se résout par
+ * de l'information dans le prompt, pas par de la magie dans le résolveur.
+ */
+function renderPerimeter(roots: string[]): string {
+  // Le projet est le PÉRIMÈTRE des outils, pas leur condition d'existence :
+  // sans dossier ils marchent toujours. Le modèle ne doit ni réclamer un
+  // dossier, ni croire qu'il ne peut rien lire.
+  if (roots.length === 0) {
+    return (
+      'No project folder is open. Your tools still work: use absolute paths, ' +
+      'or relative ones, which resolve from the user home directory. ' +
+      'Nothing confines them to a folder, so name the exact path you are ' +
+      'about to touch when it matters.'
+    );
+  }
+
+  if (roots.length === 1) {
+    return (
+      `Open project: ${roots[0]}\n` +
+      'All tool paths are relative to this root, and you cannot step outside it.'
+    );
+  }
+
+  return (
+    'Open project, spanning several source folders:\n' +
+    roots
+      .map((root, index) =>
+        index === 0
+          ? `- ${root}  (default: relative paths resolve here)`
+          : `- ${root}`,
+      )
+      .join('\n') +
+    '\nRelative paths resolve against the first folder. To reach another one, ' +
+    'use its absolute path. You cannot step outside these folders.'
+  );
+}
+
 export function buildSystemPrompt(options: SystemPromptOptions): string {
   const blocks = [
     'You are bonaparte, a local-first coding agent working on a real project. ' +
       'Be precise and concise. Verify with tools instead of assuming.',
-    options.projectRoot
-      ? `Open project: ${options.projectRoot}\n` +
-        'All tool paths are relative to this root, and you cannot step outside it.'
-      : // Le projet est le PÉRIMÈTRE des outils, pas leur condition
-        // d'existence : sans dossier ils marchent toujours, simplement sans
-        // confinement. Le modèle ne doit ni réclamer un dossier, ni croire
-        // qu'il ne peut rien lire.
-        'No project folder is open. Your tools still work: use absolute paths, ' +
-        'or relative ones, which resolve from the user home directory. ' +
-        'Nothing confines them to a folder, so name the exact path you are ' +
-        'about to touch when it matters.',
+    renderPerimeter(options.roots ?? []),
     'Available tools:\n' + renderToolInventory(options.tools),
     'To call a tool, emit exactly:\n' +
       '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
@@ -80,25 +115,44 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
  * Le delta d'inventaire annonce les outils ; il fallait aussi annoncer le
  * décor dans lequel ils travaillent.
  */
-export function renderProjectDelta(
-  previous: string | undefined,
-  current: string | undefined,
+export function renderPerimeterDelta(
+  previous: string[],
+  current: string[],
 ): string | null {
-  if (previous === current) return null;
+  // L'ORDRE compte autant que le contenu : la première racine est le défaut
+  // des chemins relatifs, donc réordonner change le comportement des outils et
+  // doit être annoncé comme le reste.
+  if (previous.length === current.length && previous.every((r, i) => r === current[i])) {
+    return null;
+  }
 
-  if (current) {
+  if (current.length === 0) {
     return (
       '[project update]\n' +
-      `A project folder is now open: ${current}\n` +
-      'All tool paths resolve inside this root, and you cannot step outside ' +
-      'it. This supersedes anything said earlier about no project being open.'
+      'The project folders were closed. Your tools still work, but nothing ' +
+      'confines them any more: relative paths resolve from the user home ' +
+      'directory. Name the exact path you are about to touch.'
     );
   }
-  return (
-    '[project update]\n' +
-    'The project folder was closed, so file and shell tools are no longer ' +
-    'available. You can still discuss and reason.'
+
+  const added = current.filter((root) => !previous.includes(root));
+  const removed = previous.filter((root) => !current.includes(root));
+  const parts = ['[project update]', 'The project now spans these folders:'];
+  parts.push(
+    current
+      .map((root, index) =>
+        index === 0 ? `- ${root}  (default for relative paths)` : `- ${root}`,
+      )
+      .join('\n'),
   );
+  if (added.length > 0) parts.push(`Added: ${added.join(', ')}`);
+  if (removed.length > 0) {
+    parts.push(`Removed (do not touch them any more): ${removed.join(', ')}`);
+  }
+  parts.push(
+    'This list supersedes anything said earlier about the project folders.',
+  );
+  return parts.join('\n');
 }
 
 /** Message appendé quand l'outillage change en cours de conversation. */

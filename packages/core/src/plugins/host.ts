@@ -279,7 +279,11 @@ export class PluginHost {
     return async (args, context) =>
       handler({
         args,
-        ...(context.projectRoot ? { projectRoot: context.projectRoot } : {}),
+        // Le SDK de plugin ne connaît qu'une racine : on lui donne la première,
+        // celle contre laquelle les chemins relatifs résolvent. Élargir son
+        // contrat à N racines est un changement de SDK, donc de tous les
+        // plugins — reporté, et consigné.
+        ...(context.roots[0] ? { projectRoot: context.roots[0] } : {}),
         signal: context.signal,
       });
   }

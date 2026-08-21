@@ -19,12 +19,14 @@ export interface ToolDef {
 
 export interface ToolContext {
   /**
-   * Projet ouvert. ABSENT est un cas normal : les outils existent quand même,
-   * le projet n'est pas leur condition d'existence mais leur PÉRIMÈTRE. Avec
-   * un projet, tout chemin y est confiné ; sans, les chemins relatifs partent
-   * du dossier personnel et rien n'est confiné.
+   * Racines du projet ouvert, ORDONNÉES : la première est le défaut des chemins
+   * relatifs, et le périmètre autorisé est leur UNION.
+   *
+   * VIDE est un cas normal : les outils existent quand même, le projet n'est
+   * pas leur condition d'existence mais leur PÉRIMÈTRE. Sans racine, les
+   * chemins relatifs partent du dossier personnel et rien n'est confiné.
    */
-  projectRoot?: string;
+  roots: string[];
   signal: AbortSignal;
 }
 

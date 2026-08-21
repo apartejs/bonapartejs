@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SystemSpec, ToolDefLike, TranscriptEntry } from '../types.js';
 import { TranscriptRenderer } from './turn-renderer.js';
 
-const SYSTEM: SystemSpec = { projectRoot: 'C:\\projet' };
+const SYSTEM: SystemSpec = { roots: ['C:\\projet'] };
 const TOOLS: ToolDefLike[] = [
   { name: 'read_file', description: 'lit', inputSchema: { type: 'object' } },
 ];

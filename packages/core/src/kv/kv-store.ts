@@ -6,7 +6,7 @@
  * annoncé — jamais de restore risqué.
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SlotApi } from '../backend/types.js';
 
@@ -89,6 +89,17 @@ export class KvStore {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Oublie l'etat d'une conversation : le fichier de slot ET son manifest.
+   *
+   * L'etat KV n'est qu'un CACHE — le log append-only est la verite. Oublier ne
+   * perd donc jamais un message : ca ne coute qu'un re-prefill, annonce.
+   */
+  async forget(conversationId: string): Promise<void> {
+    await rm(this.slotFilename(conversationId), { force: true });
+    await rm(this.manifestPath(conversationId), { force: true });
   }
 
   async saveState(

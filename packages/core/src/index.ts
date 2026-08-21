@@ -163,6 +163,8 @@ export type {
   ToolingViewContribution,
 } from '@aparte/bonaparte-shared';
 
+export type { CreateProjectOptions, Project } from './project/store.js';
+export { ProjectStore } from './project/store.js';
 export type { EndpointProbe, ProbeOptions } from './backend/detect-endpoint.js';
 export { probeEndpoint } from './backend/detect-endpoint.js';
 export type {

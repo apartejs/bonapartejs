@@ -194,7 +194,7 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
       store: new ConversationStore(join(root, 'conversations')),
       registry,
       permissions: new PermissionEngine('impro'),
-      projectRoot,
+      roots: [projectRoot],
       live: {
         modelFingerprint: await fingerprintModelFile(MODEL as string),
         nCtx: N_CTX,

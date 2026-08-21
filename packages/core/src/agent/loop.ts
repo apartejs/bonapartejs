@@ -219,19 +219,14 @@ export class AgentLoop {
       }
     }
 
-    const projectRoot = this.options.system.projectRoot;
-    if (!projectRoot) {
-      // Sans projet, les outils disque ne sont pas dans l'inventaire ; ce
-      // garde-fou couvre un outil enregistré par ailleurs.
-      return {
-        name,
-        ok: false,
-        content: `No project is open, so ${name} cannot run. Ask the user to open a project folder.`,
-      };
-    }
+    // Aucun garde-fou « pas de projet, pas d'outil » : le projet est le
+    // PÉRIMÈTRE des outils, pas leur condition d'existence. Sans racine, ils
+    // travaillent sans confinement — c'est le mode de jeu qui arbitre, pas
+    // l'absence de dossier.
+    const roots = this.options.system.roots ?? [];
 
     try {
-      const result = await registered.handler(args, { projectRoot, signal });
+      const result = await registered.handler(args, { roots, signal });
       return { name, ok: result.ok, content: result.content };
     } catch (error) {
       return {

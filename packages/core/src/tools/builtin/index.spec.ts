@@ -32,8 +32,8 @@ afterEach(async () => {
   roots = [];
 });
 
-function ctx(projectRoot: string): ToolContext {
-  return { projectRoot, signal: new AbortController().signal };
+function ctx(...roots: string[]): ToolContext {
+  return { roots, signal: new AbortController().signal };
 }
 
 async function call(
@@ -282,7 +282,7 @@ describe('sans projet ouvert', () => {
     const read = builtinTools().find((t) => t.def.name === 'read_file')!;
     const result = await read.handler(
       { path: file },
-      { signal: new AbortController().signal },
+      { roots: [], signal: new AbortController().signal },
     );
 
     expect(result.ok).toBe(true);

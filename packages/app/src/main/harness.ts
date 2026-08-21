@@ -7,7 +7,7 @@
  */
 
 import { execFile, spawn, spawnSync } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
@@ -28,6 +28,7 @@ import {
   kvSlotsDir,
   PermissionEngine,
   PluginHost,
+  ProjectStore,
   probeEndpoint,
   resolveSettings,
   SAMPLING_SETTINGS,
@@ -238,10 +239,14 @@ export class Harness {
   private window: BrowserWindow | null = null;
   private engine: BackendConfigDto | null = null;
   /**
-   * Projet de la conversation OUVERTE — pas de l'application. Miroir en
-   * mémoire de `meta.projectRoot`, tenu à jour à chaque bascule.
+   * Périmètre de la conversation OUVERTE — pas de l'application.
+   *
+   * Les racines viennent du PROJET auquel la conversation est rattachée : un
+   * seul endroit à éditer, un seul endroit pour les permissions. Vide est un
+   * cas normal (conversation sans projet) : les outils marchent, sans
+   * confinement.
    */
-  private projectRoot: string | null = null;
+  private roots: string[] = [];
   private currentConversationId: string | null = null;
   private readonly registry = new ToolRegistry();
   private readonly pluginHost = new PluginHost({
@@ -267,6 +272,7 @@ export class Harness {
   private readonly store = new ConversationStore(
     join(bonaparteDataDir(), 'conversations'),
   );
+  private readonly projects = new ProjectStore(bonaparteDataDir());
   private readonly configPath = join(bonaparteDataDir(), 'config', 'global.json');
 
   /**
@@ -300,16 +306,72 @@ export class Harness {
   async restoreSession(): Promise<void> {
     // Avant tout : un serveur laissé par une session morte brutalement.
     await killOrphanedServer();
+    await this.purgeLegacyConversations();
     await this.loadPlugins();
     const config = await this.loadConfig();
     // On rouvre la dernière conversation, et c'est ELLE qui dit s'il y a un
     // projet. Rien n'est chargé en VRAM ici : seulement de la méta.
     if (config.currentConversationId && (await this.store.exists(config.currentConversationId))) {
       this.currentConversationId = config.currentConversationId;
-      this.projectRoot = (await this.store.meta(config.currentConversationId)).projectRoot ?? null;
+      this.roots = await this.rootsOf(config.currentConversationId);
     }
     this.registerBuiltinTools();
     if (config.mode) this.permissions.setMode(config.mode as PlayMode);
+  }
+
+  /**
+   * Table rase des conversations d'ancienne forme (décision de Paul, 2026-08-20).
+   *
+   * Avant la refonte, une conversation portait son dossier elle-même
+   * (`projectRoot`). Le périmètre appartient désormais au PROJET. Écrire du code
+   * de compatibilité pour quelques conversations n'avait pas de sens : on les
+   * supprime avec leur état KV, et on le DIT dans le journal plutôt que de les
+   * faire disparaître en silence.
+   *
+   * La détection porte sur le JSON brut : le champ n'existe plus dans le type.
+   */
+  private async purgeLegacyConversations(): Promise<void> {
+    const dir = join(bonaparteDataDir(), 'conversations');
+    let ids: string[];
+    try {
+      ids = await readdir(dir);
+    } catch {
+      return;
+    }
+    for (const id of ids) {
+      let raw: string;
+      try {
+        raw = await readFile(join(dir, id, 'meta.json'), 'utf8');
+      } catch {
+        continue;
+      }
+      if (!raw.includes('"projectRoot"')) continue;
+      await this.store.remove(id);
+      await this.kv.forget(id);
+      console.log(`[conversations] ancienne forme purgée : ${id}`);
+    }
+  }
+
+  /**
+   * Racines en vigueur pour une conversation : celles de SON projet.
+   *
+   * Une conversation sans projet, ou dont le projet a été supprimé, rend un
+   * périmètre vide — ce qui est un état licite, pas une erreur : les outils
+   * marchent, simplement sans confinement.
+   */
+  private async rootsOf(conversationId: string): Promise<string[]> {
+    const { projectId } = await this.store.meta(conversationId);
+    if (!projectId) return [];
+    return (await this.projects.get(projectId))?.roots ?? [];
+  }
+
+  /** Nom du projet pour l'affichage, ou rien s'il n'y en a pas. */
+  private async projectNameOf(
+    projectId: string | undefined,
+  ): Promise<{ projectName?: string }> {
+    if (!projectId) return {};
+    const project = await this.projects.get(projectId);
+    return project ? { projectName: project.name } : {};
   }
 
   /** Conversation courante, créée à la volée si l'app n'en a encore aucune. */
@@ -323,7 +385,7 @@ export class Harness {
 
   private async setCurrentConversation(id: string): Promise<void> {
     this.currentConversationId = id;
-    this.projectRoot = (await this.store.meta(id)).projectRoot ?? null;
+    this.roots = await this.rootsOf(id);
     this.registerBuiltinTools();
     const config = await this.loadConfig();
     await this.saveConfig({ ...config, currentConversationId: id });
@@ -336,7 +398,7 @@ export class Harness {
         id: meta.id,
         title: meta.title,
         updatedAt: meta.updatedAt,
-        ...(meta.projectRoot ? { projectName: basename(meta.projectRoot) } : {}),
+        ...(await this.projectNameOf(meta.projectId)),
         ...(meta.modelPath ? { modelName: modelDisplayName(meta.modelPath) } : {}),
         // Une reprise instantanée se promet sur pièce : l'état doit exister.
         hasKvState: await this.kv.has(meta.id),
@@ -503,11 +565,19 @@ export class Harness {
     }
   }
 
+  /**
+   * Vue « projet » exposée au renderer.
+   *
+   * Intérimaire : le DTO ne porte encore qu'une racine, celle par défaut. Les
+   * écrans qui montreront le projet complet — nom, N racines, édition — sont
+   * l'étape 2, et c'est là que ce DTO deviendra un vrai projet.
+   */
   private project(recents: string[] = []): ProjectDto | null {
-    if (!this.projectRoot) return null;
+    const primary = this.roots[0];
+    if (!primary) return null;
     return {
-      root: this.projectRoot,
-      name: basename(this.projectRoot),
+      root: primary,
+      name: basename(primary),
       recents,
     };
   }
@@ -525,11 +595,28 @@ export class Harness {
     const picked = result.canceled ? null : (result.filePaths[0] ?? null);
     if (!picked) return null;
 
-    // Le dossier est attaché à la CONVERSATION ouverte, pas à l'application :
-    // une autre conversation garde le sien, ou n'en a pas.
+    // Le dossier appartient au PROJET, et la conversation appartient à un
+    // projet. Choisir un dossier depuis une conversation sans projet en crée
+    // donc un, nommé d'après le dossier ; depuis une conversation qui en a
+    // déjà un, le dossier s'ajoute à ses racines.
     const id = await this.ensureConversationId();
-    await this.store.setProjectRoot(id, picked);
-    this.projectRoot = picked;
+    const { projectId } = await this.store.meta(id);
+
+    if (projectId && (await this.projects.get(projectId))) {
+      const project = await this.projects.get(projectId);
+      const roots = project?.roots ?? [];
+      if (!roots.includes(picked)) {
+        await this.projects.setRoots(projectId, [...roots, picked]);
+      }
+    } else {
+      const created = await this.projects.create({
+        name: basename(picked),
+        roots: [picked],
+      });
+      await this.store.setProjectId(id, created.id);
+    }
+
+    this.roots = await this.rootsOf(id);
     this.session = null;
     this.registerBuiltinTools();
 
@@ -797,7 +884,7 @@ export class Harness {
         store: this.store,
         registry: this.registry,
         permissions: this.permissions,
-        ...(this.projectRoot ? { projectRoot: this.projectRoot } : {}),
+        ...(this.roots.length > 0 ? { roots: this.roots } : {}),
         approve: this.approve,
         // Le fil est anglais ; seule la langue de réponse suit l'utilisateur.
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',

@@ -136,11 +136,14 @@ export type TranscriptEntry =
 
 export interface SystemSpec {
   /**
-   * Projet ouvert. Absent = discussion sans projet : les outils qui touchent
-   * au disque ne sont simplement pas dans l'inventaire, mais la conversation
-   * fonctionne. Ouvrir un projet plus tard les annonce par un delta.
+   * Racines du projet ouvert, ORDONNÉES : la première est le défaut des chemins
+   * relatifs, le périmètre autorisé est leur union.
+   *
+   * Vide ou absent = discussion sans projet. Les outils marchent quand même,
+   * simplement sans confinement — le projet est leur périmètre, pas leur
+   * condition d'existence. Ouvrir un projet plus tard l'annonce par un delta.
    */
-  projectRoot?: string;
+  roots?: string[];
   replyLanguage?: string;
   projectInstructions?: string;
 }

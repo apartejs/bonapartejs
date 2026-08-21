@@ -20,7 +20,7 @@ import type {
 } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import { renderInventoryDelta, renderProjectDelta } from '../wire/system-prompt.js';
+import { renderInventoryDelta, renderPerimeterDelta } from '../wire/system-prompt.js';
 
 export interface ChatSessionOptions {
   backend: Backend;
@@ -28,8 +28,11 @@ export interface ChatSessionOptions {
   store: ConversationStore;
   registry: ToolRegistry;
   permissions: PermissionEngine;
-  /** Projet ouvert — absent = discussion sans outils disque. */
-  projectRoot?: string;
+  /**
+   * Racines du projet, ORDONNÉES. Vide = conversation sans projet : les outils
+   * marchent, simplement sans confinement.
+   */
+  roots?: string[];
   live: LiveBackendConfig;
   /** Langue attendue des réponses (ex. « French ») — le fil reste anglais. */
   replyLanguage?: string;
@@ -80,7 +83,7 @@ export class ChatSession {
       permissions: options.permissions,
       conversationId,
       system: {
-        ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+        ...(options.roots && options.roots.length > 0 ? { roots: options.roots } : {}),
         ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
         ...(options.projectInstructions
           ? { projectInstructions: options.projectInstructions }
@@ -97,7 +100,7 @@ export class ChatSession {
     backend.prepareConversation?.(
       conversationId,
       {
-        ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+        ...(options.roots && options.roots.length > 0 ? { roots: options.roots } : {}),
         ...(options.replyLanguage ? { replyLanguage: options.replyLanguage } : {}),
         ...(options.projectInstructions
           ? { projectInstructions: options.projectInstructions }
@@ -113,7 +116,7 @@ export class ChatSession {
     await session.announceInventoryDelta(meta.toolNames);
     // Le décor a-t-il changé depuis le figeage ? Même règle : on appende.
     if (meta.toolNames !== undefined) {
-      await session.announceProjectDelta(meta.frozenProjectRoot);
+      await session.announcePerimeterDelta(meta.frozenRoots ?? []);
     }
 
     if (!backend.slots) {
@@ -147,7 +150,7 @@ export class ChatSession {
       // Le décor est figé en même temps que l'inventaire : sans ça, la
       // réouverture croirait qu'un projet vient d'apparaître et annoncerait
       // un changement qui n'a pas eu lieu.
-      await store.setFrozenProjectRoot(this.conversationId, this.options.projectRoot);
+      await store.setFrozenRoots(this.conversationId, this.options.roots ?? []);
       return;
     }
 
@@ -161,17 +164,18 @@ export class ChatSession {
   }
 
   /**
-   * Le prompt système est figé à la création : s'il a été figé sans projet et
-   * qu'un dossier est ouvert ensuite, le modèle croirait encore travailler
-   * sans décor. On l'annonce par un message APPENDÉ — jamais de re-rendu.
+   * Le prompt système est figé à la création : si le périmètre a bougé depuis
+   * — dossier ajouté, retiré, ou simplement RÉORDONNÉ, ce qui change la racine
+   * par défaut des chemins relatifs — le modèle travaillerait sur un décor
+   * périmé. On l'annonce par un message APPENDÉ, jamais par un re-rendu.
    */
-  private async announceProjectDelta(frozen: string | undefined): Promise<void> {
-    const current = this.options.projectRoot;
-    const message = renderProjectDelta(frozen, current);
+  private async announcePerimeterDelta(frozen: string[]): Promise<void> {
+    const current = this.options.roots ?? [];
+    const message = renderPerimeterDelta(frozen, current);
     if (!message) return;
 
     await this.appendService(message);
-    await this.options.store.setFrozenProjectRoot(this.conversationId, current);
+    await this.options.store.setFrozenRoots(this.conversationId, current);
   }
 
   /** Message de service : dans le transcript ET dans le log, jamais dans l'UI. */

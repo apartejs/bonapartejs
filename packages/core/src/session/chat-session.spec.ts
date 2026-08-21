@@ -85,7 +85,7 @@ async function makeRig(options: {
       store: new ConversationStore(join(dir, 'conversations')),
       registry,
       permissions: new PermissionEngine('impro'),
-      projectRoot: 'C:\\projet',
+      roots: ['C:\\projet'],
       live: options.live ?? LIVE,
     },
   };

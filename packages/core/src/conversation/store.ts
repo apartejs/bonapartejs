@@ -4,7 +4,7 @@
  * un PromptLog octet-identique (dont le flag thinking de chaque tour).
  */
 
-import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { TranscriptEntry } from '../backend/types.js';
 
@@ -26,17 +26,21 @@ export interface ConversationMeta {
   /** Inventaire d'outils au moment du figeage (base des deltas). */
   toolNames?: string[];
   /**
-   * Dossier de projet de CETTE conversation — absent = discussion sans outils
-   * disque. Le projet appartient à la conversation, pas à l'application : on
-   * doit pouvoir tenir deux conversations sur deux dossiers différents, et
-   * changer de projet ne doit pas réécrire l'historique d'une autre.
+   * Projet auquel cette conversation appartient — absent = « sans projet »,
+   * un cas légitime (on discute sans dossier, invariant acquis).
+   *
+   * Le PÉRIMÈTRE (les racines) appartient au projet, pas à la conversation :
+   * un seul endroit à éditer, un seul endroit pour les permissions et les
+   * consignes. Ce que la conversation possède, c'est l'EXÉCUTION — modèle,
+   * échantillonnage, mode de jeu.
    */
-  projectRoot?: string;
+  projectId?: string;
   /**
-   * Projet en vigueur au moment où le prompt système a été FIGÉ. Comparé au
-   * projet courant pour savoir s'il faut annoncer un changement de décor.
+   * Périmètre en vigueur au moment où le prompt système a été FIGÉ. Comparé au
+   * périmètre courant pour savoir s'il faut annoncer un changement de décor —
+   * l'ORDRE compte, puisqu'il désigne la racine par défaut.
    */
-  frozenProjectRoot?: string;
+  frozenRoots?: string[];
   /**
    * Surcharges de réglages de CETTE conversation — échantillonnage seulement
    * (les paramètres de lancement entrent au manifest KV et restent globaux).
@@ -48,7 +52,7 @@ export interface CreateConversationOptions {
   title?: string;
   modelPath?: string;
   nCtx?: number;
-  projectRoot?: string;
+  projectId?: string;
 }
 
 /**
@@ -98,7 +102,7 @@ export class ConversationStore {
       updatedAt: now,
       ...(options.modelPath ? { modelPath: options.modelPath } : {}),
       ...(options.nCtx !== undefined ? { nCtx: options.nCtx } : {}),
-      ...(options.projectRoot ? { projectRoot: options.projectRoot } : {}),
+      ...(options.projectId ? { projectId: options.projectId } : {}),
     };
     await mkdir(this.convDir(id), { recursive: true });
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
@@ -114,10 +118,11 @@ export class ConversationStore {
     }
   }
 
-  /** Rattache (ou remplace) le dossier de projet de la conversation. */
-  async setProjectRoot(id: string, projectRoot: string): Promise<void> {
+  /** Rattache la conversation à un projet, ou la détache avec `undefined`. */
+  async setProjectId(id: string, projectId: string | undefined): Promise<void> {
     const meta = await this.meta(id);
-    meta.projectRoot = projectRoot;
+    if (projectId === undefined) delete meta.projectId;
+    else meta.projectId = projectId;
     meta.updatedAt = new Date().toISOString();
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }
@@ -161,10 +166,9 @@ export class ConversationStore {
   }
 
   /** Mémorise le projet en vigueur au figeage (ou après annonce du delta). */
-  async setFrozenProjectRoot(id: string, projectRoot: string | undefined): Promise<void> {
+  async setFrozenRoots(id: string, roots: string[]): Promise<void> {
     const meta = await this.meta(id);
-    if (projectRoot === undefined) delete meta.frozenProjectRoot;
-    else meta.frozenProjectRoot = projectRoot;
+    meta.frozenRoots = roots;
     await this.writeMeta(meta);
   }
 
@@ -211,6 +215,14 @@ export class ConversationStore {
       .split('\n')
       .filter((line) => line.trim().length > 0)
       .map((line) => JSON.parse(line) as ConversationEvent);
+  }
+
+  /**
+   * Supprime definitivement une conversation : log, meta et manifest.
+   * L'etat KV, lui, appartient au KvStore — l'appelant l'oublie separement.
+   */
+  async remove(id: string): Promise<void> {
+    await rm(this.convDir(id), { recursive: true, force: true });
   }
 
   async listMeta(): Promise<ConversationMeta[]> {

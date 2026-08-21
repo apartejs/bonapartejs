@@ -75,7 +75,7 @@ async function rig(options: {
     registry,
     permissions,
     conversationId: 'conv-test',
-    system: { projectRoot: 'C:\\projet' },
+    system: { roots: ['C:\\projet'] },
     ...(options.approve ? { approve: options.approve } : {}),
     ...(options.maxTurns !== undefined ? { maxTurns: options.maxTurns } : {}),
   });

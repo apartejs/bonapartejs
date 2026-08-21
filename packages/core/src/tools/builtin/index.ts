@@ -10,8 +10,8 @@
 import { exec } from 'node:child_process';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { displayPath, resolveInProject } from '../../project/paths.js';
+import { dirname, join } from 'node:path';
+import { displayInPerimeter, resolveInPerimeter } from '../../project/paths.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolResult } from '../types.js';
 
 export interface BuiltinTool {
@@ -57,28 +57,27 @@ function describeError(error: unknown): string {
  * d'être confinés.
  */
 function workRoot(ctx: ToolContext): string {
-  return ctx.projectRoot ?? homedir();
+  return ctx.roots[0] ?? homedir();
 }
 
-/** Résout un chemin ou rend le message d'erreur destiné au modèle. */
-function inProject(
+/**
+ * Résout un chemin dans le périmètre, ou rend le message destiné au modèle.
+ *
+ * Le refus NOMME les racines autorisées : c'est ce qui permet au modèle de se
+ * corriger au tour suivant plutôt que de retenter le même chemin.
+ */
+function inPerimeter(
   ctx: ToolContext,
   requested: string,
 ): { path: string } | { error: string } {
   try {
-    if (!ctx.projectRoot) {
-      // Sans projet : un chemin absolu passe tel quel, un relatif part du
-      // dossier personnel. Rien ne confine — c'est le mode de jeu qui décide
-      // de ce qui se fait sans demander.
-      return { path: resolve(homedir(), requested.replace(/\\/g, '/')) };
-    }
-    return { path: resolveInProject(ctx.projectRoot, requested) };
+    return { path: resolveInPerimeter(ctx.roots, requested) };
   } catch (error) {
     return { error: describeError(error) };
   }
 }
 
-async function walkFiles(root: string, from: string): Promise<string[]> {
+async function walkFiles(from: string): Promise<string[]> {
   const found: string[] = [];
   const stack = [from];
   while (stack.length > 0 && found.length < MAX_SCANNED_FILES) {
@@ -99,7 +98,6 @@ async function walkFiles(root: string, from: string): Promise<string[]> {
       }
     }
   }
-  void root;
   return found;
 }
 
@@ -124,7 +122,7 @@ const readFileTool: BuiltinTool = {
   handler: async (args, ctx) => {
     const requested = str(args, 'path');
     if (!requested) return ko('Missing argument: path.');
-    const resolved = inProject(ctx, requested);
+    const resolved = inPerimeter(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
 
     let content: string;
@@ -170,7 +168,7 @@ const writeFileTool: BuiltinTool = {
     if (content === null) {
       return ko('Missing or non-string argument: content.');
     }
-    const resolved = inProject(ctx, requested);
+    const resolved = inPerimeter(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
 
     try {
@@ -180,7 +178,7 @@ const writeFileTool: BuiltinTool = {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
     return ok(
-      `Wrote: ${displayPath(workRoot(ctx), resolved.path)} (${content.length} characters)`,
+      `Wrote: ${displayInPerimeter(ctx.roots, resolved.path)} (${content.length} characters)`,
     );
   },
 };
@@ -212,7 +210,7 @@ const editFileTool: BuiltinTool = {
     if (oldString === null || newString === null) {
       return ko('Arguments old_string and new_string are required.');
     }
-    const resolved = inProject(ctx, requested);
+    const resolved = inPerimeter(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
 
     let content: string;
@@ -240,7 +238,7 @@ const editFileTool: BuiltinTool = {
     } catch (error) {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
-    return ok(`Edited: ${displayPath(workRoot(ctx), resolved.path)}`);
+    return ok(`Edited: ${displayInPerimeter(ctx.roots, resolved.path)}`);
   },
 };
 
@@ -258,7 +256,7 @@ const listDirTool: BuiltinTool = {
   },
   handler: async (args, ctx) => {
     const requested = str(args, 'path') ?? '.';
-    const resolved = inProject(ctx, requested);
+    const resolved = inPerimeter(ctx, requested);
     if ('error' in resolved) return ko(resolved.error);
 
     try {
@@ -303,22 +301,35 @@ const grepFilesTool: BuiltinTool = {
       return ko(`Invalid regular expression: ${describeError(error)}`);
     }
 
-    const resolved = inProject(ctx, str(args, 'path') ?? '.');
-    if ('error' in resolved) return ko(resolved.error);
+    // Chercher, c'est chercher PARTOUT : sans sous-dossier explicite, on
+    // balaie toutes les racines du projet. Un grep qui n'aurait vu que la
+    // première racine mentirait par omission — « aucun résultat » alors que le
+    // fichier existe dans le dépôt voisin.
+    const requestedPath = str(args, 'path');
+    let starts: string[];
+    if (requestedPath === null && ctx.roots.length > 0) {
+      starts = ctx.roots;
+    } else {
+      const resolved = inPerimeter(ctx, requestedPath ?? '.');
+      if ('error' in resolved) return ko(resolved.error);
+      starts = [resolved.path];
+    }
 
     const hits: string[] = [];
-    for (const file of await walkFiles(workRoot(ctx), resolved.path)) {
-      if (ctx.signal.aborted) break;
-      let content: string;
-      try {
-        content = await readFile(file, 'utf8');
-      } catch {
-        continue; // binaire ou illisible : ignoré
+    for (const start of starts) {
+      for (const file of await walkFiles(start)) {
+        if (ctx.signal.aborted) break;
+        let content: string;
+        try {
+          content = await readFile(file, 'utf8');
+        } catch {
+          continue; // binaire ou illisible : ignoré
+        }
+        const rel = displayInPerimeter(ctx.roots, file);
+        content.split('\n').forEach((line, index) => {
+          if (regex.test(line)) hits.push(`${rel}:${index + 1}: ${line.trim()}`);
+        });
       }
-      const rel = displayPath(workRoot(ctx), file);
-      content.split('\n').forEach((line, index) => {
-        if (regex.test(line)) hits.push(`${rel}:${index + 1}: ${line.trim()}`);
-      });
     }
 
     if (hits.length === 0) return ok(`No match for /${pattern}/.`);

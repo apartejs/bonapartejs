@@ -3,7 +3,7 @@ import type { ToolDef } from '../tools/types.js';
 import {
   buildSystemPrompt,
   renderInventoryDelta,
-  renderProjectDelta,
+  renderPerimeterDelta,
   renderToolInventory,
   renderToolResults,
 } from './system-prompt.js';
@@ -38,44 +38,69 @@ describe('renderToolInventory', () => {
   });
 });
 
-describe('renderProjectDelta', () => {
+describe('renderPerimeterDelta', () => {
   it('annonce un projet ouvert APRÈS le figeage du prompt', () => {
     // Le prompt système est figé à la création : s'il disait « aucun projet »
     // et qu'un dossier est ouvert ensuite, le modèle n'a aucun moyen de
-    // l'apprendre — il continuera de répondre qu'il ne peut pas lire de
+    // l'apprendre — il continuerait de répondre qu'il ne peut pas lire de
     // fichiers, alors que les outils sont là.
-    const message = renderProjectDelta(undefined, 'D:/projets/app');
+    const message = renderPerimeterDelta([], ['D:/projets/app']);
     expect(message).toBeTruthy();
     expect(message).toContain('D:/projets/app');
-    expect(message).toMatch(/now open/i);
   });
 
-  it('annonce la fermeture du projet', () => {
-    const message = renderProjectDelta('D:/projets/app', undefined);
-    expect(message).toMatch(/no longer/i);
+  it('annonce la fermeture, sans prétendre que les outils disparaissent', () => {
+    // Le projet est le PÉRIMÈTRE, pas la condition d'existence : fermer les
+    // dossiers retire le confinement, pas les outils.
+    const message = renderPerimeterDelta(['D:/projets/app'], []) ?? '';
+    expect(message).toMatch(/still work/i);
+    expect(message).not.toMatch(/no longer available/i);
   });
 
-  it('annonce un changement de dossier', () => {
-    const message = renderProjectDelta('D:/a', 'D:/b');
-    expect(message).toContain('D:/b');
+  it('nomme les racines ajoutées et retirées', () => {
+    const message = renderPerimeterDelta(['D:/a', 'D:/b'], ['D:/a', 'D:/c']) ?? '';
+    expect(message).toMatch(/Added: D:\/c/);
+    expect(message).toMatch(/Removed[^\n]*D:\/b/);
+  });
+
+  it('annonce un RÉORDONNANCEMENT : la racine par défaut a changé', () => {
+    // Même ensemble, autre ordre : les chemins relatifs ne résolvent plus au
+    // même endroit. Se taire ici ferait écrire le modèle dans le mauvais dépôt.
+    const message = renderPerimeterDelta(['D:/a', 'D:/b'], ['D:/b', 'D:/a']);
+    expect(message).toBeTruthy();
+    expect(message).toMatch(/default for relative paths/i);
   });
 
   it('ne dit rien quand rien n’a changé', () => {
-    expect(renderProjectDelta('D:/a', 'D:/a')).toBeNull();
-    expect(renderProjectDelta(undefined, undefined)).toBeNull();
+    expect(renderPerimeterDelta(['D:/a'], ['D:/a'])).toBeNull();
+    expect(renderPerimeterDelta([], [])).toBeNull();
   });
 
   it('reste en anglais : c’est du protocole, pas de l’interface', () => {
-    const message = renderProjectDelta(undefined, 'D:/projets/app') ?? '';
+    const message = renderPerimeterDelta([], ['D:/projets/app']) ?? '';
     expect(message).not.toMatch(/[éèàçù]/);
   });
 });
 
 describe('buildSystemPrompt', () => {
-  const base = { projectRoot: 'D:\\projets\\app', tools: [tool('read_file')] };
+  const base = { roots: ['D:\\projets\\app'], tools: [tool('read_file')] };
 
   it('annonce le projet ouvert', () => {
     expect(buildSystemPrompt(base)).toContain('D:\\projets\\app');
+  });
+
+  it('avec plusieurs racines, les nomme TOUTES et désigne le défaut', () => {
+    // L'ambiguïté des chemins relatifs se résout par de l'information dans le
+    // prompt, pas par de la magie dans le résolveur : le modèle doit pouvoir
+    // atteindre la deuxième racine sans tâtonner.
+    const prompt = buildSystemPrompt({
+      roots: ['D:\\a', 'D:\\b'],
+      tools: [tool('read_file')],
+    });
+    expect(prompt).toContain('D:\\a');
+    expect(prompt).toContain('D:\\b');
+    expect(prompt).toMatch(/default.*relative/i);
+    expect(prompt).toMatch(/absolute path/i);
   });
 
   it('embarque l’inventaire d’outils', () => {

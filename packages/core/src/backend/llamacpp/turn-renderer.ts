@@ -50,7 +50,7 @@ export class TranscriptRenderer {
   ensureSystemPrompt(system: SystemSpec, tools: ToolDefLike[]): string {
     if (this.frozenSystemPrompt === null) {
       this.frozenSystemPrompt = buildSystemPrompt({
-        ...(system.projectRoot ? { projectRoot: system.projectRoot } : {}),
+        ...(system.roots && system.roots.length > 0 ? { roots: system.roots } : {}),
         tools: tools.map((t) => ({ ...t, effect: 'read' as const })),
         ...(system.replyLanguage ? { replyLanguage: system.replyLanguage } : {}),
         ...(system.projectInstructions
