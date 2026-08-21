@@ -21,6 +21,7 @@ const LABELS = {
     exited: 'Le shell s’est terminé.',
     restart: 'Relancer',
     noShell: 'Aucun shell trouvé sur cette machine.',
+    lost: (n: number) => `[… ${n} caractères perdus : sortie trop rapide …]`,
   },
   en: {
     shell: 'Shell',
@@ -29,6 +30,7 @@ const LABELS = {
     exited: 'The shell exited.',
     restart: 'Restart',
     noShell: 'No shell found on this machine.',
+    lost: (n: number) => `[… ${n} characters lost: output too fast …]`,
   },
 } as const;
 
@@ -162,11 +164,19 @@ export default function TerminalView({ locale, projectRoot }: ToolingViewProps) 
       if (!alive) return;
       const reply = (await invoke('read', { since: cursorRef.current })) as {
         data?: string;
+        lost?: number;
         next?: number;
         exited?: boolean;
       };
       if (!alive) return;
       const chunk = reply.data ?? '';
+      // De la sortie a été perdue (tampon élagué plus vite qu'on ne lit) : on
+      // le DIT. Un trou muet dans un terminal ferait douter de tout le reste.
+      if (reply.lost && reply.lost > 0) {
+        termRef.current?.write(`
+[33m${t.lost(reply.lost)}[0m
+`);
+      }
       if (chunk) {
         termRef.current?.write(chunk);
         cursorRef.current = reply.next ?? cursorRef.current + chunk.length;

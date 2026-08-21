@@ -15,6 +15,15 @@
  * Notre SDK de plugin n'a pas encore de canal Node → vue pour POUSSER des
  * données ; c'est un manque connu, contourné par un polling adaptatif côté vue
  * (rapide quand ça débite, lent au repos).
+ *
+ * Différence assumée avec VS Code, qui résout le même problème proprement : il
+ * fait tourner le PTY dans un PROCESS dédié, pousse les données, et applique
+ * une contre-pression par acquittements — le client acquitte tous les 5 000
+ * caractères, le PTY est mis en pause à 100 000 non acquittés et reprend sous
+ * 5 000 (`FlowControlConstants`). Nous n'avons ni push ni acquittement : un
+ * débit trop rapide élague le tampon, donc PERD de la sortie. On le signale
+ * (`lost`) au lieu de laisser un trou muet, mais la vraie réponse est un
+ * `ctx.emit()` avec acquittement dans le SDK.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -269,10 +278,17 @@ export default definePlugin({
       const { since = 0 } = (payload ?? {}) as { since?: number };
       if (!session) return { data: '', next: since, exited: true, mode: null };
 
+      // Le tampon a-t-il élagué DEVANT le curseur du client ? Alors de la
+      // sortie est perdue. VS Code n'a pas ce problème : il met le PTY en
+      // pause (HighWatermarkChars = 100 000) et le reprend quand le client a
+      // rattrapé, au lieu de jeter. Faute de canal de push, on jette — mais on
+      // le DIT, plutôt que de laisser un trou muet dans le terminal.
+      const lost = Math.max(0, session.dropped - since);
       const start = Math.max(0, since - session.dropped);
       const data = session.buffer.slice(start);
       return {
         data,
+        lost,
         next: session.dropped + session.buffer.length,
         exited: session.exited,
         mode: session.mode,
