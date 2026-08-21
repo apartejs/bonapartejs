@@ -6,6 +6,7 @@ import type {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { DotsGlyph, PlusGlyph } from './icons.js';
 
 interface ConversationSidebarProps {
   conversations: ConversationSummaryDto[];
@@ -139,21 +140,23 @@ export function ConversationSidebar({
         <span className="conv-sidebar-tools" ref={menuRef}>
           <button
             type="button"
-            className="conv-icon-button"
+            className="icon-button"
             onClick={() => setMenuOpen(!menuOpen)}
             title={t.conversations.organise}
+            aria-label={t.conversations.organise}
             aria-expanded={menuOpen}
           >
-            ···
+            <DotsGlyph />
           </button>
           <button
             type="button"
-            className="conv-new"
+            className="icon-button"
             onClick={onCreate}
             disabled={busy}
             title={t.conversations.create}
+            aria-label={t.conversations.create}
           >
-            +
+            <PlusGlyph />
           </button>
 
           {menuOpen && (

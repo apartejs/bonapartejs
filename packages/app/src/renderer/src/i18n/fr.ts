@@ -96,6 +96,13 @@ export const FR: AppTranslations = {
     pluginReloadHint:
       'Démonte et réactive les plugins sans redémarrer bonaparte — le modèle reste chargé.',
   },
+  models: {
+    pick: 'Choisir un modèle',
+    scanning: 'Recherche des modèles…',
+    none: 'Aucun modèle trouvé sur cette machine.',
+    switchWarning:
+      'Changer de modèle reconstruit le contexte : l’état sauvegardé ne vaut que pour le modèle qui l’a produit.',
+  },
   tooling: {
     open: 'Ouvrir une vue',
     openMenu: 'Ouvrir',

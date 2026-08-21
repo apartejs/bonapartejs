@@ -8,6 +8,7 @@ import type {
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { ModeSelector } from './ModeSelector.js';
+import { ModelSelector } from './ModelSelector.js';
 import { TemperatureControl } from './TemperatureControl.js';
 
 interface ChatScreenProps {
@@ -19,6 +20,10 @@ interface ChatScreenProps {
   onModeChange: (mode: PlayModeDto) => void;
   /** Modèle de la conversation — poussé en fin de rangée. */
   modelName: string | null;
+  /** Ouvrir la conversation avec un autre modèle. */
+  onPickModel: (modelPath: string) => void;
+  /** Une ouverture est en cours : le sélecteur ne doit pas relancer par-dessus. */
+  busy: boolean;
   /** La température est portée par la conversation : elle se relit au changement. */
   conversationId: string | null;
 }
@@ -48,6 +53,8 @@ export function ChatScreen({
   mode,
   onModeChange,
   modelName,
+  onPickModel,
+  busy,
   conversationId,
 }: ChatScreenProps) {
   const { t } = useTranslate();
@@ -217,11 +224,10 @@ export function ChatScreen({
           <>
             <ModeSelector mode={mode} onModeChange={onModeChange} />
             <TemperatureControl conversationId={conversationId} />
-            {modelName && (
-              <span className="composer-model" title={modelName}>
-                {modelName}
-              </span>
-            )}
+            {/* Le modèle appartient à la conversation, comme le mode et la
+                température : il se choisit donc au même endroit, et non en
+                créant une conversation. */}
+            <ModelSelector modelName={modelName} busy={busy} onPick={onPickModel} />
           </>
         }
       />

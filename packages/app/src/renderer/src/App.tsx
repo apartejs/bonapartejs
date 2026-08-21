@@ -352,10 +352,20 @@ export function App() {
   return (
     <div className="app-shell">
       <div className="app-body">
-        {view === 'chat' &&
-          !layout.sidebarCollapsed && (
+        {/*
+          Les flancs restent MONTÉS, replié compris — leur largeur tombe à
+          zéro, et c'est tout. C'est la seule façon fiable d'animer un repli :
+          monter puis démonter l'élément ne laisse au navigateur aucun état de
+          départ à interpoler, donc aucune transition à jouer.
+        */}
+        {view === 'chat' && (
             <>
-              <div className="side-slot" style={{ width: layout.sidebarWidth }}>
+              <div
+                className="side-slot"
+                data-collapsed={layout.sidebarCollapsed ? 'true' : 'false'}
+                aria-hidden={layout.sidebarCollapsed}
+                style={{ width: layout.sidebarCollapsed ? 0 : layout.sidebarWidth }}
+              >
                 <ConversationSidebar
                   conversations={conversations}
                   projects={projects}
@@ -437,13 +447,19 @@ export function App() {
               onModeChange={changeMode}
               modelName={opened.modelName ?? null}
               conversationId={opened.conversationId}
+              busy={busy}
+              onPickModel={(modelPath) => void tryOpen(opened.conversationId, modelPath)}
             />
           </div>
           ) : null}
         </main>
         {view === 'chat' && (
-          !layout.panelCollapsed && (
-            <div className="side-slot" style={{ width: layout.panelWidth }}>
+            <div
+              className="side-slot"
+              data-collapsed={layout.panelCollapsed ? 'true' : 'false'}
+              aria-hidden={layout.panelCollapsed}
+              style={{ width: layout.panelCollapsed ? 0 : layout.panelWidth }}
+            >
               <ResizeHandle
                 width={layout.panelWidth}
                 bounds={PANEL_BOUNDS}
@@ -458,7 +474,6 @@ export function App() {
                 onClose={layout.togglePanel}
               />
             </div>
-          )
         )}
       </div>
       {settingsOpen && (

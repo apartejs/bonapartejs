@@ -22,6 +22,7 @@
   --bp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --bp-fast: 150ms;
   --bp-base: 260ms;
+  --bp-slow: 400ms;
 
   /*
    * Hauteur des deux barres du haut — celle de la conversation et celle du
@@ -830,34 +831,6 @@ button.primary {
   color: var(--aparte-text-muted);
 }
 
-.conv-new {
-  font-family: var(--bp-sans);
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--aparte-border);
-  background: transparent;
-  color: var(--aparte-text);
-  cursor: pointer;
-}
-
-.conv-new:hover:not(:disabled) {
-  border-color: var(--aparte-primary);
-  background: var(--aparte-surface-2);
-}
-
-.conv-new:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-/* L'intitulé disparaît sous 1100 px : le « + » reste, l'action aussi. */
-@media (max-width: 1100px) {
-  .conv-new-label {
-    display: none;
-  }
-}
-
 .conv-empty {
   margin: 0;
   padding: 4px 14px 14px;
@@ -1071,11 +1044,17 @@ button.primary {
 }
 
 /*
- * Le `+` a la même taille et la même cible que la bascule voisine : deux
- * boutons côte à côte de tailles différentes se lisent comme un défaut, et
- * 24 px était en dessous de la cible confortable.
+ * ── Bouton-icône ──────────────────────────────────────────────────────────
+ *
+ * UNE définition pour tous : le `+` du panneau, celui du flanc, les menus
+ * d'actions. Il y en avait trois, de trois tailles — dont une pastille de
+ * 12 px de police autour d'un `+` écrit en caractère, ce qui donnait un signe
+ * minuscule perdu au milieu de sa bordure.
+ *
+ * Même gabarit que la bascule des flancs (28 px), donc deux boutons voisins ne
+ * se lisent jamais comme un défaut d'alignement.
  */
-.tooling-add-button {
+.icon-button {
   flex: 0 0 auto;
   align-self: center;
   width: 28px;
@@ -1090,15 +1069,20 @@ button.primary {
   cursor: pointer;
 }
 
-.tooling-add-button svg {
+.icon-button svg {
   width: 16px;
   height: 16px;
 }
 
-.tooling-add-button:hover,
-.tooling-add-button[aria-expanded='true'] {
+.icon-button:hover:not(:disabled),
+.icon-button[aria-expanded='true'] {
   color: var(--aparte-text);
   background: var(--aparte-surface-2);
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /*

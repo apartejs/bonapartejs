@@ -95,6 +95,14 @@ export interface AppTranslations {
     pluginReloading: string;
     pluginReloadHint: string;
   };
+  /** Choix du modèle, dans le composeur. */
+  models: {
+    pick: string;
+    scanning: string;
+    none: string;
+    /** Ce que change vraiment un changement de modèle. */
+    switchWarning: string;
+  };
   tooling: {
     heading: string;
     empty: string;

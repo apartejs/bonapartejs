@@ -95,6 +95,13 @@ export const EN: AppTranslations = {
     pluginReloadHint:
       'Tears down and re-activates plugins without restarting bonaparte — the model stays loaded.'
   },
+  models: {
+    pick: 'Choose a model',
+    scanning: 'Looking for models…',
+    none: 'No model found on this machine.',
+    switchWarning:
+      'Switching models rebuilds the context: a saved state only holds for the model that produced it.',
+  },
   tooling: {
     open: 'Open a view',
     openMenu: 'Open',

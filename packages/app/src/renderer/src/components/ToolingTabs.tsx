@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import type { ToolingTabsApi } from '../tooling/use-tooling-tabs.js';
+import { PlusGlyph } from './icons.js';
 
 interface ToolingTabsProps {
   tooling: ToolingTabsApi;
@@ -106,20 +107,13 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
       <button
         ref={buttonRef}
         type="button"
-        className="tooling-add-button"
+        className="icon-button"
         onClick={() => (anchor ? setAnchor(null) : place())}
         aria-expanded={anchor !== null}
         aria-label={t.tooling.open}
         title={t.tooling.open}
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path
-            d="M8 3.75v8.5M3.75 8h8.5"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-          />
-        </svg>
+        <PlusGlyph />
       </button>
 
       {anchor && (

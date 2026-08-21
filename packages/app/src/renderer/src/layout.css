@@ -5,12 +5,44 @@
  * ici ne fixe de dimension — ce fichier ne s'occupe que de la mécanique.
  */
 
+/*
+ * Un flanc est TOUJOURS monté, replié compris : sa largeur tombe à zéro, et la
+ * transition fait le reste.
+ *
+ * C'est la seule façon fiable d'animer un repli. En le montant à l'ouverture
+ * et le démontant à la fermeture, le navigateur n'a aucun état de départ à
+ * interpoler — l'élément naît à sa largeur finale dans la frame où il est
+ * créé — et le repli est instantané dans les deux sens, quelles que soient les
+ * acrobaties de `requestAnimationFrame` autour.
+ *
+ * `overflow: hidden` garde le contenu à l'intérieur pendant le trajet ; il est
+ * posé ici et non sur les enfants, car il n'y a plus de démontage pour
+ * l'éviter. Le séparateur, qui chevauche la bordure, est replacé en
+ * conséquence (cf. plus bas).
+ */
 .side-slot {
   position: relative;
   flex: 0 0 auto;
   display: flex;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  transition: width var(--bp-slow) var(--bp-ease);
+}
+
+/*
+ * Replié, le flanc ne prend plus rien : ni clic, ni tabulation. Sans ça, on
+ * pourrait attraper au clavier des boutons larges de zéro pixel — et
+ * redimensionner un flanc qui n'est pas là.
+ */
+.side-slot[data-collapsed='true'] {
+  pointer-events: none;
+}
+
+/* Pendant un glissé de séparateur, la largeur suit le doigt : une transition
+   ferait traîner le flanc derrière le curseur. */
+body.resizing .side-slot {
+  transition: none;
 }
 
 /* Les enfants d'un flanc prennent la largeur que le slot leur donne, au lieu
@@ -34,18 +66,24 @@
   top: 0;
   bottom: 0;
   width: 8px;
+  /* Le slot découpe (il anime son repli) : la poignée reste donc DEDANS. */
   z-index: 5;
   cursor: col-resize;
   background: transparent;
   touch-action: none;
 }
 
+/*
+ * Collée à l'intérieur de la bordure, pas centrée dessus : le slot découpe ce
+ * qui dépasse depuis qu'il anime son repli, et la moitié extérieure de la
+ * poignée se faisait manger. Huit pixels de saisie, tous du bon côté.
+ */
 .resize-handle-end {
-  right: -4px;
+  inset-inline-end: 0;
 }
 
 .resize-handle-start {
-  left: -4px;
+  inset-inline-start: 0;
 }
 
 /*
