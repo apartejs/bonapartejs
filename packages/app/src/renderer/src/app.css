@@ -20,9 +20,9 @@
    */
   --bp-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --bp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --bp-fast: 130ms;
-  --bp-base: 240ms;
-  --bp-slow: 380ms;
+  --bp-fast: 150ms;
+  --bp-base: 260ms;
+  --bp-slow: 420ms;
 }
 
 /*
@@ -962,7 +962,8 @@ button.primary {
   gap: 2px;
   flex: 1;
   min-width: 0;
-  padding: 6px 4px 0 8px;
+  padding: 6px 2px 0 8px;
+  transition: opacity var(--bp-base) var(--bp-ease);
 }
 
 /* La bande d'onglets défile ; le bouton `+` reste, lui, toujours atteignable. */
@@ -1052,40 +1053,45 @@ button.primary {
   font-family: var(--bp-mono);
 }
 
-.tooling-add {
-  position: relative;
-  display: flex;
-  align-items: center;
-  margin-inline-start: auto;
-  padding-bottom: 6px;
-}
-
+/*
+ * Le `+` a la même taille et la même cible que la bascule voisine : deux
+ * boutons côte à côte de tailles différentes se lisent comme un défaut, et
+ * 24 px était en dessous de la cible confortable.
+ */
 .tooling-add-button {
-  width: 24px;
-  height: 24px;
+  flex: 0 0 auto;
+  align-self: center;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
+  padding: 0;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 8px;
   background: none;
   color: var(--aparte-text-muted);
-  font-size: 15px;
-  line-height: 1;
   cursor: pointer;
 }
 
-.tooling-add-button:hover {
-  border-color: var(--aparte-border);
+.tooling-add-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tooling-add-button:hover,
+.tooling-add-button[aria-expanded='true'] {
   color: var(--aparte-text);
   background: var(--aparte-surface-2);
 }
 
+/*
+ * Position FIXE, ancrée sur le bouton par JavaScript. La zone qui porte la
+ * bande d'onglets coupe ce qui dépasse (elle se replie en glissant) : un menu
+ * posé en absolu à l'intérieur se faisait couper avec, et le clic ouvrait un
+ * menu invisible. `fixed` échappe au découpage des ancêtres.
+ */
 .tooling-menu {
-  position: absolute;
-  /* Le menu s'ouvre sous un bouton collé au bord droit de la fenêtre : il
-     s'aligne donc par la fin, sinon il déborderait. */
-  top: calc(100% + 6px);
-  inset-inline-end: 0;
+  position: fixed;
   z-index: 30;
   min-width: 232px;
   padding: 5px;

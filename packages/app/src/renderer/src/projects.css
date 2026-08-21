@@ -173,23 +173,46 @@
 }
 
 /*
- * Zone des onglets : sa largeur suit celle du panneau, et se replie en
- * glissant. `overflow: hidden` est ce qui rend le repli propre — sans lui, les
- * onglets débordent sur le titre pendant la transition.
+ * Moitié droite de la barre : elle fait EXACTEMENT la largeur du panneau,
+ * bascule comprise, donc son refend tombe pile sur le bord du panneau. Elle
+ * est alignée par la fin (`flex-end`) : la bascule reste collée au bord de la
+ * fenêtre pendant que les onglets entrent et sortent par la droite, en suivant
+ * l'ouverture du panneau.
+ *
+ * `overflow: hidden` est ce qui rend le repli propre — sans lui, les onglets
+ * déborderaient sur le titre pendant la transition. C'est aussi pourquoi le
+ * menu du `+` est en position fixe : posé en absolu, il se ferait couper ici.
  */
-.conv-header-side {
+.conv-header-right {
+  position: relative;
   display: flex;
   align-items: stretch;
+  justify-content: flex-end;
   flex: 0 0 auto;
   min-width: 0;
+  padding-inline-end: 8px;
   overflow: hidden;
-  border-inline-start: 1px solid var(--aparte-border);
-  transition: width var(--bp-slow) var(--bp-ease);
+  border-inline-start: 1px solid transparent;
+  transition:
+    width var(--bp-slow) var(--bp-ease),
+    border-color var(--bp-slow) var(--bp-ease);
+}
+
+/* Le refend ne se montre que s'il sépare quelque chose. */
+.conv-header-right[data-open='true'] {
+  border-inline-start-color: var(--aparte-border);
+}
+
+/* Panneau fermé, il ne reste que la bascule : la bande d'onglets s'efface au
+   lieu de se tasser, sinon on verrait un `+` orphelin flotter. */
+.conv-header-right[data-open='false'] .tooling-tabs {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Pendant un glissé de séparateur, la largeur est pilotée au doigt : une
-   transition ferait traîner le panneau derrière le curseur. */
-body.resizing .conv-header-side {
+   transition ferait traîner la barre derrière le curseur. */
+body.resizing .conv-header-right {
   transition: none;
 }
 

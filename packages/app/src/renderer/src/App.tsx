@@ -381,7 +381,6 @@ export function App() {
           panelCollapsed={layout.panelCollapsed}
           onToggleSidebar={layout.toggleSidebar}
           onTogglePanel={layout.togglePanel}
-          sideVisible={panel.mounted}
           sideWidth={panel.entered ? layout.panelWidth : 0}
           tabs={<ToolingTabs tooling={tooling} />}
         />

@@ -31,16 +31,24 @@ interface ConversationHeaderProps {
    */
   tabs: ReactNode;
   /**
-   * La zone des onglets est-elle montée, et à quelle largeur ?
+   * Largeur de la moitié droite de la barre, celle qui coiffe le panneau.
    *
-   * Deux valeurs et non un booléen, parce que le repli est ANIMÉ : la zone
-   * reste montée le temps que sa largeur descende à zéro. Sans ça, le panneau
-   * disparaîtrait d'un coup — ce qui se lit comme un défaut, pas comme une
-   * action.
+   * Elle vaut la largeur du panneau quand il est ouvert, zéro quand il est
+   * fermé, et transite entre les deux : la bande d'onglets SUIT donc
+   * l'ouverture du panneau, comme chez Codex.
    */
-  sideVisible: boolean;
   sideWidth: number;
 }
+
+/**
+ * Place réservée à la bascule, en pixels — bouton de 28 px et 8 px de marge.
+ *
+ * La moitié droite de la barre fait exactement la largeur du panneau, bascule
+ * COMPRISE : c'est ce qui aligne son bord gauche sur celui du panneau. Sans en
+ * tenir compte, le refend tombait un bouton trop à gauche. Et il faut garder
+ * cette largeur au minimum, sinon la bascule serait rognée panneau fermé.
+ */
+const TOGGLE_SLOT = 36;
 
 /**
  * En-tête de la conversation : ce qui la NOMME et ce qu'elle VOIT.
@@ -67,7 +75,6 @@ export function ConversationHeader({
   onToggleSidebar,
   onTogglePanel,
   tabs,
-  sideVisible,
   sideWidth,
 }: ConversationHeaderProps) {
   const { t } = useTranslate();
@@ -163,26 +170,27 @@ export function ConversationHeader({
 
       </div>
 
-      {sideVisible && (
-        <div className="conv-header-side" style={{ width: sideWidth }}>
-          {tabs}
-        </div>
-      )}
-
       {/*
-        La bascule du panneau est le DERNIER enfant de la barre, toujours : ni
-        dans la zone des onglets (qui apparaît et disparaît), ni dans la zone
-        du titre (qui s'étire). Elle ne bouge donc jamais d'un pixel, ouvert ou
-        fermé — c'est ce que Paul a remarqué chez Codex : « on dirait que c'est
-        la même icône ». C'en est une seule.
+        Moitié droite : elle fait la largeur du panneau, bascule comprise, et
+        elle est alignée par la FIN. La bascule est donc collée au bord de la
+        fenêtre et n'en bouge jamais — panneau ouvert comme fermé, c'est le
+        même bouton au même pixel — tandis que les onglets entrent et sortent
+        par la droite en suivant le panneau.
       */}
-      <FlankToggle
-        side="end"
-        collapsed={panelCollapsed}
-        label={panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel}
-        shortcut="Ctrl+Alt+B"
-        onToggle={onTogglePanel}
-      />
+      <div
+        className="conv-header-right"
+        data-open={panelCollapsed ? 'false' : 'true'}
+        style={{ width: Math.max(sideWidth, TOGGLE_SLOT) }}
+      >
+        {tabs}
+        <FlankToggle
+          side="end"
+          collapsed={panelCollapsed}
+          label={panelCollapsed ? t.layout.expandPanel : t.layout.collapsePanel}
+          shortcut="Ctrl+Alt+B"
+          onToggle={onTogglePanel}
+        />
+      </div>
 
       {panel === 'project' && (
         <div className="conv-popover popover" role="dialog" aria-label={t.header.projectPanel}>
