@@ -22,12 +22,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Plafond au repos. Mesure du 2026-08-19 sur Windows 11 : 343 Mo répartis sur
- * quatre processus (principal 96, GPU 60, utilitaire 44, rendu 143). La marge
- * absorbe les variations de plateforme ; un dépassement franc veut dire qu'on
- * a embarqué quelque chose sans s'en rendre compte, et mérite d'être regardé.
+ * Plafond au repos, en mémoire PRIVÉE.
+ *
+ * `workingSetSize` a d'abord servi ici — c'était une erreur, démontrée : le
+ * MÊME commit mesurait 341 Mo un soir et 463 Mo une heure plus tard. Le
+ * working set inclut les pages partagées et suit le rognage de l'OS selon la
+ * pression mémoire de la machine ; il varie de ±35 % sans qu'une ligne de code
+ * ait bougé. Un test qui échoue pour des raisons étrangères au code est pire
+ * qu'aucun test : on finit par l'ignorer.
+ *
+ * `privateBytes` est la mémoire que le processus possède réellement. Mesure du
+ * 2026-08-20 : ~200 Mo sur quatre processus.
+ *
+ * Réserve de portabilité : `privateBytes` est renseigné sur Windows ; ailleurs
+ * il peut valoir 0, et on retombe alors sur le working set faute de mieux.
  */
-const BUDGET_MO = 450;
+const BUDGET_MO = 320;
 
 let app: ElectronApplication;
 
@@ -63,17 +73,19 @@ test('l’app tient dans son budget mémoire', async () => {
 
   const parProcessus = metrics.map((m) => ({
     type: m.type,
-    mo: Math.round((m.memory.workingSetSize ?? 0) / 1024),
+    // privateBytes quand la plateforme le renseigne ; sinon le working set,
+    // faute de mieux — mais alors le chiffre est bruité, cf. l'en-tête.
+    mo: Math.round((m.memory.privateBytes || m.memory.workingSetSize || 0) / 1024),
   }));
   const total = parProcessus.reduce((sum, p) => sum + p.mo, 0);
 
   // Le chiffre est imprimé même quand le test passe : c'est la donnée qu'on
   // revendique, elle ne doit pas être visible seulement en cas d'échec.
   console.log(
-    `empreinte : ${total} Mo — ${parProcessus.map((p) => `${p.type} ${p.mo}`).join(', ')}`,
+    `empreinte privée : ${total} Mo — ${parProcessus.map((p) => `${p.type} ${p.mo}`).join(', ')}`,
   );
 
-  expect(total, `empreinte de ${total} Mo, budget ${BUDGET_MO} Mo`).toBeLessThan(
+  expect(total, `empreinte privée de ${total} Mo, budget ${BUDGET_MO} Mo`).toBeLessThan(
     BUDGET_MO,
   );
 });
