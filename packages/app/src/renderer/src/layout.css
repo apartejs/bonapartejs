@@ -12,12 +12,13 @@
   min-width: 0;
   min-height: 0;
   /*
-   * Le repli GLISSE. Le flanc reste monté le temps que sa largeur descende à
-   * zéro (cf. use-collapse-transition), et `overflow: hidden` garde son
-   * contenu à l'intérieur pendant le trajet — sinon la liste des
-   * conversations déborde sur le chat.
+   * Le repli GLISSE : le flanc reste monté le temps que sa largeur descende à
+   * zéro (cf. use-collapse-transition).
+   *
+   * Le découpage du contenu est posé sur les ENFANTS, pas ici : le séparateur
+   * de redimensionnement chevauche volontairement la bordure du slot, et un
+   * `overflow: hidden` à ce niveau lui mangeait la moitié de sa cible.
    */
-  overflow: hidden;
   transition: width var(--bp-slow) var(--bp-ease);
 }
 
@@ -33,6 +34,9 @@ body.resizing .side-slot {
   flex: 1;
   width: auto;
   min-width: 0;
+  /* Pendant le repli, le contenu reste DANS le flanc — sans ça, la liste des
+     conversations déborde sur le chat le temps du trajet. */
+  overflow: hidden;
 }
 
 /*

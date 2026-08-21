@@ -158,7 +158,15 @@
   display: flex;
   align-items: stretch;
   flex: 0 0 auto;
-  padding: 0 8px 0 8px;
+  /*
+   * AUCUN rembourrage à la fin. La moitié droite fait la largeur du panneau et
+   * doit finir AU BORD de la fenêtre, comme lui : avec 8 px ici, tout le bloc
+   * était poussé vers l'intérieur et son refend tombait 8 px à gauche de la
+   * bordure du panneau. Le rembourrage de la bascule est porté par la moitié
+   * droite elle-même, à l'intérieur de cette largeur.
+   */
+  padding-block: 0;
+  padding-inline: 8px 0;
   border-bottom: 1px solid var(--aparte-border);
   background: var(--aparte-surface-1);
 }

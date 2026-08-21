@@ -41,14 +41,15 @@ interface ConversationHeaderProps {
 }
 
 /**
- * Place réservée à la bascule, en pixels — bouton de 28 px et 8 px de marge.
+ * Place réservée à la bascule, en pixels : 28 de bouton, 8 de marge, 1 de
+ * refend. Les trois comptent — la boîte est en `border-box`, donc un pixel
+ * oublié se prend sur le bouton.
  *
  * La moitié droite de la barre fait exactement la largeur du panneau, bascule
- * COMPRISE : c'est ce qui aligne son bord gauche sur celui du panneau. Sans en
- * tenir compte, le refend tombait un bouton trop à gauche. Et il faut garder
- * cette largeur au minimum, sinon la bascule serait rognée panneau fermé.
+ * COMPRISE : c'est ce qui aligne son refend sur la bordure du panneau. Sans en
+ * tenir compte, il tombait un bouton trop à gauche.
  */
-const TOGGLE_SLOT = 36;
+const TOGGLE_SLOT = 37;
 
 /**
  * En-tête de la conversation : ce qui la NOMME et ce qu'elle VOIT.
