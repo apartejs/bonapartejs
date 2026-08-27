@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { aparteGlobalConfig, getSegmentRenderer } from '@aparte/core';
+import {
+  aparteGlobalConfig,
+  getSegmentRenderer,
+  isSegmentSettled,
+  type AparteSegment,
+} from '@aparte/core';
 import { bootstrapAparte, bootstrapHighlighting } from './aparte-bootstrap.js';
 
 /** Les types de segments que notre boucle émet réellement (ChatScreen). */
@@ -81,5 +86,41 @@ describe('bootstrap aparté', () => {
 
     expect(light).toContain('github-light');
     expect(dark).toContain('github-dark');
+  });
+});
+
+/**
+ * Deux règles de la lib dont ChatScreen dépend DIRECTEMENT, et qui ont changé
+ * sans que rien ne casse : la compilation passait, les tests passaient, et le
+ * comportement était faux à l'écran. Elles sont épinglées ici pour que le
+ * prochain changement de contrat se voie en rouge plutôt qu'en production.
+ */
+describe('contrat de la lib dont dépend la boucle', () => {
+  it('un segment sans `isStreaming` n’est PAS considéré comme fini', () => {
+    // C'est pour ça que `finish()` appelle `updateMessage(id, { status })` :
+    // c'est le seul geste qui referme les segments du tour. Sans lui, la lib
+    // les tient pour toujours en cours — pas de dernier passage du Markdown,
+    // pas de coloration de la dernière ligne de code.
+    const open = { id: 's1', type: 'text', content: 'bonjour' } as AparteSegment;
+
+    expect(isSegmentSettled(open)).toBe(false);
+    expect(isSegmentSettled({ ...open, isStreaming: false })).toBe(true);
+  });
+
+  it('un raisonnement sans `collapsed` est REPLIÉ', () => {
+    // Depuis 0.10.0, l'absence vaut fermé (avant, elle valait ouvert). Notre
+    // segment de réflexion doit donc dire `collapsed: false` explicitement,
+    // sinon le modèle réfléchit une minute derrière un bloc fermé — l'écran
+    // vide qu'on voulait précisément éviter.
+    bootstrapAparte();
+    const renderer = getSegmentRenderer('thinking');
+    const render = (segment: AparteSegment): string => {
+      const out = renderer?.render(segment);
+      return typeof out === 'string' ? out : (out?.outerHTML ?? '');
+    };
+    const base = { id: 's2', type: 'thinking', content: 'hmm' } as AparteSegment;
+
+    expect(render(base)).not.toContain('open');
+    expect(render({ ...base, collapsed: false } as AparteSegment)).toContain('open');
   });
 });

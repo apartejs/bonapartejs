@@ -95,7 +95,7 @@
 .model-button:hover:not(:disabled) {
   border-color: var(--aparte-border);
   background: var(--aparte-surface-2);
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
 }
 
 .model-button:disabled {
@@ -140,7 +140,7 @@
   border: none;
   border-radius: 8px;
   background: none;
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   font-family: inherit;
   font-size: 12.5px;
   text-align: start;

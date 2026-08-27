@@ -38,6 +38,15 @@ const freshId = (): string => `msg-${Date.now()}-${nextId++}`;
  * activité d'outil pendant qu'elle tourne.
  */
 interface TurnState {
+  /**
+   * Bulle assistante du tour. On la garde pour pouvoir DÉCLARER le tour fini :
+   * `updateMessage(id, { status })` est ce qui fait fermer à la lib les
+   * segments encore ouverts — dernier passage du Markdown, coloration de la
+   * dernière ligne de code, horodatage de fin. Sans cet appel, `isStreaming`
+   * reste `undefined`, ce qui n'est pas `false` : la lib considère chaque
+   * segment comme toujours en train d'arriver, pour toujours.
+   */
+  messageId: string;
   thinking: string | null;
   /** Segment de texte courant ; remis à null après un outil (le texte suivant
    *  s'écrit alors APRÈS la pastille, dans un nouveau segment). */
@@ -88,6 +97,13 @@ export function ChatScreen({
         type: 'thinking',
         content: '',
         label: t.chat.thinking,
+        // EXPLICITEMENT ouvert. Depuis 0.10.0, l'absence de `collapsed` veut
+        // dire FERMÉ (c'est ce que font les assistants du marché) — et un
+        // raisonnement replié pendant qu'il arrive, c'est exactement l'écran
+        // vide qu'on voulait éviter : une minute de réflexion sans rien
+        // afficher se lit comme une application plantée. On le referme
+        // nous-mêmes dès que la réponse commence.
+        collapsed: false,
       });
       state.thinking = id;
       return id;
@@ -108,13 +124,20 @@ export function ChatScreen({
     };
 
     /** Fin de tour : rien ne doit rester à tourner dans le vide. */
-    const finish = (state: TurnState): void => {
+    const finish = (state: TurnState, status: 'completed' | 'error'): void => {
       if (state.thinking) chatRef.current.updateSegment(state.thinking, { collapsed: true });
       // Un outil resté « pending » afficherait un spinner éternel : on dit
       // plutôt qu'il n'a pas abouti.
       for (const call of state.pendingCalls) {
         chatRef.current.updateSegment(call.segmentId, { status: 'aborted' });
       }
+      // Le tour est CLOS, et il faut le dire à la lib : c'est ce passage qui
+      // referme les segments restés ouverts. Il ne s'agit pas d'un détail
+      // d'état — c'est lui qui déclenche le dernier passage du Markdown et la
+      // coloration de la ligne de code en cours, laissée volontairement brute
+      // pendant le flux. Sans lui, la dernière ligne de chaque bloc de code
+      // reste en gris, définitivement.
+      chatRef.current.updateMessage(state.messageId, { status });
       turn.current = null;
       onStreamingChange(false);
     };
@@ -167,7 +190,7 @@ export function ChatScreen({
 
         case 'done':
           onStats(event.stats);
-          finish(state);
+          finish(state, 'completed');
           break;
 
         case 'error':
@@ -176,7 +199,7 @@ export function ChatScreen({
             type: 'error',
             content: `${t.chat.errorPrefix} : ${event.message}`,
           });
-          finish(state);
+          finish(state, 'error');
           break;
       }
     });
@@ -188,13 +211,17 @@ export function ChatScreen({
     // Bulle assistante vide : la lib la rend « en attente » (points animés,
     // aria-busy, pas de barre d'actions) tant que rien n'y est écrit. Entre
     // l'envoi et le premier token il peut s'écouler une minute de prefill.
+    const messageId = freshId();
     chat.appendMessage({
-      id: freshId(),
+      id: messageId,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
+      // Le tour COMMENCE : sans cet état, la bulle n'est jamais déclarée en
+      // cours, et rien n'a de fin à annoncer.
+      status: 'streaming',
     });
-    turn.current = { thinking: null, text: null, pendingCalls: [], seq: 0 };
+    turn.current = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
     onStreamingChange(true);
     void window.bonaparte.sendMessage(detail.content);
   };

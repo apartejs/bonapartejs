@@ -46,7 +46,7 @@
   padding: 6px 8px;
   text-align: start;
   font-size: 12.5px;
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   background: transparent;
   border: 0;
   border-radius: 7px;
@@ -84,7 +84,7 @@
   text-align: start;
   font-family: var(--bp-serif);
   font-size: 12.5px;
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -172,7 +172,7 @@
 }
 
 .conv-chip-project {
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
 }
 
 .conv-chip-dim {
@@ -195,7 +195,7 @@
   text-align: start;
   font-family: var(--bp-serif);
   font-size: 15px;
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
@@ -284,7 +284,7 @@
 }
 
 .conv-header-more:hover {
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   background: var(--aparte-surface-2);
   border-color: var(--aparte-border);
 }
@@ -389,7 +389,7 @@
   padding: 6px 8px;
   text-align: start;
   font-size: 12.5px;
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   background: transparent;
   border: 0;
   border-radius: 7px;
@@ -522,7 +522,7 @@
 }
 
 .root-actions button:hover:not(:disabled) {
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   border-color: var(--aparte-border);
 }
 
@@ -554,6 +554,6 @@
 }
 
 .root-add button:hover {
-  color: var(--aparte-text-primary);
+  color: var(--aparte-text);
   background: var(--aparte-surface-2);
 }
