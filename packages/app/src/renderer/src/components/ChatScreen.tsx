@@ -217,9 +217,13 @@ export function ChatScreen({
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
-      // Le tour COMMENCE : sans cet état, la bulle n'est jamais déclarée en
-      // cours, et rien n'a de fin à annoncer.
-      status: 'streaming',
+      // PAS de `status: 'streaming'` ici, et c'est mesuré :
+      // `isAwaitingReply()` rend `true` dès que le statut vaut `streaming`,
+      // sans regarder le contenu — la bulle resterait donc « en attente »
+      // (points animés, `aria-busy`) pendant toute la réponse. Sans statut,
+      // l'attente redevient ce qu'elle doit être : vraie tant qu'il n'y a rien,
+      // fausse au premier segment. Et `updateMessage({ status })` en fin de
+      // tour referme les segments quel qu'ait été l'état d'avant.
     });
     turn.current = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
     onStreamingChange(true);
