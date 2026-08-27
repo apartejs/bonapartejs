@@ -184,7 +184,7 @@ button:disabled {
 button.primary {
   background: var(--aparte-primary);
   border-color: var(--aparte-primary);
-  color: var(--aparte-text-inverse, #fff);
+  color: var(--aparte-text-inverse);
   font-weight: 600;
 }
 
@@ -268,7 +268,7 @@ button.primary {
 
 .segmented button.active {
   background: var(--aparte-primary);
-  color: var(--aparte-text-inverse, #fff);
+  color: var(--aparte-text-inverse);
   font-weight: 600;
 }
 
@@ -305,17 +305,6 @@ button.primary {
 
 .field-narrow input {
   width: 140px;
-}
-
-.field-select {
-  width: 100%;
-  padding: 9px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-2);
-  color: var(--aparte-text);
-  font-family: var(--bp-mono);
-  font-size: 13px;
 }
 
 .probe-result {
@@ -387,7 +376,7 @@ button.primary {
 }
 
 .field-row button:hover {
-  background: var(--aparte-surface-3, var(--aparte-surface-1));
+  background: var(--aparte-surface-3);
   color: var(--aparte-primary);
 }
 
@@ -395,7 +384,7 @@ button.primary {
   font-style: normal;
   text-transform: none;
   letter-spacing: normal;
-  color: var(--aparte-success, #2e7d32);
+  color: var(--aparte-success);
 }
 
 .install-hint {
@@ -516,19 +505,6 @@ button.primary {
   gap: 10px;
 }
 
-/* ── Modes de jeu, projet, dialogue d’accord ───────────────────────── */
-
-.mode-select {
-  font-family: var(--bp-sans);
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-2);
-  color: var(--aparte-text);
-  cursor: pointer;
-}
-
 .mode-lecture {
   color: var(--aparte-text-muted);
 }
@@ -539,46 +515,8 @@ button.primary {
 }
 
 .mode-impro {
-  color: var(--aparte-error, #c0392b);
+  color: var(--aparte-error);
   border-color: currentColor;
-}
-
-.chip-project {
-  font-family: var(--bp-mono);
-  color: var(--aparte-primary);
-}
-
-/* Puce cliquable : ouvrir un projet reste une action, jamais un passage obligé. */
-.chip-button {
-  font-family: var(--bp-mono);
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px dashed var(--aparte-border);
-  background: transparent;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chip-button.chip-project {
-  border-style: solid;
-  border-color: var(--aparte-primary);
-}
-
-.recent-row {
-  display: block;
-  width: 100%;
-  text-align: start;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  padding: 9px 12px;
-}
-
-.recent-row:hover {
-  background: var(--aparte-surface-2);
 }
 
 .modal-backdrop {
@@ -648,7 +586,7 @@ button.primary {
 
 .chip-model {
   font-family: var(--bp-mono);
-  color: var(--aparte-secondary, var(--aparte-text-muted));
+  color: var(--aparte-secondary);
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -656,7 +594,7 @@ button.primary {
 }
 
 .setup-error {
-  color: var(--aparte-error, #c0392b);
+  color: var(--aparte-error);
   font-size: 13px;
   margin: 4px 0 12px;
 }
@@ -703,12 +641,12 @@ button.primary {
 }
 
 .status-ready {
-  color: var(--aparte-success, #2e7d32);
+  color: var(--aparte-success);
   border-color: currentColor;
 }
 
 .status-crashed {
-  color: var(--aparte-error, #c0392b);
+  color: var(--aparte-error);
   border-color: currentColor;
 }
 
@@ -723,7 +661,7 @@ button.primary {
 }
 
 .chip-ok {
-  color: var(--aparte-success, #2e7d32);
+  color: var(--aparte-success);
 }
 
 .chip-dim {
@@ -731,7 +669,7 @@ button.primary {
 }
 
 .chip-err {
-  color: var(--aparte-error, #c0392b);
+  color: var(--aparte-error);
 }
 
 /* ── Mascotte ──────────────────────────────────────────────────────── */
@@ -1459,54 +1397,6 @@ button.primary {
   font-family: var(--bp-mono);
   font-size: 11px;
   color: var(--aparte-text-muted);
-}
-
-/* ── Terminal ───────────────────────────────────────────────────────────── */
-
-.terminal-view {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 8px;
-}
-
-.terminal-scroll {
-  flex: 1;
-  min-height: 120px;
-  margin: 0;
-  padding: 9px 10px;
-  overflow: auto;
-  border: 1px solid var(--aparte-border);
-  border-radius: 8px;
-  background: var(--aparte-surface-3);
-  font-family: var(--bp-mono);
-  font-size: 11.5px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.terminal-input-row {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.terminal-prompt {
-  font-family: var(--bp-mono);
-  color: var(--aparte-primary);
-}
-
-.terminal-input {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 8px;
-  border-radius: 7px;
-  border: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-1);
-  color: var(--aparte-text);
-  font-family: var(--bp-mono);
-  font-size: 12px;
 }
 
 /* ── Navigateur outillé ─────────────────────────────────────────────────── */

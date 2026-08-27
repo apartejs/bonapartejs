@@ -42,6 +42,11 @@ function tokensReadWithoutFallback(css: string): string[] {
   return [...css.matchAll(/var\(\s*(--aparte-[a-z0-9-]+)\s*\)/g)].map((m) => m[1] as string);
 }
 
+/** Les jetons lus AVEC un repli — suspects dans l'autre sens (voir plus bas). */
+function tokensReadWithFallback(css: string): string[] {
+  return [...css.matchAll(/var\(\s*(--aparte-[a-z0-9-]+)\s*,/g)].map((m) => m[1] as string);
+}
+
 function tokensDeclared(css: string): Set<string> {
   return new Set([...css.matchAll(/(--aparte-[a-z0-9-]+)\s*:/g)].map((m) => m[1] as string));
 }
@@ -63,5 +68,21 @@ describe('jetons de thème lus par bonaparte', () => {
     );
 
     expect([...new Set(missing)]).toEqual([]);
+  });
+
+  it('aucun repli sur un jeton que la lib déclare', () => {
+    // Un repli ne s'applique QUE si le jeton est absent. Sur un jeton déclaré,
+    // il ne sert donc jamais — il ne fait que vivre à côté, et diverger : nous
+    // portions `var(--aparte-error, #c0392b)`, soit un second rouge en réserve
+    // qui n'aurait pris la main que le jour où la lib aurait retiré le sien.
+    // C'est le ménage que la lib s'est fait à elle-même en 0.13.0 (471 replis
+    // retirés, dont 155 contredisaient la valeur déclarée).
+    const useless = ourStylesheets().flatMap(({ file, css }) =>
+      tokensReadWithFallback(css)
+        .filter((token) => declared.has(token))
+        .map((token) => `${file} met un repli sur ${token}, que la lib déclare`),
+    );
+
+    expect([...new Set(useless)]).toEqual([]);
   });
 });
