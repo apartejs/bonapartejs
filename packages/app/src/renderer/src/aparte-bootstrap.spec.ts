@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AparteConfig, getSegmentRenderer } from '@aparte/core';
+import { aparteGlobalConfig, getSegmentRenderer } from '@aparte/core';
 import { bootstrapAparte, bootstrapHighlighting } from './aparte-bootstrap.js';
 
 /** Les types de segments que notre boucle émet réellement (ChatScreen). */
@@ -26,7 +26,7 @@ describe('bootstrap aparté', () => {
     // répond en Markdown brut est illisible.
     bootstrapAparte();
 
-    const html = AparteConfig.renderMarkdown('**gras** et `code`');
+    const html = aparteGlobalConfig.renderMarkdown('**gras** et `code`');
     expect(html).toContain('<strong>');
     expect(html).toContain('<code>');
   });
@@ -39,7 +39,7 @@ describe('bootstrap aparté', () => {
     bootstrapAparte();
 
     const target = {} as HTMLElement;
-    expect(AparteConfig.createStreamingMarkdownRenderer(target)).not.toBeNull();
+    expect(aparteGlobalConfig.createStreamingMarkdownRenderer(target)).not.toBeNull();
   });
 
   it('installe la coloration syntaxique, de façon asynchrone', async () => {
@@ -47,14 +47,14 @@ describe('bootstrap aparté', () => {
     // premier rendu.
     await bootstrapHighlighting('dark');
 
-    expect(AparteConfig.hasHighlightProvider()).toBe(true);
+    expect(aparteGlobalConfig.hasHighlightProvider()).toBe(true);
   });
 
   it('colorise les langages qu’on a choisi d’embarquer', async () => {
     await bootstrapHighlighting('dark');
 
     for (const lang of ['typescript', 'python', 'rust', 'bash', 'json']) {
-      const html = await AparteConfig.highlightCode('const a = 1;', lang);
+      const html = await aparteGlobalConfig.highlightCode('const a = 1;', lang);
       expect(html, `pas de coloration pour ${lang}`).toContain('shiki');
     }
   });
@@ -66,7 +66,7 @@ describe('bootstrap aparté', () => {
     await bootstrapHighlighting('dark');
 
     await expect(
-      AparteConfig.highlightCode('++++[>++++<-]', 'brainfuck'),
+      aparteGlobalConfig.highlightCode('++++[>++++<-]', 'brainfuck'),
     ).resolves.toBeTypeOf('string');
   });
 
@@ -74,10 +74,10 @@ describe('bootstrap aparté', () => {
     // Le HTML produit par shiki fige les couleurs : sans ré-enregistrement,
     // un thème clair garderait du code sur fond sombre.
     await bootstrapHighlighting('light');
-    const light = await AparteConfig.highlightCode('const a = 1;', 'typescript');
+    const light = await aparteGlobalConfig.highlightCode('const a = 1;', 'typescript');
 
     await bootstrapHighlighting('dark');
-    const dark = await AparteConfig.highlightCode('const a = 1;', 'typescript');
+    const dark = await aparteGlobalConfig.highlightCode('const a = 1;', 'typescript');
 
     expect(light).toContain('github-light');
     expect(dark).toContain('github-dark');

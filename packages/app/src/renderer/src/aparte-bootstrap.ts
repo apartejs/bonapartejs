@@ -22,7 +22,7 @@ import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
  *   d'une conversation, message rejoué). Sans lui, l'historique s'afficherait
  *   en Markdown brut alors que le direct serait propre.
  *
- * Sans aucun des deux, `AparteConfig.renderMarkdown` rend la chaîne
+ * Sans aucun des deux, `aparteGlobalConfig.renderMarkdown` rend la chaîne
  * INCHANGÉE : le modèle affiche ses astérisques en clair.
  */
 export function bootstrapAparte(): void {

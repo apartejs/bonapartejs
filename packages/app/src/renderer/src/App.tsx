@@ -1,4 +1,4 @@
-import { AparteConfig } from '@aparte/core';
+import { aparteGlobalConfig } from '@aparte/core';
 import { fr as aparteFr } from '@aparte/locale-fr';
 import type {
   ApprovalRequestDto,
@@ -193,8 +193,10 @@ export function App() {
 
   // Locale des composants aparté (chaînes internes des web components).
   useEffect(() => {
-    if (locale === 'fr') AparteConfig.setLocale(aparteFr);
-    else AparteConfig.resetLocale(); // 0.3.0-alpha.0 — retour au défaut (en)
+    // 0.13.0 : la configuration n'est plus une classe à statiques mais une
+    // INSTANCE exportée. Même contrat, un objet à la place d'un espace de noms.
+    if (locale === 'fr') aparteGlobalConfig.setLocale(aparteFr);
+    else aparteGlobalConfig.resetLocale(); // retour au défaut (en)
   }, [locale]);
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
