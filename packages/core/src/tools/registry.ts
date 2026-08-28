@@ -1,8 +1,8 @@
 /**
- * Registre unique des outils : cœur + plugins + MCP. C'est lui qui produit la
- * grammaire (donc ce que le modèle peut littéralement émettre) et les deltas
- * d'inventaire appendés au log quand l'outillage change en cours de
- * conversation — jamais de re-rendu de l'historique.
+ * Single tool registry: core + plugins + MCP. It's what produces the
+ * grammar (i.e. what the model can literally emit) and the inventory
+ * deltas appended to the log when the tooling changes mid-conversation —
+ * never a re-render of the history.
  */
 
 import { createHash } from 'node:crypto';
@@ -22,7 +22,7 @@ export class ToolRegistry {
 
   register(def: ToolDef, handler: ToolHandler, source: ToolSource = 'builtin'): void {
     if (this.tools.has(def.name)) {
-      throw new Error(`Outil déjà enregistré : ${def.name}`);
+      throw new Error(`Tool already registered: ${def.name}`);
     }
     this.tools.set(def.name, { def, handler, source });
     this.emit({ added: [def], removed: [] });
@@ -45,8 +45,8 @@ export class ToolRegistry {
 
   snapshot(): ToolInventorySnapshot {
     const defs = this.list();
-    // L'empreinte couvre nom + description + schéma : deux inventaires
-    // identiques enregistrés dans un ordre différent donnent le même hash.
+    // The fingerprint covers name + description + schema: two identical
+    // inventories registered in a different order give the same hash.
     const material = JSON.stringify(
       defs.map((d) => [d.name, d.description, d.effect, d.inputSchema]),
     );
@@ -56,7 +56,7 @@ export class ToolRegistry {
     };
   }
 
-  /** Ce qui a changé depuis une photo (added porte les définitions). */
+  /** What changed since a snapshot (added carries the definitions). */
   diff(previous: ToolInventorySnapshot): ToolInventoryDelta {
     const before = new Set(previous.names);
     const current = this.list();

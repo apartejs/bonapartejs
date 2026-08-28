@@ -1,7 +1,7 @@
 /**
- * Contrat des traductions du harness. Une locale = un fichier (fr.ts, en.ts),
- * tous typés par cette interface : une clé manquante = erreur de compilation,
- * et la parité est aussi vérifiée par les specs.
+ * Contract for the harness translations. One locale = one file (fr.ts,
+ * en.ts), all typed by this interface: a missing key = a compile error,
+ * and parity is also verified by the specs.
  */
 
 export interface HarnessTranslations {

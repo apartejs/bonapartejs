@@ -15,7 +15,7 @@ afterEach(async () => {
   dirs = [];
 });
 
-/** Hôte avec un plugin « term » découvert : `activate` l'exige. */
+/** Host with a "term" plugin discovered: `activate` requires it. */
 async function hostWithTerm(
   emit = vi.fn(),
 ): Promise<{ host: PluginHost; emit: ReturnType<typeof vi.fn> }> {
@@ -38,19 +38,20 @@ async function hostWithTerm(
 }
 
 /**
- * Contre-pression des événements poussés par un plugin.
+ * Backpressure for events pushed by a plugin.
  *
- * Le terminal perdait de la sortie : le producteur (un PTY) débitait plus vite
- * que la vue ne lisait, et le tampon élaguait le plus ancien. VS Code résout ce
- * problème depuis longtemps, et pas en agrandissant le tampon : il MET LE
- * PRODUCTEUR EN PAUSE. Le client acquitte par paquets, et au-delà d'un seuil de
- * non-acquittés le producteur doit s'arrêter jusqu'à ce que le client rattrape.
+ * The terminal was losing output: the producer (a PTY) was outputting
+ * faster than the view was reading, and the buffer was trimming the
+ * oldest data. VS Code has solved this problem for a long time, and not
+ * by growing the buffer: it PAUSES THE PRODUCER. The client acknowledges
+ * in batches, and beyond a threshold of unacknowledged bytes the producer
+ * must stop until the client catches up.
  *
- * Ces tests fixent ce contrat côté hôte : `emit` dit quand s'arrêter, et
- * `onDrain` dit quand reprendre.
+ * These tests pin down this contract on the host side: `emit` says when
+ * to stop, and `onDrain` says when to resume.
  */
 
-/** Plugin minimal qui expose son contexte pour que le test l'utilise. */
+/** Minimal plugin that exposes its context for the test to use. */
 function capturing(): {
   module: PluginNodeModule;
   ctx: () => {
@@ -74,28 +75,28 @@ function capturing(): {
   };
 }
 
-describe('contre-pression des événements de plugin', () => {
-  it('expose les seuils, et le seuil d’acquittement ne dépasse pas le seuil bas', () => {
-    // Si le paquet d'acquittement était plus gros que le seuil bas, le
-    // producteur ne repartirait jamais : le client n'atteindrait pas le seuil
-    // qui déclenche la reprise. C'est la contrainte que VS Code documente.
+describe('backpressure of plugin events', () => {
+  it('exposes the thresholds, and the ack threshold does not exceed the low watermark', () => {
+    // If the acknowledgment batch were bigger than the low watermark, the
+    // producer would never restart: the client would never reach the
+    // threshold that triggers the resume. This is the constraint VS Code documents.
     expect(FLOW_CONTROL.ackSize).toBeLessThanOrEqual(FLOW_CONTROL.lowWatermark);
     expect(FLOW_CONTROL.lowWatermark).toBeLessThan(FLOW_CONTROL.highWatermark);
   });
 
-  it('transmet l’événement à l’hôte, sur le canal par défaut', async () => {
-    // Un plugin à vue unique n'a pas d'instance à nommer : `emit` passe par le
-    // canal par défaut, dont l'identifiant est la chaîne vide.
+  it('forwards the event to the host, on the default channel', async () => {
+    // A single-view plugin has no instance to name: `emit` goes through
+    // the default channel, whose id is the empty string.
     const { host: h, emit } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
 
-    plugin.ctx().emit('data', 'bonjour');
+    plugin.ctx().emit('data', 'hello');
 
-    expect(emit).toHaveBeenCalledWith('term', '', 'data', 'bonjour');
+    expect(emit).toHaveBeenCalledWith('term', '', 'data', 'hello');
   });
 
-  it('rend true tant que la vue suit', async () => {
+  it('returns true as long as the view keeps up', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -103,7 +104,7 @@ describe('contre-pression des événements de plugin', () => {
     expect(plugin.ctx().emit('data', 'x')).toBe(true);
   });
 
-  it('rend false au-delà du seuil haut : le producteur doit s’arrêter', async () => {
+  it('returns false beyond the high watermark: the producer must stop', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -117,11 +118,11 @@ describe('contre-pression des événements de plugin', () => {
     }
 
     expect(last).toBe(false);
-    // On s'arrête AU franchissement du seuil, pas bien après.
+    // We stop RIGHT AT the threshold crossing, not well after.
     expect(pushed).toBeLessThanOrEqual(FLOW_CONTROL.highWatermark + chunk.length);
   });
 
-  it('reprend, et le signale, quand la vue redescend sous le seuil bas', async () => {
+  it('resumes, and signals it, when the view drops back below the low watermark', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -132,22 +133,22 @@ describe('contre-pression des événements de plugin', () => {
     const chunk = 'x'.repeat(FLOW_CONTROL.highWatermark);
     expect(plugin.ctx().emit('data', chunk)).toBe(false);
 
-    // Un acquittement partiel ne suffit pas : on reste au-dessus du seuil bas.
+    // A partial acknowledgment isn't enough: we stay above the low watermark.
     h.acknowledge('term', '', chunk.length - FLOW_CONTROL.lowWatermark - 1);
     expect(drained).not.toHaveBeenCalled();
 
-    // Celui qui fait passer sous le seuil bas déclenche la reprise.
+    // The one that crosses below the low watermark triggers the resume.
     h.acknowledge('term', '', 2);
     expect(drained).toHaveBeenCalledTimes(1);
     expect(plugin.ctx().emit('data', 'x')).toBe(true);
   });
 
-  it('ignore un acquittement d’un plugin inconnu, sans lever', async () => {
+  it('ignores an acknowledgment from an unknown plugin, without throwing', async () => {
     const { host: h } = await hostWithTerm();
     expect(() => h.acknowledge('fantome', '', 100)).not.toThrow();
   });
 
-  it('oublie le compteur au démontage : un plugin réactivé repart à zéro', async () => {
+  it('forgets the counter on teardown: a reactivated plugin starts fresh', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -157,11 +158,11 @@ describe('contre-pression des événements de plugin', () => {
 
     const again = capturing();
     await h.activate('term', again.module);
-    // Sans remise à zéro, le plugin rechargé naîtrait déjà bloqué.
+    // Without a reset, the reloaded plugin would be born already blocked.
     expect(again.ctx().emit('data', 'x')).toBe(true);
   });
 
-  it('un emit après démontage ne pousse rien : le plugin n’existe plus', async () => {
+  it('an emit after teardown pushes nothing: the plugin no longer exists', async () => {
     const { host: h, emit } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -174,20 +175,21 @@ describe('contre-pression des événements de plugin', () => {
   });
 });
 
-describe('contre-pression PAR INSTANCE', () => {
-  it('achemine l’événement avec l’instance visée', async () => {
+describe('backpressure PER INSTANCE', () => {
+  it('routes the event with the targeted instance', async () => {
     const { host: h, emit } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
 
-    plugin.ctx().channel('t1').emit('data', 'bonjour');
+    plugin.ctx().channel('t1').emit('data', 'hello');
 
-    expect(emit).toHaveBeenCalledWith('term', 't1', 'data', 'bonjour');
+    expect(emit).toHaveBeenCalledWith('term', 't1', 'data', 'hello');
   });
 
-  it('compte séparément : un onglet qui déborde n’arrête pas les autres', async () => {
-    // C'est TOUT l'intérêt du découpage. Avec un compteur unique par plugin,
-    // un `cat` d'un gros fichier dans un terminal figerait le terminal voisin.
+  it('counts separately: one tab overflowing does not stop the others', async () => {
+    // This is the WHOLE point of the split. With a single counter per
+    // plugin, a `cat` of a large file in one terminal would freeze the
+    // neighboring terminal.
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -199,7 +201,7 @@ describe('contre-pression PAR INSTANCE', () => {
     expect(quiet.emit('data', 'x')).toBe(true);
   });
 
-  it('acquitte l’instance visée, et elle seule', async () => {
+  it('acknowledges the targeted instance, and only that one', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -212,11 +214,11 @@ describe('contre-pression PAR INSTANCE', () => {
     h.acknowledge('term', 't1', FLOW_CONTROL.highWatermark);
 
     expect(one.emit('data', 'x')).toBe(true);
-    // t2 n'a rien acquitté : elle reste en pause.
+    // t2 acknowledged nothing: it stays paused.
     expect(two.emit('data', 'y')).toBe(false);
   });
 
-  it('réveille la bonne instance', async () => {
+  it('wakes up the right instance', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -236,7 +238,7 @@ describe('contre-pression PAR INSTANCE', () => {
     expect(drainedTwo).not.toHaveBeenCalled();
   });
 
-  it('un canal jeté oublie son compteur : rouvrir un onglet repart libre', async () => {
+  it('a discarded channel forgets its counter: reopening a tab starts free', async () => {
     const { host: h } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);
@@ -245,12 +247,12 @@ describe('contre-pression PAR INSTANCE', () => {
     expect(channel.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
     channel.dispose();
 
-    // Même identifiant réutilisé : sans remise à zéro, le nouvel onglet
-    // naîtrait bloqué par le trafic de l'ancien.
+    // Same id reused: without a reset, the new tab would be born blocked
+    // by the old one's traffic.
     expect(plugin.ctx().channel('t1').emit('data', 'x')).toBe(true);
   });
 
-  it('un canal jeté ne pousse plus rien', async () => {
+  it('a discarded channel no longer pushes anything', async () => {
     const { host: h, emit } = await hostWithTerm();
     const plugin = capturing();
     await h.activate('term', plugin.module);

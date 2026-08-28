@@ -20,11 +20,11 @@ afterEach(async () => {
 });
 
 describe('ProjectStore', () => {
-  it('part d’une liste vide sans fichier', async () => {
+  it('starts from an empty list with no file', async () => {
     expect(await (await store()).list()).toEqual([]);
   });
 
-  it('crée un projet avec ses racines, en les rendant absolues', async () => {
+  it('creates a project with its roots, making them absolute', async () => {
     const s = await store();
     const p = await s.create({ name: 'bonaparte', roots: ['./un', './deux'] });
 
@@ -34,24 +34,24 @@ describe('ProjectStore', () => {
     expect(await s.list()).toHaveLength(1);
   });
 
-  it('accepte un projet SANS racine — c’est un groupe légitime', async () => {
+  it('accepts a project with NO root — it’s a legitimate group', async () => {
     const s = await store();
     const p = await s.create({ name: 'idées' });
     expect(p.roots).toEqual([]);
   });
 
-  it('renomme sans toucher aux racines', async () => {
+  it('renames without touching the roots', async () => {
     const s = await store();
-    const p = await s.create({ name: 'avant', roots: ['./a'] });
-    const after = await s.rename(p.id, 'après');
+    const p = await s.create({ name: 'before', roots: ['./a'] });
+    const after = await s.rename(p.id, 'after');
 
-    expect(after.name).toBe('après');
+    expect(after.name).toBe('after');
     expect(after.roots).toEqual(p.roots);
   });
 
-  it('remplace les racines, et l’ORDRE est conservé tel quel', async () => {
-    // L'ordre est sémantique : la première racine est le défaut des chemins
-    // relatifs. Le réordonnancement doit donc être une opération fidèle.
+  it('replaces the roots, and the ORDER is kept as-is', async () => {
+    // The order is semantic: the first root is the default for relative
+    // paths. Reordering must therefore be a faithful operation.
     const s = await store();
     const p = await s.create({ name: 'p', roots: ['./a', './b'] });
     const after = await s.setRoots(p.id, ['./b', './a']);
@@ -59,13 +59,13 @@ describe('ProjectStore', () => {
     expect(after.roots).toEqual([resolve('./b'), resolve('./a')]);
   });
 
-  it('déduplique les racines répétées', async () => {
+  it('deduplicates repeated roots', async () => {
     const s = await store();
     const p = await s.create({ name: 'p', roots: ['./a', './a', './b'] });
     expect(p.roots).toEqual([resolve('./a'), resolve('./b')]);
   });
 
-  it('supprime un projet', async () => {
+  it('removes a project', async () => {
     const s = await store();
     const p = await s.create({ name: 'p' });
     await s.remove(p.id);
@@ -74,15 +74,15 @@ describe('ProjectStore', () => {
     expect(await s.get(p.id)).toBeUndefined();
   });
 
-  it('rend undefined pour un projet inconnu, sans lever', async () => {
+  it('returns undefined for an unknown project, without throwing', async () => {
     expect(await (await store()).get('fantome')).toBeUndefined();
   });
 
-  it('lève sur une modification d’un projet inconnu', async () => {
+  it('throws on a modification of an unknown project', async () => {
     await expect((await store()).rename('fantome', 'x')).rejects.toThrow(/fantome/);
   });
 
-  it('persiste entre deux instances', async () => {
+  it('persists across two instances', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-projects-'));
     dirs.push(dir);
 
@@ -93,17 +93,17 @@ describe('ProjectStore', () => {
     expect(relu?.roots).toEqual([resolve('./a')]);
   });
 
-  it('survit à un fichier corrompu plutôt que de tout perdre', async () => {
-    // Un JSON illisible ne doit pas empêcher l'app de démarrer : on repart
-    // d'une liste vide, ce qui est réparable, au lieu de lever au chargement.
+  it('survives a corrupted file rather than losing everything', async () => {
+    // An unreadable JSON must not prevent the app from starting: we start
+    // over from an empty list, which is fixable, instead of throwing on load.
     const dir = await mkdtemp(join(tmpdir(), 'bp-projects-'));
     dirs.push(dir);
-    await writeFile(join(dir, 'projects.json'), '{ pas du json', 'utf8');
+    await writeFile(join(dir, 'projects.json'), '{ not json', 'utf8');
 
     expect(await new ProjectStore(dir).list()).toEqual([]);
   });
 
-  it('écrit un fichier relisible et versionné', async () => {
+  it('writes a file that is re-readable and versioned', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-projects-'));
     dirs.push(dir);
     await new ProjectStore(dir).create({ name: 'p' });

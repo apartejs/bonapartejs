@@ -94,7 +94,7 @@ function managed(
 }
 
 describe('createLlamaCppBackend — managed', () => {
-  it('démarre : spawn avec les bons args, poll health, statut ready', async () => {
+  it('starts: spawns with the right args, polls health, status ready', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();
     const backend = managed(server, spawn, { slotSavePath: 'C:\\bp\\kv' });
@@ -111,7 +111,7 @@ describe('createLlamaCppBackend — managed', () => {
     expect(args).toContain('--slot-save-path');
   });
 
-  it('échoue au démarrage si health ne répond jamais : crashed + kill', async () => {
+  it('fails to start if health never responds: crashed + kill', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();
     const backend = managed(server, spawn, { baseUrl: 'http://127.0.0.1:1' });
@@ -121,7 +121,7 @@ describe('createLlamaCppBackend — managed', () => {
     expect(spawn.killCount).toBe(1);
   });
 
-  it('redémarre après une sortie inattendue (borné par maxRestarts)', async () => {
+  it('restarts after an unexpected exit (bounded by maxRestarts)', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();
     const backend = managed(server, spawn);
@@ -135,7 +135,7 @@ describe('createLlamaCppBackend — managed', () => {
     expect(statuses).toContain('restarting');
   });
 
-  it('abandonne (crashed) quand maxRestarts est épuisé', async () => {
+  it('gives up (crashed) when maxRestarts is exhausted', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();
     const backend = managed(server, spawn, { maxRestarts: 0 });
@@ -147,7 +147,7 @@ describe('createLlamaCppBackend — managed', () => {
     expect(spawn.calls).toHaveLength(1);
   });
 
-  it('stop() est intentionnel : kill, statut stopped, pas de restart', async () => {
+  it('stop() is intentional: kill, status stopped, no restart', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();
     const backend = managed(server, spawn);
@@ -162,7 +162,7 @@ describe('createLlamaCppBackend — managed', () => {
     expect(spawn.calls).toHaveLength(1);
   });
 
-  it('slots présent si et seulement si slotSavePath est configuré', async () => {
+  it('slots present if and only if slotSavePath is configured', async () => {
     const server = await fakeServer();
     const withSlots = managed(server, makeFakeSpawn(), { slotSavePath: 'C:\\kv' });
     const withoutSlots = managed(server, makeFakeSpawn());
@@ -173,8 +173,8 @@ describe('createLlamaCppBackend — managed', () => {
   });
 });
 
-describe('createLlamaCppBackend — CLI unifié', () => {
-  it('préfixe les args avec la sous-commande quand commandPrefix est fourni', async () => {
+describe('createLlamaCppBackend — unified CLI', () => {
+  it('prefixes the args with the subcommand when commandPrefix is provided', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();
     const backend = createLlamaCppBackend({
@@ -194,7 +194,7 @@ describe('createLlamaCppBackend — CLI unifié', () => {
 });
 
 describe('createLlamaCppBackend — remote', () => {
-  it('start() vérifie la santé puis délègue complete() au serveur', async () => {
+  it('start() checks health then delegates complete() to the server', async () => {
     const server = await fakeServer({ responder: () => 'coucou' });
     const backend = createLlamaCppBackend({ mode: 'remote', url: server.url });
 
@@ -211,7 +211,7 @@ describe('createLlamaCppBackend — remote', () => {
     expect(props.totalSlots).toBeGreaterThan(0);
   });
 
-  it('start() échoue proprement si le serveur distant est injoignable', async () => {
+  it('start() fails cleanly if the remote server is unreachable', async () => {
     const backend = createLlamaCppBackend({
       mode: 'remote',
       url: 'http://127.0.0.1:1',
@@ -220,7 +220,7 @@ describe('createLlamaCppBackend — remote', () => {
     expect(backend.status()).toBe('crashed');
   });
 
-  it('kvPersistence distant est déclaratif (défaut true, désactivable)', async () => {
+  it('remote kvPersistence is declarative (default true, can be disabled)', async () => {
     const server = await fakeServer();
     const on = createLlamaCppBackend({ mode: 'remote', url: server.url });
     const off = createLlamaCppBackend({

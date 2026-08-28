@@ -1,15 +1,15 @@
 /**
- * Grammaire GBNF des appels d'outils.
+ * GBNF grammar for tool calls.
  *
- * Elle est PARESSEUSE : `grammar_lazy: true` + un déclencheur sur
- * `<tool_call>` (params non documentés dans le README de llama.cpp, vérifiés
- * dans `tools/server/server-schema.cpp`). Le modèle parle donc librement, et
- * la contrainte ne s'applique qu'à partir du moment où il ouvre un appel.
+ * It is LAZY: `grammar_lazy: true` + a trigger on `<tool_call>` (params
+ * not documented in llama.cpp's README, verified in
+ * `tools/server/server-schema.cpp`). The model therefore speaks freely,
+ * and the constraint only applies from the moment it opens a call.
  *
- * Ce qui est contraint : l'enveloppe JSON et surtout le NOM de l'outil, borné
- * à l'inventaire courant — un outil retiré devient littéralement inémettable.
- * Les arguments restent du JSON libre, validés ensuite par le registre (une
- * erreur d'arguments est un tour de boucle normal, pas un plantage).
+ * What's constrained: the JSON envelope and especially the tool's NAME,
+ * bound to the current inventory — a removed tool becomes literally
+ * unemittable. The arguments remain free-form JSON, validated afterward
+ * by the registry (an argument error is a normal loop turn, not a crash).
  */
 
 import {
@@ -20,14 +20,14 @@ import {
 } from '../wire/hermes-parser.js';
 import type { ToolDef } from './types.js';
 
-/** Type WORD de `common_grammar_trigger_type` (common/common.h). */
+/** WORD type from `common_grammar_trigger_type` (common/common.h). */
 export const GRAMMAR_TRIGGER_TYPE_WORD = 1;
 
 export interface GrammarConstraint {
   grammar: string;
   grammarLazy: true;
   grammarTriggers: { type: number; value: string }[];
-  /** Les mots déclencheurs mono-token DOIVENT être préservés (sinon erreur 400). */
+  /** Single-token trigger words MUST be preserved (otherwise a 400 error). */
   preservedTokens: string[];
 }
 
@@ -35,7 +35,7 @@ export function escapeGbnfLiteral(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-/** Règles JSON standard (portées de grammars/json.gbnf de llama.cpp). */
+/** Standard JSON rules (ported from llama.cpp's grammars/json.gbnf). */
 const JSON_RULES = [
   String.raw`value ::= object | array | string | number | ("true" | "false" | "null") ws`,
   String.raw`object ::= "{" ws ( string ":" ws value ("," ws string ":" ws value)* )? "}" ws`,
@@ -51,18 +51,19 @@ export function buildToolCallGrammar(tools: ToolDef[]): string {
     .join(' | ');
 
   return [
-    // Plusieurs blocs d'affilée : la convention Hermes rend les appels
-    // parallèles ainsi, et notre parseur les lit. Une racine à un seul bloc
-    // serait satisfaite après le premier, et le second reviderait la pile.
+    // Several blocks in a row: the Hermes convention renders parallel
+    // calls this way, and our parser reads them. A root with a single
+    // block would be satisfied after the first, and the second would
+    // find the stack empty.
     String.raw`root ::= tool-call (ws tool-call)*`,
-    // Les DEUX balises font partie de la racine.
-    // — L'ouvrante parce que le déclencheur paresseux la donne à la grammaire :
-    //   `llama_grammar_accept_impl` (src/llama-grammar.cpp) appelle
-    //   `llama_grammar_accept_token` avec le texte du déclencheur. Sans elle,
-    //   le serveur lève « Unexpected empty grammar stack after accepting
-    //   piece: <tool_call> » dès le premier appel d'outil.
-    // — La fermante parce que sans elle la grammaire serait satisfaite dès la
-    //   fin du JSON et l'appel sortirait tronqué.
+    // BOTH tags are part of the root.
+    // — The opening one because the lazy trigger feeds it to the grammar:
+    //   `llama_grammar_accept_impl` (src/llama-grammar.cpp) calls
+    //   `llama_grammar_accept_token` with the trigger's text. Without it,
+    //   the server raises "Unexpected empty grammar stack after accepting
+    //   piece: <tool_call>" on the very first tool call.
+    // — The closing one because without it the grammar would be satisfied
+    //   as soon as the JSON ends and the call would come out truncated.
     String.raw`tool-call ::= "<tool_call>" ws "{" ws "\"name\":" ws tool-name "," ws "\"arguments\":" ws object "}" ws "</tool_call>"`,
     `tool-name ::= ${names}`,
     ...JSON_RULES,

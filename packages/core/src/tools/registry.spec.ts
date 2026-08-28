@@ -18,8 +18,8 @@ function registry(...names: string[]): ToolRegistry {
   return reg;
 }
 
-describe('ToolRegistry — inventaire', () => {
-  it('enregistre puis retrouve un outil avec sa source', () => {
+describe('ToolRegistry — inventory', () => {
+  it('registers then retrieves a tool with its source', () => {
     const reg = new ToolRegistry();
     reg.register(def('read_file'), handler, 'mcp');
     const found = reg.get('read_file');
@@ -28,16 +28,16 @@ describe('ToolRegistry — inventaire', () => {
     expect(found?.handler).toBe(handler);
   });
 
-  it('source builtin par défaut', () => {
+  it('defaults to builtin source', () => {
     expect(registry('a').get('a')?.source).toBe('builtin');
   });
 
-  it('refuse un nom en double', () => {
+  it('refuses a duplicate name', () => {
     const reg = registry('a');
-    expect(() => reg.register(def('a'), handler)).toThrow(/déjà/);
+    expect(() => reg.register(def('a'), handler)).toThrow(/already/);
   });
 
-  it('list trie par nom', () => {
+  it('list sorts by name', () => {
     expect(registry('zeta', 'alpha', 'milieu').list().map((d) => d.name)).toEqual([
       'alpha',
       'milieu',
@@ -45,41 +45,41 @@ describe('ToolRegistry — inventaire', () => {
     ]);
   });
 
-  it('unregister retire l’outil', () => {
+  it('unregister removes the tool', () => {
     const reg = registry('a', 'b');
     reg.unregister('a');
     expect(reg.get('a')).toBeUndefined();
     expect(reg.list().map((d) => d.name)).toEqual(['b']);
   });
 
-  it('unregister d’un inconnu ne lève pas', () => {
+  it('unregister of an unknown tool does not throw', () => {
     expect(() => registry().unregister('fantome')).not.toThrow();
   });
 });
 
-describe('ToolRegistry — empreinte', () => {
-  it('même inventaire, ordre d’enregistrement différent ⇒ même empreinte', () => {
+describe('ToolRegistry — fingerprint', () => {
+  it('same inventory, different registration order ⇒ same fingerprint', () => {
     expect(registry('a', 'b').snapshot().hash).toBe(registry('b', 'a').snapshot().hash);
   });
 
-  it('un outil ajouté change l’empreinte', () => {
+  it('an added tool changes the fingerprint', () => {
     expect(registry('a').snapshot().hash).not.toBe(registry('a', 'b').snapshot().hash);
   });
 
-  it('un schéma modifié change l’empreinte (même nom)', () => {
+  it('a modified schema changes the fingerprint (same name)', () => {
     const before = registry('a').snapshot().hash;
     const reg = new ToolRegistry();
     reg.register(def('a', { inputSchema: { type: 'object', properties: { x: {} } } }), handler);
     expect(reg.snapshot().hash).not.toBe(before);
   });
 
-  it('snapshot expose les noms triés', () => {
+  it('snapshot exposes the sorted names', () => {
     expect(registry('b', 'a').snapshot().names).toEqual(['a', 'b']);
   });
 });
 
 describe('ToolRegistry — diff', () => {
-  it('détecte les ajouts avec leur définition complète', () => {
+  it('detects additions with their complete definition', () => {
     const before = registry('a').snapshot();
     const reg = registry('a', 'b');
     const delta = reg.diff(before);
@@ -88,21 +88,21 @@ describe('ToolRegistry — diff', () => {
     expect(delta.added[0]!.description).toBe('outil b');
   });
 
-  it('détecte les retraits par nom', () => {
+  it('detects removals by name', () => {
     const before = registry('a', 'b').snapshot();
     const delta = registry('a').diff(before);
     expect(delta.added).toEqual([]);
     expect(delta.removed).toEqual(['b']);
   });
 
-  it('inventaire inchangé ⇒ delta vide', () => {
+  it('unchanged inventory ⇒ empty delta', () => {
     const reg = registry('a', 'b');
     expect(reg.diff(reg.snapshot())).toEqual({ added: [], removed: [] });
   });
 });
 
 describe('ToolRegistry — notifications', () => {
-  it('notifie à l’enregistrement et au retrait', () => {
+  it('notifies on registration and on removal', () => {
     const reg = new ToolRegistry();
     const seen: ToolInventoryDelta[] = [];
     reg.onChange((delta) => seen.push(delta));
@@ -115,7 +115,7 @@ describe('ToolRegistry — notifications', () => {
     expect(seen[1]!.removed).toEqual(['a']);
   });
 
-  it('unregister d’un inconnu ne notifie pas', () => {
+  it('unregister of an unknown tool does not notify', () => {
     const reg = new ToolRegistry();
     const listener = vi.fn();
     reg.onChange(listener);
@@ -123,7 +123,7 @@ describe('ToolRegistry — notifications', () => {
     expect(listener).not.toHaveBeenCalled();
   });
 
-  it('la désinscription arrête les notifications', () => {
+  it('unsubscribing stops the notifications', () => {
     const reg = new ToolRegistry();
     const listener = vi.fn();
     reg.onChange(listener)();
@@ -132,13 +132,13 @@ describe('ToolRegistry — notifications', () => {
   });
 });
 
-describe('ToolRegistry — grammaire', () => {
-  it('reflète l’inventaire courant', () => {
+describe('ToolRegistry — grammar', () => {
+  it('reflects the current inventory', () => {
     const reg = registry('read_file');
     expect(reg.grammar()?.grammar).toContain('read_file');
   });
 
-  it('un outil retiré disparaît de la grammaire (donc inémettable)', () => {
+  it('a removed tool disappears from the grammar (hence unemittable)', () => {
     const reg = registry('read_file', 'run_shell');
     reg.unregister('run_shell');
     const grammar = reg.grammar()!.grammar;
@@ -146,7 +146,7 @@ describe('ToolRegistry — grammaire', () => {
     expect(grammar).not.toContain('run_shell');
   });
 
-  it('aucun outil ⇒ aucune contrainte', () => {
+  it('no tool ⇒ no constraint', () => {
     expect(registry().grammar()).toBeNull();
   });
 });

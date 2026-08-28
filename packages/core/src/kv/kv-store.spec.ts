@@ -30,8 +30,8 @@ function manifest(overrides: Partial<KvManifest> = {}): KvManifest {
   };
 }
 
-describe('canRestore (politique stricte)', () => {
-  it('accepte un manifest identique à la config vivante', () => {
+describe('canRestore (strict policy)', () => {
+  it('accepts a manifest identical to the live config', () => {
     expect(canRestore(manifest(), LIVE)).toEqual({ ok: true });
   });
 
@@ -40,12 +40,12 @@ describe('canRestore (politique stricte)', () => {
     ['nCtx', { nCtx: 16384 }],
     ['cacheType', { cacheTypeK: 'f16', cacheTypeV: 'f16' }],
     ['buildTag', { buildTag: 'b9999' }],
-  ] as const)('refuse sur mismatch %s', (reason, override) => {
+  ] as const)('refuses on %s mismatch', (reason, override) => {
     expect(canRestore(manifest(override), LIVE)).toEqual({ ok: false, reason });
   });
 });
 
-describe('KvStore (contre le faux llama-server)', () => {
+describe('KvStore (against the fake llama-server)', () => {
   let servers: FakeLlamaServer[] = [];
   let dirs: string[] = [];
 
@@ -82,7 +82,7 @@ describe('KvStore (contre le faux llama-server)', () => {
     dirs = [];
   });
 
-  it('saveState sauvegarde le slot et écrit un manifest complet', async () => {
+  it('saveState saves the slot and writes a complete manifest', async () => {
     const { slots, client, store, dir } = await setup();
     await prefill(client, 'x'.repeat(400)); // 100 tokens
 
@@ -100,12 +100,12 @@ describe('KvStore (contre le faux llama-server)', () => {
     expect(onDisk.schemaVersion).toBe(1);
   });
 
-  it('restoreState restaure quand tout matche (prefill quasi nul ensuite)', async () => {
+  it('restoreState restores when everything matches (near-zero prefill afterward)', async () => {
     const { slots, client, store } = await setup();
     const prompt = 'x'.repeat(400);
     await prefill(client, prompt);
     await store.saveState(slots, 0, 'conv-1', LIVE);
-    await client.eraseSlot(0); // simule une autre conversation passée par là
+    await client.eraseSlot(0); // simulates another conversation that passed through
 
     const outcome = await store.restoreState(slots, 0, 'conv-1', LIVE);
     expect(outcome).toMatchObject({ restored: true, nRestored: 100 });
@@ -117,10 +117,10 @@ describe('KvStore (contre le faux llama-server)', () => {
     })) {
       if (event.type === 'done') promptMs = event.stats.promptMs;
     }
-    expect(promptMs).toBe(20); // 2 tokens seulement — l'état a bien été restauré
+    expect(promptMs).toBe(20); // only 2 tokens — the state was indeed restored
   });
 
-  it('refuse le restore sur mismatch nCtx SANS toucher au serveur', async () => {
+  it('refuses the restore on nCtx mismatch WITHOUT touching the server', async () => {
     const { slots, client, store, server } = await setup();
     const prompt = 'x'.repeat(400);
     await prefill(client, prompt);
@@ -132,18 +132,18 @@ describe('KvStore (contre le faux llama-server)', () => {
       nCtx: 16384,
     });
     expect(outcome).toEqual({ restored: false, reason: 'nCtx' });
-    expect(server.getSlotTokens(0)).toHaveLength(0); // aucun restore effectué
+    expect(server.getSlotTokens(0)).toHaveLength(0); // no restore performed
   });
 
-  it('signale proprement un manifest absent', async () => {
+  it('cleanly reports a missing manifest', async () => {
     const { slots, store } = await setup();
     const outcome = await store.restoreState(slots, 0, 'conv-inconnue', LIVE);
     expect(outcome).toEqual({ restored: false, reason: 'missing' });
   });
 
-  it('signale proprement un manifest corrompu', async () => {
+  it('cleanly reports a corrupted manifest', async () => {
     const { slots, store, dir } = await setup();
-    await writeFile(join(dir, 'conv-1.manifest.json'), '{pas du json', 'utf8');
+    await writeFile(join(dir, 'conv-1.manifest.json'), '{not json', 'utf8');
     const outcome = await store.restoreState(slots, 0, 'conv-1', LIVE);
     expect(outcome).toEqual({ restored: false, reason: 'corrupt' });
   });

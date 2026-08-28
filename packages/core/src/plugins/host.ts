@@ -1,17 +1,18 @@
 /**
- * Hôte de plugins — découverte, validation, activation RÉVERSIBLE.
+ * Plugin host — discovery, validation, REVERSIBLE activation.
  *
- * Deux principes, et le second est le seul qui compte à long terme :
+ * Two principles, and the second is the only one that matters long-term:
  *
- * 1. Le manifeste est **déclaratif** : on le lit et on le valide sans exécuter
- *    une ligne du plugin. Un identifiant en double, une vue mal formée, un
- *    outil sans description se voient AVANT d'avoir chargé quoi que ce soit.
+ * 1. The manifest is **declarative**: it's read and validated without
+ *    executing a single line of the plugin. A duplicate id, a malformed
+ *    view, a tool with no description are caught BEFORE anything gets
+ *    loaded.
  *
- * 2. Tout ce qu'un plugin enregistre passe par son **contexte**, et le
- *    contexte défait tout au démontage. L'auteur d'un plugin n'a aucune liste
- *    de désinscriptions à tenir — donc rien à oublier. C'est ce qui rend une
- *    désactivation (ou un remplacement à chaud) sûre, plutôt que dépendante de
- *    la discipline de chacun.
+ * 2. Everything a plugin registers goes through its **context**, and the
+ *    context undoes everything on teardown. A plugin author has no list of
+ *    unregistrations to maintain — so nothing to forget. That's what makes
+ *    a deactivation (or a hot swap) safe, rather than dependent on
+ *    everyone's discipline.
  */
 
 import { readFile, readdir } from 'node:fs/promises';
@@ -26,7 +27,7 @@ import type { ToolRegistry } from '../tools/registry.js';
 
 export const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
-/** Résultat d'un outil de plugin, tel que le modèle le recevra. */
+/** Result of a plugin tool, as the model will receive it. */
 export interface PluginToolResult {
   ok: boolean;
   content: string;
@@ -42,23 +43,23 @@ export type PluginToolHandler = (
   invocation: PluginToolInvocation,
 ) => Promise<PluginToolResult>;
 
-/** Commande appelable depuis la vue du plugin (renderer → main). */
+/** Command callable from the plugin's view (renderer → main). */
 export type PluginCommandHandler = (payload: unknown) => Promise<unknown> | unknown;
 
 /**
- * Canal vers UNE instance de vue — un onglet du panneau d'outillage.
+ * Channel to ONE view instance — one tab of the tooling panel.
  *
- * Le panneau permettant d'ouvrir plusieurs onglets du même type (deux
- * terminaux, trois navigateurs), la contre-pression doit être comptée par
- * instance : avec un compteur unique par plugin, un `cat` d'un gros fichier
- * dans un terminal figerait le terminal voisin.
+ * Since the panel allows opening several tabs of the same type (two
+ * terminals, three browsers), backpressure must be counted per instance:
+ * with a single counter per plugin, a `cat` of a large file in one
+ * terminal would freeze the neighboring terminal.
  */
 export interface PluginInstanceChannel {
-  /** Pousse vers CETTE instance. `false` = elle est en retard, arrête-toi. */
+  /** Pushes to THIS instance. `false` = it's falling behind, stop. */
   emit(event: string, payload: unknown): boolean;
-  /** Cette instance a rattrapé. */
+  /** This instance has caught up. */
   onDrain(listener: () => void): void;
-  /** L'onglet est fermé : on oublie son compteur et on cesse d'émettre. */
+  /** The tab is closed: we forget its counter and stop emitting. */
   dispose(): void;
 }
 
@@ -66,23 +67,23 @@ export interface PluginNodeContext {
   readonly pluginId: string;
   registerToolHandler(name: string, handler: PluginToolHandler): void;
   /**
-   * Expose une commande à la VUE du plugin. C'est le seul chemin renderer →
-   * moitié Node : il passe par l'hôte, donc il se démonte avec le plugin et
-   * ne peut pas survivre à sa désactivation.
+   * Exposes a command to the plugin's VIEW. This is the only renderer →
+   * Node-half path: it goes through the host, so it gets torn down with
+   * the plugin and cannot survive its deactivation.
    */
   registerCommand(name: string, handler: PluginCommandHandler): void;
   getConfig<T = unknown>(key: string): T | undefined;
   /**
-   * Pousse un événement vers la VUE du plugin. Rend `false` quand la vue est en
-   * retard : l'appelant doit cesser de lire sa source jusqu'à `onDrain`.
-   * Convention des flux Node — `write()` puis `'drain'`.
+   * Pushes an event to the plugin's VIEW. Returns `false` when the view is
+   * falling behind: the caller must stop reading its source until
+   * `onDrain`. Node stream convention — `write()` then `'drain'`.
    */
   emit(event: string, payload: unknown): boolean;
-  /** La vue a rattrapé : le producteur peut reprendre. */
+  /** The view has caught up: the producer can resume. */
   onDrain(listener: () => void): void;
   /**
-   * Canal vers une instance de vue précise. Un plugin qui gère plusieurs
-   * onglets en ouvre un par session et le garde à côté d'elle.
+   * Channel to a specific view instance. A plugin managing several tabs
+   * opens one per session and keeps it alongside it.
    */
   channel(instanceId: string): PluginInstanceChannel;
   onDispose(dispose: () => void | Promise<void>): void;
@@ -95,7 +96,7 @@ export interface PluginNodeModule {
 
 export interface DiscoveredPlugin {
   id: string;
-  /** Dossier du plugin — sert à résoudre ses points d'entrée. */
+  /** Plugin's folder — used to resolve its entry points. */
   dir: string;
   manifest?: PluginManifest;
   error?: string;
@@ -104,12 +105,13 @@ export interface DiscoveredPlugin {
 
 export interface PluginHostOptions {
   registry: ToolRegistry;
-  /** Réglages globaux des plugins, par id puis par clé. */
+  /** Global plugin settings, by id then by key. */
   config?: Record<string, Record<string, unknown>>;
   logger?: (message: string) => void;
   /**
-   * Achemine un événement poussé par un plugin vers SA vue. `core` ne connaît
-   * pas Electron : c'est l'hôte applicatif qui fournit le transport.
+   * Routes an event pushed by a plugin to ITS view. `core` doesn't know
+   * about Electron: it's the application host that provides the
+   * transport.
    */
   emit?: (
     pluginId: string,
@@ -120,31 +122,32 @@ export interface PluginHostOptions {
 }
 
 /**
- * Seuils de contre-pression, repris TELS QUELS de VS Code
+ * Backpressure thresholds, taken AS-IS from VS Code
  * (`FlowControlConstants`, src/vs/platform/terminal/common/terminal.ts).
  *
- * Le problème est le même que le leur : un producteur natif — un PTY — débite
- * plus vite que la vue ne consomme. Agrandir le tampon ne fait que retarder la
- * perte ; la seule réponse correcte est de METTRE LE PRODUCTEUR EN PAUSE.
+ * The problem is the same as theirs: a native producer — a PTY — outputs
+ * faster than the view consumes. Growing the buffer only delays the loss;
+ * the only correct answer is to PAUSE THE PRODUCER.
  *
- * `ackSize` doit rester <= `lowWatermark`, sinon le client n'atteindrait jamais
- * le seuil qui déclenche la reprise et le producteur resterait bloqué.
+ * `ackSize` must stay <= `lowWatermark`, otherwise the client would never
+ * reach the threshold that triggers the resume and the producer would
+ * stay stuck.
  */
 export const FLOW_CONTROL = {
-  /** Non-acquittés au-delà desquels le producteur doit s'arrêter. */
+  /** Unacknowledged bytes beyond which the producer must stop. */
   highWatermark: 100_000,
-  /** Non-acquittés en-dessous desquels il peut reprendre. */
+  /** Unacknowledged bytes below which it can resume. */
   lowWatermark: 5_000,
-  /** Taille du paquet d'acquittement côté vue. */
+  /** Size of the acknowledgment batch on the view side. */
   ackSize: 5_000,
 } as const;
 
 /**
- * Poids d'une charge utile, en caractères.
+ * Weight of a payload, in characters.
  *
- * Les données d'un terminal sont des chaînes : on mesure directement. Pour le
- * reste, la sérialisation JSON donne un ordre de grandeur suffisant — il s'agit
- * de réguler un débit, pas de facturer des octets.
+ * Terminal data is strings: we measure them directly. For everything
+ * else, JSON serialization gives a good-enough order of magnitude — this
+ * is about regulating a flow rate, not billing exact bytes.
  */
 function sizeOf(payload: unknown): number {
   if (typeof payload === 'string') return payload.length;
@@ -155,16 +158,16 @@ function sizeOf(payload: unknown): number {
   }
 }
 
-/** Tout ce qu'une activation a posé, pour pouvoir le retirer d'un bloc. */
+/** Everything an activation has set up, so it can be torn down as one block. */
 interface ActivationRecord {
   toolNames: string[];
   commands: Map<string, PluginCommandHandler>;
   disposers: (() => void | Promise<void>)[];
-  /** Un flux par instance de vue, plus un canal par défaut (clé vide). */
+  /** One flow per view instance, plus a default channel (empty key). */
   flows: Map<string, InstanceFlow>;
 }
 
-/** Compteur de contre-pression d'UNE instance. */
+/** Backpressure counter for ONE instance. */
 interface InstanceFlow {
   unacknowledged: number;
   paused: boolean;
@@ -178,10 +181,10 @@ export class PluginHost {
   constructor(private readonly options: PluginHostOptions) {}
 
   /**
-   * Scanne un dossier de plugins. Chaque sous-dossier contenant un
-   * `plugin.json` est un candidat ; un manifeste illisible ou invalide est
-   * RETENU avec son erreur, pour que le hub Réglages puisse le montrer au
-   * lieu de le faire disparaître en silence.
+   * Scans a plugins folder. Every subfolder containing a `plugin.json` is
+   * a candidate; an unreadable or invalid manifest is KEPT along with its
+   * error, so the Settings hub can show it instead of silently making it
+   * disappear.
    */
   async discover(root: string): Promise<DiscoveredPlugin[]> {
     let entries: string[];
@@ -198,7 +201,7 @@ export class PluginHost {
       try {
         raw = await readFile(join(dir, PLUGIN_MANIFEST_FILE), 'utf8');
       } catch {
-        continue; // pas un plugin : ni bruit, ni erreur
+        continue; // not a plugin: no noise, no error
       }
 
       const parsed = this.parseManifest(raw);
@@ -243,20 +246,20 @@ export class PluginHost {
     return { manifest: result.data };
   }
 
-  /** Plugin découvert (utile pour résoudre le point d'entrée à importer). */
+  /** Discovered plugin (useful for resolving the entry point to import). */
   get(id: string): DiscoveredPlugin | undefined {
     return this.plugins.get(id);
   }
 
   /**
-   * Active un plugin déjà découvert. Le module est fourni par l'appelant :
-   * c'est LUI qui décide comment charger du code (import() côté main,
-   * protocole custom côté renderer) — l'hôte, lui, reste testable sans
-   * charger quoi que ce soit.
+   * Activates an already-discovered plugin. The module is supplied by the
+   * caller: IT decides how to load code (import() on the main side, a
+   * custom protocol on the renderer side) — the host itself stays
+   * testable without loading anything.
    */
   async activate(id: string, module: PluginNodeModule): Promise<void> {
     const plugin = this.plugins.get(id);
-    if (!plugin?.manifest) throw new Error(`Plugin inconnu : ${id}`);
+    if (!plugin?.manifest) throw new Error(`Unknown plugin: ${id}`);
     if (this.activations.has(id)) return;
 
     const manifest = plugin.manifest;
@@ -274,8 +277,8 @@ export class PluginHost {
         const contribution = declared.get(name);
         if (!contribution) {
           throw new Error(
-            `Outil non déclaré au manifeste de « ${id} » : ${name}. ` +
-              'Le manifeste doit rester lisible sans exécuter le plugin.',
+            `Tool not declared in the manifest of "${id}": ${name}. ` +
+              'The manifest must remain readable without executing the plugin.',
           );
         }
         const def: ToolDef = {
@@ -296,12 +299,13 @@ export class PluginHost {
       log: (message) => this.options.logger?.(`[plugin:${id}] ${message}`),
 
       /**
-       * Pousse un événement vers la vue. Rend `false` quand la vue est en
-       * retard : l'appelant DOIT alors cesser de lire sa source jusqu'à
-       * `onDrain`. C'est la convention des flux Node (`write` puis `drain`),
-       * choisie parce qu'elle est déjà connue de tout le monde.
+       * Pushes an event to the view. Returns `false` when the view is
+       * falling behind: the caller MUST then stop reading its source
+       * until `onDrain`. This is the Node stream convention (`write` then
+       * `drain`), chosen because everyone already knows it.
        *
-       * Sans instance visée : le canal par défaut, pour un plugin à vue unique.
+       * With no targeted instance: the default channel, for a
+       * single-view plugin.
        */
       emit: (event, payload) => defaultChannel().emit(event, payload),
       onDrain: (listener) => defaultChannel().onDrain(listener),
@@ -315,8 +319,8 @@ export class PluginHost {
     try {
       await module.activate(context);
     } catch (error) {
-      // Activation ratée = rien ne subsiste. Un plugin à moitié monté est
-      // pire qu'un plugin absent : l'inventaire mentirait au modèle.
+      // Failed activation = nothing remains. A half-mounted plugin is
+      // worse than an absent plugin: the inventory would lie to the model.
       await this.deactivate(id);
       plugin.error = error instanceof Error ? error.message : String(error);
       throw error;
@@ -325,21 +329,21 @@ export class PluginHost {
     delete plugin.error;
   }
 
-  /** Démonte un plugin : outils retirés, nettoyages exécutés, dans l'ordre. */
+  /** Tears down a plugin: tools removed, cleanups run, in order. */
   async deactivate(id: string): Promise<void> {
     const record = this.activations.get(id);
     if (!record) return;
     this.activations.delete(id);
 
     for (const name of record.toolNames) this.options.registry.unregister(name);
-    // Les nettoyages tournent en ordre inverse d'inscription (pile), et l'un
-    // qui échoue ne doit pas empêcher les suivants.
+    // Cleanups run in reverse registration order (a stack), and one that
+    // fails must not prevent the following ones.
     for (const dispose of [...record.disposers].reverse()) {
       try {
         await dispose();
       } catch (error) {
         this.options.logger?.(
-          `[plugin:${id}] nettoyage en échec : ${
+          `[plugin:${id}] cleanup failed: ${
             error instanceof Error ? error.message : String(error)
           }`,
         );
@@ -350,28 +354,28 @@ export class PluginHost {
     if (plugin) plugin.active = false;
   }
 
-  /** Appelle une commande exposée par un plugin actif. */
+  /** Calls a command exposed by an active plugin. */
   async invoke(pluginId: string, command: string, payload: unknown): Promise<unknown> {
     const handler = this.activations.get(pluginId)?.commands.get(command);
     if (!handler) {
-      throw new Error(`Commande inconnue : ${pluginId}.${command}`);
+      throw new Error(`Unknown command: ${pluginId}.${command}`);
     }
     return handler(payload);
   }
 
-  /** Démonte tout — appelé à la fermeture de l'app. */
+  /** Tears down everything — called when the app closes. */
   /**
-   * Canal vers une instance. Le compteur est créé à la demande et vit dans
-   * l'activation, donc il disparaît avec le plugin.
+   * Channel to an instance. The counter is created on demand and lives in
+   * the activation, so it disappears with the plugin.
    */
   private channelFor(
     pluginId: string,
     record: ActivationRecord,
     instanceId: string,
   ): PluginInstanceChannel {
-    // `disposed` appartient au CANAL, pas au compteur : rouvrir un onglet du
-    // même identifiant doit rendre un canal neuf et libre, tandis que
-    // l'ancien objet, s'il traîne encore dans une fermeture, doit rester muet.
+    // `disposed` belongs to the CHANNEL, not the counter: reopening a tab
+    // with the same id must yield a fresh, free channel, while the old
+    // object, if it still lingers in some closure, must stay silent.
     let disposed = false;
 
     const ensure = (): InstanceFlow => {
@@ -388,7 +392,7 @@ export class PluginHost {
 
     return {
       emit: (event, payload) => {
-        // Plugin démonté, ou canal jeté : une vue morte ne reçoit rien.
+        // Plugin torn down, or channel discarded: a dead view receives nothing.
         if (disposed || this.activations.get(pluginId) !== record) return false;
         const flow = ensure();
         this.options.emit?.(pluginId, instanceId, event, payload);
@@ -408,12 +412,12 @@ export class PluginHost {
   }
 
   /**
-   * La vue signale qu'elle a CONSOMMÉ `bytes` octets pour une instance.
+   * The view signals that it has CONSUMED `bytes` bytes for an instance.
    *
-   * Le compte de CETTE instance redescend ; en repassant sous le seuil bas, on
-   * la réveille — les autres onglets ne sont pas touchés. Un plugin ou une
-   * instance inconnus sont ignorés : un acquittement en retard, après une
-   * fermeture d'onglet, ne doit pas lever.
+   * THIS instance's count goes back down; crossing back below the low
+   * watermark wakes it up — other tabs are untouched. An unknown plugin
+   * or instance is ignored: a late acknowledgment, after a tab closes,
+   * must not throw.
    */
   acknowledge(pluginId: string, instanceId: string, bytes: number): void {
     const flow = this.activations.get(pluginId)?.flows.get(instanceId);
@@ -429,7 +433,7 @@ export class PluginHost {
     for (const id of [...this.activations.keys()]) await this.deactivate(id);
   }
 
-  /** Photo pour l'UI (hub Réglages, onglets du panneau d'outillage). */
+  /** Snapshot for the UI (Settings hub, tooling panel tabs). */
   status(): PluginStatusDto[] {
     return [...this.plugins.values()].map((plugin) => ({
       id: plugin.id,
@@ -444,15 +448,15 @@ export class PluginHost {
     }));
   }
 
-  /** Adapte la signature du SDK à celle du registre d'outils du harness. */
+  /** Adapts the plugin SDK's signature to that of the harness's tool registry. */
   private adapt(handler: PluginToolHandler): ToolHandler {
     return async (args, context) =>
       handler({
         args,
-        // Le SDK de plugin ne connaît qu'une racine : on lui donne la première,
-        // celle contre laquelle les chemins relatifs résolvent. Élargir son
-        // contrat à N racines est un changement de SDK, donc de tous les
-        // plugins — reporté, et consigné.
+        // The plugin SDK only knows one root: we give it the first one,
+        // the one relative paths resolve against. Widening its contract
+        // to N roots is an SDK change, hence a change for every plugin —
+        // deferred, and logged.
         ...(context.roots[0] ? { projectRoot: context.roots[0] } : {}),
         signal: context.signal,
       });

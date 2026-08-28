@@ -9,24 +9,24 @@ function engine(mode: PlayMode): PermissionEngine {
   return new PermissionEngine(mode);
 }
 
-describe('PermissionEngine — matrice mode × effet', () => {
+describe('PermissionEngine — mode × effect matrix', () => {
   it.each([
     ['lecture', 'allow', 'deny', 'deny'],
     ['repetition', 'allow', 'ask', 'ask'],
     ['plume', 'allow', 'allow', 'ask'],
     ['impro', 'allow', 'allow', 'allow'],
-  ] as const)('%s : lire=%s, écrire=%s, exécuter=%s', (mode, r, w, e) => {
+  ] as const)('%s: read=%s, write=%s, execute=%s', (mode, r, w, e) => {
     const perm = engine(mode);
     expect(perm.evaluate(read)).toBe(r);
     expect(perm.evaluate(write)).toBe(w);
     expect(perm.evaluate(exec)).toBe(e);
   });
 
-  it('le mode par défaut est Répétition', () => {
+  it('the default mode is Rehearsal', () => {
     expect(new PermissionEngine().getMode()).toBe('repetition');
   });
 
-  it('setMode change l’arbitrage immédiatement', () => {
+  it('setMode changes the arbitration immediately', () => {
     const perm = engine('repetition');
     expect(perm.evaluate(write)).toBe('ask');
     perm.setMode('plume');
@@ -34,15 +34,15 @@ describe('PermissionEngine — matrice mode × effet', () => {
   });
 });
 
-describe('PermissionEngine — règles mémorisées', () => {
-  it('une règle transforme un « demander » en « autoriser »', () => {
+describe('PermissionEngine — remembered rules', () => {
+  it('a rule turns an "ask" into an "allow"', () => {
     const perm = engine('repetition');
     expect(perm.evaluate(write)).toBe('ask');
     perm.remember({ tool: 'write_file' });
     expect(perm.evaluate(write)).toBe('allow');
   });
 
-  it('une règle ne lève JAMAIS un refus du mode', () => {
+  it('a rule NEVER lifts a denial coming from the mode', () => {
     const perm = engine('lecture');
     perm.remember({ tool: 'write_file' });
     perm.remember({ tool: 'run_shell', commandPrefix: 'pnpm' });
@@ -50,19 +50,19 @@ describe('PermissionEngine — règles mémorisées', () => {
     expect(perm.evaluate(exec)).toBe('deny');
   });
 
-  it('une règle ne vaut que pour son outil', () => {
+  it('a rule only applies to its own tool', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'write_file' });
     expect(perm.evaluate(exec)).toBe('ask');
   });
 
-  it('règle à préfixe : autorise la commande qui commence par le préfixe', () => {
+  it('prefix rule: allows the command that starts with the prefix', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'run_shell', commandPrefix: 'pnpm test' });
     expect(perm.evaluate(exec)).toBe('allow');
   });
 
-  it('règle à préfixe : une autre commande reste à demander', () => {
+  it('prefix rule: a different command is still left asking', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'run_shell', commandPrefix: 'pnpm test' });
     expect(
@@ -70,7 +70,7 @@ describe('PermissionEngine — règles mémorisées', () => {
     ).toBe('ask');
   });
 
-  it('le préfixe s’applique aux frontières de mot (pas de faux positif)', () => {
+  it('the prefix applies at word boundaries (no false positive)', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'run_shell', commandPrefix: 'pnpm test' });
     expect(perm.evaluate({ ...exec, command: 'pnpm testament-destructif' })).toBe(
@@ -78,20 +78,20 @@ describe('PermissionEngine — règles mémorisées', () => {
     );
   });
 
-  it('une règle sans préfixe autorise toutes les commandes de l’outil', () => {
+  it('a rule with no prefix allows every command of the tool', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'run_shell' });
     expect(perm.evaluate({ ...exec, command: 'nimporte quoi' })).toBe('allow');
   });
 
-  it('remember est idempotent', () => {
+  it('remember is idempotent', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'write_file' });
     perm.remember({ tool: 'write_file' });
     expect(perm.listRules()).toHaveLength(1);
   });
 
-  it('forget retire la règle et rétablit la demande', () => {
+  it('forget removes the rule and restores the ask', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'write_file' });
     perm.forget({ tool: 'write_file' });
@@ -99,12 +99,12 @@ describe('PermissionEngine — règles mémorisées', () => {
     expect(perm.evaluate(write)).toBe('ask');
   });
 
-  it('les règles fournies à la construction s’appliquent', () => {
+  it('rules provided at construction time apply', () => {
     const perm = new PermissionEngine('repetition', [{ tool: 'write_file' }]);
     expect(perm.evaluate(write)).toBe('allow');
   });
 
-  it('listRules ne laisse pas muter l’état interne', () => {
+  it('listRules does not let internal state be mutated', () => {
     const perm = engine('repetition');
     perm.remember({ tool: 'write_file' });
     perm.listRules().push({ tool: 'run_shell' });

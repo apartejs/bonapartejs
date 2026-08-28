@@ -1,16 +1,16 @@
 /**
- * Catalogue des réglages du harness.
+ * Catalog of the harness's settings.
  *
- * La ligne de partage est structurelle, pas esthétique :
+ * The dividing line is structural, not cosmetic:
  *
- * - **Lancement** (`scopes: ['global']`) : ces paramètres entrent au manifest
- *   KV. Les laisser varier par conversation ferait diverger le manifest du
- *   serveur réellement lancé — et un restore refusé (au mieux) ou accepté à
- *   tort (au pire). Les changer invalide les états sauvegardés, et l'interface
- *   doit le dire avant, pas après.
- * - **Échantillonnage** (`global` + `conversation`) : à chaud, sans effet sur
- *   le préfixe du prompt, donc sans effet sur le cache. C'est ce qui rend
- *   légitime de le régler conversation par conversation.
+ * - **Launch** (`scopes: ['global']`): these parameters go into the KV
+ *   manifest. Letting them vary per conversation would make the manifest
+ *   diverge from the server actually launched — and a restore refused (at
+ *   best) or wrongly accepted (at worst). Changing them invalidates saved
+ *   states, and the interface must say so beforehand, not after.
+ * - **Sampling** (`global` + `conversation`): live, with no effect on the
+ *   prompt's prefix, hence no effect on the cache. That's what makes it
+ *   legitimate to tune it conversation by conversation.
  */
 
 import type { SettingField } from './resolve.js';
@@ -122,8 +122,8 @@ export const LAUNCH_SETTINGS: SettingField[] = [
   },
 ];
 
-/** Tous les réglages du harness ; les plugins ajoutent les leurs par-dessus. */
+/** All of the harness's settings; plugins add theirs on top. */
 export const HARNESS_SETTINGS: SettingField[] = [...SAMPLING_SETTINGS, ...LAUNCH_SETTINGS];
 
-/** Les clés dont un changement invalide les états KV sauvegardés. */
+/** The keys whose change invalidates saved KV states. */
 export const KV_INVALIDATING_KEYS = new Set(['nCtx', 'cacheType']);

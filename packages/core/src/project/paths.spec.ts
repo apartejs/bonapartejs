@@ -10,140 +10,140 @@ import {
   resolveInProject,
 } from './paths.js';
 
-const ROOT = resolve('/projets/bonaparte');
+const ROOT = resolve('/projects/bonaparte');
 
 describe('resolveInProject', () => {
-  it('résout un chemin relatif simple', () => {
+  it('resolves a simple relative path', () => {
     expect(resolveInProject(ROOT, 'src/index.ts')).toBe(join(ROOT, 'src/index.ts'));
   });
 
-  it('accepte les séparateurs POSIX comme Windows', () => {
+  it('accepts POSIX separators as well as Windows', () => {
     expect(resolveInProject(ROOT, 'src\\index.ts')).toBe(
       resolveInProject(ROOT, 'src/index.ts'),
     );
   });
 
-  it('normalise les segments redondants', () => {
+  it('normalizes redundant segments', () => {
     expect(resolveInProject(ROOT, './src/../src/a.ts')).toBe(join(ROOT, 'src/a.ts'));
   });
 
-  it('accepte la racine elle-même', () => {
+  it('accepts the root itself', () => {
     expect(resolveInProject(ROOT, '.')).toBe(ROOT);
   });
 
-  it('accepte un chemin absolu situé dans le projet', () => {
+  it('accepts an absolute path located inside the project', () => {
     const inside = join(ROOT, 'src/a.ts');
     expect(resolveInProject(ROOT, inside)).toBe(inside);
   });
 
-  it('refuse une remontée hors du projet', () => {
+  it('refuses climbing outside the project', () => {
     expect(() => resolveInProject(ROOT, '../secrets.txt')).toThrow(
       PathOutsideProjectError,
     );
   });
 
-  it('refuse une remontée déguisée au milieu du chemin', () => {
+  it('refuses a disguised climb in the middle of the path', () => {
     expect(() => resolveInProject(ROOT, 'src/../../secrets.txt')).toThrow(
       PathOutsideProjectError,
     );
   });
 
-  it('refuse un chemin absolu étranger', () => {
+  it('refuses a foreign absolute path', () => {
     expect(() => resolveInProject(ROOT, resolve('/etc/passwd'))).toThrow(
       PathOutsideProjectError,
     );
   });
 
-  it('refuse un répertoire frère au préfixe commun', () => {
-    // /projets/bonaparte-secret commence par la racine en tant que chaîne :
-    // le test de préfixe naïf laisserait passer.
+  it('refuses a sibling directory with a common prefix', () => {
+    // /projects/bonaparte-secret starts with the root as a string: a
+    // naive prefix test would let it through.
     expect(() => resolveInProject(ROOT, `${ROOT}-secret/a.ts`)).toThrow(
       PathOutsideProjectError,
     );
   });
 
-  it('le message d’erreur nomme le chemin demandé', () => {
+  it('the error message names the requested path', () => {
     expect(() => resolveInProject(ROOT, '../x')).toThrow(/\.\.\/x/);
   });
 });
 
 describe('displayPath', () => {
-  it('rend un chemin relatif en séparateurs POSIX', () => {
+  it('renders a relative path with POSIX separators', () => {
     expect(displayPath(ROOT, join(ROOT, 'src', 'a.ts'))).toBe('src/a.ts');
   });
 
-  it('rend « . » pour la racine', () => {
+  it('renders "." for the root', () => {
     expect(displayPath(ROOT, ROOT)).toBe('.');
   });
 
-  it('laisse un chemin hors projet tel quel (diagnostic)', () => {
-    const outside = resolve('/ailleurs/a.ts');
-    expect(displayPath(ROOT, outside).split(sep).join('/')).toContain('ailleurs');
+  it('leaves an out-of-project path as-is (diagnostic)', () => {
+    const outside = resolve('/elsewhere/a.ts');
+    expect(displayPath(ROOT, outside).split(sep).join('/')).toContain('elsewhere');
   });
 });
 
-// ─── Périmètre à N racines ────────────────────────────────────────────────
+// ─── N-root perimeter ───────────────────────────────────────────────────
 
-const A = resolve('/projets/alpha');
-const B = resolve('/projets/beta');
+const A = resolve('/projects/alpha');
+const B = resolve('/projects/beta');
 
 describe('resolveInPerimeter', () => {
-  describe('sans racine — le projet est le périmètre, pas la condition', () => {
-    it('résout un relatif depuis le dossier personnel', () => {
+  describe('with no root — the project is the perimeter, not the condition', () => {
+    it('resolves a relative path from the home folder', () => {
       const got = resolveInPerimeter([], 'notes.txt');
       expect(got).toBe(resolve(homedir(), 'notes.txt'));
     });
 
-    it('laisse passer un absolu quelconque : rien n’est confiné', () => {
+    it('lets any absolute path through: nothing is confined', () => {
       const ailleurs = resolve('/tmp/ailleurs/x.txt');
       expect(resolveInPerimeter([], ailleurs)).toBe(ailleurs);
     });
   });
 
-  describe('une seule racine — comportement identique à avant', () => {
-    it('résout un relatif dans la racine', () => {
+  describe('a single root — behavior identical to before', () => {
+    it('resolves a relative path inside the root', () => {
       expect(resolveInPerimeter([A], 'src/a.ts')).toBe(join(A, 'src/a.ts'));
     });
 
-    it('refuse une évasion par ..', () => {
+    it('refuses an escape via ..', () => {
       expect(() => resolveInPerimeter([A], '../secrets.txt')).toThrow(
         PathOutsidePerimeterError,
       );
     });
 
-    it('refuse un absolu étranger', () => {
+    it('refuses a foreign absolute path', () => {
       expect(() => resolveInPerimeter([A], B)).toThrow(PathOutsidePerimeterError);
     });
   });
 
-  describe('plusieurs racines', () => {
-    it('résout un relatif contre la PREMIÈRE racine', () => {
+  describe('multiple roots', () => {
+    it('resolves a relative path against the FIRST root', () => {
       expect(resolveInPerimeter([A, B], 'src/a.ts')).toBe(join(A, 'src/a.ts'));
-      // L'ordre est sémantique : inverser change la racine par défaut.
+      // The order is semantic: reversing it changes the default root.
       expect(resolveInPerimeter([B, A], 'src/a.ts')).toBe(join(B, 'src/a.ts'));
     });
 
-    it('accepte un absolu situé dans n’importe quelle racine', () => {
+    it('accepts an absolute path located in any root', () => {
       expect(resolveInPerimeter([A, B], join(B, 'lib/b.ts'))).toBe(join(B, 'lib/b.ts'));
     });
 
-    it('accepte un relatif qui sort de la première mais retombe dans une autre', () => {
-      // Le périmètre est l'UNION des racines : ce qui compte est où le chemin
-      // atterrit, pas par quel détour il y arrive.
+    it('accepts a relative path that leaves the first root but lands in another', () => {
+      // The perimeter is the UNION of the roots: what matters is where the
+      // path lands, not by which detour it gets there.
       const got = resolveInPerimeter([A, B], '../beta/lib/b.ts');
       expect(got).toBe(join(B, 'lib/b.ts'));
     });
 
-    it('refuse ce qui n’atterrit dans aucune racine', () => {
-      expect(() => resolveInPerimeter([A, B], resolve('/projets/gamma/x'))).toThrow(
+    it('refuses what lands in no root', () => {
+      expect(() => resolveInPerimeter([A, B], resolve('/projects/gamma/x'))).toThrow(
         PathOutsidePerimeterError,
       );
     });
 
-    it('le refus NOMME les racines, pour que le modèle se corrige seul', () => {
+    it('the refusal NAMES the roots, so the model can correct itself', () => {
       let message = '';
       try {
-        resolveInPerimeter([A, B], resolve('/projets/gamma/x'));
+        resolveInPerimeter([A, B], resolve('/projects/gamma/x'));
       } catch (error) {
         message = (error as Error).message;
       }
@@ -152,7 +152,7 @@ describe('resolveInPerimeter', () => {
     });
   });
 
-  it('accepte les séparateurs Windows comme POSIX', () => {
+  it('accepts Windows separators as well as POSIX', () => {
     expect(resolveInPerimeter([A], 'src\\a.ts')).toBe(
       resolveInPerimeter([A], 'src/a.ts'),
     );
@@ -160,22 +160,22 @@ describe('resolveInPerimeter', () => {
 });
 
 describe('displayInPerimeter', () => {
-  it('avec une seule racine, reste relatif et sobre', () => {
+  it('with a single root, stays relative and plain', () => {
     expect(displayInPerimeter([A], join(A, 'src/a.ts'))).toBe('src/a.ts');
   });
 
-  it('avec plusieurs racines, préfixe du nom de la racine qui contient', () => {
-    // Sans ce préfixe, deux fichiers « src/a.ts » de deux dépôts seraient
-    // indistinguables dans une sortie de grep.
+  it('with multiple roots, prefixes the name of the containing root', () => {
+    // Without this prefix, two "src/a.ts" files from two repos would be
+    // indistinguishable in grep output.
     expect(displayInPerimeter([A, B], join(B, 'src/a.ts'))).toBe('beta/src/a.ts');
   });
 
-  it('hors périmètre, rend le chemin absolu plutôt que de mentir', () => {
+  it('outside the perimeter, returns the absolute path rather than lying', () => {
     const ailleurs = resolve('/tmp/x.txt');
     expect(displayInPerimeter([A], ailleurs)).toBe(ailleurs);
   });
 
-  it('sans racine, rend l’absolu', () => {
+  it('with no root, returns the absolute path', () => {
     const p = resolve('/tmp/x.txt');
     expect(displayInPerimeter([], p)).toBe(p);
   });

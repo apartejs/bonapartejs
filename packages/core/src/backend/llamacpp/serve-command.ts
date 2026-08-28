@@ -1,8 +1,8 @@
 /**
- * llama.cpp existe sous deux formes : le binaire historique `llama-server`
- * (les flags directement) et le CLI unifié `llama` (b10xxx+, sous-commande
- * `serve` devant les mêmes flags). Déduit le préfixe d'arguments du nom du
- * binaire.
+ * llama.cpp exists in two forms: the historical `llama-server` binary
+ * (flags directly) and the unified `llama` CLI (b10xxx+, `serve`
+ * subcommand ahead of the same flags). Infers the argument prefix from the
+ * binary's name.
  */
 
 export function detectServeCommandPrefix(binPath: string): string[] {

@@ -4,17 +4,17 @@ import { resolveSettings, type SettingField } from './resolve.js';
 const fields: SettingField[] = [
   {
     key: 'temperature',
-    label: 'Température',
+    label: 'Temperature',
     type: 'number',
     scopes: ['global', 'conversation'],
     default: 0.7,
   },
   {
     key: 'nCtx',
-    label: 'Taille de contexte',
+    label: 'Context size',
     type: 'number',
-    // Un paramètre de LANCEMENT : il entre au manifest KV, donc il ne se
-    // règle pas par conversation.
+    // A LAUNCH parameter: it goes into the KV manifest, so it cannot be
+    // set per conversation.
     scopes: ['global'],
     default: 8192,
   },
@@ -24,7 +24,7 @@ const byKey = (resolved: ReturnType<typeof resolveSettings>, key: string) =>
   resolved.find((setting) => setting.key === key);
 
 describe('resolveSettings', () => {
-  it('sans surcharge, la valeur vient du défaut et le dit', () => {
+  it('with no override, the value comes from the default and says so', () => {
     const resolved = resolveSettings(fields, {}, 'conversation');
     expect(byKey(resolved, 'temperature')).toMatchObject({
       value: 0.7,
@@ -33,12 +33,12 @@ describe('resolveSettings', () => {
     });
   });
 
-  it('le global l’emporte sur le défaut', () => {
+  it('the global setting wins over the default', () => {
     const resolved = resolveSettings(fields, { global: { temperature: 0.3 } }, 'global');
     expect(byKey(resolved, 'temperature')).toMatchObject({ value: 0.3, from: 'global' });
   });
 
-  it('la conversation l’emporte sur le global', () => {
+  it('the conversation setting wins over the global one', () => {
     const resolved = resolveSettings(
       fields,
       { global: { temperature: 0.3 }, conversation: { temperature: 0.9 } },
@@ -51,9 +51,9 @@ describe('resolveSettings', () => {
     });
   });
 
-  it('dit de QUOI la valeur hérite quand elle n’est pas surchargée', () => {
-    // C'est ce qui permet à l'UI d'écrire « hérité du réglage global (0,3) »
-    // au lieu d'afficher un champ dont on ignore d'où il sort.
+  it('says WHAT the value is inherited from when it is not overridden', () => {
+    // This is what lets the UI write "inherited from the global setting
+    // (0.3)" instead of showing a field whose origin is unknown.
     const resolved = resolveSettings(fields, { global: { temperature: 0.3 } }, 'conversation');
     expect(byKey(resolved, 'temperature')).toMatchObject({
       value: 0.3,
@@ -63,7 +63,7 @@ describe('resolveSettings', () => {
     });
   });
 
-  it('n’expose dans une portée que les réglages qui s’y règlent', () => {
+  it('exposes in a scope only the settings that can be set there', () => {
     const conversation = resolveSettings(fields, {}, 'conversation');
     expect(conversation.map((s) => s.key)).toEqual(['temperature']);
 
@@ -71,9 +71,9 @@ describe('resolveSettings', () => {
     expect(global.map((s) => s.key)).toEqual(['temperature', 'nCtx']);
   });
 
-  it('ignore une surcharge de portée interdite plutôt que de l’appliquer', () => {
-    // Une conversation ne peut pas changer nCtx : l'accepter ferait diverger
-    // le manifest KV du serveur réellement lancé.
+  it('ignores an override from a forbidden scope rather than applying it', () => {
+    // A conversation cannot change nCtx: accepting it would make the KV
+    // manifest diverge from the server actually launched.
     const resolved = resolveSettings(
       fields,
       { conversation: { nCtx: 32768 } },
@@ -82,7 +82,7 @@ describe('resolveSettings', () => {
     expect(byKey(resolved, 'nCtx')?.value).toBe(8192);
   });
 
-  it('remet le défaut quand une surcharge vaut undefined', () => {
+  it('falls back to the default when an override is undefined', () => {
     const resolved = resolveSettings(
       fields,
       { global: { temperature: 0.3 }, conversation: { temperature: undefined } },

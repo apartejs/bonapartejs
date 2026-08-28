@@ -1,9 +1,10 @@
 /**
- * Résolution des chemins d'outils, relative au projet ouvert.
+ * Tool path resolution, relative to the open project.
  *
- * Frontière de sécurité : un agent ne sort pas du projet. Tout chemin est
- * résolu puis vérifié comme descendant de la racine — un `..` bien placé ou
- * un chemin absolu étranger est refusé, pas silencieusement corrigé.
+ * Security boundary: an agent does not step outside the project. Every
+ * path is resolved then verified to be a descendant of the root — a
+ * well-placed `..` or a foreign absolute path is refused, not silently
+ * corrected.
  */
 
 import { homedir } from 'node:os';
@@ -14,7 +15,7 @@ export class PathOutsideProjectError extends Error {
     readonly requested: string,
     readonly projectRoot: string,
   ) {
-    // Message destiné au modèle : anglais, comme tout ce qui part sur le fil.
+    // Message intended for the model: English, like everything that goes over the wire.
     super(
       `Path outside the project: ${requested} (root: ${projectRoot}). ` +
         'Tools cannot step outside the open project.',
@@ -25,12 +26,12 @@ export class PathOutsideProjectError extends Error {
 
 export function resolveInProject(projectRoot: string, requested: string): string {
   const root = resolve(projectRoot);
-  // Les modèles écrivent indifféremment des séparateurs POSIX ou Windows.
+  // Models write POSIX or Windows separators interchangeably.
   const normalized = requested.replace(/\\/g, '/');
   const absolute = resolve(root, normalized);
 
-  // `relative` répond à la vraie question — être DANS l'arbre — là où un test
-  // de préfixe de chaîne confondrait « /projet » et « /projet-secret ».
+  // `relative` answers the real question — being INSIDE the tree — where a
+  // string-prefix test would confuse "/project" and "/project-secret".
   const rel = relative(root, absolute);
   const escapes = rel.startsWith('..') || (rel !== '' && isAbsolute(rel));
   if (escapes) throw new PathOutsideProjectError(requested, root);
@@ -43,8 +44,8 @@ export class PathOutsidePerimeterError extends Error {
     readonly requested: string,
     readonly roots: string[],
   ) {
-    // Le message NOMME les racines : c'est ce qui permet au modèle de se
-    // corriger au tour suivant au lieu de retenter le même chemin.
+    // The message NAMES the roots: that's what lets the model correct
+    // itself on the next turn instead of retrying the same path.
     super(
       `Path outside the project perimeter: ${requested}. ` +
         `Allowed roots: ${roots.join(', ')}. ` +
@@ -54,7 +55,7 @@ export class PathOutsidePerimeterError extends Error {
   }
 }
 
-/** Le chemin atterrit-il dans cette racine (vraie descendance, pas préfixe) ? */
+/** Does the path land inside this root (true descendance, not a prefix)? */
 function contains(root: string, absolute: string): boolean {
   const rel = relative(resolve(root), absolute);
   if (rel === '') return true;
@@ -62,24 +63,25 @@ function contains(root: string, absolute: string): boolean {
 }
 
 /**
- * Résout un chemin dans le périmètre d'un projet à N racines.
+ * Resolves a path within the perimeter of an N-root project.
  *
- * Une seule règle, uniforme : on résout — les relatifs contre la PREMIÈRE
- * racine, qui est le défaut annoncé au modèle — puis on vérifie que le résultat
- * atterrit dans l'UNION des racines. Ce qui compte est donc où le chemin
- * arrive, pas par quel détour : un `..` qui retombe dans une autre racine du
- * même projet est légitime.
+ * One single, uniform rule: resolve — relatives against the FIRST root,
+ * which is the default announced to the model — then verify the result
+ * lands within the UNION of the roots. What matters is therefore where
+ * the path ends up, not by which detour: a `..` that lands back in
+ * another root of the same project is legitimate.
  *
- * Sans racine, rien n'est confiné : le projet est le PÉRIMÈTRE des outils, pas
- * leur condition d'existence. Un relatif part alors du dossier personnel.
+ * With no root, nothing is confined: the project is the tools' PERIMETER,
+ * not their condition of existence. A relative then starts from the home
+ * folder.
  */
 export function resolveInPerimeter(roots: string[], requested: string): string {
-  // Les modèles écrivent indifféremment des séparateurs POSIX ou Windows.
+  // Models write POSIX or Windows separators interchangeably.
   const normalized = requested.replace(/\\/g, '/');
 
   if (roots.length === 0) {
-    // `resolve` ignore la base quand l'argument est déjà absolu : les deux cas
-    // se traitent d'un coup.
+    // `resolve` ignores the base when the argument is already absolute:
+    // both cases are handled at once.
     return resolve(homedir(), normalized);
   }
 
@@ -91,12 +93,12 @@ export function resolveInPerimeter(roots: string[], requested: string): string {
 }
 
 /**
- * Chemin affichable dans un résultat d'outil.
+ * Path displayable in a tool result.
  *
- * Dès qu'il y a plusieurs racines, le nom de la racine préfixe le chemin :
- * sans ça, deux `src/a.ts` venant de deux dépôts seraient indistinguables dans
- * une sortie de grep. Hors périmètre, on rend l'absolu plutôt que de fabriquer
- * un relatif trompeur.
+ * As soon as there is more than one root, the root's name prefixes the
+ * path: without that, two `src/a.ts` coming from two repos would be
+ * indistinguishable in grep output. Outside the perimeter, we return the
+ * absolute path rather than fabricate a misleading relative one.
  */
 export function displayInPerimeter(roots: string[], absolute: string): string {
   const target = resolve(absolute);
@@ -108,7 +110,7 @@ export function displayInPerimeter(roots: string[], absolute: string): string {
   return `${basename(resolve(root))}/${inner}`;
 }
 
-/** Chemin affichable dans les résultats d'outils (relatif, séparateurs POSIX). */
+/** Path displayable in tool results (relative, POSIX separators). */
 export function displayPath(projectRoot: string, absolute: string): string {
   const rel = relative(resolve(projectRoot), resolve(absolute));
   if (rel === '') return '.';

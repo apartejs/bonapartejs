@@ -1,8 +1,8 @@
 /**
- * Construction des arguments de lancement de llama-server à partir de la
- * config. Décisions actées : -fa on explicite (jamais auto), types KV
- * symétriques obligatoires, --load-mode (mmap/mlock dépréciés upstream),
- * extraFlags passthrough en dernier.
+ * Builds the llama-server launch arguments from the config. Decisions
+ * locked in: explicit -fa on (never auto), mandatory symmetric KV types,
+ * --load-mode (mmap/mlock deprecated upstream), extraFlags passthrough
+ * last.
  */
 
 export interface LlamaCppLaunchConfig {
@@ -24,8 +24,8 @@ export interface LlamaCppLaunchConfig {
 export function buildLlamaServerArgs(config: LlamaCppLaunchConfig): string[] {
   if (config.cacheTypeK && config.cacheTypeV && config.cacheTypeK !== config.cacheTypeV) {
     throw new Error(
-      `Les types de cache KV doivent être symétriques (K=${config.cacheTypeK}, V=${config.cacheTypeV}) : ` +
-        'un couple asymétrique retombe silencieusement sur un chemin non fusionné bien plus lent.',
+      `KV cache types must be symmetric (K=${config.cacheTypeK}, V=${config.cacheTypeV}): ` +
+        'an asymmetric pair silently falls back to a much slower, unfused path.',
     );
   }
   const cacheType = config.cacheTypeK ?? config.cacheTypeV ?? 'f16';

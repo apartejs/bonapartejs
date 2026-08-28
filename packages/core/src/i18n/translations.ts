@@ -1,6 +1,7 @@
 /**
- * i18n du harness — une locale = un fichier (fr.ts, en.ts), l'interface dans
- * types.ts. Ce module est le point d'entrée stable (harnessT + re-exports).
+ * Harness i18n — one locale = one file (fr.ts, en.ts), the interface lives
+ * in types.ts. This module is the stable entry point (harnessT +
+ * re-exports).
  */
 
 import type { BonaparteLocale } from '@aparte/bonaparte-shared';

@@ -21,10 +21,10 @@ afterEach(async () => {
 });
 
 describe('ConversationStore', () => {
-  it('rattache la conversation à un projet, pas à l’application', async () => {
-    // La conversation référence un PROJET ; c'est le projet qui porte les
-    // racines. Deux conversations sur deux projets différents doivent
-    // coexister sans se marcher dessus.
+  it('attaches the conversation to a project, not to the application', async () => {
+    // The conversation references a PROJECT; it's the project that carries
+    // the roots. Two conversations on two different projects must
+    // coexist without stepping on each other.
     const store = await makeStore();
     await store.create('a', { projectId: 'proj-alpha' });
     await store.create('b', { projectId: 'proj-beta' });
@@ -33,53 +33,53 @@ describe('ConversationStore', () => {
     expect((await store.meta('b')).projectId).toBe('proj-beta');
   });
 
-  it('une conversation sans projet reste licite', async () => {
-    // Invariant acquis : on discute sans dossier, et les outils marchent
-    // quand même — sans confinement.
+  it('a conversation with no project remains valid', async () => {
+    // Established invariant: discussing with no folder still works, and
+    // the tools work too — with no confinement.
     const store = await makeStore();
     await store.create('libre');
     expect((await store.meta('libre')).projectId).toBeUndefined();
   });
 
-  it('setProjectId rattache puis détache après coup', async () => {
+  it('setProjectId attaches then detaches afterward', async () => {
     const store = await makeStore();
     await store.create('c');
 
     await store.setProjectId('c', 'proj-gamma');
     expect((await store.meta('c')).projectId).toBe('proj-gamma');
 
-    // Retirer du projet doit rendre la conversation « sans projet », pas
-    // laisser un identifiant orphelin qui pointerait dans le vide.
+    // Removing from the project must make the conversation "project-less",
+    // not leave an orphaned id pointing at nothing.
     await store.setProjectId('c', undefined);
     expect((await store.meta('c')).projectId).toBeUndefined();
   });
 
-  it('setFrozenRoots retient le périmètre en vigueur au figeage', async () => {
-    // C'est la base du delta : sans lui, réouvrir une conversation croirait
-    // que le périmètre vient d'apparaître et l'annoncerait pour rien.
+  it('setFrozenRoots retains the scope in effect at freeze time', async () => {
+    // This is the basis of the delta: without it, reopening a conversation
+    // would think the scope had just appeared and would announce it for nothing.
     const store = await makeStore();
     await store.create('f');
 
     await store.setFrozenRoots('f', ['/a', '/b']);
     expect((await store.meta('f')).frozenRoots).toEqual(['/a', '/b']);
 
-    // L'ordre est sémantique : il doit être retenu tel quel.
+    // The order is semantic: it must be kept as-is.
     await store.setFrozenRoots('f', ['/b', '/a']);
     expect((await store.meta('f')).frozenRoots).toEqual(['/b', '/a']);
   });
 
-  it('setSetting pose puis retire une surcharge de conversation', async () => {
+  it('setSetting sets then removes a conversation override', async () => {
     const store = await makeStore();
     await store.create('s');
     await store.setSetting('s', 'temperature', 0.2);
     expect((await store.meta('s')).settings).toEqual({ temperature: 0.2 });
 
-    // undefined = revenir à l'héritage, pas stocker un trou.
+    // undefined = revert to inheritance, not store a hole.
     await store.setSetting('s', 'temperature', undefined);
     expect((await store.meta('s')).settings).toEqual({});
   });
 
-  it('setTitle renomme sans toucher au reste', async () => {
+  it('setTitle renames without touching the rest', async () => {
     const store = await makeStore();
     await store.create('d', { title: 'Sans titre', projectId: 'proj-delta' });
     await store.setTitle('d', 'Refonte du parser');
@@ -88,7 +88,7 @@ describe('ConversationStore', () => {
     expect(meta.projectId).toBe('proj-delta');
   });
 
-  it('create puis listMeta expose la conversation', async () => {
+  it('create then listMeta exposes the conversation', async () => {
     const store = await makeStore();
     await store.create('conv-1', { title: 'Ma conversation' });
     const metas = await store.listMeta();
@@ -98,7 +98,7 @@ describe('ConversationStore', () => {
     expect(await store.exists('fantome')).toBe(false);
   });
 
-  it('appendEvent + loadEvents restituent le log dans l’ordre', async () => {
+  it('appendEvent + loadEvents return the log in order', async () => {
     const store = await makeStore();
     await store.create('conv-1');
     await store.appendEvent('conv-1', {
@@ -117,12 +117,12 @@ describe('ConversationStore', () => {
     expect(events[1]).toMatchObject({ type: 'assistant' });
   });
 
-  it('loadEvents sur une conversation inconnue lève une erreur claire', async () => {
+  it('loadEvents on an unknown conversation throws a clear error', async () => {
     const store = await makeStore();
     await expect(store.loadEvents('fantome')).rejects.toThrow(/fantome/);
   });
 
-  it('épingle le modèle ET la taille de contexte à la création', async () => {
+  it('pins the model AND the context size at creation', async () => {
     const store = await makeStore();
     await store.create('conv-1', { modelPath: 'D:\\models\\qwen3.gguf', nCtx: 32768 });
     const meta = await store.meta('conv-1');
@@ -130,7 +130,7 @@ describe('ConversationStore', () => {
     expect(meta.nCtx).toBe(32768);
   });
 
-  it('setModel pose modèle + nCtx sur une conversation qui n’en avait pas', async () => {
+  it('setModel sets model + nCtx on a conversation that had none', async () => {
     const store = await makeStore();
     await store.create('conv-1');
     expect((await store.meta('conv-1')).modelPath).toBeUndefined();
@@ -140,23 +140,23 @@ describe('ConversationStore', () => {
     expect(meta.nCtx).toBe(16384);
   });
 
-  it('fige l’état backend et l’inventaire d’outils', async () => {
+  it('freezes the backend state and the tool inventory', async () => {
     const store = await makeStore();
     await store.create('conv-1');
-    await store.freezeBackendState('conv-1', { systemPrompt: 'SYS gelé' }, [
+    await store.freezeBackendState('conv-1', { systemPrompt: 'SYS frozen' }, [
       'read_file',
     ]);
     const meta = await store.meta('conv-1');
-    expect(meta.backendState).toEqual({ systemPrompt: 'SYS gelé' });
+    expect(meta.backendState).toEqual({ systemPrompt: 'SYS frozen' });
     expect(meta.toolNames).toEqual(['read_file']);
   });
 
-  it('meta lève une erreur claire pour une conversation inconnue', async () => {
+  it('meta throws a clear error for an unknown conversation', async () => {
     const store = await makeStore();
     await expect(store.meta('fantome')).rejects.toThrow(/fantome/);
   });
 
-  it('appendEvent met à jour updatedAt', async () => {
+  it('appendEvent updates updatedAt', async () => {
     const store = await makeStore();
     const created = await store.create('conv-1');
     await new Promise((r) => setTimeout(r, 10));
@@ -171,7 +171,7 @@ describe('ConversationStore', () => {
 });
 
 describe('rebuildTranscript', () => {
-  it('restitue le transcript sémantique depuis les événements persistés', () => {
+  it('restores the semantic transcript from the persisted events', () => {
     const transcript = rebuildTranscript([
       { type: 'user', text: 'Q', at: 'x' },
       {

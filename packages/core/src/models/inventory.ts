@@ -1,8 +1,8 @@
 /**
- * Inventaire des modèles GGUF — le modèle n'est PAS un paramètre du backend :
- * c'est une propriété de la conversation, choisie depuis cet inventaire.
- * Scan des emplacements connus (LM Studio, cache Hugging Face) + répertoires
- * custom ; le scan disque profond opt-in viendra plus tard (plan v1).
+ * GGUF model inventory — the model is NOT a backend parameter: it's a
+ * property of the conversation, chosen from this inventory. Scans known
+ * locations (LM Studio, Hugging Face cache) + custom directories; deep
+ * opt-in disk scanning will come later (v1 plan).
  */
 
 import { readdir, stat } from 'node:fs/promises';
@@ -12,9 +12,9 @@ import { join, resolve } from 'node:path';
 export type ModelSource = 'lmstudio' | 'hf-cache' | 'custom' | 'manual';
 
 export interface DiscoveredModel {
-  /** Chemin absolu du fichier .gguf. */
+  /** Absolute path of the .gguf file. */
   path: string;
-  /** Nom lisible (nom de fichier sans extension). */
+  /** Readable name (filename without extension). */
   name: string;
   sizeBytes: number;
   modifiedAt: string;
@@ -26,7 +26,7 @@ export interface ScanRoot {
   source: ModelSource;
 }
 
-/** Emplacements connus, selon la plateforme (les absents sont ignorés au scan). */
+/** Known locations, depending on the platform (absent ones are ignored when scanning). */
 export function defaultScanRoots(): ScanRoot[] {
   const home = homedir();
   return [
@@ -37,7 +37,7 @@ export function defaultScanRoots(): ScanRoot[] {
 }
 
 export interface ScanOptions {
-  /** Profondeur max de récursion (défaut 4). */
+  /** Max recursion depth (default 4). */
   maxDepth?: number;
 }
 
@@ -53,7 +53,7 @@ export async function scanModels(
     try {
       entries = await readdir(dir, { withFileTypes: true });
     } catch {
-      return; // racine absente ou illisible : ignorée
+      return; // root absent or unreadable: ignored
     }
     for (const entry of entries) {
       const path = join(dir, entry.name);
@@ -74,7 +74,7 @@ export async function scanModels(
           source,
         });
       } catch {
-        // fichier disparu entre readdir et stat : ignoré
+        // file disappeared between readdir and stat: ignored
       }
     }
   }

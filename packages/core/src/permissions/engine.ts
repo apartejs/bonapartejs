@@ -1,13 +1,13 @@
 /**
- * Moteur de permissions — les 4 modes de jeu.
+ * Permission engine — the 4 play modes.
  *
- * Lecture     : l'agent lit et répond, aucune écriture ni commande.
- * Répétition  : tout ce qui touche au système demande l'accord (défaut).
- * Plume       : l'agent tient la plume — éditions automatiques, commandes non.
- * Impro       : tout passe.
+ * Reading    : the agent reads and replies, no writes and no commands.
+ * Rehearsal  : anything that touches the system asks for agreement (default).
+ * Quill      : the agent holds the pen — automatic edits, but no commands.
+ * Improv     : anything goes.
  *
- * Le mode est un PLAFOND : une règle mémorisée peut transformer un « demander »
- * en « autoriser », jamais lever un refus du mode.
+ * The mode is a CEILING: a remembered rule can turn an "ask" into an
+ * "allow", but it can never lift a denial coming from the mode.
  */
 
 import type { ToolEffect } from '../tools/types.js';
@@ -23,17 +23,17 @@ export const PLAY_MODES: readonly PlayMode[] = [
 
 export type PermissionDecision = 'allow' | 'ask' | 'deny';
 
-/** Règle mémorisée pour un projet (« toujours autoriser ceci »). */
+/** Remembered rule for a project ("always allow this"). */
 export interface AllowRule {
   tool: string;
-  /** Pour les outils d'exécution : préfixe de commande autorisé. */
+  /** For execution tools: allowed command prefix. */
   commandPrefix?: string;
 }
 
 export interface PermissionQuery {
   tool: string;
   effect: ToolEffect;
-  /** Commande complète, pour les outils d'exécution. */
+  /** Full command, for execution tools. */
   command?: string;
 }
 
@@ -67,7 +67,7 @@ export class PermissionEngine {
 
   evaluate(query: PermissionQuery): PermissionDecision {
     const ceiling = MODE_MATRIX[this.mode][query.effect];
-    // Le mode est un plafond : une règle ne peut qu'assouplir un « ask ».
+    // The mode is a ceiling: a rule can only loosen an "ask".
     if (ceiling !== 'ask') return ceiling;
     return this.rules.some((rule) => matches(rule, query)) ? 'allow' : 'ask';
   }
@@ -89,7 +89,7 @@ function matches(rule: AllowRule, query: PermissionQuery): boolean {
   if (rule.commandPrefix === undefined) return true;
   const command = query.command ?? '';
   if (!command.startsWith(rule.commandPrefix)) return false;
-  // Frontière de mot : « pnpm test » ne doit pas autoriser « pnpm testament ».
+  // Word boundary: "pnpm test" must not authorize "pnpm testament".
   const next = command.charAt(rule.commandPrefix.length);
   return next === '' || /\s/.test(next);
 }

@@ -1,7 +1,7 @@
 /**
- * Persistance des conversations — log JSONL append-only + méta, un dossier
- * par conversation. Le log enregistre TOUT ce qu'il faut pour reconstruire
- * un PromptLog octet-identique (dont le flag thinking de chaque tour).
+ * Conversation persistence — append-only JSONL log + meta, one folder per
+ * conversation. The log records EVERYTHING needed to reconstruct a
+ * byte-identical PromptLog (including the thinking flag of each turn).
  */
 
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -13,37 +13,37 @@ export interface ConversationMeta {
   title: string;
   createdAt: string;
   updatedAt: string;
-  /** Modèle épinglé à la conversation (chemin GGUF) — pas au backend. */
+  /** Model pinned to the conversation (GGUF path) — not to the backend. */
   modelPath?: string;
-  /** Taille de contexte épinglée avec le modèle (entre au manifest KV). */
+  /** Context size pinned with the model (goes into the KV manifest). */
   nCtx?: number;
   /**
-   * État opaque du backend pour cette conversation (llama.cpp y met son
-   * prompt système figé). Le reconstruire le ferait varier avec l'inventaire
-   * et casserait le préfixe du cache KV.
+   * Opaque backend state for this conversation (llama.cpp puts its frozen
+   * system prompt there). Rebuilding it would make it vary with the
+   * inventory and would break the KV cache prefix.
    */
   backendState?: unknown;
-  /** Inventaire d'outils au moment du figeage (base des deltas). */
+  /** Tool inventory at freeze time (basis for the deltas). */
   toolNames?: string[];
   /**
-   * Projet auquel cette conversation appartient — absent = « sans projet »,
-   * un cas légitime (on discute sans dossier, invariant acquis).
+   * Project this conversation belongs to — absent = "no project", a
+   * legitimate case (discussing with no folder, an established invariant).
    *
-   * Le PÉRIMÈTRE (les racines) appartient au projet, pas à la conversation :
-   * un seul endroit à éditer, un seul endroit pour les permissions et les
-   * consignes. Ce que la conversation possède, c'est l'EXÉCUTION — modèle,
-   * échantillonnage, mode de jeu.
+   * The SCOPE (the roots) belongs to the project, not the conversation:
+   * one single place to edit, one single place for permissions and
+   * instructions. What the conversation owns is the EXECUTION — model,
+   * sampling, play mode.
    */
   projectId?: string;
   /**
-   * Périmètre en vigueur au moment où le prompt système a été FIGÉ. Comparé au
-   * périmètre courant pour savoir s'il faut annoncer un changement de décor —
-   * l'ORDRE compte, puisqu'il désigne la racine par défaut.
+   * Scope in effect at the moment the system prompt was FROZEN. Compared
+   * against the current scope to know whether a change of scenery needs
+   * announcing — the ORDER matters, since it designates the default root.
    */
   frozenRoots?: string[];
   /**
-   * Surcharges de réglages de CETTE conversation — échantillonnage seulement
-   * (les paramètres de lancement entrent au manifest KV et restent globaux).
+   * Settings overrides for THIS conversation — sampling only (launch
+   * parameters go into the KV manifest and remain global).
    */
   settings?: Record<string, unknown>;
 }
@@ -56,9 +56,9 @@ export interface CreateConversationOptions {
 }
 
 /**
- * Log persisté. Les entrées assistant et résultats d'outils stockent
- * l'entrée de transcript telle quelle (verbatim du fournisseur compris) :
- * c'est ce qui permet de rejouer un rendu octet-identique.
+ * Persisted log. Assistant entries and tool results store the transcript
+ * entry as-is (including the provider's verbatim text): that's what makes
+ * it possible to replay a byte-identical render.
  */
 export type ConversationEvent =
   | { type: 'user'; text: string; at: string }
@@ -72,7 +72,7 @@ export type ConversationEvent =
       entry: Extract<TranscriptEntry, { role: 'tool_results' }>;
       at: string;
     }
-  /** Message de service (delta d'inventaire) : dans le prompt, pas dans l'UI. */
+  /** Service message (inventory delta): in the prompt, not in the UI. */
   | { type: 'service'; text: string; at: string };
 
 export class ConversationStore {
@@ -114,11 +114,11 @@ export class ConversationStore {
     try {
       return await this.readMeta(id);
     } catch {
-      throw new Error(`Conversation inconnue : ${id}`);
+      throw new Error(`Unknown conversation: ${id}`);
     }
   }
 
-  /** Rattache la conversation à un projet, ou la détache avec `undefined`. */
+  /** Attaches the conversation to a project, or detaches it with `undefined`. */
   async setProjectId(id: string, projectId: string | undefined): Promise<void> {
     const meta = await this.meta(id);
     if (projectId === undefined) delete meta.projectId;
@@ -127,7 +127,7 @@ export class ConversationStore {
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }
 
-  /** Pose (ou retire, avec `undefined`) une surcharge de réglage. */
+  /** Sets (or removes, with `undefined`) a settings override. */
   async setSetting(id: string, key: string, value: unknown): Promise<void> {
     const meta = await this.meta(id);
     const settings = { ...(meta.settings ?? {}) };
@@ -138,7 +138,7 @@ export class ConversationStore {
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
   }
 
-  /** Renomme la conversation (le reste de la méta est préservé). */
+  /** Renames the conversation (the rest of the meta is preserved). */
   async setTitle(id: string, title: string): Promise<void> {
     const meta = await this.meta(id);
     meta.title = title;
@@ -153,7 +153,7 @@ export class ConversationStore {
     await this.writeMeta(meta);
   }
 
-  /** Fige l'état backend et l'inventaire d'outils de la conversation. */
+  /** Freezes the backend state and the tool inventory of the conversation. */
   async freezeBackendState(
     id: string,
     backendState: unknown,
@@ -165,14 +165,14 @@ export class ConversationStore {
     await this.writeMeta(meta);
   }
 
-  /** Mémorise le projet en vigueur au figeage (ou après annonce du delta). */
+  /** Remembers the project in effect at freeze time (or after announcing the delta). */
   async setFrozenRoots(id: string, roots: string[]): Promise<void> {
     const meta = await this.meta(id);
     meta.frozenRoots = roots;
     await this.writeMeta(meta);
   }
 
-  /** Met à jour l'inventaire de référence après annonce d'un delta. */
+  /** Updates the reference inventory after announcing a delta. */
   async setFrozenTools(id: string, toolNames: string[]): Promise<void> {
     const meta = await this.meta(id);
     meta.toolNames = [...toolNames];
@@ -209,7 +209,7 @@ export class ConversationStore {
     try {
       raw = await readFile(this.logPath(id), 'utf8');
     } catch {
-      throw new Error(`Conversation inconnue : ${id}`);
+      throw new Error(`Unknown conversation: ${id}`);
     }
     return raw
       .split('\n')
@@ -218,8 +218,8 @@ export class ConversationStore {
   }
 
   /**
-   * Supprime definitivement une conversation : log, meta et manifest.
-   * L'etat KV, lui, appartient au KvStore — l'appelant l'oublie separement.
+   * Permanently deletes a conversation: log, meta, and manifest.
+   * The KV state itself belongs to the KvStore — the caller forgets it separately.
    */
   async remove(id: string): Promise<void> {
     await rm(this.convDir(id), { recursive: true, force: true });
@@ -237,7 +237,7 @@ export class ConversationStore {
       try {
         metas.push(await this.readMeta(id));
       } catch {
-        // dossier étranger ou méta corrompue : ignoré du listing
+        // foreign folder or corrupted meta: ignored from the listing
       }
     }
     return metas.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -245,9 +245,9 @@ export class ConversationStore {
 }
 
 /**
- * Reconstruit le transcript sémantique depuis les événements persistés.
- * C'est LUI que la boucle et les backends consomment — chaque backend en
- * dérive ensuite sa propre représentation.
+ * Rebuilds the semantic transcript from the persisted events. This is
+ * what the loop and the backends consume — each backend then derives its
+ * own representation from it.
  */
 export function rebuildTranscript(
   events: ConversationEvent[],

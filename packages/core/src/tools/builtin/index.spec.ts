@@ -19,9 +19,8 @@ async function project(files: Record<string, string> = {}): Promise<string> {
 }
 
 afterEach(async () => {
-  // Sous Windows, un process tué (test de timeout) garde son cwd verrouillé
-  // quelques instants : on réessaie, et un échec de ménage ne doit jamais
-  // faire tomber un test.
+  // On Windows, a killed process (timeout test) keeps its cwd locked for
+  // a few moments: we retry, and a cleanup failure must never fail a test.
   await Promise.all(
     roots.map((r) =>
       rm(r, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch(
@@ -42,12 +41,12 @@ async function call(
   projectRoot: string,
 ): Promise<ToolResult> {
   const tool = builtinTools().find((t) => t.def.name === name);
-  if (!tool) throw new Error(`outil absent du kit : ${name}`);
+  if (!tool) throw new Error(`tool missing from the kit: ${name}`);
   return tool.handler(args, ctx(projectRoot));
 }
 
-describe('kit d’outils', () => {
-  it('expose les outils attendus avec un effet déclaré', () => {
+describe('tool kit', () => {
+  it('exposes the expected tools with a declared effect', () => {
     const byName = new Map(builtinTools().map((t) => [t.def.name, t.def]));
     expect([...byName.keys()].sort()).toEqual([
       'edit_file',
@@ -63,7 +62,7 @@ describe('kit d’outils', () => {
     expect(byName.get('run_shell')!.effect).toBe('execute');
   });
 
-  it('chaque outil décrit ses arguments en JSON Schema objet', () => {
+  it('each tool describes its arguments as an object JSON Schema', () => {
     for (const { def } of builtinTools()) {
       expect(def.inputSchema['type']).toBe('object');
       expect(def.description.length).toBeGreaterThan(10);
@@ -72,36 +71,36 @@ describe('kit d’outils', () => {
 });
 
 describe('read_file', () => {
-  it('lit un fichier du projet', async () => {
+  it('reads a file from the project', async () => {
     const root = await project({ 'src/a.ts': 'const a = 1;' });
     const res = await call('read_file', { path: 'src/a.ts' }, root);
     expect(res.ok).toBe(true);
     expect(res.content).toContain('const a = 1;');
   });
 
-  it('signale un fichier absent sans lever', async () => {
+  it('reports a missing file without throwing', async () => {
     const root = await project();
     const res = await call('read_file', { path: 'fantome.ts' }, root);
     expect(res.ok).toBe(false);
     expect(res.content).toMatch(/fantome\.ts/);
   });
 
-  it('refuse de sortir du projet, proprement', async () => {
+  it('cleanly refuses to leave the project', async () => {
     const root = await project();
     const res = await call('read_file', { path: '../secrets.txt' }, root);
     expect(res.ok).toBe(false);
     expect(res.content).toMatch(/project/i);
   });
 
-  it('tronque un fichier démesuré en le signalant', async () => {
-    const root = await project({ 'gros.txt': 'x'.repeat(MAX_TOOL_OUTPUT_CHARS + 500) });
-    const res = await call('read_file', { path: 'gros.txt' }, root);
+  it('truncates an oversized file while flagging it', async () => {
+    const root = await project({ 'big.txt': 'x'.repeat(MAX_TOOL_OUTPUT_CHARS + 500) });
+    const res = await call('read_file', { path: 'big.txt' }, root);
     expect(res.ok).toBe(true);
     expect(res.content.length).toBeLessThan(MAX_TOOL_OUTPUT_CHARS + 300);
     expect(res.content).toMatch(/truncated/i);
   });
 
-  it('lit une tranche avec offset et limit', async () => {
+  it('reads a slice with offset and limit', async () => {
     const root = await project({ 'l.txt': 'l1\nl2\nl3\nl4\nl5' });
     const res = await call('read_file', { path: 'l.txt', offset: 2, limit: 2 }, root);
     expect(res.content).toContain('l2');
@@ -111,34 +110,34 @@ describe('read_file', () => {
 });
 
 describe('write_file', () => {
-  it('écrit et crée les dossiers manquants', async () => {
+  it('writes and creates missing directories', async () => {
     const root = await project();
     const res = await call(
       'write_file',
-      { path: 'a/b/c.txt', content: 'coucou' },
+      { path: 'a/b/c.txt', content: 'hi' },
       root,
     );
     expect(res.ok).toBe(true);
-    expect(await readFile(join(root, 'a/b/c.txt'), 'utf8')).toBe('coucou');
+    expect(await readFile(join(root, 'a/b/c.txt'), 'utf8')).toBe('hi');
   });
 
-  it('écrase un fichier existant', async () => {
-    const root = await project({ 'a.txt': 'avant' });
-    await call('write_file', { path: 'a.txt', content: 'après' }, root);
-    expect(await readFile(join(root, 'a.txt'), 'utf8')).toBe('après');
+  it('overwrites an existing file', async () => {
+    const root = await project({ 'a.txt': 'before' });
+    await call('write_file', { path: 'a.txt', content: 'after' }, root);
+    expect(await readFile(join(root, 'a.txt'), 'utf8')).toBe('after');
   });
 
-  it('refuse d’écrire hors du projet', async () => {
+  it('refuses to write outside the project', async () => {
     const root = await project();
     const res = await call(
       'write_file',
-      { path: '../evasion.txt', content: 'x' },
+      { path: '../escape.txt', content: 'x' },
       root,
     );
     expect(res.ok).toBe(false);
   });
 
-  it('exige un contenu de type chaîne', async () => {
+  it('requires string-typed content', async () => {
     const root = await project();
     const res = await call('write_file', { path: 'a.txt', content: 42 }, root);
     expect(res.ok).toBe(false);
@@ -147,7 +146,7 @@ describe('write_file', () => {
 });
 
 describe('edit_file', () => {
-  it('remplace une occurrence unique', async () => {
+  it('replaces a unique occurrence', async () => {
     const root = await project({ 'a.ts': 'let x = 1;\nlet y = 2;' });
     const res = await call(
       'edit_file',
@@ -158,18 +157,18 @@ describe('edit_file', () => {
     expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('const x = 1;\nlet y = 2;');
   });
 
-  it('refuse si le motif est absent', async () => {
+  it('refuses if the pattern is absent', async () => {
     const root = await project({ 'a.ts': 'rien' });
     const res = await call(
       'edit_file',
-      { path: 'a.ts', old_string: 'introuvable', new_string: 'x' },
+      { path: 'a.ts', old_string: 'missing', new_string: 'x' },
       root,
     );
     expect(res.ok).toBe(false);
     expect(res.content).toMatch(/not found|no occurrence/i);
   });
 
-  it('refuse si le motif est ambigu (plusieurs occurrences)', async () => {
+  it('refuses if the pattern is ambiguous (multiple occurrences)', async () => {
     const root = await project({ 'a.ts': 'dup\ndup' });
     const res = await call(
       'edit_file',
@@ -178,13 +177,13 @@ describe('edit_file', () => {
     );
     expect(res.ok).toBe(false);
     expect(res.content).toMatch(/2/);
-    // Le fichier ne doit pas avoir bougé.
+    // The file must not have moved.
     expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('dup\ndup');
   });
 });
 
 describe('list_dir', () => {
-  it('liste le contenu en distinguant les dossiers', async () => {
+  it('lists the contents, distinguishing directories', async () => {
     const root = await project({ 'src/a.ts': '', 'README.md': '' });
     const res = await call('list_dir', {}, root);
     expect(res.ok).toBe(true);
@@ -192,39 +191,39 @@ describe('list_dir', () => {
     expect(res.content).toContain('README.md');
   });
 
-  it('signale un dossier absent', async () => {
+  it('reports a missing directory', async () => {
     const root = await project();
-    const res = await call('list_dir', { path: 'nulle-part' }, root);
+    const res = await call('list_dir', { path: 'nowhere' }, root);
     expect(res.ok).toBe(false);
   });
 });
 
 describe('grep_files', () => {
-  it('trouve les lignes correspondantes avec fichier et numéro', async () => {
+  it('finds matching lines with file and line number', async () => {
     const root = await project({
-      'a.ts': 'const cible = 1;\nautre',
+      'a.ts': 'const target = 1;\nother',
       'b.ts': 'rien',
     });
-    const res = await call('grep_files', { pattern: 'cible' }, root);
+    const res = await call('grep_files', { pattern: 'target' }, root);
     expect(res.ok).toBe(true);
     expect(res.content).toMatch(/a\.ts:1/);
     expect(res.content).not.toContain('b.ts');
   });
 
-  it('accepte une expression régulière', async () => {
+  it('accepts a regular expression', async () => {
     const root = await project({ 'a.ts': 'foo123bar' });
     const res = await call('grep_files', { pattern: 'foo\\d+bar' }, root);
     expect(res.ok).toBe(true);
     expect(res.content).toContain('a.ts');
   });
 
-  it('signale une regex invalide sans lever', async () => {
+  it('reports an invalid regex without throwing', async () => {
     const root = await project({ 'a.ts': 'x' });
     const res = await call('grep_files', { pattern: '([' }, root);
     expect(res.ok).toBe(false);
   });
 
-  it('dit clairement quand rien ne correspond', async () => {
+  it('clearly states when nothing matches', async () => {
     const root = await project({ 'a.ts': 'x' });
     const res = await call('grep_files', { pattern: 'zzz' }, root);
     expect(res.ok).toBe(true);
@@ -233,28 +232,28 @@ describe('grep_files', () => {
 });
 
 describe('run_shell', () => {
-  it('exécute une commande et capture sa sortie', async () => {
+  it('executes a command and captures its output', async () => {
     const root = await project();
     const res = await call('run_shell', { command: 'echo bonaparte' }, root);
     expect(res.ok).toBe(true);
     expect(res.content).toContain('bonaparte');
   });
 
-  it('rapporte un code de sortie non nul sans lever', async () => {
+  it('reports a non-zero exit code without throwing', async () => {
     const root = await project();
     const res = await call('run_shell', { command: 'exit 3' }, root);
     expect(res.ok).toBe(false);
     expect(res.content).toMatch(/3/);
   });
 
-  it('s’exécute à la racine du projet', async () => {
-    const root = await project({ 'marqueur.txt': '' });
+  it('executes at the project root', async () => {
+    const root = await project({ 'marker.txt': '' });
     const command = process.platform === 'win32' ? 'dir /b' : 'ls';
     const res = await call('run_shell', { command }, root);
-    expect(res.content).toContain('marqueur.txt');
+    expect(res.content).toContain('marker.txt');
   });
 
-  it('interrompt une commande qui dépasse le délai', async () => {
+  it('interrupts a command that exceeds the deadline', async () => {
     const root = await project();
     const command =
       process.platform === 'win32'
@@ -265,18 +264,19 @@ describe('run_shell', () => {
     expect(res.content).toMatch(/timeout/i);
   }, 15_000);
 
-  it('exige une commande non vide', async () => {
+  it('requires a non-empty command', async () => {
     const root = await project();
     const res = await call('run_shell', { command: '   ' }, root);
     expect(res.ok).toBe(false);
   });
 });
 
-describe('sans projet ouvert', () => {
-  it('les outils existent quand même et lisent un chemin absolu', async () => {
-    // Le projet est le PÉRIMÈTRE des outils, pas leur condition d'existence :
-    // discuter sans dossier ne doit pas priver l'agent de savoir lire.
-    const dir = await project({ 'note.txt': 'contenu hors projet' });
+describe('with no project open', () => {
+  it('the tools still exist and can read an absolute path', async () => {
+    // The project is the tools' PERIMETER, not their condition of
+    // existence: discussing with no folder must not deprive the agent of
+    // the ability to read.
+    const dir = await project({ 'note.txt': 'content outside the project' });
     const file = join(dir, 'note.txt');
 
     const read = builtinTools().find((t) => t.def.name === 'read_file')!;
@@ -286,6 +286,6 @@ describe('sans projet ouvert', () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.content).toContain('contenu hors projet');
+    expect(result.content).toContain('content outside the project');
   });
 });

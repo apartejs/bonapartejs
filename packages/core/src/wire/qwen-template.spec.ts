@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { PromptLog, renderSystem, renderUser } from './qwen-template.js';
 
-describe('rendus ChatML élémentaires', () => {
-  it('renderSystem produit le bloc exact', () => {
+describe('basic ChatML renders', () => {
+  it('renderSystem produces the exact block', () => {
     expect(renderSystem('Tu es bonaparte.')).toBe(
       '<|im_start|>system\nTu es bonaparte.<|im_end|>\n',
     );
   });
 
-  it('renderUser produit le bloc exact', () => {
+  it('renderUser produces the exact block', () => {
     expect(renderUser('Salut !')).toBe('<|im_start|>user\nSalut !<|im_end|>\n');
   });
 });
 
-describe('PromptLog — append-only, octet-identique', () => {
-  it('premier tour (thinking actif) : prompt exact', () => {
+describe('PromptLog — append-only, byte-identical', () => {
+  it('first turn (thinking active): exact prompt', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Bonjour');
     const prompt = log.beginAssistantTurn({ thinking: true });
@@ -25,7 +25,7 @@ describe('PromptLog — append-only, octet-identique', () => {
     );
   });
 
-  it('thinking désactivé : le suffixe force le bloc think vide', () => {
+  it('thinking disabled: the suffix forces an empty think block', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Bonjour');
     const prompt = log.beginAssistantTurn({ thinking: false });
@@ -34,13 +34,13 @@ describe('PromptLog — append-only, octet-identique', () => {
     );
   });
 
-  it('aucun BOS applicatif : le prompt commence par <|im_start|>system', () => {
+  it('no application-level BOS: the prompt starts with <|im_start|>system', () => {
     const log = new PromptLog('SYS');
     log.appendUser('x');
     expect(log.beginAssistantTurn({ thinking: true }).startsWith('<|im_start|>system')).toBe(true);
   });
 
-  it('le prompt du tour suivant étend octet-pour-octet le précédent + génération', () => {
+  it('the next turn’s prompt extends the previous one byte-for-byte + generation', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Question 1');
     const p1 = log.beginAssistantTurn({ thinking: true });
@@ -53,7 +53,7 @@ describe('PromptLog — append-only, octet-identique', () => {
     expect(p2.startsWith(p1 + raw + '<|im_end|>\n')).toBe(true);
   });
 
-  it('les blocs <think> générés restent verbatim dans l’historique gelé', () => {
+  it('generated <think> blocks stay verbatim in the frozen history', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Q');
     log.beginAssistantTurn({ thinking: true });
@@ -61,7 +61,7 @@ describe('PromptLog — append-only, octet-identique', () => {
     expect(log.frozen).toContain('<think>raisonnement secret</think>Réponse');
   });
 
-  it('basculer thinking entre les tours préserve la propriété de préfixe', () => {
+  it('toggling thinking between turns preserves the prefix property', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Q1');
     const p1 = log.beginAssistantTurn({ thinking: false });
@@ -71,8 +71,8 @@ describe('PromptLog — append-only, octet-identique', () => {
     expect(p2.startsWith(p1 + 'R1' + '<|im_end|>\n')).toBe(true);
   });
 
-  it('PROPRIÉTÉ : sur 30 tours pseudo-aléatoires, chaque prompt est un préfixe strict du suivant', () => {
-    // LCG déterministe — pas de Math.random pour un test rejouable.
+  it('PROPERTY: over 30 pseudo-random turns, each prompt is a strict prefix of the next', () => {
+    // Deterministic LCG — no Math.random, so the test is replayable.
     let seed = 42;
     const rand = (): number => {
       seed = (seed * 1103515245 + 12345) % 2 ** 31;
@@ -102,22 +102,22 @@ describe('PromptLog — append-only, octet-identique', () => {
     }
   });
 
-  it('protège l’invariant : beginAssistantTurn deux fois sans complete ⇒ erreur', () => {
+  it('protects the invariant: beginAssistantTurn twice without complete ⇒ error', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Q');
     log.beginAssistantTurn({ thinking: true });
-    expect(() => log.beginAssistantTurn({ thinking: true })).toThrow(/tour/);
+    expect(() => log.beginAssistantTurn({ thinking: true })).toThrow(/turn/);
   });
 
-  it('protège l’invariant : complete sans begin ⇒ erreur', () => {
+  it('protects the invariant: complete without begin ⇒ error', () => {
     const log = new PromptLog('SYS');
-    expect(() => log.completeAssistantTurn('R')).toThrow(/tour/);
+    expect(() => log.completeAssistantTurn('R')).toThrow(/turn/);
   });
 
-  it('protège l’invariant : appendUser pendant un tour assistant ouvert ⇒ erreur', () => {
+  it('protects the invariant: appendUser during an open assistant turn ⇒ error', () => {
     const log = new PromptLog('SYS');
     log.appendUser('Q');
     log.beginAssistantTurn({ thinking: true });
-    expect(() => log.appendUser('Q2')).toThrow(/tour/);
+    expect(() => log.appendUser('Q2')).toThrow(/turn/);
   });
 });

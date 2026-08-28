@@ -1,10 +1,10 @@
 /**
- * Parsing de la sortie brute Qwen3 (format Hermes) : blocs de raisonnement
- * `<think>…</think>` et appels d'outils
+ * Parsing of raw Qwen3 output (Hermes format): reasoning blocks
+ * `<think>…</think>` and tool calls
  * `<tool_call>{"name":…,"arguments":{…}}</tool_call>`.
  *
- * Robustesse avant tout : un bloc mal formé est COMPTÉ, jamais levé — le
- * modèle a le droit de se tromper, la boucle doit pouvoir lui répondre.
+ * Robustness above all: a malformed block is COUNTED, never thrown — the
+ * model has the right to get it wrong, the loop must be able to respond.
  */
 
 export const TOOL_CALL_OPEN = '<tool_call>';
@@ -19,12 +19,12 @@ export interface ParsedToolCall {
 }
 
 export interface ParsedOutput {
-  /** Texte visible : hors think, hors tool_call, tronqué à <|im_end|>. */
+  /** Visible text: outside think, outside tool_call, truncated at <|im_end|>. */
   text: string;
-  /** Contenu des blocs <think> concaténés. */
+  /** Concatenated content of the <think> blocks. */
   thinking: string;
   calls: ParsedToolCall[];
-  /** Blocs tool_call présents mais inexploitables. */
+  /** tool_call blocks present but unusable. */
   malformed: number;
 }
 
@@ -34,7 +34,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** null = bloc inexploitable (comptabilisé en `malformed`). */
+/** null = unusable block (counted in `malformed`). */
 function parseCall(payload: string): ParsedToolCall | null {
   let parsed: unknown;
   try {
@@ -48,7 +48,7 @@ function parseCall(payload: string): ParsedToolCall | null {
   if (typeof name !== 'string' || name.trim() === '') return null;
 
   const rawArgs = record?.['arguments'];
-  // Certains modèles sérialisent `arguments` en chaîne JSON plutôt qu'en objet.
+  // Some models serialize `arguments` as a JSON string rather than an object.
   if (typeof rawArgs === 'string') {
     try {
       return { name, arguments: asRecord(JSON.parse(rawArgs)) ?? {} };
@@ -85,8 +85,8 @@ export function parseHermesOutput(raw: string): ParsedOutput {
       const from = thinkAt + THINK_OPEN.length;
       const close = source.indexOf(THINK_CLOSE, from);
       if (close === -1) {
-        // Génération coupée en plein raisonnement : on garde la pensée, pas
-        // de texte fantôme.
+        // Generation cut off mid-reasoning: we keep the thought, no
+        // phantom text.
         thinkParts.push(source.slice(from));
         break;
       }

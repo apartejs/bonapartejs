@@ -1,17 +1,17 @@
 /**
- * Prompt système et messages de service.
+ * System prompt and service messages.
  *
- * TOUT ce qui part vers le modèle est en ANGLAIS : c'est un protocole, pas de
- * l'UI. Les modèles (Qwen inclus) sont entraînés majoritairement en anglais
- * pour l'instruction et le tool-calling ; mélanger les langues sur le fil
- * dégrade la fiabilité des appels. La langue de RÉPONSE, elle, est une
- * consigne explicite (`replyLanguage`). L'i18n fr/en concerne l'interface,
- * jamais le fil.
+ * EVERYTHING that goes to the model is in ENGLISH: it's a protocol, not
+ * UI. Models (Qwen included) are trained predominantly in English for
+ * instruction-following and tool-calling; mixing languages on the wire
+ * degrades call reliability. The REPLY language, on the other hand, is an
+ * explicit instruction (`replyLanguage`). fr/en i18n concerns the
+ * interface, never the wire.
  *
- * Le prompt système est FIGÉ à la création de la conversation : il porte
- * l'inventaire d'outils de ce moment-là. Tout changement ultérieur passe par
- * un message de delta APPENDÉ — jamais par un re-rendu, sinon le préfixe du
- * cache KV saute et le différenciateur produit avec.
+ * The system prompt is FROZEN when the conversation is created: it
+ * carries the tool inventory from that moment. Any later change goes
+ * through an APPENDED delta message — never a re-render, otherwise the KV
+ * cache prefix drops and the differentiator along with it.
  */
 
 import type { ToolOutcome } from '../backend/types.js';
@@ -19,14 +19,14 @@ import type { ToolDef, ToolInventoryDelta } from '../tools/types.js';
 
 export interface SystemPromptOptions {
   /**
-   * Racines du projet, ORDONNÉES. Vide = aucun projet : les outils marchent
-   * quand même, sans confinement.
+   * Project roots, ORDERED. Empty = no project: the tools still work,
+   * with no confinement.
    */
   roots?: string[];
   tools: ToolDef[];
-  /** Langue attendue des réponses, en clair (ex. « French »). */
+  /** Expected reply language, in plain words (e.g. "French"). */
   replyLanguage?: string;
-  /** Consignes de projet (CLAUDE.md & co) — optionnel. */
+  /** Project instructions (CLAUDE.md & co) — optional. */
   projectInstructions?: string;
 }
 
@@ -40,17 +40,18 @@ export function renderToolInventory(tools: ToolDef[]): string {
 }
 
 /**
- * Bloc de décor : ce que le modèle peut voir.
+ * Scenery block: what the model can see.
  *
- * Avec plusieurs racines, il faut les NOMMER toutes et dire laquelle sert de
- * défaut aux chemins relatifs. Sans cette information, le modèle ne peut
- * atteindre les autres racines que par tâtonnement — l'ambiguïté se résout par
- * de l'information dans le prompt, pas par de la magie dans le résolveur.
+ * With multiple roots, all of them must be NAMED, along with which one
+ * serves as the default for relative paths. Without this information,
+ * the model can only reach the other roots by trial and error — the
+ * ambiguity is resolved with information in the prompt, not magic in the
+ * resolver.
  */
 function renderPerimeter(roots: string[]): string {
-  // Le projet est le PÉRIMÈTRE des outils, pas leur condition d'existence :
-  // sans dossier ils marchent toujours. Le modèle ne doit ni réclamer un
-  // dossier, ni croire qu'il ne peut rien lire.
+  // The project is the tools' PERIMETER, not their condition of
+  // existence: without a folder they still work. The model must neither
+  // demand a folder, nor believe it can't read anything.
   if (roots.length === 0) {
     return (
       'No project folder is open. Your tools still work: use absolute paths, ' +
@@ -124,21 +125,21 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
 }
 
 /**
- * Message appendé quand le PROJET change en cours de conversation.
+ * Message appended when the PROJECT changes mid-conversation.
  *
- * Le prompt système est figé à la création : s'il a été figé sans projet et
- * qu'un dossier est ouvert ensuite, le modèle continuerait de répondre qu'il
- * ne peut pas lire de fichiers — alors que les outils sont bel et bien là.
- * Le delta d'inventaire annonce les outils ; il fallait aussi annoncer le
- * décor dans lequel ils travaillent.
+ * The system prompt is frozen at creation: if it was frozen with no
+ * project and a folder is opened afterward, the model would keep
+ * replying that it can't read files — even though the tools are right
+ * there. The inventory delta announces the tools; the scenery they work
+ * in also needed to be announced.
  */
 export function renderPerimeterDelta(
   previous: string[],
   current: string[],
 ): string | null {
-  // L'ORDRE compte autant que le contenu : la première racine est le défaut
-  // des chemins relatifs, donc réordonner change le comportement des outils et
-  // doit être annoncé comme le reste.
+  // The ORDER matters as much as the content: the first root is the
+  // default for relative paths, so reordering changes the tools'
+  // behavior and must be announced like everything else.
   if (previous.length === current.length && previous.every((r, i) => r === current[i])) {
     return null;
   }
@@ -172,7 +173,7 @@ export function renderPerimeterDelta(
   return parts.join('\n');
 }
 
-/** Message appendé quand l'outillage change en cours de conversation. */
+/** Message appended when the tooling changes mid-conversation. */
 export function renderInventoryDelta(delta: ToolInventoryDelta): string | null {
   if (delta.added.length === 0 && delta.removed.length === 0) return null;
 
@@ -186,10 +187,10 @@ export function renderInventoryDelta(delta: ToolInventoryDelta): string | null {
   return parts.join('\n');
 }
 
-/** Défini une fois pour toutes dans le contrat de backend. */
+/** Defined once and for all in the backend contract. */
 export type { ToolOutcome } from '../backend/types.js';
 
-/** Tour « utilisateur » qui rend les résultats d'outils au modèle. */
+/** "user" turn that renders tool results to the model. */
 export function renderToolResults(outcomes: ToolOutcome[]): string {
   return outcomes
     .map(

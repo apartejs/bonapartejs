@@ -1,13 +1,13 @@
 /**
- * Contrat des backends de modèle — LE point d'extension : llama.cpp est le
- * backend inclus d'office, un plugin peut en enregistrer d'autres. L'UI et le
- * kv-store dégradent selon les capacités déclarées.
+ * Model backend contract — THE extension point: llama.cpp is the backend
+ * included by default, a plugin can register others. The UI and the
+ * kv-store degrade gracefully based on the declared capabilities.
  */
 
 export interface BackendCapabilities {
-  /** Sauvegarde/restauration d'état par conversation (slots). */
+  /** Save/restore state per conversation (slots). */
   kvPersistence: boolean;
-  /** Sortie contrainte par grammaire (GBNF / json_schema). */
+  /** Output constrained by grammar (GBNF / json_schema). */
   grammar: boolean;
 }
 
@@ -28,23 +28,22 @@ export interface SamplingParams {
 }
 
 export interface CompletionRequest {
-  /** Prompt DÉJÀ templaté côté client, octet-identique entre tours. */
+  /** Prompt ALREADY templated client-side, byte-identical across turns. */
   prompt: string;
   idSlot?: number;
   cachePrompt?: boolean;
   returnProgress?: boolean;
   nPredict?: number;
-  /** Grammaire GBNF brute (exclusif avec jsonSchema). */
+  /** Raw GBNF grammar (exclusive with jsonSchema). */
   grammar?: string;
   jsonSchema?: object;
   /**
-   * Grammaire paresseuse : ne s'applique qu'après un déclencheur. Paramètres
-   * non documentés dans le README de llama.cpp, vérifiés dans
-   * tools/server/server-schema.cpp.
+   * Lazy grammar: only applies after a trigger. Parameters not documented
+   * in llama.cpp's README, verified in tools/server/server-schema.cpp.
    */
   grammarLazy?: boolean;
   grammarTriggers?: { type: number; value: string }[];
-  /** Mots déclencheurs mono-token à ne pas fragmenter à la tokenisation. */
+  /** Single-token trigger words that must not be split at tokenization. */
   preservedTokens?: string[];
   sampling?: SamplingParams;
   signal?: AbortSignal;
@@ -97,12 +96,12 @@ export interface ServerProps {
   chatTemplate: string;
 }
 
-// ── Contrat de tour, agnostique du fournisseur ─────────────────────────
+// ── Turn contract, provider-agnostic ────────────────────────────────────
 //
-// La boucle agentique ne connaît QUE ces types : un transcript sémantique
-// entre et des événements structurés sortent. Comment une conversation
-// devient une requête — prompt brut templaté pour llama.cpp, `messages[]`
-// pour une API cloud — est l'affaire du backend, pas de la boucle.
+// The agentic loop knows ONLY these types: a semantic transcript goes in
+// and structured events come out. How a conversation becomes a request —
+// a raw templated prompt for llama.cpp, `messages[]` for a cloud API — is
+// the backend's business, not the loop's.
 
 export interface ToolCall {
   name: string;
@@ -123,25 +122,25 @@ export type TranscriptEntry =
       thinking?: string;
       calls?: ToolCall[];
       /**
-       * Sortie VERBATIM du fournisseur pour ce tour. Indispensable aux
-       * backends à préfixe stable : au rejeu, reconstituer le texte depuis
-       * `text`/`calls` donnerait un octet près mais pas identique, et le
-       * cache KV sauterait. Les autres fournisseurs l'ignorent.
+       * VERBATIM provider output for this turn. Indispensable for
+       * stable-prefix backends: on replay, reconstructing the text from
+       * `text`/`calls` would land byte-close but not identical, and the
+       * KV cache would drop. Other providers ignore it.
        */
       raw?: string;
     }
   | { role: 'tool_results'; results: ToolOutcome[] }
-  /** Message de service (delta d'inventaire d'outils). */
+  /** Service message (tool inventory delta). */
   | { role: 'service'; text: string };
 
 export interface SystemSpec {
   /**
-   * Racines du projet ouvert, ORDONNÉES : la première est le défaut des chemins
-   * relatifs, le périmètre autorisé est leur union.
+   * Roots of the open project, ORDERED: the first is the default for
+   * relative paths, the allowed scope is their union.
    *
-   * Vide ou absent = discussion sans projet. Les outils marchent quand même,
-   * simplement sans confinement — le projet est leur périmètre, pas leur
-   * condition d'existence. Ouvrir un projet plus tard l'annonce par un delta.
+   * Empty or absent = a project-less discussion. Tools still work, simply
+   * without confinement — the project is their scope, not their condition
+   * of existence. Opening a project later announces it via a delta.
    */
   roots?: string[];
   replyLanguage?: string;
@@ -151,20 +150,20 @@ export interface SystemSpec {
 export interface TurnRequest {
   conversationId: string;
   system: SystemSpec;
-  /** Inventaire d'outils de CE tour (grammaire ou API native selon le backend). */
+  /** Tool inventory for THIS turn (grammar or native API depending on the backend). */
   tools: ToolDefLike[];
   transcript: TranscriptEntry[];
   signal: AbortSignal;
   idSlot?: number;
   /**
-   * Échantillonnage de CE tour (température & co). Réglable par conversation :
-   * contrairement aux paramètres de lancement, il ne change rien au préfixe du
-   * prompt, donc il n'invalide aucun état KV.
+   * Sampling for THIS turn (temperature & co). Adjustable per conversation:
+   * unlike launch parameters, it changes nothing in the prompt's prefix, so
+   * it invalidates no KV state.
    */
   sampling?: SamplingParams;
 }
 
-/** Forme minimale d'un outil attendue par un backend (cf. tools/types.ts). */
+/** Minimal shape of a tool expected by a backend (cf. tools/types.ts). */
 export interface ToolDefLike {
   name: string;
   description: string;
@@ -172,11 +171,11 @@ export interface ToolDefLike {
 }
 
 /**
- * Événements d'un tour. Les noms suivent volontairement `AparteStreamEvent`
- * d'apartéJS (text / thinking / tool_use / done) : le jour où les providers
- * de la lib seront importables depuis Node, l'un d'eux deviendra un backend
- * bonaparte sans traduction — un appel d'outil par événement, la boucle les
- * regroupe jusqu'au `done`.
+ * Events of a turn. The names deliberately follow apartéJS's
+ * `AparteStreamEvent` (text / thinking / tool_use / done): the day the
+ * lib's providers become importable from Node, one of them will become a
+ * bonaparte backend with no translation needed — one tool call per event,
+ * the loop groups them until `done`.
  */
 export type ProviderEvent =
   | { type: 'text'; delta: string }
@@ -185,36 +184,36 @@ export type ProviderEvent =
   | { type: 'done'; stats: CompletionStats; raw?: string };
 
 export interface Backend {
-  /** Identifiant d'instance (ex. 'llamacpp:local'). */
+  /** Instance identifier (e.g. 'llamacpp:local'). */
   id: string;
-  /** Type enregistré dans le registre (ex. 'llamacpp'). */
+  /** Type registered in the registry (e.g. 'llamacpp'). */
   typeId: string;
   capabilities: BackendCapabilities;
   status(): BackendStatus;
   start(): Promise<void>;
   stop(): Promise<void>;
-  /** LE point d'entrée de la boucle agentique. */
+  /** THE entry point of the agentic loop. */
   runTurn(request: TurnRequest): AsyncIterable<ProviderEvent>;
   /**
-   * État opaque à persister par conversation (llama.cpp y met son prompt
-   * système figé). Absent = le backend n'a rien à retenir.
+   * Opaque state to persist per conversation (llama.cpp puts its frozen
+   * system prompt there). Absent = the backend has nothing to remember.
    */
   exportState?(conversationId: string): unknown;
   importState?(conversationId: string, state: unknown): void;
   /**
-   * Prépare une conversation à son ouverture (llama.cpp y fige son prompt
-   * système). Attendre le premier tour laisserait une fenêtre où l'inventaire
-   * pourrait changer sans qu'aucun delta ne l'annonce.
+   * Prepares a conversation when it opens (llama.cpp freezes its system
+   * prompt there). Waiting for the first turn would leave a window where
+   * the inventory could change with no delta announcing it.
    */
   prepareConversation?(
     conversationId: string,
     system: SystemSpec,
     tools: ToolDefLike[],
   ): void;
-  /** Primitive bas niveau — utile aux backends à complétion brute. */
+  /** Low-level primitive — useful for raw-completion backends. */
   complete(request: CompletionRequest): AsyncIterable<CompletionEvent>;
   props(): Promise<ServerProps>;
-  /** Présent si et seulement si capabilities.kvPersistence. */
+  /** Present if and only if capabilities.kvPersistence. */
   slots?: SlotApi;
   onStatusChange(listener: (status: BackendStatus) => void): () => void;
 }

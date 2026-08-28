@@ -9,37 +9,37 @@ function pair(args: string[], flag: string): string | undefined {
 }
 
 describe('buildLlamaServerArgs', () => {
-  it('inclut le modèle, le port et un host loopback', () => {
+  it('includes the model, the port, and a loopback host', () => {
     const args = buildLlamaServerArgs(base);
     expect(pair(args, '-m')).toBe(base.modelPath);
     expect(pair(args, '--port')).toBe('8123');
     expect(pair(args, '--host')).toBe('127.0.0.1');
   });
 
-  it('force toujours -fa on (jamais auto)', () => {
+  it('always forces -fa on (never auto)', () => {
     const args = buildLlamaServerArgs(base);
     expect(pair(args, '-fa')).toBe('on');
   });
 
-  it('types KV symétriques par défaut (f16/f16)', () => {
+  it('symmetric KV types by default (f16/f16)', () => {
     const args = buildLlamaServerArgs(base);
     expect(pair(args, '--cache-type-k')).toBe('f16');
     expect(pair(args, '--cache-type-v')).toBe('f16');
   });
 
-  it('un seul type KV fourni ⇒ l’autre est aligné', () => {
+  it('only one KV type provided ⇒ the other is aligned', () => {
     const args = buildLlamaServerArgs({ ...base, cacheTypeK: 'q8_0' });
     expect(pair(args, '--cache-type-k')).toBe('q8_0');
     expect(pair(args, '--cache-type-v')).toBe('q8_0');
   });
 
-  it('types KV asymétriques explicites ⇒ erreur (chemin lent silencieux upstream)', () => {
+  it('explicit asymmetric KV types ⇒ error (silent slow path upstream)', () => {
     expect(() =>
       buildLlamaServerArgs({ ...base, cacheTypeK: 'q8_0', cacheTypeV: 'f16' }),
-    ).toThrow(/symétriques/);
+    ).toThrow(/symmetric/);
   });
 
-  it('mappe les options vers les bons flags', () => {
+  it('maps the options to the right flags', () => {
     const args = buildLlamaServerArgs({
       ...base,
       nCtx: 32768,
@@ -59,7 +59,7 @@ describe('buildLlamaServerArgs', () => {
     expect(pair(args, '--load-mode')).toBe('mmap');
   });
 
-  it('ajoute extraFlags en dernier, tels quels', () => {
+  it('appends extraFlags last, as-is', () => {
     const args = buildLlamaServerArgs({
       ...base,
       extraFlags: ['--rope-scaling', 'yarn', '--verbose'],
@@ -67,7 +67,7 @@ describe('buildLlamaServerArgs', () => {
     expect(args.slice(-3)).toEqual(['--rope-scaling', 'yarn', '--verbose']);
   });
 
-  it('n’émet pas de flags pour les options absentes', () => {
+  it('emits no flags for absent options', () => {
     const args = buildLlamaServerArgs(base);
     expect(args).not.toContain('--slot-save-path');
     expect(args).not.toContain('-ngl');

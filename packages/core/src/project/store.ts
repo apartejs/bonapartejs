@@ -1,18 +1,18 @@
 /**
- * Magasin des projets.
+ * Project store.
  *
- * Un projet est une entité NOMMÉE, créée par l'utilisateur, qui porte un
- * ENSEMBLE ORDONNÉ de racines. C'est lui qui définit ce que le modèle peut
- * voir ; la conversation, elle, définit comment un tour s'exécute (modèle,
- * échantillonnage, permissions). Cette ligne de partage est reprise de l'app
- * Codex, seule application de bureau comparable — sa propre CLI fait autrement
- * parce qu'elle a un répertoire courant, ce que nous n'avons pas.
+ * A project is a NAMED entity, created by the user, that carries an
+ * ORDERED SET of roots. It's what defines what the model can see; the
+ * conversation, meanwhile, defines how a turn executes (model, sampling,
+ * permissions). This dividing line is taken from the Codex app, the only
+ * comparable desktop application — its own CLI does it differently
+ * because it has a current directory, which we don't.
  *
- * L'ordre des racines est SÉMANTIQUE : la première est le défaut des chemins
- * relatifs (voir `resolveInPerimeter`). Réordonner change donc le comportement,
- * et doit être annoncé au modèle comme un delta de périmètre.
+ * The order of the roots is SEMANTIC: the first is the default for
+ * relative paths (see `resolveInPerimeter`). Reordering therefore changes
+ * behavior, and must be announced to the model as a perimeter delta.
  *
- * Un projet sans racine est légal : c'est un simple groupe de conversations.
+ * A project with no root is legal: it's simply a group of conversations.
  */
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto';
 export interface Project {
   id: string;
   name: string;
-  /** Racines absolues, ORDONNÉES. La première est le défaut des relatifs. */
+  /** Absolute roots, ORDERED. The first is the default for relatives. */
   roots: string[];
   createdAt: string;
   updatedAt: string;
@@ -40,7 +40,7 @@ interface ProjectsFile {
 
 const VERSION = 1;
 
-/** Absolutise et déduplique en gardant le premier venu — l'ordre est porteur. */
+/** Makes absolute and deduplicates keeping the first one seen — the order is meaningful. */
 function normalizeRoots(roots: string[] | undefined): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -61,9 +61,9 @@ export class ProjectStore {
   }
 
   /**
-   * Un fichier absent ou illisible rend une liste VIDE plutôt que de lever :
-   * l'app doit démarrer et laisser l'utilisateur réparer, pas refuser de
-   * s'ouvrir sur un JSON tronqué.
+   * A missing or unreadable file returns an EMPTY list rather than
+   * throwing: the app must start and let the user fix things, not refuse
+   * to open over a truncated JSON.
    */
   private async read(): Promise<ProjectsFile> {
     try {
@@ -75,7 +75,7 @@ export class ProjectStore {
     }
   }
 
-  /** Écriture atomique : un fichier temporaire puis un renommage. */
+  /** Atomic write: a temp file then a rename. */
   private async write(data: ProjectsFile): Promise<void> {
     await mkdir(this.dir, { recursive: true });
     const temp = `${this.file}.tmp`;
@@ -112,7 +112,7 @@ export class ProjectStore {
   ): Promise<Project> {
     const data = await this.read();
     const project = data.projects.find((p) => p.id === id);
-    if (!project) throw new Error(`Projet inconnu : ${id}`);
+    if (!project) throw new Error(`Unknown project: ${id}`);
     change(project);
     project.updatedAt = new Date().toISOString();
     await this.write({ version: VERSION, projects: data.projects });

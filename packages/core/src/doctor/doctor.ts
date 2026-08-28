@@ -1,8 +1,8 @@
 /**
- * Doctor — vérifie que la machine peut faire tourner bonaparte.
- * La logique est pure : tout l'accès système passe par un `DoctorEnv`
- * injecté (testable sans machine réelle). L'implémentation système vit
- * dans doctor-env.ts.
+ * Doctor — checks that the machine can run bonaparte.
+ * The logic is pure: all system access goes through an injected
+ * `DoctorEnv` (testable with no real machine). The system implementation
+ * lives in doctor-env.ts.
  */
 
 import type { BonaparteLocale } from '@aparte/bonaparte-shared';
@@ -19,19 +19,19 @@ export interface GpuInfo {
 }
 
 export interface DoctorEnv {
-  /** ex. process.version : "v24.14.0" */
+  /** e.g. process.version: "v24.14.0" */
   nodeVersion: string;
-  /** Chemin llama-server configuré par l'utilisateur (config), sinon null. */
+  /** llama-server path configured by the user (config), otherwise null. */
   configuredLlamaServerPath: string | null;
   fileExists(path: string): Promise<boolean>;
-  /** Résolution PATH (where/which) — null si absent. */
+  /** PATH resolution (where/which) — null if absent. */
   lookupOnPath(binary: string): Promise<string | null>;
-  /** Sortie de `<binaire> --version` — null si inexécutable. */
+  /** Output of `<binary> --version` — null if not runnable. */
   readVersionOutput(binPath: string): Promise<string | null>;
-  /** Répertoire où les états KV seront écrits (--slot-save-path). */
+  /** Directory where KV states will be written (--slot-save-path). */
   slotSavePath: string;
   canWrite(dir: string): Promise<boolean>;
-  /** Octets libres sur le volume du répertoire, null si indéterminable. */
+  /** Free bytes on the directory's volume, null if it cannot be determined. */
   freeDiskBytes(dir: string): Promise<number | null>;
   detectGpu(): Promise<GpuInfo[]>;
 }
@@ -43,14 +43,14 @@ export interface DoctorCheck {
   id: DoctorCheckId;
   label: string;
   status: DoctorStatus;
-  /** Un échec bloquant empêche bonaparte de fonctionner. */
+  /** A blocking failure prevents bonaparte from working. */
   blocking: boolean;
   detail?: string;
 }
 
 export interface DoctorReport {
   checks: DoctorCheck[];
-  /** true si aucun échec bloquant. */
+  /** true if there is no blocking failure. */
   ok: boolean;
 }
 
@@ -89,8 +89,8 @@ async function checkLlamaServer(
   let binPath: string | null = null;
   if (env.configuredLlamaServerPath) {
     const exists = await env.fileExists(env.configuredLlamaServerPath);
-    // Un chemin configuré qui ne pointe sur rien est une erreur de config :
-    // échec explicite, pas de repli silencieux sur le PATH.
+    // A configured path that points to nothing is a config error:
+    // explicit failure, no silent fallback to PATH.
     if (!exists) {
       return {
         ...base,
@@ -101,7 +101,7 @@ async function checkLlamaServer(
     }
     binPath = env.configuredLlamaServerPath;
   } else {
-    // Binaire historique d'abord, puis le CLI unifié (`llama serve`, b10xxx+).
+    // Historical binary first, then the unified CLI (`llama serve`, b10xxx+).
     binPath =
       (await env.lookupOnPath('llama-server')) ??
       (await env.lookupOnPath('llama'));

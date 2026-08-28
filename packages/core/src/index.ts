@@ -1,9 +1,9 @@
 /**
- * @aparte/bonaparte-core — le harness de bonaparte.
+ * @aparte/bonaparte-core — bonaparte's harness.
  *
- * Node pur : ce paquet n'importe JAMAIS electron (frontière garantie par la
- * règle lint @nx/enforce-module-boundaries). Il est consommé par le main
- * process de l'app Electron ET par le CLI `npx @aparte/bonaparte`.
+ * Pure Node: this package NEVER imports electron (boundary guaranteed by
+ * the @nx/enforce-module-boundaries lint rule). It is consumed by the
+ * Electron app's main process AND by the `npx @aparte/bonaparte` CLI.
  */
 
 export type { HarnessTranslations } from './i18n/translations.js';
@@ -153,8 +153,8 @@ export type {
   PluginToolResult,
 } from './plugins/host.js';
 export { PLUGIN_MANIFEST_FILE, PluginHost } from './plugins/host.js';
-// La surface publique de l'hôte parle le contrat partagé : le ré-exporter
-// garde les déclarations générées autoportantes.
+// The host's public surface speaks the shared contract: re-exporting it
+// keeps the generated declarations self-contained.
 export type {
   AgentToolContribution,
   PluginConfigField,

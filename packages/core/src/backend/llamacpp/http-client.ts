@@ -1,7 +1,7 @@
 /**
- * Client HTTP llama-server — parle UNIQUEMENT à /completion (prompt brut,
- * jamais /v1/chat/completions : re-templating Qwen3 non byte-stable), aux
- * slots (save/restore/erase) et à /props (détection de capacités).
+ * llama-server HTTP client — talks ONLY to /completion (raw prompt, never
+ * /v1/chat/completions: Qwen3 re-templating is not byte-stable), to the
+ * slots (save/restore/erase), and to /props (capability detection).
  */
 
 import type {
@@ -34,8 +34,8 @@ async function expectJson<T>(res: Response): Promise<T> {
 }
 
 /**
- * Itère les événements SSE `data: {...}` d'un flux, en bufferisant — un
- * chunk réseau peut couper un événement en deux.
+ * Iterates the SSE `data: {...}` events of a stream, buffering — a network
+ * chunk can cut an event in two.
  */
 async function* sseEvents(
   body: ReadableStream<Uint8Array>,

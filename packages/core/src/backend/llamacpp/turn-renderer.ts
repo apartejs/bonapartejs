@@ -1,11 +1,11 @@
 /**
- * Rendu d'un transcript en prompt Qwen APPEND-ONLY.
+ * Renders a transcript into an APPEND-ONLY Qwen prompt.
  *
- * C'est ici, et nulle part ailleurs, que vit la contrainte de stabilité
- * octet : le rendu du tour N+1 étend celui du tour N. Le transcript est la
- * source de vérité ; ce module ne fait qu'y ajouter ce qu'il n'a pas encore
- * rendu, et sait aussi tout rejouer depuis zéro (réouverture de conversation)
- * de façon déterministe.
+ * This is where, and nowhere else, the byte-stability constraint lives:
+ * the render of turn N+1 extends that of turn N. The transcript is the
+ * source of truth; this module only appends what it hasn't rendered yet,
+ * and also knows how to replay everything from scratch (reopening a
+ * conversation) deterministically.
  */
 
 import type { ToolDefLike, TranscriptEntry } from '../types.js';
@@ -17,9 +17,9 @@ import {
 import type { SystemSpec } from '../types.js';
 
 export interface RenderedTurn {
-  /** Prompt complet à envoyer à /completion. */
+  /** Full prompt to send to /completion. */
   prompt: string;
-  /** Sortie brute du tour, à geler une fois la génération finie. */
+  /** Raw turn output, to freeze once generation is done. */
   commit(raw: string): void;
 }
 
@@ -29,7 +29,7 @@ export class TranscriptRenderer {
   private frozenSystemPrompt: string | null = null;
   private turnOpen = false;
 
-  /** Prompt système figé : re-le construire le ferait dériver. */
+  /** Frozen system prompt: rebuilding it would let it drift. */
   get systemPrompt(): string | null {
     return this.frozenSystemPrompt;
   }
@@ -39,13 +39,14 @@ export class TranscriptRenderer {
   }
 
   /**
-   * Prépare le prompt du prochain tour à partir du transcript complet.
-   * Les entrées déjà rendues ne le sont jamais deux fois.
+   * Prepares the next turn's prompt from the full transcript. Entries
+   * already rendered are never rendered twice.
    */
   /**
-   * Fige le prompt système s'il ne l'est pas déjà. Appelé à l'ouverture de la
-   * conversation : attendre le premier tour laisserait une fenêtre où un outil
-   * ajouté entre-temps changerait le prompt sans qu'aucun delta ne l'annonce.
+   * Freezes the system prompt if it isn't already. Called when the
+   * conversation opens: waiting for the first turn would leave a window
+   * where a tool added in the meantime would change the prompt with no
+   * delta announcing it.
    */
   ensureSystemPrompt(system: SystemSpec, tools: ToolDefLike[]): string {
     if (this.frozenSystemPrompt === null) {
@@ -73,8 +74,8 @@ export class TranscriptRenderer {
       this.rendered = 0;
     }
     if (this.turnOpen) {
-      // Tour précédent jamais gelé (erreur réseau) : on le referme à vide
-      // pour ne pas laisser le log dans un état intermédiaire.
+      // Previous turn never frozen (network error): we close it empty so
+      // as not to leave the log in an intermediate state.
       this.log.completeAssistantTurn('');
       this.turnOpen = false;
     }
@@ -94,7 +95,7 @@ export class TranscriptRenderer {
       commit: (raw: string) => {
         this.log?.completeAssistantTurn(raw);
         this.turnOpen = false;
-        // Le tour assistant qui suivra dans le transcript est déjà rendu.
+        // The assistant turn that will follow in the transcript is already rendered.
         this.rendered += 1;
       },
     };
@@ -112,23 +113,24 @@ export class TranscriptRenderer {
         log.appendUser(renderToolResults(entry.results));
         break;
       case 'assistant':
-        // Rejeu (réouverture) : le tour est reconstitué tel qu'émis.
+        // Replay (reopening): the turn is reconstructed exactly as emitted.
         log.beginAssistantTurn({ thinking: Boolean(entry.thinking) });
         log.completeAssistantTurn(rawOf(entry));
         break;
     }
   }
 
-  /** Historique gelé — utilisé par les tests d'octet-identité. */
+  /** Frozen history — used by byte-identity tests. */
   get frozen(): string {
     return this.log?.frozen ?? '';
   }
 }
 
 /**
- * Sortie brute d'un tour assistant. Le verbatim du fournisseur fait foi — la
- * reconstitution depuis text/calls n'est qu'un filet pour les transcripts
- * venus d'un autre backend (le préfixe repart alors de ce point).
+ * Raw output of an assistant turn. The provider's verbatim text is
+ * authoritative — reconstructing from text/calls is only a safety net for
+ * transcripts coming from another backend (the prefix then starts over
+ * from that point).
  */
 function rawOf(entry: Extract<TranscriptEntry, { role: 'assistant' }>): string {
   if (entry.raw !== undefined) return entry.raw;

@@ -4,10 +4,10 @@ import { TranscriptRenderer } from './turn-renderer.js';
 
 const SYSTEM: SystemSpec = { roots: ['C:\\projet'] };
 const TOOLS: ToolDefLike[] = [
-  { name: 'read_file', description: 'lit', inputSchema: { type: 'object' } },
+  { name: 'read_file', description: 'reads', inputSchema: { type: 'object' } },
 ];
 
-/** Déroule une conversation et rend les prompts successifs. */
+/** Runs through a conversation and renders the successive prompts. */
 function play(
   renderer: TranscriptRenderer,
   script: { user: string; raw: string }[],
@@ -25,7 +25,7 @@ function play(
 }
 
 describe('TranscriptRenderer — append-only', () => {
-  it('chaque prompt étend octet-pour-octet le précédent', () => {
+  it('each prompt extends the previous one byte-for-byte', () => {
     const { prompts } = play(new TranscriptRenderer(), [
       { user: 'Q1', raw: 'R1' },
       { user: 'Q2', raw: 'R2' },
@@ -37,8 +37,8 @@ describe('TranscriptRenderer — append-only', () => {
     }
   });
 
-  it('rejeu depuis zéro : le prompt est OCTET-IDENTIQUE à la session vivante', () => {
-    // C'est LA condition du restore de cache KV entre deux ouvertures.
+  it('replay from scratch: the prompt is BYTE-IDENTICAL to the live session', () => {
+    // This is THE condition for KV cache restore across two openings.
     const live = new TranscriptRenderer();
     const { prompts, transcript } = play(live, [
       { user: 'Q1', raw: '<think>hm</think>R1' },
@@ -50,12 +50,12 @@ describe('TranscriptRenderer — append-only', () => {
     transcript.push({ role: 'user', text: 'Q3' });
     const afterReplay = replayed.next(transcript, SYSTEM, TOOLS).prompt;
 
-    // Le rendu rejoué doit étendre exactement le dernier prompt vivant.
+    // The replayed render must extend exactly the last live prompt.
     const lastLive = prompts.at(-1) as string;
     expect(afterReplay.startsWith(lastLive)).toBe(true);
   });
 
-  it('rend les résultats d’outils comme un tour utilisateur', () => {
+  it('renders tool results as a user turn', () => {
     const renderer = new TranscriptRenderer();
     const transcript: TranscriptEntry[] = [
       { role: 'user', text: 'lis' },
@@ -70,18 +70,18 @@ describe('TranscriptRenderer — append-only', () => {
     expect(prompt).toContain('tool result: read_file');
   });
 
-  it('n’expose aucun prompt système tant qu’aucun tour n’a été rendu', () => {
+  it('exposes no system prompt until a turn has been rendered', () => {
     expect(new TranscriptRenderer().systemPrompt).toBeNull();
   });
 
-  it('le prompt système figé est réutilisé tel quel après restore', () => {
+  it('the frozen system prompt is reused as-is after restore', () => {
     const renderer = new TranscriptRenderer();
-    renderer.restore('SYSTÈME GELÉ');
+    renderer.restore('FROZEN SYSTEM');
     const prompt = renderer.next([{ role: 'user', text: 'x' }], SYSTEM, TOOLS).prompt;
-    expect(prompt.startsWith('<|im_start|>system\nSYSTÈME GELÉ<|im_end|>\n')).toBe(true);
+    expect(prompt.startsWith('<|im_start|>system\nFROZEN SYSTEM<|im_end|>\n')).toBe(true);
   });
 
-  it('un inventaire d’outils différent ne change pas un prompt déjà figé', () => {
+  it('a different tool inventory does not change an already-frozen prompt', () => {
     const renderer = new TranscriptRenderer();
     const first = renderer.next([{ role: 'user', text: 'x' }], SYSTEM, TOOLS);
     first.commit('R');
@@ -94,7 +94,7 @@ describe('TranscriptRenderer — append-only', () => {
     ];
     renderer.next(transcript, SYSTEM, [
       ...TOOLS,
-      { name: 'run_shell', description: 'exécute', inputSchema: { type: 'object' } },
+      { name: 'run_shell', description: 'executes', inputSchema: { type: 'object' } },
     ]);
     expect(renderer.systemPrompt).toBe(frozen);
   });

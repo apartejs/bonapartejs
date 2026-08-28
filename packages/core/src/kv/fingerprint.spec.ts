@@ -20,26 +20,26 @@ afterEach(async () => {
 });
 
 describe('fingerprintModelFile', () => {
-  it('est stable pour un fichier inchangé', async () => {
-    const path = await tmpModel('qwen.gguf', 'contenu');
+  it('is stable for an unchanged file', async () => {
+    const path = await tmpModel('qwen.gguf', 'content');
     expect(await fingerprintModelFile(path)).toBe(await fingerprintModelFile(path));
   });
 
-  it('change quand le fichier est remplacé (taille ou mtime différents)', async () => {
-    const path = await tmpModel('qwen.gguf', 'contenu');
+  it('changes when the file is replaced (different size or mtime)', async () => {
+    const path = await tmpModel('qwen.gguf', 'content');
     const before = await fingerprintModelFile(path);
-    await writeFile(path, 'contenu totalement différent');
+    await writeFile(path, 'totally different content');
     await utimes(path, new Date(), new Date(Date.now() + 5000));
     expect(await fingerprintModelFile(path)).not.toBe(before);
   });
 
-  it('diffère entre deux chemins distincts au contenu identique', async () => {
-    const a = await tmpModel('a.gguf', 'même contenu');
-    const b = await tmpModel('b.gguf', 'même contenu');
+  it('differs between two distinct paths with identical content', async () => {
+    const a = await tmpModel('a.gguf', 'same content');
+    const b = await tmpModel('b.gguf', 'same content');
     expect(await fingerprintModelFile(a)).not.toBe(await fingerprintModelFile(b));
   });
 
-  it('rejette avec une erreur claire si le fichier est absent', async () => {
+  it('rejects with a clear error if the file is absent', async () => {
     await expect(
       fingerprintModelFile('C:\\nexiste\\pas.gguf'),
     ).rejects.toThrow(/pas\.gguf/);

@@ -15,38 +15,38 @@ const tool = (name: string): ToolDef => ({
 });
 
 describe('escapeGbnfLiteral', () => {
-  it('échappe les guillemets et antislashs', () => {
+  it('escapes quotes and backslashes', () => {
     expect(escapeGbnfLiteral('a"b\\c')).toBe('a\\"b\\\\c');
   });
 
-  it('laisse un nom ordinaire intact', () => {
+  it('leaves an ordinary name intact', () => {
     expect(escapeGbnfLiteral('read_file')).toBe('read_file');
   });
 });
 
 describe('buildToolCallGrammar', () => {
-  it('borne le nom aux outils fournis', () => {
+  it('bounds the name to the provided tools', () => {
     const grammar = buildToolCallGrammar([tool('read_file'), tool('run_shell')]);
     expect(grammar).toContain('"\\"read_file\\""');
     expect(grammar).toContain('"\\"run_shell\\""');
   });
 
-  it('exige la balise fermante dans la règle racine', () => {
-    // Sans elle, la grammaire serait satisfaite avant </tool_call> et
-    // l'appel serait tronqué.
+  it('requires the closing tag in the root rule', () => {
+    // Without it, the grammar would be satisfied before </tool_call> and
+    // the call would come out truncated.
     expect(buildToolCallGrammar([tool('a')])).toContain('</tool_call>');
   });
 
-  it('accepte la balise OUVRANTE : le déclencheur la donne à la grammaire', () => {
-    // Vérifié dans src/llama-grammar.cpp (llama_grammar_accept_impl) : quand un
-    // déclencheur tombe, llama.cpp appelle `llama_grammar_accept_token` avec le
-    // TEXTE du déclencheur. La grammaire doit donc pouvoir consommer
-    // `<tool_call>` comme premier littéral, sinon la pile se vide aussitôt et le
-    // serveur lève « Unexpected empty grammar stack after accepting piece:
-    // <tool_call> ». Observé en réel le 2026-08-19 sur le modèle de Paul, où
-    // `<tool_call>` est un token spécial unique (id 248058).
-    // L'invariant : le tout premier littéral que la grammaire peut consommer,
-    // en partant de la racine, est la balise ouvrante.
+  it('accepts the OPENING tag: the trigger feeds it to the grammar', () => {
+    // Verified in src/llama-grammar.cpp (llama_grammar_accept_impl): when a
+    // trigger fires, llama.cpp calls `llama_grammar_accept_token` with the
+    // trigger's TEXT. The grammar must therefore be able to consume
+    // `<tool_call>` as its first literal, otherwise the stack empties right
+    // away and the server raises "Unexpected empty grammar stack after
+    // accepting piece: <tool_call>". Observed for real on 2026-08-19 on
+    // Paul's model, where `<tool_call>` is a single special token (id 248058).
+    // The invariant: the very first literal the grammar can consume,
+    // starting from the root, is the opening tag.
     const lines = buildToolCallGrammar([tool('a')]).split('\n');
     const root = lines.find((line) => line.startsWith('root ::='));
     expect(root).toMatch(/^root ::=\s*tool-call\b/);
@@ -55,16 +55,16 @@ describe('buildToolCallGrammar', () => {
     expect(call).toMatch(/^tool-call ::=\s*"<tool_call>"/);
   });
 
-  it('autorise plusieurs appels d’affilée (appels parallèles Hermes)', () => {
-    // La convention Hermes rend les appels parallèles par blocs multiples, et
-    // notre parseur les gère. Si la racine n'admettait qu'un bloc, la grammaire
-    // serait satisfaite après le premier et le second ferait replonger la pile
-    // à zéro — le modèle ne pourrait littéralement pas appeler deux outils.
+  it('allows several calls in a row (Hermes parallel calls)', () => {
+    // The Hermes convention renders parallel calls as multiple blocks, and
+    // our parser handles them. If the root only admitted one block, the
+    // grammar would be satisfied after the first and the second would send
+    // the stack back to empty — the model literally could not call two tools.
     const grammar = buildToolCallGrammar([tool('a')]);
     expect(grammar).toMatch(/^root ::=.*[*+]/m);
   });
 
-  it('déclare une règle racine et les règles JSON nécessaires', () => {
+  it('declares a root rule and the necessary JSON rules', () => {
     const grammar = buildToolCallGrammar([tool('a')]);
     expect(grammar).toMatch(/^root ::=/m);
     for (const rule of ['value', 'object', 'array', 'string', 'number', 'ws']) {
@@ -72,23 +72,23 @@ describe('buildToolCallGrammar', () => {
     }
   });
 
-  it('n’émet aucune règle vide quand un seul outil est présent', () => {
+  it('emits no empty rule when only one tool is present', () => {
     const grammar = buildToolCallGrammar([tool('solo')]);
     expect(grammar).not.toMatch(/::=\s*$/m);
   });
 
-  it('échappe un nom d’outil exotique (le guillemet ne casse pas le littéral)', () => {
+  it('escapes an exotic tool name (the quote does not break the literal)', () => {
     const grammar = buildToolCallGrammar([tool('weird"name')]);
     expect(grammar).toContain('weird\\"name');
   });
 });
 
 describe('buildGrammarConstraint', () => {
-  it('retourne null sans outil (rien à contraindre)', () => {
+  it('returns null with no tool (nothing to constrain)', () => {
     expect(buildGrammarConstraint([])).toBeNull();
   });
 
-  it('déclenche sur <tool_call> en mode WORD', () => {
+  it('triggers on <tool_call> in WORD mode', () => {
     const constraint = buildGrammarConstraint([tool('a')])!;
     expect(constraint.grammarLazy).toBe(true);
     expect(constraint.grammarTriggers).toEqual([
@@ -96,13 +96,13 @@ describe('buildGrammarConstraint', () => {
     ]);
   });
 
-  it('préserve les balises spéciales (sinon le serveur refuse le déclencheur)', () => {
+  it('preserves the special tags (otherwise the server refuses the trigger)', () => {
     const constraint = buildGrammarConstraint([tool('a')])!;
     expect(constraint.preservedTokens).toContain('<tool_call>');
     expect(constraint.preservedTokens).toContain('</tool_call>');
   });
 
-  it('embarque la grammaire des outils fournis', () => {
+  it('embeds the grammar of the provided tools', () => {
     const constraint = buildGrammarConstraint([tool('read_file')])!;
     expect(constraint.grammar).toContain('read_file');
   });

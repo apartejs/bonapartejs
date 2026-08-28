@@ -1,7 +1,7 @@
 /**
- * Implémentation système de DoctorEnv — la seule partie du doctor qui touche
- * la machine. Volontairement fine : toute la logique est dans doctor.ts,
- * testée avec un environnement simulé.
+ * System implementation of DoctorEnv — the only part of the doctor that
+ * touches the machine. Deliberately thin: all the logic is in doctor.ts,
+ * tested with a simulated environment.
  */
 
 import { execFile } from 'node:child_process';
@@ -33,8 +33,8 @@ async function lookupOnPath(binary: string): Promise<string | null> {
 }
 
 async function detectGpu(): Promise<GpuInfo[]> {
-  // Détection basique (J1-2) — le doctor complet (variantes CUDA/Vulkan/ROCm
-  // pour le téléchargeur de binaires) arrive en J5.
+  // Basic detection (J1-2) — the full doctor (CUDA/Vulkan/ROCm variants
+  // for the binary downloader) arrives in J5.
   const gpus: GpuInfo[] = [];
 
   const nvidia = await run('nvidia-smi', [
@@ -60,7 +60,7 @@ async function detectGpu(): Promise<GpuInfo[]> {
 }
 
 export interface SystemDoctorEnvOptions {
-  /** Chemin llama-server issu de la config utilisateur (quand elle existera). */
+  /** llama-server path coming from user config (once it exists). */
   configuredLlamaServerPath?: string | null;
   slotSavePath?: string;
 }
@@ -74,7 +74,7 @@ export function createSystemDoctorEnv(
     nodeVersion: process.version,
     configuredLlamaServerPath: options.configuredLlamaServerPath ?? null,
     readVersionOutput: async (binPath) => {
-      // llama peut écrire la version sur stderr : on capture les deux.
+      // llama might write the version to stderr: we capture both.
       try {
         const { stdout, stderr } = await execFileAsync(binPath, ['--version'], {
           timeout: 5_000,
@@ -82,7 +82,7 @@ export function createSystemDoctorEnv(
         });
         return `${stdout}\n${stderr}`;
       } catch (error) {
-        // execFile rejette aussi quand l'exit code ≠ 0 mais la sortie existe.
+        // execFile also rejects when the exit code ≠ 0 but output exists.
         const e = error as { stdout?: string; stderr?: string };
         const out = `${e.stdout ?? ''}\n${e.stderr ?? ''}`.trim();
         return out.length > 0 ? out : null;

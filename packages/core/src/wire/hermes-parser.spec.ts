@@ -3,8 +3,8 @@ import { parseHermesOutput } from './hermes-parser.js';
 
 const call = (inner: string): string => `<tool_call>${inner}</tool_call>`;
 
-describe('parseHermesOutput — texte simple', () => {
-  it('retourne le texte tel quel quand il n’y a rien de spécial', () => {
+describe('parseHermesOutput — simple text', () => {
+  it('returns the text as-is when there is nothing special', () => {
     const out = parseHermesOutput('Bonjour Paul.');
     expect(out.text).toBe('Bonjour Paul.');
     expect(out.calls).toEqual([]);
@@ -12,44 +12,44 @@ describe('parseHermesOutput — texte simple', () => {
     expect(out.malformed).toBe(0);
   });
 
-  it('tronque à <|im_end|>', () => {
+  it('truncates at <|im_end|>', () => {
     const out = parseHermesOutput('Réponse<|im_end|>déchet suivant');
     expect(out.text).toBe('Réponse');
   });
 
-  it('rogne les espaces de bord du texte visible', () => {
+  it('trims the edge whitespace of the visible text', () => {
     expect(parseHermesOutput('  Salut  \n').text).toBe('Salut');
   });
 });
 
-describe('parseHermesOutput — blocs think', () => {
-  it('extrait le raisonnement et le retire du texte', () => {
+describe('parseHermesOutput — think blocks', () => {
+  it('extracts the reasoning and removes it from the text', () => {
     const out = parseHermesOutput('<think>je réfléchis</think>Voici la réponse.');
     expect(out.thinking).toBe('je réfléchis');
     expect(out.text).toBe('Voici la réponse.');
   });
 
-  it('concatène plusieurs blocs think', () => {
+  it('concatenates several think blocks', () => {
     const out = parseHermesOutput('<think>un</think>A<think>deux</think>B');
     expect(out.thinking).toBe('un\ndeux');
     expect(out.text).toBe('AB');
   });
 
-  it('gère un think multi-lignes', () => {
+  it('handles a multi-line think', () => {
     const out = parseHermesOutput('<think>ligne1\nligne2</think>ok');
     expect(out.thinking).toBe('ligne1\nligne2');
     expect(out.text).toBe('ok');
   });
 
-  it('ignore un think jamais refermé (pas de texte fantôme)', () => {
+  it('ignores a never-closed think (no phantom text)', () => {
     const out = parseHermesOutput('<think>coupé au milieu');
     expect(out.text).toBe('');
     expect(out.thinking).toBe('coupé au milieu');
   });
 });
 
-describe('parseHermesOutput — appels d’outils', () => {
-  it('extrait un appel simple et le retire du texte', () => {
+describe('parseHermesOutput — tool calls', () => {
+  it('extracts a simple call and removes it from the text', () => {
     const out = parseHermesOutput(
       `Je regarde.${call('{"name": "read_file", "arguments": {"path": "src/a.ts"}}')}`,
     );
@@ -59,7 +59,7 @@ describe('parseHermesOutput — appels d’outils', () => {
     ]);
   });
 
-  it('extrait plusieurs appels parallèles dans l’ordre', () => {
+  it('extracts several parallel calls in order', () => {
     const out = parseHermesOutput(
       call('{"name": "a", "arguments": {}}') +
         '\n' +
@@ -69,7 +69,7 @@ describe('parseHermesOutput — appels d’outils', () => {
     expect(out.calls[1]!.arguments).toEqual({ x: 1 });
   });
 
-  it('préserve les types JSON des arguments', () => {
+  it('preserves the JSON types of the arguments', () => {
     const out = parseHermesOutput(
       call(
         '{"name": "t", "arguments": {"s": "x", "n": 3.5, "b": true, "z": null, "arr": [1, "deux"], "obj": {"k": "v"}}}',
@@ -85,26 +85,26 @@ describe('parseHermesOutput — appels d’outils', () => {
     });
   });
 
-  it('accepte les espaces et retours à la ligne autour du JSON', () => {
+  it('accepts spaces and newlines around the JSON', () => {
     const out = parseHermesOutput(
       '<tool_call>\n  {"name": "t", "arguments": {}}\n</tool_call>',
     );
     expect(out.calls[0]).toEqual({ name: 't', arguments: {} });
   });
 
-  it('tolère arguments absent (outil sans paramètre)', () => {
+  it('tolerates a missing arguments field (parameter-less tool)', () => {
     const out = parseHermesOutput(call('{"name": "list"}'));
     expect(out.calls[0]).toEqual({ name: 'list', arguments: {} });
   });
 
-  it('accepte des arguments sérialisés en chaîne JSON (variante fréquente)', () => {
+  it('accepts arguments serialized as a JSON string (frequent variant)', () => {
     const out = parseHermesOutput(
       call('{"name": "t", "arguments": "{\\"path\\": \\"a.ts\\"}"}'),
     );
     expect(out.calls[0]!.arguments).toEqual({ path: 'a.ts' });
   });
 
-  it('supporte du texte entre deux appels', () => {
+  it('supports text between two calls', () => {
     const out = parseHermesOutput(
       `avant${call('{"name": "a", "arguments": {}}')}milieu${call('{"name": "b", "arguments": {}}')}après`,
     );
@@ -112,7 +112,7 @@ describe('parseHermesOutput — appels d’outils', () => {
     expect(out.calls).toHaveLength(2);
   });
 
-  it('combine think et tool_call', () => {
+  it('combines think and tool_call', () => {
     const out = parseHermesOutput(
       `<think>il faut lire</think>ok${call('{"name": "read_file", "arguments": {"path": "a"}}')}`,
     );
@@ -122,27 +122,27 @@ describe('parseHermesOutput — appels d’outils', () => {
   });
 });
 
-describe('parseHermesOutput — robustesse', () => {
-  it('compte un JSON invalide sans lever', () => {
+describe('parseHermesOutput — robustness', () => {
+  it('counts an invalid JSON without throwing', () => {
     const out = parseHermesOutput(call('{ceci n’est pas du json}'));
     expect(out.calls).toEqual([]);
     expect(out.malformed).toBe(1);
   });
 
-  it('compte un appel sans nom exploitable', () => {
+  it('counts a call with no usable name', () => {
     const out = parseHermesOutput(call('{"arguments": {"x": 1}}'));
     expect(out.calls).toEqual([]);
     expect(out.malformed).toBe(1);
   });
 
-  it('ignore un bloc tool_call jamais refermé', () => {
+  it('ignores a never-closed tool_call block', () => {
     const out = parseHermesOutput('texte<tool_call>{"name": "a"');
     expect(out.text).toBe('texte');
     expect(out.calls).toEqual([]);
     expect(out.malformed).toBe(1);
   });
 
-  it('garde les appels valides même si un autre est cassé', () => {
+  it('keeps the valid calls even if another one is broken', () => {
     const out = parseHermesOutput(
       call('{"name": "bon", "arguments": {}}') + call('{cassé}'),
     );
@@ -150,14 +150,14 @@ describe('parseHermesOutput — robustesse', () => {
     expect(out.malformed).toBe(1);
   });
 
-  it('ne casse pas sur un argument contenant des chevrons', () => {
+  it('does not break on an argument containing angle brackets', () => {
     const out = parseHermesOutput(
       call('{"name": "write", "arguments": {"content": "a < b && c > d"}}'),
     );
     expect(out.calls[0]!.arguments).toEqual({ content: 'a < b && c > d' });
   });
 
-  it('n’extrait rien après <|im_end|> (appel hors périmètre ignoré)', () => {
+  it('extracts nothing after <|im_end|> (out-of-perimeter call ignored)', () => {
     const out = parseHermesOutput(
       `Fini<|im_end|>${call('{"name": "fantome", "arguments": {}}')}`,
     );
@@ -165,7 +165,7 @@ describe('parseHermesOutput — robustesse', () => {
     expect(out.calls).toEqual([]);
   });
 
-  it('accepte une chaîne vide', () => {
+  it('accepts an empty string', () => {
     expect(parseHermesOutput('')).toEqual({
       text: '',
       thinking: '',

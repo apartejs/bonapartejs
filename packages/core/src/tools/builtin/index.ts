@@ -1,10 +1,10 @@
 /**
- * Outils intégrés de l'agent.
+ * Agent's built-in tools.
  *
- * Principe : un échec ATTENDU (fichier absent, chemin hors projet, motif
- * ambigu) n'est jamais une exception — c'est un résultat `ok: false` avec un
- * message exploitable, que la boucle réinjecte au modèle pour qu'il se
- * corrige. Seul l'imprévu remonte.
+ * Principle: an EXPECTED failure (missing file, path outside the project,
+ * ambiguous pattern) is never an exception — it's an `ok: false` result
+ * with an actionable message, which the loop reinjects to the model so it
+ * can correct itself. Only the unexpected propagates up.
  */
 
 import { exec } from 'node:child_process';
@@ -19,7 +19,7 @@ export interface BuiltinTool {
   handler: ToolHandler;
 }
 
-/** Taille max d'un contenu réinjecté au modèle (garde-fou de contexte). */
+/** Max size of content reinjected to the model (context guardrail). */
 export const MAX_TOOL_OUTPUT_CHARS = 30_000;
 
 const DEFAULT_SHELL_TIMEOUT_MS = 120_000;
@@ -52,19 +52,20 @@ function describeError(error: unknown): string {
 }
 
 /**
- * Racine de travail : le projet s'il y en a un, sinon le dossier personnel.
- * Les outils ne disparaissent pas faute de projet — ils cessent seulement
- * d'être confinés.
+ * Working root: the project if there is one, otherwise the home folder.
+ * Tools don't disappear for lack of a project — they simply stop being
+ * confined.
  */
 function workRoot(ctx: ToolContext): string {
   return ctx.roots[0] ?? homedir();
 }
 
 /**
- * Résout un chemin dans le périmètre, ou rend le message destiné au modèle.
+ * Resolves a path within the perimeter, or returns the message intended
+ * for the model.
  *
- * Le refus NOMME les racines autorisées : c'est ce qui permet au modèle de se
- * corriger au tour suivant plutôt que de retenter le même chemin.
+ * The refusal NAMES the allowed roots: that's what lets the model correct
+ * itself on the next turn rather than retrying the same path.
  */
 function inPerimeter(
   ctx: ToolContext,
@@ -301,10 +302,10 @@ const grepFilesTool: BuiltinTool = {
       return ko(`Invalid regular expression: ${describeError(error)}`);
     }
 
-    // Chercher, c'est chercher PARTOUT : sans sous-dossier explicite, on
-    // balaie toutes les racines du projet. Un grep qui n'aurait vu que la
-    // première racine mentirait par omission — « aucun résultat » alors que le
-    // fichier existe dans le dépôt voisin.
+    // Searching means searching EVERYWHERE: with no explicit subdirectory,
+    // we sweep every root of the project. A grep that only saw the first
+    // root would lie by omission — "no results" when the file exists in
+    // the neighboring repo.
     const requestedPath = str(args, 'path');
     let starts: string[];
     if (requestedPath === null && ctx.roots.length > 0) {
@@ -323,7 +324,7 @@ const grepFilesTool: BuiltinTool = {
         try {
           content = await readFile(file, 'utf8');
         } catch {
-          continue; // binaire ou illisible : ignoré
+          continue; // binary or unreadable: ignored
         }
         const rel = displayInPerimeter(ctx.roots, file);
         content.split('\n').forEach((line, index) => {

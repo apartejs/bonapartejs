@@ -21,7 +21,7 @@ afterEach(async () => {
 const toolCall = (name: string, args: Record<string, unknown> = {}): string =>
   `<tool_call>{"name": "${name}", "arguments": ${JSON.stringify(args)}}</tool_call>`;
 
-/** Répond selon le nombre d'appels déjà servis (scénario multi-tours). */
+/** Replies based on the number of calls already served (multi-turn scenario). */
 function scripted(...replies: string[]): (prompt: string) => string {
   let turn = 0;
   return () => replies[Math.min(turn++, replies.length - 1)] ?? '';
@@ -97,8 +97,8 @@ async function collect(
   };
 }
 
-describe('AgentLoop — tour simple', () => {
-  it('streame la réponse et termine sans outil', async () => {
+describe('AgentLoop — simple turn', () => {
+  it('streams the response and ends without a tool', async () => {
     const { loop, transcript } = await rig({ replies: ['Bonjour Paul.'] });
     const { all, text } = await collect(
       loop.run(transcript, 'Salut', new AbortController().signal),
@@ -108,7 +108,7 @@ describe('AgentLoop — tour simple', () => {
     expect(all.some((e) => e.type === 'tool_call')).toBe(false);
   });
 
-  it('appende le tour au transcript (user puis assistant)', async () => {
+  it('appends the turn to the transcript (user then assistant)', async () => {
     const { loop, transcript } = await rig({ replies: ['Réponse.'] });
     await collect(loop.run(transcript, 'Question', new AbortController().signal));
     expect(transcript).toEqual([
@@ -117,7 +117,7 @@ describe('AgentLoop — tour simple', () => {
     ]);
   });
 
-  it('remonte le raisonnement séparément du texte', async () => {
+  it('surfaces the reasoning separately from the text', async () => {
     const { loop, transcript } = await rig({
       replies: ['<think>je pense</think>Voilà.'],
     });
@@ -130,7 +130,7 @@ describe('AgentLoop — tour simple', () => {
     );
   });
 
-  it('expose le coût de prefill et la part de cache', async () => {
+  it('exposes the prefill cost and the cache share', async () => {
     const { loop, transcript } = await rig({ replies: ['ok'] });
     const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
     const end = all.find((e) => e.type === 'turn_end');
@@ -139,8 +139,8 @@ describe('AgentLoop — tour simple', () => {
   });
 });
 
-describe('AgentLoop — outils', () => {
-  it('exécute un appel puis boucle jusqu’à la réponse finale', async () => {
+describe('AgentLoop — tools', () => {
+  it('executes a call then loops until the final response', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('read_file', { path: 'a.ts' }), 'Le fichier dit bonjour.'],
       tools: [{ def: def('read_file') }],
@@ -156,7 +156,7 @@ describe('AgentLoop — outils', () => {
     expect(text).toContain('Le fichier dit bonjour.');
   });
 
-  it('appende les résultats d’outils au transcript', async () => {
+  it('appends tool results to the transcript', async () => {
     const { loop, transcript } = await rig({
       replies: [toolCall('read_file'), 'fini'],
       tools: [{ def: def('read_file') }],
@@ -174,7 +174,7 @@ describe('AgentLoop — outils', () => {
     });
   });
 
-  it('exécute plusieurs appels du même tour dans l’ordre', async () => {
+  it('executes several calls from the same turn in order', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('a') + toolCall('b'), 'fini'],
       tools: [{ def: def('a') }, { def: def('b') }],
@@ -183,7 +183,7 @@ describe('AgentLoop — outils', () => {
     expect(calls.map((c) => c.name)).toEqual(['a', 'b']);
   });
 
-  it('répond proprement à un outil inconnu, en rappelant l’inventaire', async () => {
+  it('responds cleanly to an unknown tool, recalling the inventory', async () => {
     const { loop, transcript } = await rig({
       replies: [toolCall('fantome'), 'compris'],
       tools: [{ def: def('read_file') }],
@@ -198,7 +198,7 @@ describe('AgentLoop — outils', () => {
     expect(result.content).toContain('read_file');
   });
 
-  it('transforme une exception de handler en résultat d’échec', async () => {
+  it('turns a handler exception into a failure result', async () => {
     const { loop, transcript } = await rig({
       replies: [toolCall('casse'), 'compris'],
       tools: [
@@ -216,9 +216,9 @@ describe('AgentLoop — outils', () => {
     expect(result.content).toContain('boum');
   });
 
-  it('borne le nombre d’allers-retours', async () => {
+  it('caps the number of round-trips', async () => {
     const { loop, transcript, calls } = await rig({
-      replies: [toolCall('boucle')], // le modèle rappelle l'outil sans fin
+      replies: [toolCall('boucle')], // the model keeps calling the tool endlessly
       tools: [{ def: def('boucle') }],
       maxTurns: 3,
     });
@@ -229,7 +229,7 @@ describe('AgentLoop — outils', () => {
 });
 
 describe('AgentLoop — permissions', () => {
-  it('mode Lecture : une écriture est refusée sans exécuter le handler', async () => {
+  it('Reading mode: a write is denied without executing the handler', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file', { path: 'a' }), 'compris'],
       tools: [{ def: def('write_file', 'write') }],
@@ -242,7 +242,7 @@ describe('AgentLoop — permissions', () => {
     expect(result.content).toMatch(/denied|play mode/i);
   });
 
-  it('mode Répétition : l’accord de l’utilisateur est demandé puis honoré', async () => {
+  it('Rehearsal mode: the user’s agreement is requested then honored', async () => {
     const approve = vi.fn<ApprovalResolver>(async () => true);
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file', { path: 'a' }), 'fait'],
@@ -256,7 +256,7 @@ describe('AgentLoop — permissions', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('mode Répétition : un refus de l’utilisateur n’exécute rien', async () => {
+  it('Rehearsal mode: a user refusal executes nothing', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'compris'],
       tools: [{ def: def('write_file', 'write') }],
@@ -269,7 +269,7 @@ describe('AgentLoop — permissions', () => {
     expect(result.ok).toBe(false);
   });
 
-  it('sans résolveur d’accord, une action à autoriser est refusée (fail-safe)', async () => {
+  it('with no approval resolver, an action needing authorization is denied (fail-safe)', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'compris'],
       tools: [{ def: def('write_file', 'write') }],
@@ -279,7 +279,7 @@ describe('AgentLoop — permissions', () => {
     expect(calls).toEqual([]);
   });
 
-  it('mode Plume : une édition passe sans demander', async () => {
+  it('Quill mode: an edit goes through without asking', async () => {
     const approve = vi.fn<ApprovalResolver>(async () => true);
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'fait'],
@@ -293,8 +293,8 @@ describe('AgentLoop — permissions', () => {
   });
 });
 
-describe('AgentLoop — inventaire changeant', () => {
-  it('la grammaire envoyée suit le registre courant', async () => {
+describe('AgentLoop — changing inventory', () => {
+  it('the sent grammar follows the current registry', async () => {
     const { loop, transcript, registry } = await rig({
       replies: ['ok'],
       tools: [{ def: def('read_file') }],

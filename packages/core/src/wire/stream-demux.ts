@@ -1,11 +1,11 @@
 /**
- * Démultiplexeur de flux Hermes : sépare, au fil des deltas, le texte visible
- * du raisonnement `<think>` et des appels `<tool_call>` (masqués).
+ * Hermes stream demultiplexer: separates, delta by delta, the visible
+ * text from the `<think>` reasoning and the `<tool_call>` calls (hidden).
  *
- * Difficulté réelle : une balise peut être coupée entre deux chunks réseau
- * (`…Bonjour <to` puis `ol_call>…`). Tout suffixe susceptible d'être le début
- * d'une balise est donc retenu jusqu'à levée d'ambiguïté — on ne laisse jamais
- * fuiter un fragment de balise dans l'UI.
+ * Real difficulty: a tag can be cut between two network chunks
+ * (`…Hello <to` then `ol_call>…`). Any suffix that could be the start of
+ * a tag is therefore held back until the ambiguity is resolved — we never
+ * let a tag fragment leak into the UI.
  */
 
 import { IM_END, THINK_CLOSE, THINK_OPEN, TOOL_CALL_CLOSE, TOOL_CALL_OPEN } from './hermes-parser.js';
@@ -32,7 +32,7 @@ function firstMarker(
   return best;
 }
 
-/** Longueur du plus long suffixe pouvant être le début d'un marqueur. */
+/** Length of the longest suffix that could be the start of a marker. */
 function heldBackLength(buffer: string, markers: string[]): number {
   const longest = Math.max(...markers.map((m) => m.length)) - 1;
   const start = Math.max(0, buffer.length - longest);
@@ -60,16 +60,16 @@ export class HermesStreamDemux {
     return events;
   }
 
-  /** Sortie brute accumulée, verbatim (log append-only + parse final). */
+  /** Accumulated raw output, verbatim (append-only log + final parse). */
   get raw(): string {
     return this.rawOutput;
   }
 
-  /** Vide les retenues en fin de génération. */
+  /** Flushes the held-back data at the end of generation. */
   flush(): DemuxEvent[] {
     const events: DemuxEvent[] = [];
     this.drain(events, true);
-    // Appel d'outil non refermé : son contenu partiel ne doit jamais fuiter.
+    // Unclosed tool call: its partial content must never leak.
     this.buffer = '';
     return events;
   }
@@ -83,7 +83,7 @@ export class HermesStreamDemux {
 
       if (this.mode === 'call') {
         const close = this.buffer.indexOf(TOOL_CALL_CLOSE);
-        if (close === -1) return; // tout est masqué, on attend la fermeture
+        if (close === -1) return; // everything is hidden, we wait for the closing tag
         this.buffer = this.buffer.slice(close + TOOL_CALL_CLOSE.length);
         this.mode = 'text';
         continue;

@@ -1,13 +1,13 @@
 /**
- * Faux llama-server — fixture HTTP réutilisée par tous les jalons pour tester
- * le harness sans GPU. Mime les endpoints réels (vérifiés dans le README de
- * llama.cpp le 2026-08-18) : POST /completion (SSE), POST /slots/{id}?action=
- * save|restore|erase, GET /slots, GET /health, GET /props.
+ * Fake llama-server — HTTP fixture reused by every milestone to test the
+ * harness without a GPU. Mimics the real endpoints (verified in
+ * llama.cpp's README on 2026-08-18): POST /completion (SSE), POST
+ * /slots/{id}?action=save|restore|erase, GET /slots, GET /health, GET /props.
  *
- * Le « prefill » est simulé : timings.prompt_ms est proportionnel aux tokens
- * NON couverts par le cache du slot — c'est ce qui permet aux tests de
- * mesurer l'effet du save/restore comme sur une vraie machine. Aucun sleep
- * réel : seul le chiffre rapporté varie.
+ * The "prefill" is simulated: timings.prompt_ms is proportional to the
+ * tokens NOT covered by the slot's cache — that's what lets the tests
+ * measure the effect of save/restore as on a real machine. No real sleep:
+ * only the reported figure varies.
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
@@ -17,16 +17,16 @@ export interface FakeSlotSnapshot {
 }
 
 export interface FakeLlamaServerOptions {
-  /** ms de prefill simulé par token non caché (défaut 1 — jamais de sleep réel). */
+  /** Simulated prefill ms per uncached token (default 1 — never a real sleep). */
   msPerToken?: number;
-  /** Texte généré pour un prompt donné (défaut : 'ok'). */
+  /** Text generated for a given prompt (default: 'ok'). */
   responder?: (prompt: string) => string;
-  /** Nombre de slots (défaut 1). */
+  /** Number of slots (default 1). */
   totalSlots?: number;
   modelPath?: string;
   /**
-   * « Disque » des fichiers d'état : passer la même Map à une nouvelle
-   * instance simule un redémarrage du process avec les fichiers survivants.
+   * State files "disk": passing the same Map to a new instance simulates
+   * a process restart with the files surviving.
    */
   files?: Map<string, FakeSlotSnapshot>;
 }
@@ -39,12 +39,12 @@ export interface FakeLlamaServer {
   close(): Promise<void>;
 }
 
-/** Tokenizer factice déterministe : 1 token = 4 caractères. */
+/** Deterministic fake tokenizer: 1 token = 4 characters. */
 export function fakeTokenize(prompt: string): string[] {
   return prompt.match(/.{1,4}/gs) ?? [];
 }
 
-/** Octets simulés par token d'état sauvegardé (ordre de grandeur réaliste). */
+/** Simulated bytes per token of saved state (realistic order of magnitude). */
 const FAKE_BYTES_PER_TOKEN = 8192;
 
 function commonPrefixLength(a: string[], b: string[]): number {
@@ -75,10 +75,10 @@ export async function startFakeLlamaServer(
   const files = options.files ?? new Map<string, FakeSlotSnapshot>();
 
   /**
-   * Cache par slot : le TEXTE vu, tokenisé à la volée. Stocker le texte
-   * (plutôt que deux tokenisations concaténées) reproduit le vrai serveur,
-   * qui tokenise une séquence continue — sinon la frontière prompt/génération
-   * casserait artificiellement le préfixe commun.
+   * Per-slot cache: the TEXT seen, tokenized on the fly. Storing the text
+   * (rather than two concatenated tokenizations) reproduces the real
+   * server, which tokenizes one continuous sequence — otherwise the
+   * prompt/generation boundary would artificially break the common prefix.
    */
   const slots = new Map<number, string>();
   const slotText = (id: number): string => slots.get(id) ?? '';
@@ -110,7 +110,7 @@ export async function startFakeLlamaServer(
       'cache-control': 'no-cache',
     });
 
-    // Un chunk de contenu par « mot » pour un vrai flux multi-événements.
+    // One content chunk per "word" for a real multi-event stream.
     const pieces = text.split(/(?<= )/);
     for (const piece of pieces) {
       res.write(`data: ${JSON.stringify({ content: piece, stop: false })}\n\n`);
@@ -147,14 +147,14 @@ export async function startFakeLlamaServer(
     res: ServerResponse,
   ): void {
     if (idSlot < 0 || idSlot >= totalSlots) {
-      json(res, 400, { error: { message: `slot ${idSlot} inexistant` } });
+      json(res, 400, { error: { message: `slot ${idSlot} does not exist` } });
       return;
     }
 
     if (action === 'save') {
       const filename = String(body['filename'] ?? '');
       if (!filename) {
-        json(res, 400, { error: { message: 'filename requis' } });
+        json(res, 400, { error: { message: 'filename required' } });
         return;
       }
       const tokens = slotTokens(idSlot);
@@ -173,7 +173,7 @@ export async function startFakeLlamaServer(
       const filename = String(body['filename'] ?? '');
       const snapshot = files.get(filename);
       if (!snapshot) {
-        json(res, 400, { error: { message: `fichier inconnu : ${filename}` } });
+        json(res, 400, { error: { message: `unknown file: ${filename}` } });
         return;
       }
       slots.set(idSlot, snapshot.tokens.join(''));
@@ -194,7 +194,7 @@ export async function startFakeLlamaServer(
       return;
     }
 
-    json(res, 400, { error: { message: `action inconnue : ${action}` } });
+    json(res, 400, { error: { message: `unknown action: ${action}` } });
   }
 
   const server: Server = createServer((req, res) => {
@@ -256,7 +256,7 @@ export async function startFakeLlamaServer(
     port,
     files,
     getSlotTokens: (idSlot) => [...slotTokens(idSlot)],
-    // Idempotent : re-fermer un serveur déjà fermé est un no-op (fixture).
+    // Idempotent: closing an already-closed server again is a no-op (fixture).
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }

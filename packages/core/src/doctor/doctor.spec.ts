@@ -20,12 +20,12 @@ function fakeEnv(overrides: Partial<DoctorEnv> = {}): DoctorEnv {
 
 function check(report: Awaited<ReturnType<typeof runDoctor>>, id: string) {
   const found = report.checks.find((c) => c.id === id);
-  if (!found) throw new Error(`check ${id} absent du rapport`);
+  if (!found) throw new Error(`check ${id} missing from the report`);
   return found;
 }
 
 describe('runDoctor', () => {
-  it('rapporte ok quand tout va bien, avec les 4 checks', async () => {
+  it('reports ok when everything is fine, with the 4 checks', async () => {
     const report = await runDoctor(fakeEnv(), 'fr');
     expect(report.ok).toBe(true);
     expect(report.checks.map((c) => c.id)).toEqual([
@@ -37,7 +37,7 @@ describe('runDoctor', () => {
     expect(report.checks.every((c) => c.status === 'ok')).toBe(true);
   });
 
-  it('échoue (bloquant) si Node est trop vieux', async () => {
+  it('fails (blocking) if Node is too old', async () => {
     const report = await runDoctor(fakeEnv({ nodeVersion: 'v18.19.0' }), 'fr');
     const node = check(report, 'node');
     expect(node.status).toBe('fail');
@@ -45,12 +45,12 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(false);
   });
 
-  it('mentionne la version trouvée dans le détail du check node', async () => {
+  it('mentions the found version in the node check detail', async () => {
     const report = await runDoctor(fakeEnv({ nodeVersion: 'v18.19.0' }), 'fr');
     expect(check(report, 'node').detail).toContain('v18.19.0');
   });
 
-  it("échoue si llama-server n'est ni configuré ni sur le PATH", async () => {
+  it("fails if llama-server is neither configured nor on the PATH", async () => {
     const report = await runDoctor(
       fakeEnv({ lookupOnPath: async () => null }),
       'fr',
@@ -62,7 +62,7 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(false);
   });
 
-  it('trouve llama-server sur le PATH et donne chemin + build', async () => {
+  it('finds llama-server on the PATH and gives path + build', async () => {
     const report = await runDoctor(fakeEnv(), 'fr');
     const llama = check(report, 'llama-server');
     expect(llama.status).toBe('ok');
@@ -70,7 +70,7 @@ describe('runDoctor', () => {
     expect(llama.detail).toContain('b10217');
   });
 
-  it('échoue (bloquant) si le build llama est trop vieux pour les slots', async () => {
+  it('fails (blocking) if the llama build is too old for slots', async () => {
     const report = await runDoctor(
       fakeEnv({ readVersionOutput: async () => 'version: 3000 (abc1234)' }),
       'fr',
@@ -82,9 +82,9 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(false);
   });
 
-  it('avertit (non bloquant) si la version est indéterminable', async () => {
+  it('warns (non-blocking) if the version cannot be determined', async () => {
     const report = await runDoctor(
-      fakeEnv({ readVersionOutput: async () => 'sortie exotique' }),
+      fakeEnv({ readVersionOutput: async () => 'exotic output' }),
       'fr',
     );
     const llama = check(report, 'llama-server');
@@ -93,7 +93,7 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(true);
   });
 
-  it('trouve le CLI unifié `llama` quand llama-server est absent', async () => {
+  it('finds the unified `llama` CLI when llama-server is absent', async () => {
     const report = await runDoctor(
       fakeEnv({
         lookupOnPath: async (binary) =>
@@ -108,7 +108,7 @@ describe('runDoctor', () => {
     expect(llama.detail).toContain('WindowsApps\\llama.exe');
   });
 
-  it('préfère llama-server au CLI unifié quand les deux existent', async () => {
+  it('prefers llama-server over the unified CLI when both exist', async () => {
     const report = await runDoctor(
       fakeEnv({
         lookupOnPath: async (binary) =>
@@ -123,7 +123,7 @@ describe('runDoctor', () => {
     );
   });
 
-  it('privilégie le chemin configuré quand il existe', async () => {
+  it('prioritizes the configured path when it exists', async () => {
     const report = await runDoctor(
       fakeEnv({
         configuredLlamaServerPath: 'D:\\ia\\llama-server.exe',
@@ -135,7 +135,7 @@ describe('runDoctor', () => {
     expect(check(report, 'llama-server').detail).toContain('D:\\ia\\llama-server.exe');
   });
 
-  it('échoue si le chemin configuré ne pointe sur rien (pas de repli silencieux)', async () => {
+  it('fails if the configured path points to nothing (no silent fallback)', async () => {
     const report = await runDoctor(
       fakeEnv({
         configuredLlamaServerPath: 'D:\\ia\\llama-server.exe',
@@ -149,7 +149,7 @@ describe('runDoctor', () => {
     expect(llama.detail).toContain('D:\\ia\\llama-server.exe');
   });
 
-  it("échoue (bloquant) si le répertoire des états KV n'est pas écrivable", async () => {
+  it("fails (blocking) if the KV states directory is not writable", async () => {
     const report = await runDoctor(fakeEnv({ canWrite: async () => false }), 'fr');
     const slot = check(report, 'slot-save-path');
     expect(slot.status).toBe('fail');
@@ -157,7 +157,7 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(false);
   });
 
-  it('avertit (non bloquant) si le disque est presque plein', async () => {
+  it('warns (non-blocking) if the disk is almost full', async () => {
     const report = await runDoctor(
       fakeEnv({ freeDiskBytes: async () => 2 * 1024 ** 3 }),
       'fr',
@@ -168,7 +168,7 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(true);
   });
 
-  it('avertit (non bloquant) si aucun GPU n’est détecté', async () => {
+  it('warns (non-blocking) if no GPU is detected', async () => {
     const report = await runDoctor(fakeEnv({ detectGpu: async () => [] }), 'fr');
     const gpu = check(report, 'gpu');
     expect(gpu.status).toBe('warn');
@@ -176,12 +176,12 @@ describe('runDoctor', () => {
     expect(report.ok).toBe(true);
   });
 
-  it('liste les GPU détectés dans le détail', async () => {
+  it('lists the detected GPUs in the detail', async () => {
     const report = await runDoctor(fakeEnv(), 'fr');
     expect(check(report, 'gpu').detail).toContain('GeForce RTX 4090');
   });
 
-  it('localise les libellés selon la locale demandée', async () => {
+  it('localizes the labels according to the requested locale', async () => {
     const fr = await runDoctor(fakeEnv(), 'fr');
     const en = await runDoctor(fakeEnv(), 'en');
     expect(check(fr, 'node').label).toBe(harnessT('fr').doctor.checkNode);

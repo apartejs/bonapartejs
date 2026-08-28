@@ -1,16 +1,15 @@
 /**
- * Registre des types de backend — le point d'extension : les plugins
- * enregistrent ici leurs providers, au même titre que llama.cpp inclus
- * d'office.
+ * Backend type registry — the extension point: plugins register their
+ * providers here, on the same footing as llama.cpp included by default.
  */
 
 import type { Backend } from './types.js';
 
 export interface BackendType {
   id: string;
-  /** Libellé affichable (les settings schema-driven viendront s'y greffer). */
+  /** Displayable label (schema-driven settings will hook into this). */
   label: string;
-  /** Fabrique une instance à partir d'une config opaque (validée en amont). */
+  /** Builds an instance from an opaque config (validated upstream). */
   create(config: Record<string, unknown>): Backend | Promise<Backend>;
 }
 
@@ -19,7 +18,7 @@ export class BackendRegistry {
 
   register(type: BackendType): void {
     if (this.types.has(type.id)) {
-      throw new Error(`Type de backend déjà enregistré : ${type.id}`);
+      throw new Error(`Backend type already registered: ${type.id}`);
     }
     this.types.set(type.id, type);
   }
@@ -32,7 +31,7 @@ export class BackendRegistry {
     const type = this.types.get(id);
     if (!type) {
       throw new Error(
-        `Type de backend inconnu : ${id} (disponibles : ${[...this.types.keys()].join(', ') || 'aucun'})`,
+        `Unknown backend type: ${id} (available: ${[...this.types.keys()].join(', ') || 'none'})`,
       );
     }
     return type;

@@ -23,11 +23,11 @@ afterEach(async () => {
 });
 
 describe('scanModels', () => {
-  it('trouve les .gguf récursivement avec taille, date et source', async () => {
+  it('finds .gguf files recursively with size, date, and source', async () => {
     const root = await tree({
       'qwen3-8b-q4.gguf': 'x'.repeat(64),
       'sous/dossier/qwen3-1.7b.GGUF': 'y'.repeat(32),
-      'notes.txt': 'pas un modèle',
+      'notes.txt': 'not a model',
     });
     const models = await scanModels([{ dir: root, source: 'lmstudio' }]);
     expect(models.map((m) => m.name).sort()).toEqual(['qwen3-1.7b', 'qwen3-8b-q4']);
@@ -38,7 +38,7 @@ describe('scanModels', () => {
     expect(big.path).toBe(join(root, 'qwen3-8b-q4.gguf'));
   });
 
-  it('ignore silencieusement les racines absentes', async () => {
+  it('silently ignores absent roots', async () => {
     const root = await tree({ 'm.gguf': 'x' });
     const models = await scanModels([
       { dir: 'C:\\nexiste\\pas\\du\\tout', source: 'hf-cache' },
@@ -48,18 +48,18 @@ describe('scanModels', () => {
     expect(models[0]!.source).toBe('custom');
   });
 
-  it('respecte la profondeur maximale', async () => {
+  it('respects the maximum depth', async () => {
     const root = await tree({
-      'a/b/c/d/e/tres-profond.gguf': 'x',
-      'proche.gguf': 'x',
+      'a/b/c/d/e/very-deep.gguf': 'x',
+      'close.gguf': 'x',
     });
     const models = await scanModels([{ dir: root, source: 'custom' }], {
       maxDepth: 2,
     });
-    expect(models.map((m) => m.name)).toEqual(['proche']);
+    expect(models.map((m) => m.name)).toEqual(['close']);
   });
 
-  it('déduplique un même fichier vu par deux racines', async () => {
+  it('deduplicates the same file seen through two roots', async () => {
     const root = await tree({ 'm.gguf': 'x' });
     const models = await scanModels([
       { dir: root, source: 'lmstudio' },
@@ -68,19 +68,19 @@ describe('scanModels', () => {
     expect(models).toHaveLength(1);
   });
 
-  it('trie par nom', async () => {
+  it('sorts by name', async () => {
     const root = await tree({
       'zeta.gguf': 'x',
       'alpha.gguf': 'x',
-      'milieu.gguf': 'x',
+      'middle.gguf': 'x',
     });
     const models = await scanModels([{ dir: root, source: 'custom' }]);
-    expect(models.map((m) => m.name)).toEqual(['alpha', 'milieu', 'zeta']);
+    expect(models.map((m) => m.name)).toEqual(['alpha', 'middle', 'zeta']);
   });
 });
 
 describe('defaultScanRoots', () => {
-  it('propose LM Studio et le cache Hugging Face', () => {
+  it('offers LM Studio and the Hugging Face cache', () => {
     const roots = defaultScanRoots();
     expect(roots.some((r) => r.source === 'lmstudio')).toBe(true);
     expect(roots.some((r) => r.source === 'hf-cache')).toBe(true);

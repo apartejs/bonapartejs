@@ -30,19 +30,19 @@ async function collect(
     if (event.type === 'token') text += event.text;
     else stats = event.stats;
   }
-  if (!stats) throw new Error('aucun événement done');
+  if (!stats) throw new Error('no "done" event');
   return { text, stats };
 }
 
 describe('LlamaCppHttpClient', () => {
-  it('health() reflète la disponibilité du serveur', async () => {
+  it('health() reflects server availability', async () => {
     const { client } = await startServer();
     expect(await client.health()).toBe(true);
     const down = new LlamaCppHttpClient('http://127.0.0.1:1');
     expect(await down.health()).toBe(false);
   });
 
-  it('props() remonte modelPath et totalSlots', async () => {
+  it('props() surfaces modelPath and totalSlots', async () => {
     const { client } = await startServer({
       modelPath: 'D:\\models\\qwen3.gguf',
       totalSlots: 4,
@@ -52,7 +52,7 @@ describe('LlamaCppHttpClient', () => {
     expect(props.totalSlots).toBe(4);
   });
 
-  it('complete() streame les tokens puis les stats finales', async () => {
+  it('complete() streams the tokens then the final stats', async () => {
     const { client } = await startServer({
       responder: () => 'bonjour le monde',
       msPerToken: 5,
@@ -65,7 +65,7 @@ describe('LlamaCppHttpClient', () => {
     expect(stats.predictedTokens).toBeGreaterThan(0);
   });
 
-  it('complete() cible un slot et profite de son cache', async () => {
+  it('complete() targets a slot and benefits from its cache', async () => {
     const { client } = await startServer({ msPerToken: 10, responder: () => '' });
     const prefix = 'x'.repeat(40);
     const first = await collect(client.complete({ prompt: prefix, idSlot: 0 }));
@@ -76,7 +76,7 @@ describe('LlamaCppHttpClient', () => {
     expect(second.stats.promptMs).toBe(20);
   });
 
-  it('complete() remonte prompt_progress quand demandé', async () => {
+  it('complete() surfaces prompt_progress when requested', async () => {
     const { client } = await startServer({ responder: () => '' });
     const prefix = 'x'.repeat(40);
     await collect(client.complete({ prompt: prefix, idSlot: 0 }));
@@ -95,7 +95,7 @@ describe('LlamaCppHttpClient', () => {
     });
   });
 
-  it('saveSlot/restoreSlot font le cycle complet à travers un redémarrage', async () => {
+  it('saveSlot/restoreSlot complete the full cycle across a restart', async () => {
     const disk = new Map();
     const { server, client } = await startServer({
       files: disk,
@@ -124,13 +124,13 @@ describe('LlamaCppHttpClient', () => {
     expect(stats.promptMs).toBe(20);
   });
 
-  it('eraseSlot retourne le nombre de tokens effacés', async () => {
+  it('eraseSlot returns the number of erased tokens', async () => {
     const { client } = await startServer({ responder: () => '' });
     await collect(client.complete({ prompt: 'x'.repeat(40), idSlot: 0 }));
     expect(await client.eraseSlot(0)).toBe(10);
   });
 
-  it('restoreSlot lève LlamaCppHttpError(400) sur fichier inconnu', async () => {
+  it('restoreSlot throws LlamaCppHttpError(400) for an unknown file', async () => {
     const { client } = await startServer();
     await expect(client.restoreSlot(0, 'inconnu.slot')).rejects.toSatisfy(
       (err: unknown) =>
@@ -138,7 +138,7 @@ describe('LlamaCppHttpClient', () => {
     );
   });
 
-  it('complete() rejette immédiatement si le signal est déjà annulé', async () => {
+  it('complete() rejects immediately if the signal is already aborted', async () => {
     const { client } = await startServer();
     const controller = new AbortController();
     controller.abort();

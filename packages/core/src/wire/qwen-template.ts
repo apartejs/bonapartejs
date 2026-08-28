@@ -1,22 +1,22 @@
 /**
- * Templating Qwen3 côté client — LE module qui rend le kv-store utile.
+ * Client-side Qwen3 templating — THE module that makes the kv-store useful.
  *
- * Le template Jinja officiel n'est pas byte-stable d'un tour à l'autre
- * (issue QwenLM/Qwen3#1826) : re-templater l'historique casse le cache de
- * préfixe. Ici, le prompt du tour N+1 ÉTEND par construction celui du tour
- * N : l'historique gelé n'est jamais re-rendu, les blocs <think> émis restent
- * verbatim, et le choix thinking/no-thinking ne joue que sur le suffixe de
- * génération du tour courant.
+ * The official Jinja template is not byte-stable from one turn to the
+ * next (issue QwenLM/Qwen3#1826): re-templating the history breaks the
+ * prefix cache. Here, turn N+1's prompt EXTENDS by construction turn N's:
+ * the frozen history is never re-rendered, the emitted <think> blocks
+ * stay verbatim, and the thinking/no-thinking choice only affects the
+ * current turn's generation suffix.
  *
- * Aucun BOS applicatif : /completion l'insère lui-même selon le modèle
- * (piège du double-BOS déjà rencontré sur monaparte).
+ * No application-level BOS: /completion inserts it itself depending on
+ * the model (the double-BOS trap already met on monaparte).
  */
 
 export const IM_START = '<|im_start|>';
 export const IM_END = '<|im_end|>';
 
 export interface AssistantTurnOptions {
-  /** true : le modèle peut émettre <think>… ; false : bloc think vide forcé. */
+  /** true: the model may emit <think>…; false: an empty think block is forced. */
   thinking: boolean;
 }
 
@@ -32,24 +32,24 @@ const ASSISTANT_HEADER = `${IM_START}assistant\n`;
 const EMPTY_THINK = '<think>\n\n</think>\n\n';
 
 /**
- * Accumulateur append-only du prompt d'une conversation.
- * Cycle : appendUser() → beginAssistantTurn() → (le serveur génère `raw`)
+ * Append-only accumulator for a conversation's prompt.
+ * Cycle: appendUser() → beginAssistantTurn() → (the server generates `raw`)
  * → completeAssistantTurn(raw) → appendUser() → …
  *
- * Garantie par construction : le prompt retourné par beginAssistantTurn au
- * tour N+1 étend octet-pour-octet celui du tour N suivi de la génération —
- * l'historique n'est JAMAIS re-rendu.
+ * Guaranteed by construction: the prompt returned by beginAssistantTurn on
+ * turn N+1 extends byte-for-byte turn N's followed by the generation —
+ * the history is NEVER re-rendered.
  */
 export class PromptLog {
   private history: string;
-  /** Prompt envoyé au serveur pour le tour assistant en cours, sinon null. */
+  /** Prompt sent to the server for the current assistant turn, otherwise null. */
   private pendingPrompt: string | null = null;
 
   constructor(systemPrompt: string) {
     this.history = renderSystem(systemPrompt);
   }
 
-  /** Historique gelé (préfixe stable pour le cache). */
+  /** Frozen history (stable prefix for the cache). */
   get frozen(): string {
     return this.history;
   }
@@ -57,17 +57,17 @@ export class PromptLog {
   appendUser(text: string): void {
     if (this.pendingPrompt !== null) {
       throw new Error(
-        'appendUser impossible : un tour assistant est en cours (completeAssistantTurn attendu).',
+        'appendUser is not possible: an assistant turn is in progress (completeAssistantTurn expected).',
       );
     }
     this.history += renderUser(text);
   }
 
-  /** Retourne le prompt COMPLET à envoyer à /completion pour ce tour. */
+  /** Returns the COMPLETE prompt to send to /completion for this turn. */
   beginAssistantTurn(options: AssistantTurnOptions): string {
     if (this.pendingPrompt !== null) {
       throw new Error(
-        'beginAssistantTurn impossible : un tour assistant est déjà en cours.',
+        'beginAssistantTurn is not possible: an assistant turn is already in progress.',
       );
     }
     const suffix = options.thinking
@@ -77,15 +77,15 @@ export class PromptLog {
     return this.pendingPrompt;
   }
 
-  /** Gèle le tour : `raw` est la sortie brute du modèle, verbatim. */
+  /** Freezes the turn: `raw` is the model's raw output, verbatim. */
   completeAssistantTurn(raw: string): void {
     if (this.pendingPrompt === null) {
       throw new Error(
-        'completeAssistantTurn impossible : aucun tour assistant en cours.',
+        'completeAssistantTurn is not possible: no assistant turn in progress.',
       );
     }
-    // L'historique devient exactement ce que le serveur a vu + généré :
-    // prompt du tour (suffixe compris) + sortie verbatim + terminateur.
+    // The history becomes exactly what the server saw + generated:
+    // the turn's prompt (suffix included) + verbatim output + terminator.
     this.history = this.pendingPrompt + raw + `${IM_END}\n`;
     this.pendingPrompt = null;
   }

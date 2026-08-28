@@ -31,8 +31,8 @@ const manifest = (id: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-describe('PluginHost — découverte', () => {
-  it('lit un manifeste valide SANS exécuter le plugin', async () => {
+describe('PluginHost — discovery', () => {
+  it('reads a valid manifest WITHOUT executing the plugin', async () => {
     const root = await makePluginDir('terminal', manifest('terminal'));
     const host = new PluginHost({ registry: new ToolRegistry() });
 
@@ -42,8 +42,8 @@ describe('PluginHost — découverte', () => {
     expect(found[0]?.error).toBeUndefined();
   });
 
-  it('signale un manifeste invalide au lieu de le charger', async () => {
-    // `id` en majuscules : refusé par le schéma.
+  it('reports an invalid manifest instead of loading it', async () => {
+    // `id` in uppercase: rejected by the schema.
     const root = await makePluginDir('bad', { id: 'BAD', name: 'x', version: '1' });
     const host = new PluginHost({ registry: new ToolRegistry() });
 
@@ -54,21 +54,21 @@ describe('PluginHost — découverte', () => {
     expect(found[0]?.active).toBe(false);
   });
 
-  it('ignore un dossier sans manifeste', async () => {
+  it('ignores a folder with no manifest', async () => {
     const root = await mkdtemp(join(tmpdir(), 'bp-plugins-'));
     dirs.push(root);
-    await mkdir(join(root, 'pas-un-plugin'), { recursive: true });
+    await mkdir(join(root, 'not-a-plugin'), { recursive: true });
     const host = new PluginHost({ registry: new ToolRegistry() });
 
     expect(await host.discover(root)).toEqual([]);
   });
 
-  it('refuse un second plugin réclamant le même identifiant', async () => {
+  it('refuses a second plugin claiming the same id', async () => {
     const root = await makePluginDir('dupe', manifest('dupe'));
-    // Un deuxième dossier dont le manifeste revendique le même id.
-    await mkdir(join(root, 'autre'), { recursive: true });
+    // A second folder whose manifest claims the same id.
+    await mkdir(join(root, 'other'), { recursive: true });
     await writeFile(
-      join(root, 'autre', 'plugin.json'),
+      join(root, 'other', 'plugin.json'),
       JSON.stringify(manifest('dupe')),
       'utf8',
     );
@@ -81,23 +81,23 @@ describe('PluginHost — découverte', () => {
   });
 });
 
-describe('PluginHost — activation réversible', () => {
+describe('PluginHost — reversible activation', () => {
   const withTool = (id: string) =>
     manifest(id, {
       contributes: {
         agentTools: [
-          { name: 'demo_tool', description: 'un outil de démo', effect: 'read' },
+          { name: 'demo_tool', description: 'a demo tool', effect: 'read' },
         ],
       },
     });
 
-  it('n’ajoute l’outil à l’inventaire qu’une fois le handler branché', async () => {
+  it('only adds the tool to the inventory once the handler is wired up', async () => {
     const root = await makePluginDir('demo', withTool('demo'));
     const registry = new ToolRegistry();
     const host = new PluginHost({ registry });
     await host.discover(root);
 
-    // Le manifeste déclare l'outil, mais rien ne l'exécute encore.
+    // The manifest declares the tool, but nothing executes it yet.
     expect(registry.list()).toHaveLength(0);
 
     await host.activate('demo', {
@@ -109,8 +109,8 @@ describe('PluginHost — activation réversible', () => {
     expect(registry.list().map((t) => t.name)).toEqual(['demo_tool']);
   });
 
-  it('défait TOUT au démontage, sans que le plugin ait à s’en occuper', async () => {
-    // C'est l'invariant du contrat : la réversibilité est dans la primitive.
+  it('undoes EVERYTHING on teardown, with no effort from the plugin', async () => {
+    // This is the contract's invariant: reversibility lives in the primitive.
     const root = await makePluginDir('demo', withTool('demo'));
     const registry = new ToolRegistry();
     const host = new PluginHost({ registry });
@@ -132,9 +132,9 @@ describe('PluginHost — activation réversible', () => {
     expect(host.status().find((p) => p.id === 'demo')?.active).toBe(false);
   });
 
-  it('refuse un handler pour un outil non déclaré au manifeste', async () => {
-    // Le manifeste doit rester lisible sans exécuter le plugin : un outil qui
-    // apparaîtrait seulement à l'activation le rendrait mensonger.
+  it('refuses a handler for a tool not declared in the manifest', async () => {
+    // The manifest must remain readable without executing the plugin: a
+    // tool that only appeared at activation time would make it a lie.
     const root = await makePluginDir('demo', withTool('demo'));
     const host = new PluginHost({ registry: new ToolRegistry() });
     await host.discover(root);
@@ -142,16 +142,16 @@ describe('PluginHost — activation réversible', () => {
     await expect(
       host.activate('demo', {
         activate: (ctx) => {
-          ctx.registerToolHandler('outil_clandestin', async () => ({
+          ctx.registerToolHandler('clandestine_tool', async () => ({
             ok: true,
             content: '',
           }));
         },
       }),
-    ).rejects.toThrow(/non déclaré/i);
+    ).rejects.toThrow(/not declared/i);
   });
 
-  it('un plugin qui explose à l’activation ne laisse rien derrière lui', async () => {
+  it('a plugin that blows up during activation leaves nothing behind', async () => {
     const root = await makePluginDir('demo', withTool('demo'));
     const registry = new ToolRegistry();
     const host = new PluginHost({ registry });
@@ -166,16 +166,16 @@ describe('PluginHost — activation réversible', () => {
       }),
     ).rejects.toThrow('boum');
 
-    // L'inventaire ne doit pas garder l'outil d'un plugin à moitié activé.
+    // The inventory must not keep the tool of a half-activated plugin.
     expect(registry.list()).toHaveLength(0);
     const status = host.status().find((p) => p.id === 'demo');
     expect(status?.active).toBe(false);
     expect(status?.error).toContain('boum');
   });
 
-  it('route une commande de la vue vers sa moitié Node', async () => {
-    // Une vue de plugin ne peut pas parler à son propre process Node sans
-    // ceci : elle passerait par des canaux ad hoc, hors du contrat.
+  it('routes a command from the view to its Node half', async () => {
+    // A plugin view cannot talk to its own Node process without this: it
+    // would have to go through ad hoc channels, outside the contract.
     const root = await makePluginDir('demo', manifest('demo'));
     const host = new PluginHost({ registry: new ToolRegistry() });
     await host.discover(root);
@@ -188,7 +188,7 @@ describe('PluginHost — activation réversible', () => {
     expect(await host.invoke('demo', 'ping', 42)).toEqual({ pong: 42 });
   });
 
-  it('une commande disparaît avec son plugin', async () => {
+  it('a command disappears with its plugin', async () => {
     const root = await makePluginDir('demo', manifest('demo'));
     const host = new PluginHost({ registry: new ToolRegistry() });
     await host.discover(root);
@@ -197,15 +197,15 @@ describe('PluginHost — activation réversible', () => {
     });
     await host.deactivate('demo');
 
-    await expect(host.invoke('demo', 'ping', null)).rejects.toThrow(/inconnue/i);
+    await expect(host.invoke('demo', 'ping', null)).rejects.toThrow(/unknown/i);
   });
 
-  it('expose les vues contribuées par les plugins actifs', async () => {
+  it('exposes the views contributed by active plugins', async () => {
     const root = await makePluginDir(
       'browser',
       manifest('browser', {
         contributes: {
-          toolingViews: [{ id: 'pages', title: 'Navigateur', icon: '◫' }],
+          toolingViews: [{ id: 'pages', title: 'Browser', icon: '◫' }],
         },
       }),
     );
@@ -214,7 +214,7 @@ describe('PluginHost — activation réversible', () => {
     await host.activate('browser', { activate: () => undefined });
 
     expect(host.status().find((p) => p.id === 'browser')?.views[0]?.title).toBe(
-      'Navigateur',
+      'Browser',
     );
   });
 });

@@ -1,10 +1,11 @@
 /**
- * Backend llama.cpp — l'implémentation incluse d'office du contrat Backend.
- * Deux modes : 'managed' (bonaparte spawn/supervise llama-server, restart
- * borné) et 'remote' (llama-server déjà lancé ailleurs, ex. autre machine).
+ * llama.cpp backend — the implementation included by default for the
+ * Backend contract. Two modes: 'managed' (bonaparte spawns/supervises
+ * llama-server, bounded restarts) and 'remote' (llama-server already
+ * launched elsewhere, e.g. another machine).
  *
- * Le spawn est injecté (SpawnFn) : la supervision se teste sans binaire réel,
- * contre le faux llama-server pour la partie HTTP.
+ * The spawn is injected (SpawnFn): supervision is tested with no real
+ * binary, against the fake llama-server for the HTTP part.
  */
 
 import { parseHermesOutput } from '../../wire/hermes-parser.js';
@@ -37,15 +38,15 @@ export interface ManagedOptions {
   binPath: string;
   launch: LlamaCppLaunchConfig;
   spawnFn: SpawnFn;
-  /** Seam de test : URL du serveur si différente de 127.0.0.1:port. */
+  /** Test seam: server URL if different from 127.0.0.1:port. */
   baseUrl?: string;
   healthIntervalMs?: number;
   healthTimeoutMs?: number;
   maxRestarts?: number;
   /**
-   * Sous-commande à préfixer aux args — ['serve'] pour le CLI unifié
-   * `llama`, [] pour le binaire historique `llama-server`.
-   * Voir detectServeCommandPrefix().
+   * Subcommand to prefix the args with — ['serve'] for the unified
+   * `llama` CLI, [] for the historical `llama-server` binary.
+   * See detectServeCommandPrefix().
    */
   commandPrefix?: string[];
 }
@@ -54,8 +55,8 @@ export interface RemoteOptions {
   mode: 'remote';
   url: string;
   /**
-   * Un serveur distant peut ne pas avoir --slot-save-path : l'utilisateur
-   * le déclare. Les erreurs runtime restent propres si c'est faux.
+   * A remote server might not have --slot-save-path: the user declares
+   * it. Runtime errors stay clean if that's wrong.
    */
   assumeKvPersistence?: boolean;
 }
@@ -73,13 +74,13 @@ function slotApi(client: LlamaCppHttpClient): SlotApi {
   };
 }
 
-/** État persistable d'une conversation côté llama.cpp. */
+/** Persistable state of a conversation on the llama.cpp side. */
 interface LlamaConversationState {
   systemPrompt: string;
 }
 
 abstract class BaseBackend implements Backend {
-  /** Un rendu append-only par conversation. */
+  /** One append-only renderer per conversation. */
   private readonly renderers = new Map<string, TranscriptRenderer>();
 
   private renderer(conversationId: string): TranscriptRenderer {
@@ -112,9 +113,10 @@ abstract class BaseBackend implements Backend {
   }
 
   /**
-   * Un tour : le transcript est rendu en prompt append-only, la grammaire est
-   * régénérée depuis l'inventaire de CE tour, la sortie est démultiplexée puis
-   * parsée — tout ce qui est spécifique à llama.cpp/Qwen reste ici.
+   * A turn: the transcript is rendered into an append-only prompt, the
+   * grammar is regenerated from THIS turn's inventory, the output is
+   * demuxed then parsed — everything specific to llama.cpp/Qwen stays
+   * here.
    */
   async *runTurn(request: TurnRequest): AsyncIterable<ProviderEvent> {
     const renderer = this.renderer(request.conversationId);
@@ -164,8 +166,8 @@ abstract class BaseBackend implements Backend {
           : { type: 'thinking', delta: out.delta };
       }
     } finally {
-      // Le tour est gelé même en cas d'interruption : le préfixe reste
-      // cohérent avec ce que le serveur a réellement vu.
+      // The turn is frozen even on interruption: the prefix stays
+      // consistent with what the server actually saw.
       turn.commit(demux.raw);
     }
 
@@ -231,11 +233,11 @@ class RemoteLlamaCppBackend extends BaseBackend {
       return;
     }
     this.setStatus('crashed');
-    throw new Error(`llama-server distant injoignable : ${this.client.baseUrl}`);
+    throw new Error(`Remote llama-server unreachable: ${this.client.baseUrl}`);
   }
 
   async stop(): Promise<void> {
-    // Distant : on ne tue rien, on se détache simplement.
+    // Remote: we kill nothing, we simply detach.
     this.setStatus('stopped');
   }
 }
@@ -296,12 +298,12 @@ class ManagedLlamaCppBackend extends BaseBackend {
     handle.kill();
     this.setStatus('crashed');
     throw new Error(
-      `llama-server ne répond pas après ${this.healthTimeoutMs} ms (${this.client.baseUrl})`,
+      `llama-server is not responding after ${this.healthTimeoutMs} ms (${this.client.baseUrl})`,
     );
   }
 
   private onProcessExit(handle: ProcessHandle, _code: number | null): void {
-    if (this.handle !== handle) return; // process d'une vie antérieure
+    if (this.handle !== handle) return; // process from a previous life
     this.handle = null;
 
     if (this.intentionalStop) {
@@ -316,7 +318,7 @@ class ManagedLlamaCppBackend extends BaseBackend {
 
     this.restartCount += 1;
     void this.spawnAndWait('restarting').catch(() => {
-      // spawnAndWait a déjà posé le statut 'crashed'.
+      // spawnAndWait has already set the 'crashed' status.
     });
   }
 

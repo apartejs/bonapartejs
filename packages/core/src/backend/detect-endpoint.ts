@@ -1,24 +1,24 @@
 /**
- * Reconnaissance d'un llama-server à une URL donnée.
+ * Recognizes a llama-server at a given URL.
  *
- * bonaparte ne pilote QUE llama.cpp. Sa raison d'être est la persistance du
- * contexte par conversation (slots + `/completion` brut + grammaire), et
- * aucune façade OpenAI ne l'expose : reconnaître LM Studio, Ollama ou vLLM
- * reviendrait à promettre une reprise instantanée qu'on ne pourrait pas
- * tenir. Un endpoint qui ne répond pas `/props` n'est donc pas un endpoint
- * pour nous — il n'est pas « dégradé », il est hors sujet.
+ * bonaparte drives ONLY llama.cpp. Its reason for being is per-conversation
+ * context persistence (slots + raw `/completion` + grammar), and no OpenAI
+ * facade exposes that: recognizing LM Studio, Ollama, or vLLM would amount
+ * to promising an instant resume we couldn't deliver. An endpoint that
+ * doesn't answer `/props` is therefore not an endpoint for us — it isn't
+ * "degraded", it's out of scope.
  *
- * Cette sonde ne sert plus qu'à valider l'URL d'un llama-server qu'on n'a pas
- * lancé soi-même ; le mode nominal reste le serveur managé.
+ * This probe now only serves to validate the URL of a llama-server we
+ * didn't launch ourselves; the managed server remains the nominal mode.
  */
 
 export interface EndpointProbe {
   protocol: 'llamacpp';
-  /** URL normalisée à utiliser (racine du serveur, sans /v1). */
+  /** Normalized URL to use (server root, without /v1). */
   baseUrl: string;
-  /** Modèle chargé, quand le serveur le dit. */
+  /** Loaded model, when the server reports it. */
   model?: string;
-  /** Nombre de slots annoncé (la persistance en dépend). */
+  /** Announced number of slots (persistence depends on it). */
   totalSlots?: number;
 }
 
@@ -56,8 +56,8 @@ export async function probeEndpoint(
   const base = trim(rawUrl);
   if (base === '') return null;
 
-  // Un utilisateur peut coller « …:8080 » ou la racine « …:8080/v1 » de la
-  // façade OpenAI du même serveur : les deux mènent au même llama-server.
+  // A user might paste "…:8080" or the "…:8080/v1" root of the same
+  // server's OpenAI facade: both lead to the same llama-server.
   const root = base.endsWith('/v1') ? base.slice(0, -3) : base;
   const props = await getJson(`${root}/props`, options);
   if (!props || !('model_path' in props || 'total_slots' in props)) return null;

@@ -110,8 +110,8 @@ async function drain(events: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
   return all;
 }
 
-describe('ChatSession — ouverture', () => {
-  it('crée la conversation et fige le prompt système avec l’inventaire', async () => {
+describe('ChatSession — opening', () => {
+  it('creates the conversation and freezes the system prompt with the inventory', async () => {
     const rig = await makeRig({ tools: [def('read_file')] });
     const { restore } = await ChatSession.open(rig.options, 'conv-1');
     expect(restore).toMatchObject({ restored: false, reason: 'missing' });
@@ -121,14 +121,14 @@ describe('ChatSession — ouverture', () => {
     expect(meta.toolNames).toEqual(['read_file']);
   });
 
-  it('réutilise le prompt figé plutôt que de le reconstruire', async () => {
+  it('reuses the frozen prompt rather than rebuilding it', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-session-frozen-'));
     dirs.push(dir);
     const first = await makeRig({ baseDir: dir, tools: [def('read_file')] });
     await ChatSession.open(first.options, 'conv-1');
     const frozen = (await first.options.store.meta('conv-1')).backendState;
 
-    // Réouverture avec un inventaire différent : le prompt ne doit pas bouger.
+    // Reopening with a different inventory: the prompt must not move.
     const second = await makeRig({
       baseDir: dir,
       tools: [def('read_file'), def('run_shell', 'execute')],
@@ -137,7 +137,7 @@ describe('ChatSession — ouverture', () => {
     expect((await second.options.store.meta('conv-1')).backendState).toEqual(frozen);
   });
 
-  it('annonce un delta d’inventaire par un message de service appendé', async () => {
+  it('announces an inventory delta via an appended service message', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-session-delta-'));
     dirs.push(dir);
     const first = await makeRig({ baseDir: dir, tools: [def('read_file')] });
@@ -152,14 +152,14 @@ describe('ChatSession — ouverture', () => {
     const events = await second.options.store.loadEvents('conv-1');
     const service = events.find((e) => e.type === 'service') as { text: string };
     expect(service.text).toContain('run_shell');
-    // L'inventaire de référence a suivi : pas de ré-annonce au prochain coup.
+    // The reference inventory followed along: no re-announcement next time.
     expect((await second.options.store.meta('conv-1')).toolNames).toEqual([
       'read_file',
       'run_shell',
     ]);
   });
 
-  it('n’appende rien quand l’inventaire n’a pas bougé', async () => {
+  it('appends nothing when the inventory has not moved', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-session-nodelta-'));
     dirs.push(dir);
     const first = await makeRig({ baseDir: dir, tools: [def('read_file')] });
@@ -170,8 +170,8 @@ describe('ChatSession — ouverture', () => {
   });
 });
 
-describe('ChatSession — envoi', () => {
-  it('streame la réponse et persiste le tour', async () => {
+describe('ChatSession — sending', () => {
+  it('streams the response and persists the turn', async () => {
     const rig = await makeRig({ replies: ['Bonjour Paul.'] });
     const { session } = await ChatSession.open(rig.options, 'conv-1');
     const events = await drain(session.send('Salut'));
@@ -186,7 +186,7 @@ describe('ChatSession — envoi', () => {
     expect(persisted.map((e) => e.type)).toEqual(['user', 'assistant']);
   });
 
-  it('persiste la séquence exacte d’un tour avec outil (rejeu identique)', async () => {
+  it('persists the exact sequence of a turn with a tool (identical replay)', async () => {
     const rig = await makeRig({
       replies: [
         '<tool_call>{"name": "read_file", "arguments": {}}</tool_call>',
@@ -205,16 +205,16 @@ describe('ChatSession — envoi', () => {
       'assistant',
     ]);
 
-    // Le verbatim du fournisseur est conservé : c'est lui qui permet un
-    // rendu octet-identique au rejeu (cf. turn-renderer.spec).
+    // The provider's verbatim text is preserved: it's what makes a
+    // byte-identical render possible on replay (cf. turn-renderer.spec).
     const first = persisted[1] as { entry: { raw?: string; calls?: unknown[] } };
     expect(first.entry.raw).toContain('<tool_call>');
     expect(first.entry.calls).toHaveLength(1);
   });
 });
 
-describe('ChatSession — persistance du contexte', () => {
-  it('CYCLE : envoi → save → redémarrage → restauration → reprise quasi gratuite', async () => {
+describe('ChatSession — context persistence', () => {
+  it('CYCLE: send → save → restart → restore → near-free resume', async () => {
     const disk = new Map<string, FakeSlotSnapshot>();
     const base = await mkdtemp(join(tmpdir(), 'bp-session-cycle-'));
     dirs.push(base);
@@ -246,7 +246,7 @@ describe('ChatSession — persistance du contexte', () => {
     expect(secondEnd.promptMs).toBeLessThan(firstEnd.promptMs / 5);
   });
 
-  it('refuse la restauration si la config vivante a changé', async () => {
+  it('refuses the restore if the live config has changed', async () => {
     const disk = new Map<string, FakeSlotSnapshot>();
     const base = await mkdtemp(join(tmpdir(), 'bp-session-mismatch-'));
     dirs.push(base);
@@ -266,7 +266,7 @@ describe('ChatSession — persistance du contexte', () => {
     expect(restore).toEqual({ restored: false, reason: 'nCtx' });
   });
 
-  it('save() rend false quand le backend n’a pas la persistance', async () => {
+  it('save() returns false when the backend has no persistence', async () => {
     const rig = await makeRig({});
     const backend = createLlamaCppBackend({
       mode: 'remote',

@@ -20,7 +20,7 @@ afterEach(async () => {
   servers = [];
 });
 
-/** POST /completion en stream et agrège les événements SSE data: {...}. */
+/** POST /completion as a stream and aggregates the SSE data: {...} events. */
 async function complete(
   server: FakeLlamaServer,
   body: Record<string, unknown>,
@@ -38,7 +38,7 @@ async function complete(
     .filter((block) => block.startsWith('data: '))
     .map((block) => JSON.parse(block.slice('data: '.length)));
   const final = events.at(-1);
-  if (!final?.stop) throw new Error('dernier événement sans stop:true');
+  if (!final?.stop) throw new Error('last event has no stop:true');
   return {
     content: events.map((e) => e.content ?? '').join(''),
     final,
@@ -60,14 +60,14 @@ async function slotAction(
 }
 
 describe('fake llama-server', () => {
-  it('répond ok sur /health', async () => {
+  it('responds ok on /health', async () => {
     const server = await start();
     const res = await fetch(`${server.url}/health`);
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: 'ok' });
   });
 
-  it('expose model_path et total_slots sur /props', async () => {
+  it('exposes model_path and total_slots on /props', async () => {
     const server = await start({ modelPath: 'D:\\models\\qwen.gguf', totalSlots: 2 });
     const res = await fetch(`${server.url}/props`);
     const props = (await res.json()) as Record<string, any>;
@@ -75,7 +75,7 @@ describe('fake llama-server', () => {
     expect(props['total_slots']).toBe(2);
   });
 
-  it('streame la réponse en SSE et termine par stop:true', async () => {
+  it('streams the response over SSE and ends with stop:true', async () => {
     const server = await start({ responder: () => 'bonjour de bonaparte' });
     const { content, final } = await complete(server, { prompt: 'salut' });
     expect(content).toBe('bonjour de bonaparte');
@@ -83,14 +83,14 @@ describe('fake llama-server', () => {
     expect(final['timings']).toBeDefined();
   });
 
-  it('facture le prefill au prorata des tokens non cachés (premier appel = tout)', async () => {
+  it('bills the prefill proportionally to uncached tokens (first call = all of it)', async () => {
     const server = await start({ msPerToken: 10 });
-    const prompt = 'x'.repeat(40); // 10 tokens de 4 chars
+    const prompt = 'x'.repeat(40); // 10 tokens of 4 chars
     const { final } = await complete(server, { prompt });
     expect(final['timings']['prompt_ms']).toBe(100);
   });
 
-  it('réutilise le cache du slot : un préfixe déjà vu ne se re-paie pas', async () => {
+  it('reuses the slot cache: an already-seen prefix is not paid for again', async () => {
     const server = await start({ msPerToken: 10 });
     const prefix = 'x'.repeat(40);
     await complete(server, { prompt: prefix, id_slot: 0 });
@@ -101,7 +101,7 @@ describe('fake llama-server', () => {
     expect(final['timings']['prompt_ms']).toBe(20);
   });
 
-  it('rapporte prompt_progress quand return_progress est demandé', async () => {
+  it('reports prompt_progress when return_progress is requested', async () => {
     const server = await start();
     const prefix = 'x'.repeat(40);
     await complete(server, { prompt: prefix, id_slot: 0 });
@@ -116,9 +116,9 @@ describe('fake llama-server', () => {
     expect(progress['processed']).toBe(12);
   });
 
-  it('sauvegarde le cache du slot dans un fichier nommé (n_saved, n_written)', async () => {
-    // responder vide : le cache du slot = les tokens du prompt uniquement
-    // (le vrai serveur garde prompt + génération ; ici on fige le comptage).
+  it('saves the slot cache to a named file (n_saved, n_written)', async () => {
+    // empty responder: the slot cache = the prompt's tokens only (the real
+    // server keeps prompt + generation; here we pin the count).
     const server = await start({ responder: () => '' });
     const prompt = 'x'.repeat(40);
     await complete(server, { prompt, id_slot: 0 });
@@ -131,7 +131,7 @@ describe('fake llama-server', () => {
     expect(server.files.has('conv-1.slot')).toBe(true);
   });
 
-  it('restaure un état sauvé après « redémarrage » (mêmes fichiers, nouveau process)', async () => {
+  it('restores a saved state after a "restart" (same files, new process)', async () => {
     const disk = new Map();
     const first = await start({ msPerToken: 10, files: disk, responder: () => '' });
     const prompt = 'x'.repeat(400); // 100 tokens
@@ -148,10 +148,10 @@ describe('fake llama-server', () => {
       prompt: prompt + 'y'.repeat(8),
       id_slot: 0,
     });
-    expect(final['timings']['prompt_ms']).toBe(20); // 2 tokens seulement
+    expect(final['timings']['prompt_ms']).toBe(20); // only 2 tokens
   });
 
-  it('erase vide le cache du slot (n_erased) et le prefill se re-paie', async () => {
+  it('erase empties the slot cache (n_erased) and the prefill is paid again', async () => {
     const server = await start({ msPerToken: 10, responder: () => '' });
     const prompt = 'x'.repeat(40);
     await complete(server, { prompt, id_slot: 0 });
@@ -161,21 +161,21 @@ describe('fake llama-server', () => {
     expect(final['timings']['prompt_ms']).toBe(100);
   });
 
-  it('répond 400 quand le fichier à restaurer est inconnu', async () => {
+  it('responds 400 when the file to restore is unknown', async () => {
     const server = await start();
     const { status } = await slotAction(server, 0, 'restore', 'inconnu.slot');
     expect(status).toBe(400);
   });
 
-  it('des slots distincts ont des caches indépendants', async () => {
+  it('distinct slots have independent caches', async () => {
     const server = await start({ msPerToken: 10, totalSlots: 2 });
     const prompt = 'x'.repeat(40);
     await complete(server, { prompt, id_slot: 0 });
     const { final } = await complete(server, { prompt, id_slot: 1 });
-    expect(final['timings']['prompt_ms']).toBe(100); // slot 1 n'a rien en cache
+    expect(final['timings']['prompt_ms']).toBe(100); // slot 1 has nothing cached
   });
 
-  it('GET /slots reflète l’état des slots', async () => {
+  it('GET /slots reflects the state of the slots', async () => {
     const server = await start({ totalSlots: 2 });
     await complete(server, { prompt: 'x'.repeat(16), id_slot: 1 });
     const res = await fetch(`${server.url}/slots`);

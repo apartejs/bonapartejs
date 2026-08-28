@@ -6,7 +6,7 @@ describe('detectServeCommandPrefix', () => {
     'C:\\tools\\llama\\llama-server.exe',
     '/usr/local/bin/llama-server',
     'llama-server',
-  ])('binaire historique %s → aucun préfixe', (binPath) => {
+  ])('historical binary %s → no prefix', (binPath) => {
     expect(detectServeCommandPrefix(binPath)).toEqual([]);
   });
 
@@ -15,11 +15,11 @@ describe('detectServeCommandPrefix', () => {
     '/usr/local/bin/llama',
     'llama',
     'LLAMA.EXE',
-  ])('CLI unifié %s → préfixe serve', (binPath) => {
+  ])('unified CLI %s → serve prefix', (binPath) => {
     expect(detectServeCommandPrefix(binPath)).toEqual(['serve']);
   });
 
-  it('un nom inconnu est traité comme le binaire historique (pas de préfixe)', () => {
+  it('an unknown name is treated as the historical binary (no prefix)', () => {
     expect(detectServeCommandPrefix('C:\\bin\\mon-serveur-custom.exe')).toEqual([]);
   });
 });

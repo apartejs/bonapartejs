@@ -1,9 +1,9 @@
 /**
- * kv-store — LE différenciateur : orchestre le save/restore d'état par
- * conversation avec un manifest de compatibilité STRICT. Le format du fichier
- * de slot n'étant pas documenté upstream, un restore n'est autorisé que si
- * le manifest matche exactement l'état vivant du serveur ; sinon re-prefill
- * annoncé — jamais de restore risqué.
+ * kv-store — THE differentiator: orchestrates save/restore of state per
+ * conversation with a STRICT compatibility manifest. Since the slot file
+ * format isn't documented upstream, a restore is only allowed if the
+ * manifest matches the server's live state exactly; otherwise an
+ * announced re-prefill — never a risky restore.
  */
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -11,12 +11,12 @@ import { join } from 'node:path';
 import type { SlotApi } from '../backend/types.js';
 
 export interface LiveBackendConfig {
-  /** Empreinte du fichier modèle (voir fingerprintModelFile). */
+  /** Fingerprint of the model file (see fingerprintModelFile). */
   modelFingerprint: string;
   nCtx: number;
   cacheTypeK: string;
   cacheTypeV: string;
-  /** Tag de build llama.cpp (ex. b6521) — 'unknown' ne matche que 'unknown'. */
+  /** llama.cpp build tag (e.g. b6521) — 'unknown' only matches 'unknown'. */
   buildTag: string;
 }
 
@@ -78,9 +78,9 @@ export class KvStore {
   }
 
   /**
-   * Un état existe-t-il pour cette conversation ? Sert au listing : promettre
-   * une reprise instantanée dans le menu sans avoir de quoi la tenir serait
-   * un mensonge — et c'est justement notre argument produit.
+   * Does state exist for this conversation? Used by the listing: promising
+   * an instant resume in the menu with nothing to back it up would be a
+   * lie — and that's precisely our product's selling point.
    */
   async has(conversationId: string): Promise<boolean> {
     try {
@@ -92,10 +92,11 @@ export class KvStore {
   }
 
   /**
-   * Oublie l'etat d'une conversation : le fichier de slot ET son manifest.
+   * Forgets a conversation's state: the slot file AND its manifest.
    *
-   * L'etat KV n'est qu'un CACHE — le log append-only est la verite. Oublier ne
-   * perd donc jamais un message : ca ne coute qu'un re-prefill, annonce.
+   * The KV state is only a CACHE — the append-only log is the truth.
+   * Forgetting therefore never loses a message: it only costs an
+   * announced re-prefill.
    */
   async forget(conversationId: string): Promise<void> {
     await rm(this.slotFilename(conversationId), { force: true });

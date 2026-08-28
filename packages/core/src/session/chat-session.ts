@@ -1,10 +1,10 @@
 /**
- * ChatSession — orchestre pour UNE conversation active : transcript sémantique,
- * boucle agentique (outils + permissions), persistance des événements et
- * save/restore d'état KV via le manifest strict.
+ * ChatSession — orchestrates ONE active conversation: semantic transcript,
+ * agentic loop (tools + permissions), event persistence, and KV state
+ * save/restore via the strict manifest.
  *
- * Elle ne connaît AUCUN détail de fournisseur : elle passe un transcript et un
- * `SystemSpec` au backend, qui en dérive sa propre représentation.
+ * It knows NO provider detail whatsoever: it passes a transcript and a
+ * `SystemSpec` to the backend, which derives its own representation from it.
  */
 
 import { AgentLoop, type AgentEvent, type ApprovalResolver } from '../agent/loop.js';
@@ -29,24 +29,24 @@ export interface ChatSessionOptions {
   registry: ToolRegistry;
   permissions: PermissionEngine;
   /**
-   * Racines du projet, ORDONNÉES. Vide = conversation sans projet : les outils
-   * marchent, simplement sans confinement.
+   * Project roots, ORDERED. Empty = project-less conversation: the tools
+   * still work, simply without confinement.
    */
   roots?: string[];
   live: LiveBackendConfig;
-  /** Langue attendue des réponses (ex. « French ») — le fil reste anglais. */
+  /** Expected reply language (e.g. "French") — the wire stays English. */
   replyLanguage?: string;
   projectInstructions?: string;
   approve?: ApprovalResolver;
   maxTurns?: number;
   idSlot?: number;
-  /** Échantillonnage de la conversation, réglable sans invalider le cache. */
+  /** Conversation sampling, adjustable without invalidating the cache. */
   sampling?: SamplingParams;
 }
 
 export type OpenResult = {
   session: ChatSession;
-  /** 'unsupported' : le backend n'a pas la capacité kvPersistence. */
+  /** 'unsupported': the backend does not have the kvPersistence capability. */
   restore: RestoreOutcome | { restored: false; reason: 'unsupported' };
 };
 
@@ -68,8 +68,9 @@ export class ChatSession {
       await store.create(conversationId);
     }
 
-    // L'état backend (prompt figé pour llama.cpp) est rendu au backend tel
-    // quel : le reconstruire le ferait dériver avec l'inventaire.
+    // The backend state (frozen prompt for llama.cpp) is handed back to
+    // the backend as-is: rebuilding it would let it drift with the
+    // inventory.
     const meta = await store.meta(conversationId);
     if (meta.backendState !== undefined) {
       backend.importState?.(conversationId, meta.backendState);
@@ -95,8 +96,8 @@ export class ChatSession {
       ...(options.idSlot !== undefined ? { idSlot: options.idSlot } : {}),
     });
 
-    // Le backend fige ce qu'il doit figer MAINTENANT (prompt système pour
-    // llama.cpp), pas au premier tour.
+    // The backend freezes what it needs to freeze NOW (system prompt for
+    // llama.cpp), not on the first turn.
     backend.prepareConversation?.(
       conversationId,
       {
@@ -111,10 +112,10 @@ export class ChatSession {
 
     const session = new ChatSession(options, conversationId, transcript, loop);
 
-    // L'outillage a-t-il bougé depuis le figeage ? Si oui : message de
-    // service APPENDÉ (jamais de re-rendu du prompt système).
+    // Has the tooling moved since the freeze? If so: an APPENDED service
+    // message (never a re-render of the system prompt).
     await session.announceInventoryDelta(meta.toolNames);
-    // Le décor a-t-il changé depuis le figeage ? Même règle : on appende.
+    // Has the scenery changed since the freeze? Same rule: we append.
     if (meta.toolNames !== undefined) {
       await session.announcePerimeterDelta(meta.frozenRoots ?? []);
     }
@@ -139,17 +140,18 @@ export class ChatSession {
     const { registry, store, backend } = this.options;
     const names = registry.list().map((d) => d.name);
 
-    // Première ouverture : rien à annoncer, on note juste l'inventaire de
-    // référence (et l'état que le backend aura figé au premier tour).
+    // First opening: nothing to announce, we just record the reference
+    // inventory (and the state the backend will have frozen by the first
+    // turn).
     if (frozenNames === undefined) {
       await store.freezeBackendState(
         this.conversationId,
         backend.exportState?.(this.conversationId),
         names,
       );
-      // Le décor est figé en même temps que l'inventaire : sans ça, la
-      // réouverture croirait qu'un projet vient d'apparaître et annoncerait
-      // un changement qui n'a pas eu lieu.
+      // The scenery is frozen at the same time as the inventory: without
+      // that, reopening would think a project had just appeared and would
+      // announce a change that never happened.
       await store.setFrozenRoots(this.conversationId, this.options.roots ?? []);
       return;
     }
@@ -164,10 +166,11 @@ export class ChatSession {
   }
 
   /**
-   * Le prompt système est figé à la création : si le périmètre a bougé depuis
-   * — dossier ajouté, retiré, ou simplement RÉORDONNÉ, ce qui change la racine
-   * par défaut des chemins relatifs — le modèle travaillerait sur un décor
-   * périmé. On l'annonce par un message APPENDÉ, jamais par un re-rendu.
+   * The system prompt is frozen at creation: if the perimeter has moved
+   * since then — a folder added, removed, or simply REORDERED, which
+   * changes the default root for relative paths — the model would be
+   * working off stale scenery. We announce it with an APPENDED message,
+   * never with a re-render.
    */
   private async announcePerimeterDelta(frozen: string[]): Promise<void> {
     const current = this.options.roots ?? [];
@@ -178,7 +181,7 @@ export class ChatSession {
     await this.options.store.setFrozenRoots(this.conversationId, current);
   }
 
-  /** Message de service : dans le transcript ET dans le log, jamais dans l'UI. */
+  /** Service message: in the transcript AND in the log, never in the UI. */
   private async appendService(text: string): Promise<void> {
     this.transcript.push({ role: 'service', text });
     await this.options.store.appendEvent(this.conversationId, {
@@ -189,9 +192,9 @@ export class ChatSession {
   }
 
   /**
-   * Envoie un message et déroule la boucle agentique. Chaque mutation du
-   * transcript annoncée par la boucle est persistée dans le même ordre : le
-   * rejeu reconstruit un transcript identique.
+   * Sends a message and runs the agentic loop. Every transcript mutation
+   * announced by the loop is persisted in the same order: replaying
+   * reconstructs an identical transcript.
    */
   async *send(text: string, signal?: AbortSignal): AsyncIterable<AgentEvent> {
     const { store, backend } = this.options;
@@ -221,7 +224,7 @@ export class ChatSession {
       yield event;
     }
 
-    // Le backend a peut-être figé son état au premier tour (prompt système).
+    // The backend may have frozen its state on the first turn (system prompt).
     const state = backend.exportState?.(this.conversationId);
     if (state !== undefined) {
       await store.freezeBackendState(
@@ -232,7 +235,7 @@ export class ChatSession {
     }
   }
 
-  /** Sauvegarde l'état KV ; false si le backend ne le permet pas. */
+  /** Saves the KV state; false if the backend does not allow it. */
   async save(): Promise<boolean> {
     const { backend, kv, live } = this.options;
     if (!backend.slots) return false;

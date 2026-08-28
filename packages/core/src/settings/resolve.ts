@@ -1,17 +1,18 @@
 /**
- * Réglages en couches — un réglage défini UNE fois, rendu partout.
+ * Layered settings — a setting defined ONCE, rendered everywhere.
  *
- * L'ordre est : défaut intégré → global → conversation. Deux règles portent
- * tout le reste :
+ * The order is: built-in default → global → conversation. Two rules carry
+ * everything else:
  *
- * - Un réglage déclare les **portées** où il se modifie. Les paramètres de
- *   lancement (taille de contexte, couches GPU, quantification du cache…)
- *   entrent au manifest KV : les laisser varier par conversation ferait
- *   diverger le manifest du serveur réellement lancé, et le restore serait
- *   refusé — ou pire, accepté à tort. Ils sont donc globaux, point.
- * - La résolution dit TOUJOURS d'où vient la valeur, pour que l'interface
- *   puisse écrire « hérité du réglage global » au lieu d'afficher un champ
- *   dont l'utilisateur ignore l'origine.
+ * - A setting declares the **scopes** where it can be changed. Launch
+ *   parameters (context size, GPU layers, cache quantization…) go into
+ *   the KV manifest: letting them vary per conversation would make the
+ *   manifest diverge from the server actually launched, and the restore
+ *   would be refused — or worse, wrongly accepted. So they are global,
+ *   period.
+ * - The resolution ALWAYS says where the value comes from, so the
+ *   interface can write "inherited from the global setting" instead of
+ *   showing a field whose origin the user has no idea about.
  */
 
 export type SettingScope = 'global' | 'conversation';
@@ -26,7 +27,7 @@ export interface SettingField {
   key: string;
   label: string;
   type: 'string' | 'number' | 'boolean' | 'select';
-  /** Portées où le réglage est modifiable — au moins une. */
+  /** Scopes where the setting is editable — at least one. */
   scopes: SettingScope[];
   default?: unknown;
   description?: string;
@@ -34,7 +35,7 @@ export interface SettingField {
   min?: number;
   max?: number;
   step?: number;
-  /** Réglage avancé : replié par défaut dans l'interface. */
+  /** Advanced setting: collapsed by default in the interface. */
   advanced?: boolean;
 }
 
@@ -47,19 +48,19 @@ export interface ResolvedSetting {
   field: SettingField;
   key: string;
   value: unknown;
-  /** Couche qui fournit la valeur effective. */
+  /** Layer that provides the effective value. */
   from: SettingsLayer;
-  /** La portée demandée surcharge-t-elle explicitement ce réglage ? */
+  /** Does the requested scope explicitly override this setting? */
   overridden: boolean;
-  /** Quand ce n'est pas surchargé : la couche dont la valeur est héritée. */
+  /** When not overridden: the layer the value is inherited from. */
   inheritedFrom?: SettingsLayer;
 }
 
 /**
- * Résout les réglages visibles dans une portée donnée.
+ * Resolves the settings visible within a given scope.
  *
- * `scope` est la portée qu'on est en train d'éditer : elle filtre les champs
- * affichés et détermine ce que « surchargé » veut dire.
+ * `scope` is the scope currently being edited: it filters the displayed
+ * fields and determines what "overridden" means.
  */
 export function resolveSettings(
   fields: SettingField[],
@@ -75,9 +76,9 @@ export function resolveSettings(
       if (field.scopes.includes('global') && has(layers.global, field.key)) {
         chain.push({ layer: 'global', value: layers.global?.[field.key] });
       }
-      // Une surcharge de conversation sur un réglage qui ne s'y règle pas est
-      // ignorée : mieux vaut un réglage qui ne prend pas qu'un serveur lancé
-      // avec autre chose que ce que dit le manifest.
+      // A conversation override on a setting that can't be set there is
+      // ignored: better a setting that doesn't take than a server
+      // launched with something other than what the manifest says.
       if (field.scopes.includes('conversation') && has(layers.conversation, field.key)) {
         chain.push({ layer: 'conversation', value: layers.conversation?.[field.key] });
       }

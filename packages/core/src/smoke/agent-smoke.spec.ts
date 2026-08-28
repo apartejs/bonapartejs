@@ -1,24 +1,24 @@
 /**
- * SMOKE RÉEL — le chemin agentique contre un vrai llama-server.
+ * REAL SMOKE — the agentic path against a real llama-server.
  *
- * Ce fichier ne tourne PAS en CI : il se saute tant que `BONAPARTE_SMOKE_MODEL`
- * n'est pas défini. Il existe parce que trois choses ne peuvent pas être
- * prouvées contre le faux serveur :
+ * This file does NOT run in CI: it's skipped as long as
+ * `BONAPARTE_SMOKE_MODEL` isn't set. It exists because three things can't
+ * be proven against the fake server:
  *
- * 1. La **grammaire paresseuse** (`grammar_lazy` + `grammar_triggers` +
- *    `preserved_tokens`) n'est documentée nulle part dans le README de
- *    llama.cpp — seulement dans `tools/server/server-schema.cpp`. Un vrai
- *    serveur est le seul juge de leur acceptation.
- * 2. Qu'un vrai modèle émette bien du Hermes `<tool_call>` avec NOTRE prompt.
- * 3. Que le préfixe du cache KV **survive à un aller-retour d'outil** — le
- *    différenciateur sous charge agentique, jamais mesuré.
+ * 1. The **lazy grammar** (`grammar_lazy` + `grammar_triggers` +
+ *    `preserved_tokens`) is documented nowhere in llama.cpp's README —
+ *    only in `tools/server/server-schema.cpp`. A real server is the only
+ *    judge of whether it accepts them.
+ * 2. That a real model actually emits Hermes `<tool_call>` with OUR prompt.
+ * 3. That the KV cache prefix **survives a tool round-trip** — the
+ *    differentiator under agentic load, never measured.
  *
- * Usage (PowerShell) :
- *   $env:BONAPARTE_SMOKE_MODEL="D:\modeles\qwen.gguf"
+ * Usage (PowerShell):
+ *   $env:BONAPARTE_SMOKE_MODEL="D:\models\qwen.gguf"
  *   npx vitest run src/smoke
  *
- * Variables : BONAPARTE_SMOKE_MODEL (requis, chemin GGUF) ·
- * BONAPARTE_SMOKE_LLAMA (défaut « llama ») · BONAPARTE_SMOKE_CTX (défaut 8192).
+ * Variables: BONAPARTE_SMOKE_MODEL (required, GGUF path) ·
+ * BONAPARTE_SMOKE_LLAMA (default "llama") · BONAPARTE_SMOKE_CTX (default 8192).
  */
 
 import { spawn, spawnSync } from 'node:child_process';
@@ -46,18 +46,18 @@ const LLAMA = process.env['BONAPARTE_SMOKE_LLAMA'] ?? 'llama';
 const N_CTX = Number(process.env['BONAPARTE_SMOKE_CTX'] ?? 8192);
 const PORT = 8127;
 
-/** Mot de passe planqué dans un fichier : le modèle ne peut PAS l'inventer. */
+/** Password stashed in a file: the model can NOT make it up. */
 const SECRET = 'ORANGE-42-VERMILLON';
 
-/** Une minute de marge par tour : un gros modèle prend son temps au premier. */
+/** One minute of margin per turn: a big model takes its time on the first one. */
 const TURN_TIMEOUT_MS = 900_000;
 
 /**
- * Filet anti-orphelin. `afterAll` ne suffit pas : un Ctrl-C au mauvais moment,
- * un crash de vitest, et le serveur — donc le modèle en VRAM — survit au test.
- * On garde une poignée sur l'enfant et on l'abat depuis les chemins de sortie
- * du process, y compris `exit` (qui n'autorise que du synchrone — notre kill
- * l'est, par construction).
+ * Anti-orphan safety net. `afterAll` isn't enough: a Ctrl-C at the wrong
+ * moment, a vitest crash, and the server — hence the model in VRAM —
+ * survives the test. We keep a handle on the child and take it down from
+ * every process exit path, including `exit` (which only allows
+ * synchronous work — our kill is, by construction).
  */
 let spawned: ProcessHandle | null = null;
 let guardsInstalled = false;
@@ -74,8 +74,8 @@ function installExitGuards(): void {
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.once(signal, () => {
       killNow();
-      // On a intercepté le signal : c'est à nous de sortir, sinon Ctrl-C
-      // n'aurait plus d'effet.
+      // We intercepted the signal: it's on us to exit now, otherwise
+      // Ctrl-C would have no effect anymore.
       process.exit(130);
     });
   }
@@ -89,7 +89,7 @@ function spawnServer(binPath: string, args: string[]): ProcessHandle {
   });
   child.stderr?.on('data', (chunk: Buffer) => {
     const line = chunk.toString('utf8').trimEnd();
-    // Seulement ce qui compte : le reste noierait le verdict.
+    // Only what matters: the rest would drown out the verdict.
     if (/error|failed|invalid|unknown argument/i.test(line)) console.log(`[llama] ${line}`);
   });
   const handle: ProcessHandle = {
@@ -152,13 +152,13 @@ function turnEnd(events: AgentEvent[]): Extract<AgentEvent, { type: 'turn_end' }
   );
 }
 
-describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
+describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
   let backend: Backend;
   let base: Omit<ChatSessionOptions, 'live'> & { live: LiveBackendConfig };
 
   beforeAll(async () => {
     const root = await mkdtemp(join(tmpdir(), 'bonaparte-smoke-'));
-    const projectRoot = join(root, 'projet');
+    const projectRoot = join(root, 'project');
     const slotDir = join(root, 'slots');
     await mkdir(projectRoot, { recursive: true });
     await mkdir(slotDir, { recursive: true });
@@ -200,8 +200,8 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
         nCtx: N_CTX,
         cacheTypeK: 'f16',
         cacheTypeV: 'f16',
-        // Le manifest exige un match exact ; 'unknown' ne matche que 'unknown',
-        // ce qui suffit pour un aller-retour dans une même exécution.
+        // The manifest requires an exact match; 'unknown' only matches
+        // 'unknown', which is enough for a round trip within a single run.
         buildTag: 'unknown',
       },
     };
@@ -212,7 +212,7 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
   });
 
   it(
-    'appelle un outil réel et se sert du résultat',
+    'calls a real tool and uses its result',
     async () => {
       const { session } = await ChatSession.open(base, 'smoke-outil');
 
@@ -223,34 +223,34 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
         ),
       );
 
-      console.log(`[smoke] outils appelés : ${out.calls.join(', ') || '(aucun)'}`);
-      console.log(`[smoke] réponse : ${out.text.trim().slice(0, 200)}`);
+      console.log(`[smoke] tools called: ${out.calls.join(', ') || '(none)'}`);
+      console.log(`[smoke] response: ${out.text.trim().slice(0, 200)}`);
 
-      // 1. Le modèle a émis du Hermes que NOTRE parser a su lire.
+      // 1. The model emitted Hermes that OUR parser was able to read.
       expect(out.calls.length).toBeGreaterThan(0);
-      // 2. L'outil a tourné dans le projet, sans échouer.
+      // 2. The tool ran inside the project, without failing.
       expect(out.results.some((r) => r.ok)).toBe(true);
-      // 3. Le résultat est revenu au modèle, qui s'en est servi : ce mot ne
-      //    peut pas être deviné, il n'existe que dans le fichier.
+      // 3. The result made it back to the model, which used it: this word
+      //    cannot be guessed, it only exists in the file.
       expect(out.text).toContain(SECRET);
     },
     TURN_TIMEOUT_MS,
   );
 
   it(
-    'ne force PAS un appel quand la question n’en demande pas (grammaire paresseuse)',
+    'does NOT force a call when the question does not ask for one (lazy grammar)',
     async () => {
-      // Sans `grammar_lazy`, la grammaire contraindrait CHAQUE tour à produire
-      // un appel d'outil. C'est le seul test qui prouve que ces paramètres non
-      // documentés font ce qu'on croit.
+      // Without `grammar_lazy`, the grammar would force EVERY turn to
+      // produce a tool call. This is the only test that proves these
+      // undocumented parameters do what we think they do.
       const { session } = await ChatSession.open(base, 'smoke-paresse');
 
       const out = await collect(
         session.send('Reply with exactly the word PONG. Do not use any tool.'),
       );
 
-      console.log(`[smoke] outils appelés : ${out.calls.join(', ') || '(aucun)'}`);
-      console.log(`[smoke] réponse : ${out.text.trim().slice(0, 120)}`);
+      console.log(`[smoke] tools called: ${out.calls.join(', ') || '(none)'}`);
+      console.log(`[smoke] response: ${out.text.trim().slice(0, 120)}`);
 
       expect(out.calls).toEqual([]);
       expect(out.text.toUpperCase()).toContain('PONG');
@@ -259,24 +259,24 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
   );
 
   it(
-    'garde le préfixe du cache après un aller-retour d’outil',
+    'keeps the cache prefix after a tool round-trip',
     async () => {
       const { session } = await ChatSession.open(base, 'smoke-cache');
 
-      // Tour 1 : appel d'outil, donc plusieurs échanges avec le modèle.
+      // Turn 1: a tool call, so several exchanges with the model.
       const first = await collect(
         session.send('Read notes.txt and summarise it in one short sentence.'),
       );
       expect(first.calls.length).toBeGreaterThan(0);
 
-      // Tour 2 : le prompt du tour 1 (résultat d'outil compris) doit être servi
-      // par le cache. Un préfixe cassé par la réinjection s'effondre vers zéro.
+      // Turn 2: turn 1's prompt (tool result included) must be served from
+      // the cache. A prefix broken by the reinjection collapses to zero.
       const second = await collect(session.send('Now answer in exactly one word: OK.'));
       const stats = turnEnd(second.events);
       expect(stats).toBeDefined();
 
-      console.log(`[smoke] tokens servis par le cache au tour 2 : ${stats?.cachedTokens}`);
-      console.log(`[smoke] prefill du tour 2 : ${stats?.promptMs} ms`);
+      console.log(`[smoke] tokens served from cache on turn 2: ${stats?.cachedTokens}`);
+      console.log(`[smoke] turn 2 prefill: ${stats?.promptMs} ms`);
 
       expect(stats?.cachedTokens ?? 0).toBeGreaterThan(0);
     },
@@ -284,7 +284,7 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
   );
 
   it(
-    'sauvegarde puis restaure un état KV contenant des tours d’outil',
+    'saves then restores a KV state containing tool turns',
     async () => {
       const { session } = await ChatSession.open(base, 'smoke-restore');
 
@@ -295,18 +295,18 @@ describe.skipIf(!MODEL)('SMOKE RÉEL — chemin agentique', () => {
 
       expect(await session.save()).toBe(true);
 
-      // Réouverture : le chemin exact d'une conversation reprise après
-      // fermeture de l'app, avec un historique qui contient des outils.
+      // Reopening: the exact path of a conversation resumed after the app
+      // closes, with a history that contains tools.
       const reopened = await ChatSession.open(base, 'smoke-restore');
-      console.log(`[smoke] restore : ${JSON.stringify(reopened.restore)}`);
+      console.log(`[smoke] restore: ${JSON.stringify(reopened.restore)}`);
       expect(reopened.restore.restored).toBe(true);
 
-      // Le modèle doit encore avoir le secret en contexte sans relire le
-      // fichier : preuve que l'état restauré porte l'historique d'outil.
+      // The model must still have the secret in context without rereading
+      // the file: proof that the restored state carries the tool history.
       const after = await collect(
         reopened.session.send('Repeat the password you found earlier, nothing else.'),
       );
-      console.log(`[smoke] après restore : ${after.text.trim().slice(0, 120)}`);
+      console.log(`[smoke] after restore: ${after.text.trim().slice(0, 120)}`);
       expect(after.text).toContain(SECRET);
     },
     TURN_TIMEOUT_MS,

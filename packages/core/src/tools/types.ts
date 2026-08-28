@@ -1,30 +1,30 @@
 /**
- * Contrat des outils de l'agent. Un outil = un schéma (JSON Schema) + un
- * handler Node pur. Les outils viennent du cœur, des plugins ou de MCP :
- * le registre les fusionne, la grammaire en découle.
+ * Agent tool contract. A tool = a schema (JSON Schema) + a pure Node
+ * handler. Tools come from the core, from plugins, or from MCP: the
+ * registry merges them, and the grammar is derived from that.
  */
 
 export type ToolSource = 'builtin' | 'plugin' | 'mcp';
 
-/** Ce que l'outil fait au système — arbitré par le moteur de permissions. */
+/** What the tool does to the system — arbitrated by the permission engine. */
 export type ToolEffect = 'read' | 'write' | 'execute';
 
 export interface ToolDef {
   name: string;
   description: string;
-  /** JSON Schema de l'objet d'arguments. */
+  /** JSON Schema of the arguments object. */
   inputSchema: Record<string, unknown>;
   effect: ToolEffect;
 }
 
 export interface ToolContext {
   /**
-   * Racines du projet ouvert, ORDONNÉES : la première est le défaut des chemins
-   * relatifs, et le périmètre autorisé est leur UNION.
+   * Roots of the open project, ORDERED: the first is the default for
+   * relative paths, and the allowed perimeter is their UNION.
    *
-   * VIDE est un cas normal : les outils existent quand même, le projet n'est
-   * pas leur condition d'existence mais leur PÉRIMÈTRE. Sans racine, les
-   * chemins relatifs partent du dossier personnel et rien n'est confiné.
+   * EMPTY is a normal case: the tools still exist, the project is not
+   * their condition of existence but their PERIMETER. With no root,
+   * relative paths start from the home folder and nothing is confined.
    */
   roots: string[];
   signal: AbortSignal;
@@ -32,7 +32,7 @@ export interface ToolContext {
 
 export interface ToolResult {
   ok: boolean;
-  /** Texte réinjecté au modèle (déjà tronqué si nécessaire). */
+  /** Text reinjected to the model (already truncated if needed). */
   content: string;
 }
 
@@ -47,10 +47,10 @@ export interface RegisteredTool {
   source: ToolSource;
 }
 
-/** Photo de l'inventaire, pour détecter les changements entre deux tours. */
+/** Snapshot of the inventory, to detect changes between two turns. */
 export interface ToolInventorySnapshot {
   names: string[];
-  /** Empreinte stable (noms + schémas) : change ⇔ l'inventaire a changé. */
+  /** Stable fingerprint (names + schemas): changes ⇔ the inventory changed. */
   hash: string;
 }
 

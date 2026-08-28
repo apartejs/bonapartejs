@@ -1,15 +1,15 @@
 /**
- * Boucle agentique — AGNOSTIQUE du fournisseur.
+ * Agentic loop — provider-AGNOSTIC.
  *
- * Elle ne manipule qu'un transcript sémantique et des événements structurés :
- * elle ignore tout du prompt brut, de la grammaire GBNF et du format Hermes.
- * Comment une conversation devient une requête est l'affaire du backend —
- * aujourd'hui un seul, le prompt append-only de llama.cpp. Cette frontière
- * reste la même : c'est elle qui garde la boucle testable sans serveur.
+ * It only manipulates a semantic transcript and structured events: it knows
+ * nothing about the raw prompt, the GBNF grammar, or the Hermes format. How a
+ * conversation becomes a request is the backend's business — today a single
+ * one, llama.cpp's append-only prompt. This boundary stays the same: it's
+ * what keeps the loop testable without a server.
  *
- * Elle n'est pas bâtie sur `runStreamAgent` (@aparte/engine) : cet engine
- * possède la liste de messages et la re-sérialise à chaque tour, incompatible
- * avec un backend à préfixe stable. Voir le journal de friction.
+ * It is not built on `runStreamAgent` (@aparte/engine): that engine owns the
+ * message list and re-serializes it on every turn, which is incompatible
+ * with a stable-prefix backend. See the friction journal.
  */
 
 import type {
@@ -27,7 +27,7 @@ export interface ApprovalRequest {
   id: string;
   tool: string;
   args: Record<string, unknown>;
-  /** Commande complète pour les outils d'exécution (aperçu UI). */
+  /** Full command for execution tools (UI preview). */
   command?: string;
 }
 
@@ -39,11 +39,11 @@ export interface AgentLoopOptions {
   permissions: PermissionEngine;
   system: SystemSpec;
   conversationId: string;
-  /** Nombre max d'allers-retours modèle↔outils pour un message. @default 10 */
+  /** Max number of model↔tool round-trips for a message. @default 10 */
   maxTurns?: number;
   approve?: ApprovalResolver;
   idSlot?: number;
-  /** Échantillonnage de la conversation (température & co). */
+  /** Conversation sampling (temperature & co). */
   sampling?: SamplingParams;
 }
 
@@ -54,8 +54,8 @@ export type AgentEvent =
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
   | { type: 'turn_end'; promptMs: number; cachedTokens: number }
   | { type: 'error'; message: string }
-  // ── mutations du transcript : l'appelant les persiste pour rejouer à
-  //    l'identique. L'UI les ignore.
+  // ── transcript mutations: the caller persists them to replay identically.
+  //    The UI ignores them.
   | { type: 'assistant_committed'; entry: TranscriptEntry }
   | { type: 'results_committed'; entry: TranscriptEntry };
 
@@ -67,8 +67,8 @@ export class AgentLoop {
   constructor(private readonly options: AgentLoopOptions) {}
 
   /**
-   * Déroule un message. `transcript` est muté en append-only : c'est la
-   * source de vérité partagée avec la persistance.
+   * Runs a message through. `transcript` is mutated append-only: it's the
+   * source of truth shared with persistence.
    */
   async *run(
     transcript: TranscriptEntry[],
@@ -197,7 +197,7 @@ export class AgentLoop {
     if (decision === 'ask') {
       const approve = this.options.approve;
       if (!approve) {
-        // Fail-safe : sans interlocuteur pour accorder, on n'agit pas.
+        // Fail-safe: with no one to grant approval, we don't act.
         return {
           name,
           ok: false,
@@ -219,10 +219,10 @@ export class AgentLoop {
       }
     }
 
-    // Aucun garde-fou « pas de projet, pas d'outil » : le projet est le
-    // PÉRIMÈTRE des outils, pas leur condition d'existence. Sans racine, ils
-    // travaillent sans confinement — c'est le mode de jeu qui arbitre, pas
-    // l'absence de dossier.
+    // No "no project, no tool" guardrail: the project is the tools'
+    // SCOPE, not their condition of existence. With no root, they work
+    // unconfined — it's the play mode that arbitrates, not the absence of
+    // a folder.
     const roots = this.options.system.roots ?? [];
 
     try {
