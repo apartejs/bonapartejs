@@ -62,6 +62,9 @@ export async function scanModels(
         continue;
       }
       if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.gguf')) continue;
+      // A multimodal projector ("mmproj-…") is not a model on its own: loading
+      // it crashes the server. llama.cpp names it so; we never offer it.
+      if (/(^|[-_. ])mmproj([-_. ]|$)/i.test(entry.name)) continue;
       const resolved = resolve(path);
       if (byPath.has(resolved)) continue;
       try {

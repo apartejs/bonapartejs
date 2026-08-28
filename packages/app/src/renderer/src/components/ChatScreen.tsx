@@ -1,7 +1,7 @@
 import { requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import { Alert, AlertDescription, Button } from '@aparte/bonaparte-plugin-sdk/ui';
-import { TriangleAlert } from 'lucide-react';
+import { CircleAlert, TriangleAlert, X } from 'lucide-react';
 import type {
   AgentEventDto,
   ApprovalRequestDto,
@@ -10,7 +10,7 @@ import type {
   PlayModeDto,
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { answerToResponse, approvalMessage, approvalOptions } from '../approval.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { modelFileName } from '../models/filter.js';
@@ -37,7 +37,9 @@ interface ChatScreenProps {
   /** The pinned model vanished from disk: a banner says so and offers the
    *  picker before anything is typed. */
   missingModel: string | null;
-  onChooseModel: () => void;
+  /** A recoverable error to show inline (a failed open, a crashed engine) — the chat stays put. */
+  error: string | null;
+  onDismissError: () => void;
   /** The engine refused to run without a model: the picker comes next, and
    *  the message that triggered it is handed over to be sent after the pick. */
   onNeedsModel: (event: { conversationId: string; missingModel?: string; text: string }) => void;
@@ -99,7 +101,8 @@ export function ChatScreen({
   busy,
   conversationId,
   missingModel,
-  onChooseModel,
+  error,
+  onDismissError,
   onNeedsModel,
   autoSend,
   onAutoSent,
@@ -107,6 +110,9 @@ export function ChatScreen({
   onApprovalResponse,
 }: ChatScreenProps) {
   const { t } = useTranslate();
+  // The composer's model menu, raised from the missing-model alert so a
+  // recovery never leaves the chat.
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // A conversation reads back the way it was seen: an assistant turn comes
   // with its segments — reasoning collapsed, tool calls with their outcome,
@@ -460,10 +466,32 @@ export function ChatScreen({
               variant="outline"
               size="sm"
               className="border-amber-600/40 bg-transparent text-current hover:bg-amber-500/15 hover:text-current"
-              onClick={onChooseModel}
+              onClick={() => setModelPickerOpen(true)}
               disabled={busy}
             >
               {t.chat.chooseModel}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {error && (
+        <Alert
+          role="alert"
+          variant="destructive"
+          className="chat-error mt-3 shrink-0"
+        >
+          <CircleAlert aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span className="flex-1">{error}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-current"
+              onClick={onDismissError}
+              aria-label={t.common.clear}
+            >
+              <X className="size-3.5" />
             </Button>
           </AlertDescription>
         </Alert>
@@ -495,7 +523,13 @@ export function ChatScreen({
             {/* The model belongs to the conversation, like the mode and the
                 temperature: it is therefore chosen in the same place, not by
                 creating a conversation. */}
-            <ModelSelector modelName={modelName} busy={busy} onPick={onPickModel} />
+            <ModelSelector
+              modelName={modelName}
+              busy={busy}
+              onPick={onPickModel}
+              open={modelPickerOpen}
+              onOpenChange={setModelPickerOpen}
+            />
           </>
         }
       />

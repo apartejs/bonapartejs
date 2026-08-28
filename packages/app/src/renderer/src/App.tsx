@@ -44,6 +44,10 @@ export function App() {
   const [view, setView] = useState<View>('boot');
   const [backendStatus, setBackendStatus] = useState<BackendStatusDto>('stopped');
   const [opened, setOpened] = useState<ConversationOpenResultDto | null>(null);
+  // Mirror of the open conversation for the stable callbacks below: a chat that is open
+  // recovers in place (the composer's model menu), it is never redirected.
+  const openedRef = useRef<ConversationOpenResultDto | null>(null);
+  openedRef.current = opened;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastStats, setLastStats] = useState<CompletionStatsDto | null>(null);
@@ -217,7 +221,8 @@ export function App() {
       pendingConv.current = event.conversationId;
       setMissingModel(event.missingModel ?? null);
       setPendingText(event.text);
-      setView('pickModel');
+      // No redirect: the missing-model banner and the composer's model menu
+      // handle it without leaving the conversation.
     },
     [],
   );
@@ -232,7 +237,7 @@ export function App() {
         if ('needsModel' in reply) {
           pendingConv.current = reply.conversationId;
           setMissingModel(reply.missingModel ?? null);
-          setView('pickModel');
+          if (!openedRef.current) setView('pickModel');
         } else {
           setOpened(reply);
           setMissingModel(null);
@@ -246,7 +251,8 @@ export function App() {
         }
         setBackendStatus(await window.bonaparte.getBackendStatus());
       } catch (err) {
-        fail(err, modelPath ? 'pickModel' : 'setup');
+        if (openedRef.current) setError(err instanceof Error ? err.message : String(err));
+        else fail(err, modelPath ? 'pickModel' : 'setup');
       } finally {
         setBusy(false);
       }
@@ -479,11 +485,8 @@ export function App() {
               busy={busy}
               onPickModel={(modelPath) => void tryOpen(opened.conversationId, modelPath)}
               missingModel={opened.missingModel ?? null}
-              onChooseModel={() => {
-                pendingConv.current = opened.conversationId;
-                setMissingModel(opened.missingModel ?? null);
-                setView('pickModel');
-              }}
+              error={error}
+              onDismissError={() => setError(null)}
               onNeedsModel={needsModel}
               autoSend={pendingText}
               onAutoSent={clearPendingText}

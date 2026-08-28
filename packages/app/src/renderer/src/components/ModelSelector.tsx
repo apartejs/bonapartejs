@@ -11,6 +11,9 @@ interface ModelSelectorProps {
   modelName: string | null;
   busy: boolean;
   onPick: (modelPath: string) => void;
+  /** Controlled open, so another surface (the missing-model alert) can raise the menu. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 function sizeLabel(bytes: number, unit: string): string {
@@ -32,9 +35,18 @@ const HINT = 'model-hint mx-1 mt-1.5 mb-0.5 text-[11.5px] leading-normal text-mu
  * rebuilt on the first message. This is the kind of information that must
  * be readable before the click, not guessed after.
  */
-export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
+export function ModelSelector({
+  modelName,
+  busy,
+  onPick,
+  open: openProp,
+  onOpenChange,
+}: ModelSelectorProps) {
   const { t } = useTranslate();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  // Controlled when the parent drives it (the alert), self-managed otherwise.
+  const open = openProp ?? openState;
+  const setOpen = onOpenChange ?? setOpenState;
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [query, setQuery] = useState('');
 

@@ -38,6 +38,19 @@ describe('scanModels', () => {
     expect(big.path).toBe(join(root, 'qwen3-8b-q4.gguf'));
   });
 
+  it('skips multimodal projector files — they are not models on their own', async () => {
+    // Paul, 2026-08-28: he picked "mmproj-Qwen3.6-35B-A3B-BF16.gguf" by
+    // mistake and the server crashed. An mmproj is the vision projector of a
+    // multimodal model, useless to load alone; llama.cpp names it "mmproj-…".
+    const root = await tree({
+      'Qwen3.6-35B-A3B-Q4_K_M.gguf': 'x'.repeat(64),
+      'mmproj-Qwen3.6-35B-A3B-BF16.gguf': 'y'.repeat(16),
+      'sub/mmproj-model-f16.GGUF': 'z'.repeat(8),
+    });
+    const models = await scanModels([{ dir: root, source: 'lmstudio' }]);
+    expect(models.map((m) => m.name)).toEqual(['Qwen3.6-35B-A3B-Q4_K_M']);
+  });
+
   it('silently ignores absent roots', async () => {
     const root = await tree({ 'm.gguf': 'x' });
     const models = await scanModels([

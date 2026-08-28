@@ -65,13 +65,18 @@ test('opening the conversation announces the vanished model', async () => {
   await expect(window.locator('.missing-model')).toContainText('gone.gguf');
 });
 
-test('sending a message leads to the picker, which names the vanished model', async () => {
+test('sending a message keeps the recovery inline — no full-screen redirect', async () => {
+  // Paul, 2026-08-28: being thrown onto a full-screen picker you cannot
+  // leave is a costly redirect. A conversation that is open recovers in
+  // place: the banner stays, and the composer's model menu is right there.
   const window = await app.firstWindow();
 
   const editor = window.locator('.aparte-ci-editor');
   await editor.fill('hello again');
   await editor.press('Enter');
 
-  await expect(window.locator('.picker-missing')).toContainText('gone.gguf');
-  await expect(window.locator('body')).not.toContainText('No model chosen');
+  await expect(window.locator('.missing-model')).toContainText('gone.gguf', { timeout: 10_000 });
+  await expect(window.locator('.picker-missing')).toHaveCount(0);
+  await expect(window.locator('.chat-wrap')).toBeVisible();
+  await expect(window.locator('.model-button')).toBeVisible();
 });
