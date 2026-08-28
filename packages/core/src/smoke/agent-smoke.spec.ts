@@ -22,7 +22,7 @@
  */
 
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -195,6 +195,11 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
       registry,
       permissions: new PermissionEngine('impro'),
       roots: [projectRoot],
+      // A small model at default temperature is a coin flip on protocol
+      // details (the first run answered with a ```json fence instead of the
+      // <tool_call> tags, the next one with the tags). The smoke judges the
+      // harness, not the dice: low temperature, fixed seed.
+      sampling: { temperature: 0.2, seed: 42 },
       live: {
         modelFingerprint: await fingerprintModelFile(MODEL as string),
         nCtx: N_CTX,
@@ -216,9 +221,12 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
     async () => {
       const { session } = await ChatSession.open(base, 'smoke-outil');
 
+      // The tool is named on purpose: the smoke judges the harness's path
+      // (call → execution → result → answer), not a small model's agency.
+      // Asked only to "tell the password", Qwen3-1.7B invents one.
       const out = await collect(
         session.send(
-          'Read the file notes.txt in the project and tell me the password it contains. ' +
+          'Use the read_file tool on notes.txt and tell me the password it contains. ' +
             'Answer with the password itself.',
         ),
       );
@@ -288,8 +296,13 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
     async () => {
       const { session } = await ChatSession.open(base, 'smoke-restore');
 
+      // Word for word the prompt of the first case: with a fixed seed, the
+      // same tokens give the same call — one phrasing verified, reused.
       const first = await collect(
-        session.send('Read notes.txt and tell me the password. Answer with the password only.'),
+        session.send(
+          'Use the read_file tool on notes.txt and tell me the password it contains. ' +
+            'Answer with the password itself.',
+        ),
       );
       expect(first.calls.length).toBeGreaterThan(0);
 
@@ -308,6 +321,59 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
       );
       console.log(`[smoke] after restore: ${after.text.trim().slice(0, 120)}`);
       expect(after.text).toContain(SECRET);
+    },
+    TURN_TIMEOUT_MS,
+  );
+
+  it(
+    'a restored state serves as the prefix of a longer, different prompt',
+    async () => {
+      // Prefix seeds and branching both rest on this single property, and
+      // the fake server cannot prove it (it simulates a proportional
+      // prefill): restore the state saved from conversation A, then send a
+      // prompt that shares A's turns and diverges after them. llama-server's
+      // cache_prompt keeps the longest common token prefix, so the cached
+      // count must cover (nearly) everything A had saved.
+      const { session: a } = await ChatSession.open(base, 'smoke-seed-a');
+      const first = await collect(
+        a.send('Reply with exactly the word ALPHA. Do not use any tool.'),
+      );
+      expect(first.text.toUpperCase()).toContain('ALPHA');
+      expect(await a.save()).toBe(true);
+      const manifest = JSON.parse(
+        await readFile(join(base.kv.manifestDir, 'smoke-seed-a.manifest.json'), 'utf8'),
+      ) as { promptTokenCount: number };
+      console.log(`[smoke] A saved: ${manifest.promptTokenCount} tokens`);
+
+      // Pollute the live slot with another conversation that shares only the
+      // system prompt: whatever the branch gets from the cache afterwards
+      // comes from the RESTORED state, not from the slot's leftovers.
+      const { session: other } = await ChatSession.open(base, 'smoke-seed-other');
+      await collect(other.send('Reply with exactly the word OMEGA. Do not use any tool.'));
+
+      // Branch B: A's turns copied, then a different next turn. B has no
+      // state of its own — the prefix must come from A's restored file.
+      const { store } = base;
+      await store.create('smoke-seed-b');
+      for (const event of await store.loadEvents('smoke-seed-a')) {
+        await store.appendEvent('smoke-seed-b', event);
+      }
+      const restored = await base.kv.restoreState(backend.slots!, 0, 'smoke-seed-a', base.live);
+      expect(restored.restored).toBe(true);
+
+      const { session: b } = await ChatSession.open(base, 'smoke-seed-b');
+      const out = await collect(
+        b.send('Now reply with exactly the word BRAVO. Do not use any tool.'),
+      );
+      const stats = turnEnd(out.events);
+      console.log(
+        `[smoke] branch: ${stats?.cachedTokens} tokens served from A's restored state ` +
+          `(A had saved ${manifest.promptTokenCount})`,
+      );
+      expect(out.text.toUpperCase()).toContain('BRAVO');
+      expect(stats?.cachedTokens ?? 0).toBeGreaterThanOrEqual(
+        Math.floor(manifest.promptTokenCount * 0.9),
+      );
     },
     TURN_TIMEOUT_MS,
   );

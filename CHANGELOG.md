@@ -89,8 +89,10 @@ published.
 
 ### Known limitations
 
-- The agentic path beyond the first tool call, and the KV prefix surviving a
-  tool round-trip, are covered by a real-model smoke test that is not part of CI.
+- The agentic path beyond the first tool call, the KV prefix surviving a
+  tool round-trip, and a restored state serving as the prefix of a branch
+  are covered by a real-model smoke test (five cases, green on Qwen3-1.7B on
+  2026-08-28) that is not part of CI.
 - The CLI cannot launch the app yet; nothing is published on npm.
 - Third-party plugins outside the repository are not loadable.
 - `n_ctx` is still pinned per conversation; retention of saved states, prefix

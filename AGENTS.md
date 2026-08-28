@@ -123,11 +123,25 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   setting, per-plugin activation, index and branching are all still to do (see
   the plan); the prompt block order (stable → volatile) is done since
   2026-08-28 · J4 MCP · J5 npx distribution.
-- **Real-model smoke results.** None recorded yet. Record here: date, model,
-  llama.cpp build, and the outcome of each case (real tool call · lazy grammar
-  not forcing a call · KV prefix kept after a tool round-trip · save/restore
-  with tool turns · restored state used as the prefix of a longer, different
-  prompt).
+- **Real-model smoke results.** Record here: date, model, llama.cpp build, and
+  the outcome of each case.
+  - **2026-08-28 — 5/5 green.** Qwen3-1.7B Q4_K_M (unsloth), unified `llama`
+    CLI build b10217-ddd4ec142, Windows, `-c 8192`, K/V f16, one slot,
+    sampling temperature 0.2 / seed 42. Real tool call → execution → result
+    → answer (the password read from the file, first time the whole agentic
+    path was seen end to end) · lazy grammar not forcing a call · KV prefix
+    kept after a tool round-trip (1 032 tokens served from the cache, prefill
+    18.6 ms) · save/restore with tool turns (636 tokens restored, the secret
+    recalled without rereading) · **a restored state serves as the prefix of
+    a longer, different prompt: 545 of 545 saved tokens reused by a branch**
+    — the property prefix seeds and branching rest on. Lessons: a 1.7B model
+    at default temperature is a coin flip on protocol details (a ```json
+    fence instead of `<tool_call>` once), and it invents a password unless
+    the prompt names the tool; the smoke judges the harness, so its prompts
+    name the tool and its sampling is fixed. The same run had shown the
+    cache gauge reading zero on every real turn — `prompt_progress` never
+    rides the final event; fixed in `http-client.ts`, fake server made
+    faithful.
 - **node-pty loads under Electron 43 WITHOUT a rebuild** (verified 2026-08-20:
   `pty.spawn(cmd.exe)` answers with its ConPTY sequences). It only needs to be
   allowed in `pnpm.onlyBuiltDependencies` — pnpm blocks build scripts by
