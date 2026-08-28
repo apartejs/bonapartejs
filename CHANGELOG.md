@@ -81,6 +81,9 @@ published.
 
 ### Fixed
 
+- Switching conversation from the sidebar left the previous thread on
+  screen: the chat screen is now remounted per conversation. Covered by an
+  Electron E2E.
 - The last user-visible strings that bypassed the translations follow the
   locale now: the settings catalog, the doctor's details, the native file
   pickers' filter names, the model pickers' size units, the CLI's help. A
