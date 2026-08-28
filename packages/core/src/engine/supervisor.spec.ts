@@ -279,9 +279,10 @@ describe('EngineSupervisor — orphan trace', () => {
     await supervisor.ensureLoaded(MODEL_A);
     expect((await readFile(join(dir, 'managed-server.pid'), 'utf8')).trim()).toBe('31337');
 
+    // No exit event here: on a real shutdown Electron quits right after
+    // stop() resolves, before the child's 'exit' fires. The kill is
+    // synchronous (taskkill /F); the trace must go with it.
     await supervisor.stop();
-    spawn.triggerExit(0);
-    await new Promise((resolve) => setTimeout(resolve, 20));
     await expect(readFile(join(dir, 'managed-server.pid'), 'utf8')).rejects.toThrow();
   });
 

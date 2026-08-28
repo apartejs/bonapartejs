@@ -88,34 +88,41 @@ export class AgentLoop {
       let cachedTokens = 0;
       let raw: string | undefined;
 
-      for await (const event of this.options.backend.runTurn({
-        conversationId: this.options.conversationId,
-        system: this.options.system,
-        tools: this.options.registry.list(),
-        transcript,
-        signal,
-        ...(this.options.idSlot !== undefined ? { idSlot: this.options.idSlot } : {}),
-        ...(this.options.sampling ? { sampling: this.options.sampling } : {}),
-        ...(this.options.thinking !== undefined ? { thinking: this.options.thinking } : {}),
-      })) {
-        switch (event.type) {
-          case 'text':
-            text += event.delta;
-            yield { type: 'token', text: event.delta };
-            break;
-          case 'thinking':
-            thinking += event.delta;
-            yield { type: 'thinking', text: event.delta };
-            break;
-          case 'tool_use':
-            calls.push(event.call);
-            break;
-          case 'done':
-            promptMs = event.stats.promptMs;
-            cachedTokens = event.stats.progress?.cache ?? 0;
-            raw = event.raw;
-            break;
+      try {
+        for await (const event of this.options.backend.runTurn({
+          conversationId: this.options.conversationId,
+          system: this.options.system,
+          tools: this.options.registry.list(),
+          transcript,
+          signal,
+          ...(this.options.idSlot !== undefined ? { idSlot: this.options.idSlot } : {}),
+          ...(this.options.sampling ? { sampling: this.options.sampling } : {}),
+          ...(this.options.thinking !== undefined ? { thinking: this.options.thinking } : {}),
+        })) {
+          switch (event.type) {
+            case 'text':
+              text += event.delta;
+              yield { type: 'token', text: event.delta };
+              break;
+            case 'thinking':
+              thinking += event.delta;
+              yield { type: 'thinking', text: event.delta };
+              break;
+            case 'tool_use':
+              calls.push(event.call);
+              break;
+            case 'done':
+              promptMs = event.stats.promptMs;
+              cachedTokens = event.stats.progress?.cache ?? 0;
+              raw = event.raw;
+              break;
+          }
         }
+      } catch (error) {
+        // A cancelled stream is not a failure: what arrived is what the
+        // model wrote, and what the server's KV cache holds. It is committed
+        // as the turn, so the next prompt stays a prefix of that cache.
+        if (!signal.aborted) throw error;
       }
 
       const entry: TranscriptEntry = {
@@ -131,7 +138,9 @@ export class AgentLoop {
       transcript.push(entry);
       yield { type: 'assistant_committed', entry };
 
-      if (calls.length === 0) {
+      // Nothing to dispatch — or a cancelled turn, whose calls (if any were
+      // parsed before the cut) must not run.
+      if (calls.length === 0 || signal.aborted) {
         yield { type: 'turn_end', promptMs, cachedTokens };
         return;
       }

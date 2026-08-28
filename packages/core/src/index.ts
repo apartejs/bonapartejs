@@ -195,3 +195,15 @@ export { createServerSpawner } from './engine/spawn.js';
 export { defaultProcessProbe } from './engine/process-probe.js';
 export type { ProcessProbe } from './engine/process-probe.js';
 export { readBuildTag } from './engine/build-tag.js';
+export { ConversationEngine, readableEvents, stripThink } from './engine/conversation-engine.js';
+export type {
+  ConversationEngineOptions,
+  History,
+  InFlight,
+  NeedsModel,
+  Opened,
+  OpenOutcome,
+  ReadableEvent,
+  SessionContext,
+  TaggedEvent,
+} from './engine/conversation-engine.js';

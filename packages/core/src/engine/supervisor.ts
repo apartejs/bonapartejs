@@ -255,6 +255,9 @@ export class EngineSupervisor {
       // The 'stopped' the backend announces is part of the story listeners
       // follow: the subscription outlives the stop.
       await backend.stop().catch(() => undefined);
+      // The kill is synchronous; the child's 'exit' event is not — and on a
+      // real shutdown Electron quits before it fires. The trace goes now.
+      await this.forgetPid();
     }
     this.unsubscribe?.();
     this.unsubscribe = null;

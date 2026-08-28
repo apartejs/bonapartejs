@@ -19,6 +19,12 @@ export interface FakeSlotSnapshot {
 export interface FakeLlamaServerOptions {
   /** Simulated prefill ms per uncached token (default 1 — never a real sleep). */
   msPerToken?: number;
+  /**
+   * A REAL delay between two content chunks (default 0: the whole reply is
+   * written at once). What lets a test act in the middle of a stream —
+   * navigate, cancel — and see what a client saw so far.
+   */
+  paceMs?: number;
   /** Text generated for a given prompt (default: 'ok'). */
   responder?: (prompt: string) => string;
   /** Number of slots (default 1). */
@@ -69,6 +75,7 @@ export async function startFakeLlamaServer(
   options: FakeLlamaServerOptions = {},
 ): Promise<FakeLlamaServer> {
   const msPerToken = options.msPerToken ?? 1;
+  const paceMs = options.paceMs ?? 0;
   const responder = options.responder ?? (() => 'ok');
   const totalSlots = options.totalSlots ?? 1;
   const modelPath = options.modelPath ?? 'C:\\fake\\model.gguf';
@@ -84,10 +91,10 @@ export async function startFakeLlamaServer(
   const slotText = (id: number): string => slots.get(id) ?? '';
   const slotTokens = (id: number): string[] => fakeTokenize(slotText(id));
 
-  function handleCompletion(
+  async function handleCompletion(
     body: Record<string, unknown>,
     res: ServerResponse,
-  ): void {
+  ): Promise<void> {
     const prompt = typeof body['prompt'] === 'string' ? body['prompt'] : '';
     const rawSlot = body['id_slot'];
     const requestedSlot = typeof rawSlot === 'number' ? rawSlot : -1;
@@ -131,11 +138,16 @@ export async function startFakeLlamaServer(
       }
     }
 
-    // One content chunk per "word" for a real multi-event stream.
+    // One content chunk per "word" for a real multi-event stream. With a
+    // pace, a client that goes away mid-stream (cancel) ends the stream
+    // where it stood, as llama-server does when the connection drops.
     const pieces = text.split(/(?<= )/);
     for (const piece of pieces) {
+      if (res.destroyed) return;
       res.write(`data: ${JSON.stringify({ content: piece, stop: false })}\n\n`);
+      if (paceMs > 0) await new Promise((resolve) => setTimeout(resolve, paceMs));
     }
+    if (res.destroyed) return;
 
     const predicted = fakeTokenize(text).length;
     const final: Record<string, unknown> = {
