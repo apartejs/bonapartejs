@@ -1469,3 +1469,17 @@ button.primary {
 .console-warning {
   color: var(--aparte-secondary);
 }
+
+/*
+ * Highlighted code inside the chat — tool inputs and outputs, code blocks.
+ *
+ * shiki inlines the colours of ITS theme (github-dark / github-light) on the
+ * <pre>: background and foreground included. Those are GitHub’s palette, not
+ * aparté’s, so the blocks sat in another world than the chat around them.
+ * The surface follows the theme tokens; !important is the only way past an
+ * inline style. Token colours stay the theme’s — legible on both surfaces.
+ */
+pre.shiki {
+  background-color: var(--aparte-code-bg) !important;
+  color: var(--aparte-text) !important;
+}
