@@ -1,6 +1,9 @@
 {
   "id": "web-search",
-  "name": { "en": "Web search", "fr": "Recherche web" },
+  "name": {
+    "en": "Web search",
+    "fr": "Recherche web"
+  },
   "version": "0.1.0",
   "description": {
     "en": "Lets the model search the web and read pages. Embedded by default — a hidden browser, no key, no service; online providers available once chosen.",
@@ -18,10 +21,20 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "query": { "type": "string", "description": "What to search for, as you would type it in a search engine." },
-            "maxResults": { "type": "integer", "minimum": 1, "maximum": 10, "description": "How many results to return (default 6)." }
+            "query": {
+              "type": "string",
+              "description": "What to search for, as you would type it in a search engine."
+            },
+            "maxResults": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "description": "How many results to return (default 6)."
+            }
           },
-          "required": ["query"]
+          "required": [
+            "query"
+          ]
         }
       },
       {
@@ -31,50 +44,114 @@
         "inputSchema": {
           "type": "object",
           "properties": {
-            "url": { "type": "string", "description": "The page's URL (http or https)." }
+            "url": {
+              "type": "string",
+              "description": "The page's URL (http or https)."
+            }
           },
-          "required": ["url"]
+          "required": [
+            "url"
+          ]
         }
       }
     ],
     "configSchemas": [
       {
         "key": "provider",
-        "label": { "en": "Search provider", "fr": "Fournisseur de recherche" },
+        "label": {
+          "en": "Search provider",
+          "fr": "Fournisseur de recherche"
+        },
         "description": {
           "en": "Embedded: a hidden browser queries a public engine, nothing leaves but the query. Online providers need a key.",
           "fr": "Embarqué : un navigateur caché interroge un moteur public, rien ne part sauf la requête. Les fournisseurs en ligne demandent une clé."
         },
         "type": "select",
         "options": [
-          { "value": "embedded", "label": { "en": "Embedded (default, no key)", "fr": "Embarqué (défaut, sans clé)" } },
-          { "value": "brave", "label": { "en": "Brave Search API", "fr": "Brave Search API" } },
-          { "value": "tavily", "label": { "en": "Tavily", "fr": "Tavily" } },
-          { "value": "serper", "label": { "en": "Serper (Google)", "fr": "Serper (Google)" } },
-          { "value": "searxng", "label": { "en": "SearXNG (self-hosted)", "fr": "SearXNG (auto-hébergé)" } }
+          {
+            "value": "embedded",
+            "label": {
+              "en": "Embedded (no key)",
+              "fr": "Embarqué (sans clé)"
+            }
+          },
+          {
+            "value": "brave",
+            "label": {
+              "en": "Brave Search API",
+              "fr": "Brave Search API"
+            }
+          },
+          {
+            "value": "tavily",
+            "label": {
+              "en": "Tavily",
+              "fr": "Tavily"
+            }
+          },
+          {
+            "value": "serper",
+            "label": {
+              "en": "Serper (Google)",
+              "fr": "Serper (Google)"
+            }
+          },
+          {
+            "value": "searxng",
+            "label": {
+              "en": "SearXNG (self-hosted)",
+              "fr": "SearXNG (auto-hébergé)"
+            }
+          }
         ],
         "default": "embedded",
-        "scopes": ["global"]
+        "scopes": [
+          "global"
+        ]
       },
       {
         "key": "apiKey",
-        "label": { "en": "API key", "fr": "Clé d’API" },
+        "label": {
+          "en": "API key",
+          "fr": "Clé d’API"
+        },
         "description": {
-          "en": "Key of the online provider chosen above. Unused by the embedded search.",
-          "fr": "Clé du fournisseur en ligne choisi ci-dessus. Inutile pour la recherche embarquée."
+          "en": "Key of the online provider chosen above.",
+          "fr": "Clé du fournisseur en ligne choisi ci-dessus."
         },
         "type": "string",
-        "scopes": ["global"]
+        "scopes": [
+          "global"
+        ],
+        "secret": true,
+        "showFor": {
+          "provider": [
+            "brave",
+            "tavily",
+            "serper",
+            "searxng"
+          ]
+        }
       },
       {
         "key": "searxngUrl",
-        "label": { "en": "SearXNG URL", "fr": "URL de SearXNG" },
+        "label": {
+          "en": "SearXNG URL",
+          "fr": "URL de SearXNG"
+        },
         "description": {
           "en": "Base URL of your SearXNG instance, e.g. http://localhost:8080.",
           "fr": "URL de base de votre instance SearXNG, ex. http://localhost:8080."
         },
         "type": "string",
-        "scopes": ["global"]
+        "scopes": [
+          "global"
+        ],
+        "showFor": {
+          "provider": [
+            "searxng"
+          ]
+        }
       }
     ]
   }

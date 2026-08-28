@@ -41,6 +41,10 @@ export interface SettingField {
   step?: number;
   /** Advanced setting: collapsed by default in the interface. */
   advanced?: boolean;
+  /** A field that reads as a secret (an API key): shown masked. */
+  secret?: boolean;
+  /** Shown only when the listed sibling settings hold one of the given values. */
+  showFor?: Record<string, string[]>;
 }
 
 export interface SettingLayers {

@@ -34,16 +34,29 @@ interface SettingsFormProps {
   onChange: (key: string, value: unknown) => void;
 }
 
+/** A field only shows when the settings it depends on hold one of the listed values (`showFor`). */
+function isShown(setting: ResolvedSettingDto, all: ResolvedSettingDto[]): boolean {
+  if (!setting.showFor) return true;
+  return Object.entries(setting.showFor).every(([key, allowed]) => {
+    const current = all.find((s) => s.key === key)?.value;
+    return allowed.includes(String(current ?? ''));
+  });
+}
+
 /**
  * A setting is defined once and rendered everywhere — the global hub as much
- * as the conversation panel. Two things are never left unsaid:
+ * as the conversation panel. Every row is one line: the label on the start
+ * edge, the control on the end, so a column of settings reads as a list
+ * whatever their types are. Two things are never left unsaid:
  *
  * - **Where the value comes from.** A field that isn't overridden shows
  *   "inherited", with the button to revert to inheritance when it is one.
- *   Without that, the user can't tell whether they're looking at their own
- *   choice or a default.
  * - **What the change costs.** Settings that enter the KV manifest invalidate
  *   saved contexts: that's said BEFORE, not found out after.
+ *
+ * A field can also depend on another (`showFor`) — the online search key only
+ * appears once an online provider is chosen — and the advanced fields hide
+ * behind a toggle, ABOVE the fields it reveals.
  *
  * The class names without utilities (`setting-row`, `setting-help`…) are
  * hooks for tests and for a host's own rules; they carry no style.
@@ -51,61 +64,72 @@ interface SettingsFormProps {
 export function SettingsForm({ settings, scope, labels, locale, onChange }: SettingsFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const visible = settings.filter((setting) => showAdvanced || !setting.advanced);
-  const hasAdvanced = settings.some((setting) => setting.advanced);
+  const shown = settings.filter((setting) => isShown(setting, settings));
+  const ordinary = shown.filter((setting) => !setting.advanced);
+  const advanced = shown.filter((setting) => setting.advanced);
 
-  return (
-    <div className="settings-form flex max-w-[560px] flex-col gap-5">
-      {visible.map((setting) => (
-        <div className="setting-row flex flex-col gap-1.5" key={setting.key}>
-          <div className="setting-head flex items-center gap-2">
-            <Label htmlFor={`set-${scope}-${setting.key}`}>{localize(setting.label, locale)}</Label>
-            {!setting.overridden && (
-              <Badge
-                variant="outline"
-                className="setting-inherited border-dashed font-mono text-[10.5px] font-normal text-muted-foreground"
-              >
-                {labels.inherited}
-              </Badge>
-            )}
-            {setting.overridden && (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="setting-reset ms-auto h-auto p-0 text-xs"
-                onClick={() => onChange(setting.key, undefined)}
-              >
-                {labels.reset}
-              </Button>
-            )}
-          </div>
-
-          <Control setting={setting} scope={scope} locale={locale} onChange={onChange} />
-
-          {setting.description && (
-            <p className="setting-help text-[11.5px] leading-snug text-muted-foreground">
-              {localize(setting.description, locale)}
-            </p>
-          )}
-          {setting.invalidatesKv && (
-            <p className="setting-warning text-[11.5px] leading-snug text-destructive">{labels.kvWarning}</p>
+  const row = (setting: ResolvedSettingDto) => (
+    <div className="setting-row flex flex-col gap-1" key={setting.key}>
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Label htmlFor={`set-${scope}-${setting.key}`} className="truncate">
+            {localize(setting.label, locale)}
+          </Label>
+          {!setting.overridden && (
+            <Badge
+              variant="outline"
+              className="setting-inherited shrink-0 border-dashed font-mono text-[10.5px] font-normal text-muted-foreground"
+            >
+              {labels.inherited}
+            </Badge>
           )}
         </div>
-      ))}
+        <div className="flex shrink-0 items-center gap-2">
+          {setting.overridden && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="setting-reset h-auto p-0 text-xs"
+              onClick={() => onChange(setting.key, undefined)}
+            >
+              {labels.reset}
+            </Button>
+          )}
+          <Control setting={setting} scope={scope} locale={locale} onChange={onChange} />
+        </div>
+      </div>
 
-      {hasAdvanced && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="setting-advanced-toggle self-start px-1 text-muted-foreground"
-          onClick={() => setShowAdvanced((shown) => !shown)}
-          aria-expanded={showAdvanced}
-        >
-          <ChevronRight className={cn('transition-transform', showAdvanced && 'rotate-90')} />
-          {labels.advanced}
-        </Button>
+      {setting.description && (
+        <p className="setting-help text-[11.5px] leading-snug text-muted-foreground">
+          {localize(setting.description, locale)}
+        </p>
+      )}
+      {setting.invalidatesKv && (
+        <p className="setting-warning text-[11.5px] leading-snug text-destructive">{labels.kvWarning}</p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="settings-form flex max-w-[560px] flex-col gap-4">
+      {ordinary.map(row)}
+
+      {advanced.length > 0 && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="setting-advanced-toggle -my-1 self-start px-1 text-muted-foreground"
+            onClick={() => setShowAdvanced((open) => !open)}
+            aria-expanded={showAdvanced}
+          >
+            <ChevronRight className={cn('transition-transform', showAdvanced && 'rotate-90')} />
+            {labels.advanced}
+          </Button>
+          {showAdvanced && advanced.map(row)}
+        </>
       )}
     </div>
   );
@@ -137,7 +161,7 @@ function Control({
   if (setting.type === 'select') {
     return (
       <Select value={String(setting.value ?? '')} onValueChange={(value) => onChange(setting.key, value)}>
-        <SelectTrigger id={id} size="sm" className="w-60 font-mono text-xs">
+        <SelectTrigger id={id} size="sm" className="w-52 font-mono text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -156,7 +180,7 @@ function Control({
       <Input
         id={id}
         type="number"
-        className="h-8 max-w-60 font-mono text-xs"
+        className="h-8 w-28 font-mono text-xs"
         value={setting.value === undefined ? '' : String(setting.value)}
         {...(setting.min !== undefined ? { min: setting.min } : {})}
         {...(setting.max !== undefined ? { max: setting.max } : {})}
@@ -172,8 +196,8 @@ function Control({
   return (
     <Input
       id={id}
-      type="text"
-      className="h-8 max-w-60 font-mono text-xs"
+      type={setting.secret ? 'password' : 'text'}
+      className="h-8 w-52 font-mono text-xs"
       value={String(setting.value ?? '')}
       onChange={(event) => onChange(setting.key, event.target.value === '' ? undefined : event.target.value)}
     />

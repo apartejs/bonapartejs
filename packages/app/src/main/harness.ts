@@ -456,6 +456,19 @@ export class Harness {
             ...(field.options ? { options: field.options } : {}),
             ...(field.description ? { description: field.description } : {}),
             ...(field.default !== undefined ? { default: field.default } : {}),
+            ...(field.secret ? { secret: true } : {}),
+            // The dependency keys are namespaced too, so the form matches them
+            // against the plugin's own settings.
+            ...(field.showFor
+              ? {
+                  showFor: Object.fromEntries(
+                    Object.entries(field.showFor).map(([key, values]) => [
+                      `plugin:${plugin.id}:${key}`,
+                      values,
+                    ]),
+                  ),
+                }
+              : {}),
           }),
         ),
       );
@@ -495,6 +508,8 @@ export class Harness {
       ...(setting.field.max !== undefined ? { max: setting.field.max } : {}),
       ...(setting.field.step !== undefined ? { step: setting.field.step } : {}),
       ...(setting.field.advanced ? { advanced: true } : {}),
+      ...(setting.field.secret ? { secret: true } : {}),
+      ...(setting.field.showFor ? { showFor: setting.field.showFor } : {}),
       value: setting.value,
       from: setting.from,
       overridden: setting.overridden,

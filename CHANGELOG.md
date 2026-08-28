@@ -168,6 +168,14 @@ published.
 
 ### Changed
 
+- **The settings read as a list, and a field can depend on another.** Every
+  row is one line now — label on the start edge, control (switch, select,
+  field) on the end — so a plugin's settings and the sampling panel line up
+  the same way. The "advanced settings" toggle sits ABOVE the fields it
+  reveals, not below them. A field can declare `showFor` (shown only when a
+  sibling holds a given value) and `secret` (masked): the web search shows
+  its API key only once an online provider is chosen, and masks it.
+
 - **Tailwind CSS 4 and shadcn/ui dress bonaparte's own controls** — the
   settings hub and the shared settings form, then the shell: the sidebar
   (its organise menu is a real menu — radio items, keyboard, Escape), the

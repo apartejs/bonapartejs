@@ -176,6 +176,10 @@ export interface ResolvedSettingDto {
   max?: number;
   step?: number;
   advanced?: boolean;
+  /** A field that reads as a secret (an API key): shown masked, one line. */
+  secret?: boolean;
+  /** Shown only when the listed sibling settings hold one of the given values. */
+  showFor?: Record<string, string[]>;
   value: unknown;
   /** Layer that provides the value: 'default' | 'global' | 'conversation'. */
   from: string;

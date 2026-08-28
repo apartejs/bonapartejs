@@ -87,6 +87,14 @@ export const configFieldSchema = z.object({
   /** For `select` only. */
   options: z.array(z.object({ value: z.string(), label: localizedLabel(80) })).optional(),
   description: localizedLabel(240).optional(),
+  /** A field read as a secret (an API key): shown masked in the hub. */
+  secret: z.boolean().optional(),
+  /**
+   * Show this field only when sibling settings hold one of the given values:
+   * `{ provider: ['brave', 'tavily'] }` shows the key only for online providers.
+   * The keys are the OTHER fields' own keys (unqualified).
+   */
+  showFor: z.record(z.string(), z.array(z.string())).optional(),
   /**
    * Scopes where the setting is editable. A global-only setting doesn't
    * appear in a conversation's settings, and vice versa.
