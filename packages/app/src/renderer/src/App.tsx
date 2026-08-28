@@ -91,6 +91,12 @@ export function App() {
     setProjects(await window.bonaparte.listProjects());
   }, []);
 
+  // The first message names the conversation: the sidebar learns it when
+  // the turn ends, not on the next navigation.
+  useEffect(() => {
+    if (!streaming) void refreshConversations();
+  }, [streaming, refreshConversations]);
+
   const changeGrouping = useCallback((next: SidebarGroupingDto) => {
     setGrouping(next);
     try {

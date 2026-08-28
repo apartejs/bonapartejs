@@ -185,6 +185,13 @@ published.
   consent nobody would give — hung the shutdown on the turn: the turn is
   cut, what arrived is committed, the state is saved, pending approvals are
   answered with a refusal.
+- On a fresh install the very first message got no reply on screen: the
+  screen had been mounted before any conversation existed and ignored the
+  events of the one the message created. A conversation exists from the
+  start now — empty, loading nothing. Every other E2E started with a
+  conversation and hid this; one starts from nothing now. The sidebar also
+  learns a conversation's name — its first message — when the turn ends,
+  not on the next navigation.
 - The context gauge was blind since the loop refactor: the harness
   forwarded a turn's end without its counts. It carries the prompt size, the
   cached part, the reply size and the slot's total again.

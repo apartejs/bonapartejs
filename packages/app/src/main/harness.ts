@@ -798,13 +798,14 @@ export class Harness {
       await this.setCurrentConversation(select);
     }
 
-    const id = this.currentConversationId;
+    let id = this.currentConversationId;
     if (!id || !(await this.store.exists(id))) {
-      return {
-        conversationId: id ?? '',
-        events: [],
-        restore: { restored: false, reason: 'missing' },
-      };
+      // A fresh install, or a current conversation deleted behind our back:
+      // the screen always shows a conversation, so one exists from the start
+      // — empty, which loads nothing. Its id is what every event will name;
+      // a screen mounted without one ignored the reply to the first message.
+      this.currentConversationId = null;
+      id = await this.ensureConversationId();
     }
     const history = await this.conversations.history(id);
     return {
