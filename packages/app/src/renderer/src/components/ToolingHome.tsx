@@ -1,3 +1,5 @@
+import { Button, Kbd } from '@aparte/bonaparte-plugin-sdk/ui';
+import { Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import type { ToolingTabsApi } from '../tooling/use-tooling-tabs.js';
@@ -11,6 +13,10 @@ interface ScriptEntry {
   name: string;
   command: string;
 }
+
+/** A soft primary: the accent wash, for the one action a row invites. */
+export const SOFT_PRIMARY =
+  'bg-accent text-accent-foreground hover:bg-accent/80 hover:text-accent-foreground';
 
 /**
  * The panel with no tab open: not an empty sentence, but what the panel can
@@ -56,40 +62,48 @@ export function ToolingHome({ tooling, projectRoot }: ToolingHomeProps) {
   };
 
   return (
-    <div className="tooling-home">
-      <p className="tooling-home-hint">{t.tooling.homeHint}</p>
-      <div className="tooling-home-views">
+    <div className="tooling-home flex flex-col gap-3.5 p-0.5 pb-1.5">
+      <p className="tooling-home-hint text-[12.5px] leading-normal text-muted-foreground">
+        {t.tooling.homeHint}
+      </p>
+      <div className="tooling-home-views grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
         {tooling.views.map((view) => (
-          <button
+          <Button
             key={view.pluginId + ':' + view.viewId}
             type="button"
-            className="tooling-home-view aparte-btn aparte-btn--neutral aparte-btn--soft"
+            variant="secondary"
+            className="tooling-home-view h-auto min-h-10 justify-start gap-2 font-normal"
             onClick={() => tooling.open(view)}
           >
-            <span className="tooling-home-view-icon" aria-hidden="true">
+            <span className="tooling-home-view-icon text-sm opacity-80" aria-hidden="true">
               {view.icon ?? '▫'}
             </span>
-            <span className="tooling-home-view-title">{view.title}</span>
-            {view.shortcut && <kbd className="aparte-kbd">{view.shortcut}</kbd>}
-          </button>
+            <span className="tooling-home-view-title min-w-0 flex-1 truncate text-start">{view.title}</span>
+            {view.shortcut && <Kbd>{view.shortcut}</Kbd>}
+          </Button>
         ))}
       </div>
 
       {scripts.length > 0 && (
         <section className="tooling-home-scripts">
-          <p className="tooling-home-section">{t.tooling.homeScripts}</p>
-          <ul className="tooling-home-script-list">
+          <p className="tooling-home-section mb-2 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+            {t.tooling.homeScripts}
+          </p>
+          <ul className="tooling-home-script-list flex flex-col gap-1.5">
             {scripts.map((script) => (
-              <li key={script.name}>
-                <button
+              <li key={script.name} className="flex min-w-0 items-center gap-2.5">
+                <Button
                   type="button"
-                  className="tooling-home-script aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                  variant="ghost"
+                  size="sm"
+                  className={`tooling-home-script ${SOFT_PRIMARY}`}
                   onClick={() => void runAndFollow(script.name)}
                   title={script.command}
                 >
-                  <span aria-hidden="true">▶</span> {script.name}
-                </button>
-                <span className="tooling-home-script-hint">
+                  <Play className="size-3.5" aria-hidden="true" />
+                  {script.name}
+                </Button>
+                <span className="tooling-home-script-hint truncate text-[11.5px] text-muted-foreground">
                   {browser ? t.tooling.homeRunOpen : t.tooling.homeRun}
                 </span>
               </li>

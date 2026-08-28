@@ -450,7 +450,7 @@ export function ChatScreen({
       {missingModel && (
         <Alert
           role="status"
-          className="missing-model my-2 border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+          className="missing-model mt-3 shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
         >
           <TriangleAlert aria-hidden="true" />
           <AlertDescription className="flex flex-wrap items-center gap-2 text-current">

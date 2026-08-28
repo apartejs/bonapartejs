@@ -1,4 +1,6 @@
 import type { ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
+import { Alert, AlertDescription, Button, Input, cn } from '@aparte/bonaparte-plugin-sdk/ui';
+import { CircleAlert, Loader2, Play } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface BrowserState {
@@ -56,6 +58,9 @@ const LABELS = {
 
 /** How long a followed script gets to announce its address. */
 const FOLLOW_TIMEOUT_MS = 60_000;
+
+const HELP = 'setting-help text-[11.5px] leading-snug text-muted-foreground';
+const SOFT_PRIMARY = 'bg-accent text-accent-foreground hover:bg-accent/80 hover:text-accent-foreground';
 
 /**
  * Tooled browser — React side.
@@ -230,94 +235,100 @@ export default function BrowserView({ locale, instanceId, projectRoot, init }: T
   }, [invoke]);
 
   return (
-    <div className="plugin-view browser-view">
+    <div className="plugin-view browser-view flex h-full flex-col gap-2">
       <form
-        className="browser-bar aparte-field-group"
+        className="browser-bar flex gap-1.5"
         onSubmit={(event) => {
           event.preventDefault();
           void openUrl(url);
         }}
       >
-        <input
-          className="browser-url aparte-field aparte-field--sm"
+        <Input
+          className="browser-url h-8 min-w-0 flex-1 font-mono text-xs"
           value={url}
           placeholder={labels.placeholder}
           onChange={(event) => setUrl(event.target.value)}
         />
-        <button
-          type="submit"
-          className="aparte-field-group__suffix aparte-btn aparte-btn--primary aparte-btn--solid aparte-btn--sm"
-        >
+        <Button type="submit" size="sm">
           {labels.go}
-        </button>
+        </Button>
         {state.open && (
-          <button
-            type="button"
-            className="aparte-btn aparte-btn--neutral aparte-btn--outline aparte-btn--sm"
-            onClick={() => void close()}
-          >
+          <Button type="button" variant="outline" size="sm" onClick={() => void close()}>
             {labels.close}
-          </button>
+          </Button>
         )}
       </form>
 
-      {/* Reserved zone: the native view lands exactly here. */}
-      <div className="browser-slot" ref={slotRef}>
+      {/* Reserved zone: the native view lands exactly here — it is not in
+          the DOM, this block only holds its place. A failed load says so
+          INSIDE the page area: that's where the user is looking. */}
+      <div className="browser-slot min-h-[140px] flex-1 rounded-lg border border-dashed p-2.5" ref={slotRef}>
         {state.error ? (
-          <div className="browser-failed aparte-alert aparte-alert--danger" role="alert">
-            <div className="aparte-alert__body">
-              <p className="aparte-alert__message">
-                {labels.failed} {state.error}
-              </p>
-            </div>
-          </div>
+          <Alert variant="destructive" role="alert" className="browser-failed">
+            <CircleAlert aria-hidden="true" />
+            <AlertDescription>
+              {labels.failed} {state.error}
+            </AlertDescription>
+          </Alert>
         ) : (
           !state.open && (
-            <div className="browser-empty">
+            <div className="browser-empty flex flex-col gap-3 p-3">
               {following ? (
-                <p className="browser-following">
-                  <span className="aparte-spinner aparte-spinner--sm" aria-hidden="true" />{' '}
+                <p className="browser-following flex items-center gap-2 text-[12.5px] text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
                   {labels.following}
                 </p>
               ) : (
                 scripts.length > 0 && (
                   <section className="browser-scripts">
-                    <p className="browser-scripts-title">{labels.scripts}</p>
-                    <ul className="browser-script-list">
+                    <p className="browser-scripts-title mb-2 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+                      {labels.scripts}
+                    </p>
+                    <ul className="browser-script-list flex flex-col gap-1.5">
                       {scripts.map((script) => (
                         <li key={script.name}>
-                          <button
+                          <Button
                             type="button"
-                            className="browser-script aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                            variant="ghost"
+                            size="sm"
+                            className={`browser-script ${SOFT_PRIMARY}`}
                             onClick={() => void runAndFollow(script.name)}
                             title={script.command}
                           >
-                            <span aria-hidden="true">▶</span> {script.name}
-                          </button>
+                            <Play className="size-3.5" aria-hidden="true" />
+                            {script.name}
+                          </Button>
                         </li>
                       ))}
                     </ul>
                   </section>
                 )
               )}
-              {gaveUp && <p className="setting-help">{labels.gaveUp}</p>}
-              <p className="setting-help">{labels.hint}</p>
+              {gaveUp && <p className={HELP}>{labels.gaveUp}</p>}
+              <p className={HELP}>{labels.hint}</p>
             </div>
           )
         )}
       </div>
 
       {state.open && (
-        <details className="browser-console">
-          <summary>
+        <details className="browser-console text-xs">
+          <summary className="cursor-pointer text-muted-foreground">
             {labels.console} ({state.messages.length})
           </summary>
           {state.messages.length === 0 ? (
-            <p className="setting-help">{labels.quiet}</p>
+            <p className={`${HELP} mt-1.5`}>{labels.quiet}</p>
           ) : (
-            <ul className="browser-console-list">
+            <ul className="browser-console-list mt-1.5 max-h-[140px] overflow-y-auto font-mono text-[11px] leading-normal">
               {state.messages.map((entry, index) => (
-                <li key={entry.at + '-' + index} className={'console-' + entry.level}>
+                <li
+                  key={entry.at + '-' + index}
+                  className={cn(
+                    'console-' + entry.level,
+                    entry.level === 'error' && 'text-destructive',
+                    entry.level === 'warning' && 'text-(--aparte-secondary)',
+                  )}
+                >
                   {entry.text}
                 </li>
               ))}

@@ -155,7 +155,10 @@ published.
   first screens — connecting the engine (a card, segmented tabs, the URL
   field with its Check button in one group, the verdict as an alert) and
   choosing the model (a real radio group, the search with its clear
-  button). The tooling panel and the plugin views follow. The primitives (button, input, select, switch, menu,
+  button); and the tooling panel — its tab strip, its "open a view" menu
+  (a real menu in a portal, so the collapsing bar no longer clips it), its
+  home — with the three plugin views (launcher, browser, terminal) on the
+  same primitives: one library for the app and its plugins, as intended. The primitives (button, input, select, switch, menu,
   popover, tabs, dialog, tooltip…) live in `@aparte/bonaparte-plugin-sdk/ui`:
   one component library for the app and every plugin view, materialised
   from shadcn's registry as source, the way shadcn intends. The palette is

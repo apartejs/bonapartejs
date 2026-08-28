@@ -1,4 +1,6 @@
 import type { ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
+import { Badge, Button } from '@aparte/bonaparte-plugin-sdk/ui';
+import { ExternalLink, Play, Square } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface ScriptEntry {
@@ -43,6 +45,10 @@ const LABELS = {
     starting: 'starting…',
   },
 } as const;
+
+const HELP = 'setting-help text-[11.5px] leading-snug text-muted-foreground';
+const SOFT_PRIMARY = 'bg-accent text-accent-foreground hover:bg-accent/80 hover:text-accent-foreground';
+const SOFT_DANGER = 'bg-destructive/10 text-destructive hover:bg-destructive/20 hover:text-destructive';
 
 /**
  * Project-aware new-tab: the open folder's scripts, launchable with one
@@ -92,59 +98,72 @@ export default function ProjectLauncherView({ projectRoot, locale, openView }: T
     [refresh],
   );
 
-  if (!projectRoot) return <p className="setting-help">{labels.noProject}</p>;
+  if (!projectRoot) return <p className={HELP}>{labels.noProject}</p>;
   if (!state) return null;
 
   const runningByName = new Map(state.running.map((entry) => [entry.name, entry]));
 
   return (
-    <div className="plugin-view">
-      <h3 className="plugin-view-title">{labels.title}</h3>
+    <div className="plugin-view flex flex-col gap-2.5">
+      <h3 className="plugin-view-title font-serif text-sm font-normal text-muted-foreground">{labels.title}</h3>
       {state.scripts.length === 0 ? (
-        <p className="setting-help">{labels.none}</p>
+        <p className={HELP}>{labels.none}</p>
       ) : (
-        <ul className="script-list">
+        <ul className="script-list flex flex-col gap-2">
           {state.scripts.map((script) => {
             const live = runningByName.get(script.name);
             return (
-              <li className="script-card aparte-card" key={script.name}>
-                <div className="script-head">
-                  <span className="script-name">{script.name}</span>
+              <li
+                className="script-card flex flex-col gap-1.5 rounded-lg border bg-background px-3 py-2.5"
+                key={script.name}
+              >
+                <div className="script-head flex items-center justify-between gap-2">
+                  <span className="script-name text-[13.5px]">{script.name}</span>
                   {live ? (
-                    <button
+                    <Button
                       type="button"
-                      className="aparte-btn aparte-btn--danger aparte-btn--soft aparte-btn--sm"
+                      variant="ghost"
+                      size="sm"
+                      className={SOFT_DANGER}
                       onClick={() => void stop(script.name)}
                     >
+                      <Square className="size-3" aria-hidden="true" />
                       {labels.stop}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
                       type="button"
-                      className="aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                      variant="ghost"
+                      size="sm"
+                      className={SOFT_PRIMARY}
                       onClick={() => void run(script.name)}
                     >
-                      ▶ {labels.run}
-                    </button>
+                      <Play className="size-3.5" aria-hidden="true" />
+                      {labels.run}
+                    </Button>
                   )}
                 </div>
-                <code className="script-command">
+                <code className="script-command font-mono text-[11px] text-muted-foreground">
                   {state.manager} run {script.name}
                 </code>
                 {live && (
-                  <div className="script-state">
+                  <div className="script-state text-[11.5px]">
                     {live.exitCode !== null ? (
-                      <span className="script-exited aparte-badge aparte-badge--danger aparte-badge--soft aparte-badge--sm">
+                      <Badge variant="destructive" className="script-exited font-mono text-[11px] font-normal">
                         {labels.exited} ({live.exitCode})
-                      </span>
+                      </Badge>
                     ) : live.url ? (
-                      <span className="script-links">
-                        <code className="script-url">{live.url}</code>
+                      <span className="script-links flex min-w-0 flex-wrap items-center gap-1.5">
+                        <code className="script-url truncate font-mono text-[11.5px] text-muted-foreground">
+                          {live.url}
+                        </code>
                         {/* Inside bonaparte first — the agent can read that page;
                             the OS browser stays one click away. */}
-                        <button
+                        <Button
                           type="button"
-                          className="aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                          variant="ghost"
+                          size="sm"
+                          className={SOFT_PRIMARY}
                           onClick={() => {
                             if (!openView?.('browser', 'page', { url: live.url })) {
                               void window.bonaparte.openExternal(live.url as string);
@@ -152,21 +171,26 @@ export default function ProjectLauncherView({ projectRoot, locale, openView }: T
                           }}
                         >
                           {labels.open}
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
-                          className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="size-7 text-muted-foreground"
                           aria-label={labels.openOutside}
                           title={labels.openOutside}
                           onClick={() => void window.bonaparte.openExternal(live.url as string)}
                         >
-                          ↗
-                        </button>
+                          <ExternalLink className="size-3.5" />
+                        </Button>
                       </span>
                     ) : (
-                      <span className="script-pending aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
+                      <Badge
+                        variant="secondary"
+                        className="script-pending font-mono text-[11px] font-normal text-muted-foreground"
+                      >
                         {labels.starting}
-                      </span>
+                      </Badge>
                     )}
                   </div>
                 )}

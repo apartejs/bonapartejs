@@ -1,4 +1,16 @@
 import type { ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@aparte/bonaparte-plugin-sdk/ui';
+import { Info, TriangleAlert } from 'lucide-react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
@@ -231,51 +243,51 @@ export default function TerminalView({
   }, [instanceId]);
 
   return (
-    <div className="pty-view">
-      <div className="pty-bar">
-        <label className="pty-shell">
-          <span>{t.shell}</span>
-          <select
-            className="aparte-field aparte-field--sm"
-            value={shellId ?? ''}
-            disabled={shells.length === 0}
-            onChange={(e) => void open(e.target.value)}
-          >
-            {shells.length === 0 ? (
-              <option value="">{t.noShell}</option>
-            ) : (
-              shells.map((shell) => (
-                <option key={shell.id} value={shell.id}>
-                  {shell.label}
-                </option>
-              ))
-            )}
-          </select>
-        </label>
+    <div className="pty-view flex h-full min-h-0 flex-col gap-2">
+      <div className="pty-bar flex shrink-0 items-center gap-2">
+        <Label
+          htmlFor={`pty-shell-${instanceId}`}
+          className="pty-shell text-[11px] font-medium tracking-[0.06em] text-muted-foreground uppercase"
+        >
+          {t.shell}
+        </Label>
+        <Select
+          value={shellId ?? ''}
+          onValueChange={(id) => void open(id)}
+          disabled={shells.length === 0}
+        >
+          <SelectTrigger id={`pty-shell-${instanceId}`} size="sm" className="h-7 w-auto min-w-40 text-xs">
+            <SelectValue placeholder={t.noShell} />
+          </SelectTrigger>
+          <SelectContent>
+            {shells.map((shell) => (
+              <SelectItem key={shell.id} value={shell.id}>
+                {shell.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {exited && (
-          <button
-            type="button"
-            className="aparte-btn aparte-btn--neutral aparte-btn--soft aparte-btn--sm"
-            onClick={() => void open(shellId)}
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={() => void open(shellId)}>
             {t.restart}
-          </button>
+          </Button>
         )}
       </div>
 
       {mode === 'basic' && (
-        <div className="pty-warning aparte-alert aparte-alert--warning" role="status">
-          <div className="aparte-alert__body">
-            <p className="aparte-alert__message">{t.degraded}</p>
-          </div>
-        </div>
+        <Alert
+          role="status"
+          className="pty-warning shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+        >
+          <TriangleAlert aria-hidden="true" />
+          <AlertDescription className="text-current">{t.degraded}</AlertDescription>
+        </Alert>
       )}
       {exited && (
-        <div className="pty-warning aparte-alert aparte-alert--neutral" role="status">
-          <div className="aparte-alert__body">
-            <p className="aparte-alert__message">{t.exited}</p>
-          </div>
-        </div>
+        <Alert role="status" className="pty-warning shrink-0">
+          <Info aria-hidden="true" />
+          <AlertDescription>{t.exited}</AlertDescription>
+        </Alert>
       )}
 
       <div className="pty-host" ref={hostRef} />

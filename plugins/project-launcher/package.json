@@ -10,7 +10,8 @@
     "test": "echo ok"
   },
   "dependencies": {
-    "@aparte/bonaparte-plugin-sdk": "workspace:*"
+    "@aparte/bonaparte-plugin-sdk": "workspace:*",
+    "lucide-react": "1.35.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

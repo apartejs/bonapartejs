@@ -59,8 +59,8 @@ export function ToolingPanel({
   }, [active?.pluginId, active?.instanceId]);
 
   return (
-    <aside className="tooling-panel" aria-label={t.tooling.heading}>
-      <div className="tooling-bar">
+    <aside className="tooling-panel flex min-h-0 flex-col border-s bg-card" aria-label={t.tooling.heading}>
+      <div className="tooling-bar flex h-(--bp-bar) shrink-0 items-stretch border-b pe-2">
         <ToolingTabs tooling={tooling} />
         <FlankToggle
           side="end"
@@ -71,11 +71,11 @@ export function ToolingPanel({
         />
       </div>
 
-      <div className="tooling-body" role="tabpanel">
+      <div className="tooling-body min-h-0 flex-1 overflow-y-auto p-3" role="tabpanel">
         {!active ? (
           <ToolingHome tooling={tooling} projectRoot={projectRoot} />
         ) : failed ? (
-          <p className="tooling-error">{t.tooling.loadFailed}</p>
+          <p className="tooling-error text-[12.5px] text-destructive">{t.tooling.loadFailed}</p>
         ) : View ? (
           // The key carries the instance: two terminals are two mounts, and
           // closing then reopening starts fresh with a new view.

@@ -250,6 +250,9 @@ importers:
       '@aparte/bonaparte-plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      lucide-react:
+        specifier: 1.35.0
+        version: 1.35.0(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -288,6 +291,9 @@ importers:
       '@aparte/bonaparte-plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      lucide-react:
+        specifier: 1.35.0
+        version: 1.35.0(react@19.2.8)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -316,6 +322,9 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
+      lucide-react:
+        specifier: 1.35.0
+        version: 1.35.0(react@19.2.8)
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
