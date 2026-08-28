@@ -1,6 +1,9 @@
 import { localize, type ResolvedSettingDto } from '@aparte/bonaparte-shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Popover, PopoverContent, PopoverTrigger, Slider, cn } from '@aparte/bonaparte-plugin-sdk/ui';
+import { Thermometer } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { MENU_LABEL } from './menu-styles.js';
 
 interface TemperatureControlProps {
   /** Changes on every open conversation: the value is carried by it. */
@@ -24,7 +27,6 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
   const { t, locale } = useTranslate();
   const [setting, setSetting] = useState<ResolvedSettingDto | null>(null);
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement>(null);
 
   const load = useCallback(async () => {
     const all = await window.bonaparte.getSettings('conversation');
@@ -34,15 +36,6 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
   useEffect(() => {
     void load();
   }, [load, conversationId]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent): void => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [open]);
 
   const change = useCallback(
     async (value: number) => {
@@ -64,62 +57,59 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
   const value = typeof setting.value === 'number' ? setting.value : 0.7;
   const min = setting.min ?? 0;
   const max = setting.max ?? 2;
+  const origin = setting.overridden ? t.temperature.thisConversation : t.settings.inherited;
 
   return (
-    <span className="temp-wrap" ref={wrapRef}>
-      <button
-        type="button"
-        className={`temp-button aparte-btn aparte-btn--neutral aparte-btn--pill aparte-btn--sm ${
-          setting.overridden ? 'temp-button-set aparte-btn--soft' : 'aparte-btn--ghost'
-        }`}
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        title={`${t.temperature.label} — ${
-          setting.overridden ? t.temperature.thisConversation : t.settings.inherited
-        }`}
-      >
-        <span className="temp-glyph aparte-btn__icon" aria-hidden="true">
-          ◑
-        </span>
-        {value.toLocaleString()}
-      </button>
-
-      {open && (
-        <div className="temp-menu aparte-popover" role="dialog" aria-label={t.temperature.label}>
-          <p className="conv-menu-label">{t.temperature.label}</p>
-          <input
-            type="range"
-            className="aparte-range"
-            min={min}
-            max={max}
-            step={setting.step ?? 0.05}
-            value={value}
-            onChange={(e) => void change(Number(e.target.value))}
-            aria-label={t.temperature.label}
-          />
-          <div className="temp-row">
-            <span className="temp-value">{value.toLocaleString()}</span>
-            {/* The origin is stated: without it, you can't tell whether
-                you're adjusting this conversation or reading the global
-                default. */}
-            <span className="temp-origin">
-              {setting.overridden ? t.temperature.thisConversation : t.settings.inherited}
-            </span>
-            {setting.overridden && (
-              <button
-                type="button"
-                className="temp-reset aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
-                onClick={() => void reset()}
-              >
-                {t.settings.reset}
-              </button>
-            )}
-          </div>
-          {setting.description && (
-            <p className="temp-help">{localize(setting.description, locale)}</p>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {/* Set FOR this conversation, the button stands apart from an
+            inherited value: otherwise you can't tell a default from a choice. */}
+        <Button
+          type="button"
+          variant={setting.overridden ? 'secondary' : 'ghost'}
+          size="sm"
+          className={cn(
+            'temp-button h-7 gap-1.5 rounded-full px-2.5 font-mono text-[11.5px] font-normal tabular-nums',
+            setting.overridden ? 'temp-button-set' : 'text-muted-foreground',
+          )}
+          title={`${t.temperature.label} — ${origin}`}
+        >
+          <Thermometer className="size-3.5 opacity-70" aria-hidden="true" />
+          {value.toLocaleString()}
+        </Button>
+      </PopoverTrigger>
+      {/* Opens UPWARD: the composer is at the bottom of the window. */}
+      <PopoverContent side="top" align="start" sideOffset={8} className="temp-menu w-64 p-3" aria-label={t.temperature.label}>
+        <p className={cn(MENU_LABEL, 'mb-3')}>{t.temperature.label}</p>
+        <Slider
+          value={[value]}
+          min={min}
+          max={max}
+          step={setting.step ?? 0.05}
+          onValueChange={([next]) => {
+            if (next !== undefined) void change(next);
+          }}
+          aria-label={t.temperature.label}
+          className="my-2"
+        />
+        <div className="temp-row mt-3 flex items-center gap-2">
+          <span className="temp-value font-mono text-[13px] tabular-nums">{value.toLocaleString()}</span>
+          {/* The origin is stated: without it, you can't tell whether
+              you're adjusting this conversation or reading the global
+              default. */}
+          <span className="temp-origin flex-1 text-[10.5px] text-muted-foreground">{origin}</span>
+          {setting.overridden && (
+            <Button type="button" variant="ghost" size="xs" className="temp-reset" onClick={() => void reset()}>
+              {t.settings.reset}
+            </Button>
           )}
         </div>
-      )}
-    </span>
+        {setting.description && (
+          <p className="temp-help mt-2 text-[11.5px] leading-snug text-muted-foreground">
+            {localize(setting.description, locale)}
+          </p>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

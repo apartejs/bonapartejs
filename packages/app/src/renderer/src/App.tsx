@@ -445,7 +445,7 @@ export function App() {
         ) : opened ? (
           /* `app-main` is a flex ROW (it centers the configuration cards):
              without this column, the chat wouldn't take up all the space. */
-          <div className="chat-view">
+          <div className="chat-view flex min-h-0 min-w-0 flex-1 flex-col">
             <ConversationHeader
               title={conversations.find((c) => c.id === opened.conversationId)?.title ?? ''}
               project={currentProjectSummary}

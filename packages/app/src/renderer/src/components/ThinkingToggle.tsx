@@ -1,4 +1,6 @@
 import type { ResolvedSettingDto } from '@aparte/bonaparte-shared';
+import { Toggle, cn } from '@aparte/bonaparte-plugin-sdk/ui';
+import { Brain } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
@@ -42,19 +44,20 @@ export function ThinkingToggle({ conversationId }: ThinkingToggleProps) {
 
   const on = setting.value !== false;
   return (
-    <button
-      type="button"
-      className={`think-button aparte-btn aparte-btn--neutral aparte-btn--pill aparte-btn--sm ${
-        on ? 'think-button-on aparte-btn--soft' : 'aparte-btn--ghost'
-      }`}
-      onClick={() => void toggle()}
-      aria-pressed={on}
+    <Toggle
+      pressed={on}
+      onPressedChange={() => void toggle()}
+      variant="outline"
+      size="sm"
+      className={cn(
+        'think-button h-7 gap-1.5 rounded-full px-2.5 text-xs font-normal text-muted-foreground',
+        'data-[state=on]:bg-muted data-[state=on]:text-foreground',
+        on && 'think-button-on',
+      )}
       title={`${t.thinking.label} ${on ? t.thinking.on : t.thinking.off} — ${t.thinking.hint}`}
     >
-      <span className="think-glyph aparte-btn__icon" aria-hidden="true">
-        {on ? '◐' : '○'}
-      </span>
+      <Brain className={cn('size-3.5', on ? 'opacity-90' : 'opacity-50')} aria-hidden="true" />
       {t.thinking.label}
-    </button>
+    </Toggle>
   );
 }

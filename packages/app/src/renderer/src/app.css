@@ -68,14 +68,6 @@
   }
 }
 
-.modal-backdrop {
-  animation: bp-veil-in var(--bp-fast) var(--bp-ease-out);
-}
-
-.modal-card {
-  animation: bp-card-in var(--bp-base) var(--bp-ease-out);
-}
-
 /*
  * Honoring `prefers-reduced-motion` is not optional: for some people, these
  * movements cause nausea. We cut everything, without breaking anything else
@@ -473,47 +465,6 @@ body,
   display: flex;
   justify-content: space-between;
   gap: 10px;
-}
-
-.mode-lecture {
-  color: var(--aparte-text-muted);
-}
-
-.mode-plume {
-  color: var(--aparte-primary);
-  border-color: currentColor;
-}
-
-.mode-impro {
-  color: var(--aparte-error);
-  border-color: currentColor;
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgb(0 0 0 / 45%);
-  backdrop-filter: blur(2px);
-  z-index: 10;
-  animation: fade-in 160ms ease both;
-}
-
-.modal-card {
-  width: min(560px, 100%);
-  padding: 28px 32px;
-  background: var(--aparte-surface-1);
-  border: 1px solid var(--aparte-border);
-  border-radius: 14px;
-  box-shadow: 0 18px 48px rgb(0 0 0 / 28%);
-  animation: card-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.modal-card h2 {
-  margin: 0 0 12px;
-  font-size: 20px;
 }
 
 @keyframes fade-in {

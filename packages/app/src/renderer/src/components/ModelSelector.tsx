@@ -1,7 +1,10 @@
 import type { ModelInfoDto } from '@aparte/bonaparte-shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Input, Popover, PopoverContent, PopoverTrigger, cn } from '@aparte/bonaparte-plugin-sdk/ui';
+import { Cpu, X } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { filterModels } from '../models/filter.js';
+import { MENU_LABEL } from './menu-styles.js';
 
 interface ModelSelectorProps {
   /** Model pinned by the open conversation. */
@@ -13,6 +16,8 @@ interface ModelSelectorProps {
 function sizeLabel(bytes: number, unit: string): string {
   return `${(bytes / 1024 ** 3).toFixed(1)} ${unit}`;
 }
+
+const HINT = 'model-hint mx-1 mt-1.5 mb-0.5 text-[11.5px] leading-normal text-muted-foreground';
 
 /**
  * Conversation's model, in the composer's row.
@@ -32,7 +37,6 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
   const [open, setOpen] = useState(false);
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [query, setQuery] = useState('');
-  const wrapRef = useRef<HTMLSpanElement>(null);
 
   const load = useCallback(async () => {
     setModels(await window.bonaparte.scanModels());
@@ -44,103 +48,111 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
     // hide models without saying why.
     setQuery('');
     if (models === null) void load();
-    const close = (event: MouseEvent): void => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const escape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', escape);
-    };
   }, [open, models, load]);
 
-  return (
-    <span className="model-wrap" ref={wrapRef}>
-      <button
-        type="button"
-        className="model-button aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--pill aparte-btn--sm"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        disabled={busy}
-        title={modelName ?? t.models.pick}
-      >
-        <span className="model-glyph aparte-btn__icon" aria-hidden="true">
-          ◈
-        </span>
-        <span className="model-name">{modelName ?? t.models.pick}</span>
-      </button>
+  const shown = models === null ? [] : filterModels(models, query);
 
-      {open && (
-        <div className="model-menu aparte-popover aparte-menu" role="menu" aria-label={t.models.pick}>
-          {/* The head stays put while the list scrolls: with dozens of GGUF
-              files on a machine, the search is the way in, and the label
-              says what this menu is even halfway down the list. */}
-          <div className="model-menu-head">
-            <p className="conv-menu-label">{t.models.pick}</p>
-            {models !== null && models.length > 0 && (
-              <span className="model-search">
-                <input
-                  className="aparte-field aparte-field--sm"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={t.picker.searchPlaceholder}
-                  spellCheck={false}
-                  autoFocus
-                  aria-label={t.picker.searchPlaceholder}
-                />
-                {query && (
-                  <button
-                    type="button"
-                    className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-                    onClick={() => setQuery('')}
-                    aria-label={t.common.clear}
-                  >
-                    ✕
-                  </button>
-                )}
-              </span>
-            )}
-          </div>
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {/* Pushed — along with anything that would follow — to the end of
+            the row, with a LOGICAL margin: correct in RTL too. */}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="model-button ms-auto h-7 max-w-[230px] gap-1.5 rounded-full px-2 font-mono text-[10.5px] font-normal text-muted-foreground"
+          disabled={busy}
+          title={modelName ?? t.models.pick}
+        >
+          <Cpu className="size-3.5 opacity-75" aria-hidden="true" />
+          <span className="model-name truncate">{modelName ?? t.models.pick}</span>
+        </Button>
+      </PopoverTrigger>
+      {/* Opens UPWARD, and never taller than the space above the composer:
+          a menu glued to the top edge reads as a bug. */}
+      <PopoverContent
+        side="top"
+        align="end"
+        sideOffset={8}
+        className="model-menu flex max-h-[min(50vh,calc(100vh-200px))] w-[min(340px,70vw)] flex-col p-0"
+        aria-label={t.models.pick}
+      >
+        {/* The head stays put while the list scrolls: with dozens of GGUF
+            files on a machine, the search is the way in, and the label
+            says what this menu is even halfway down the list. */}
+        <div className="model-menu-head flex flex-col gap-1.5 px-2.5 pt-2.5 pb-1.5">
+          <p className={MENU_LABEL}>{t.models.pick}</p>
+          {models !== null && models.length > 0 && (
+            <div className="model-search flex items-center gap-1.5">
+              <Input
+                className="h-7 text-xs"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t.picker.searchPlaceholder}
+                spellCheck={false}
+                autoFocus
+                aria-label={t.picker.searchPlaceholder}
+              />
+              {query && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => setQuery('')}
+                  aria-label={t.common.clear}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="min-h-0 overflow-y-auto px-1.5 pb-1.5">
           {models === null ? (
-            <p className="model-hint">{t.models.scanning}</p>
+            <p className={HINT}>{t.models.scanning}</p>
           ) : models.length === 0 ? (
-            <p className="model-hint">{t.models.none}</p>
-          ) : filterModels(models, query).length === 0 ? (
-            <p className="model-hint">{t.picker.noMatch}</p>
+            <p className={HINT}>{t.models.none}</p>
+          ) : shown.length === 0 ? (
+            <p className={HINT}>{t.picker.noMatch}</p>
           ) : (
             <>
-              {filterModels(models, query).map((model) => {
-                const current = modelName !== null && model.name === modelName;
-                return (
-                  <button
-                    key={model.path}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={current}
-                    className="model-item aparte-menu__item"
-                    disabled={current}
-                    onClick={() => {
-                      setOpen(false);
-                      onPick(model.path);
-                    }}
-                    title={model.path}
-                  >
-                    <span className="model-item-name">{model.name}</span>
-                    <span className="model-item-size">
-                      {sizeLabel(model.sizeBytes, t.units.gib)}
-                    </span>
-                  </button>
-                );
-              })}
-              <p className="model-hint">{t.models.switchWarning}</p>
+              <div role="listbox" aria-label={t.models.pick}>
+                {shown.map((model) => {
+                  const current = modelName !== null && model.name === modelName;
+                  return (
+                    /* The current model isn't clickable: it's marked, not offered. */
+                    <button
+                      key={model.path}
+                      type="button"
+                      data-slot="model-item"
+                      role="option"
+                      aria-selected={current}
+                      className={cn(
+                        'model-item flex w-full items-baseline gap-2.5 rounded-md px-2 py-1.5 text-start text-[12.5px] text-foreground',
+                        current ? 'cursor-default text-primary' : 'hover:bg-muted',
+                      )}
+                      disabled={current}
+                      onClick={() => {
+                        setOpen(false);
+                        onPick(model.path);
+                      }}
+                      title={model.path}
+                    >
+                      <span className="model-item-name min-w-0 flex-1 truncate">{model.name}</span>
+                      <span className="model-item-size font-mono text-[10.5px] text-muted-foreground">
+                        {sizeLabel(model.sizeBytes, t.units.gib)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className={HINT}>{t.models.switchWarning}</p>
             </>
           )}
         </div>
-      )}
-    </span>
+      </PopoverContent>
+    </Popover>
   );
 }

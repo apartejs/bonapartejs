@@ -1,5 +1,7 @@
 import { requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
+import { Alert, AlertDescription, Button } from '@aparte/bonaparte-plugin-sdk/ui';
+import { TriangleAlert } from 'lucide-react';
 import type {
   AgentEventDto,
   ApprovalRequestDto,
@@ -446,21 +448,25 @@ export function ChatScreen({
   return (
     <div className="chat-wrap">
       {missingModel && (
-        <div className="aparte-alert aparte-alert--warning missing-model" role="status">
-          <div className="aparte-alert__body">
-            <p className="aparte-alert__message">
-              {t.chat.missingModel.replace('{name}', modelFileName(missingModel))}
-            </p>
-            <button
+        <Alert
+          role="status"
+          className="missing-model my-2 border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+        >
+          <TriangleAlert aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center gap-2 text-current">
+            <span className="flex-1">{t.chat.missingModel.replace('{name}', modelFileName(missingModel))}</span>
+            <Button
               type="button"
-              className="aparte-btn aparte-btn--warning aparte-btn--soft aparte-btn--sm"
+              variant="outline"
+              size="sm"
+              className="border-amber-600/40 bg-transparent text-current hover:bg-amber-500/15 hover:text-current"
               onClick={onChooseModel}
               disabled={busy}
             >
               {t.chat.chooseModel}
-            </button>
-          </div>
-        </div>
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
       <AparteChat
         ref={chat.ref}

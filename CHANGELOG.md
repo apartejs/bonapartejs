@@ -148,8 +148,11 @@ published.
   (its organise menu is a real menu — radio items, keyboard, Escape), the
   conversation header (the project panel is a popover that closes on Escape,
   the actions a menu), the status strip (badges, the context gauge on a
-  progress bar), the project dialog (a dialog: overlay, focus trap, Escape).
-  The rest of the screens follow. The primitives (button, input, select, switch, menu,
+  progress bar), the project dialog (a dialog: overlay, focus trap, Escape),
+  then the composer's row: the play mode is a menu of radio items, the
+  reasoning switch a pressed toggle, the temperature a popover with a real
+  slider (keyboard, Escape), the model a popover with its search. The rest
+  of the screens follow. The primitives (button, input, select, switch, menu,
   popover, tabs, dialog, tooltip…) live in `@aparte/bonaparte-plugin-sdk/ui`:
   one component library for the app and every plugin view, materialised
   from shadcn's registry as source, the way shadcn intends. The palette is

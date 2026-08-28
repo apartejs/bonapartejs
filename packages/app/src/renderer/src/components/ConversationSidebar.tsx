@@ -20,6 +20,7 @@ import {
 import { Ellipsis, Folder, Plus } from 'lucide-react';
 import { useMemo, type ReactElement } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { MENU_LABEL } from './menu-styles.js';
 
 interface ConversationSidebarProps {
   conversations: ConversationSummaryDto[];
@@ -47,7 +48,6 @@ function relativeDate(iso: string, locale: string): string {
   return rtf.format(-Math.round(minutes / (60 * 24)), 'day');
 }
 
-const MENU_LABEL = 'text-[10.5px] font-medium tracking-[0.08em] text-muted-foreground uppercase';
 const GROUP_HEAD = 'conv-group-head flex items-center gap-1.5 pt-1.5 pb-[3px] ps-2.5 pe-3.5';
 const GROUP_COUNT = 'conv-group-count flex-none text-[11px] text-muted-foreground tabular-nums';
 

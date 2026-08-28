@@ -17,6 +17,7 @@ import { Ellipsis, Folder } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { FlankToggle } from './FlankToggle.js';
+import { MENU_LABEL } from './menu-styles.js';
 
 interface ConversationHeaderProps {
   title: string;
@@ -40,7 +41,7 @@ interface ConversationHeaderProps {
   onTogglePanel: () => void;
 }
 
-const POPOVER_LABEL = 'mx-2 mb-1.5 text-[10.5px] font-medium tracking-[0.08em] text-muted-foreground uppercase';
+const POPOVER_LABEL = `mx-2 mb-1.5 ${MENU_LABEL}`;
 
 /**
  * Conversation header: what NAMES it and what it SEES.
@@ -250,7 +251,7 @@ export function ConversationHeader({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="conv-popover-right min-w-56">
-          <DropdownMenuLabel className={POPOVER_LABEL.replace('mx-2 mb-1.5 ', '')}>{t.header.moveTo}</DropdownMenuLabel>
+          <DropdownMenuLabel className={MENU_LABEL}>{t.header.moveTo}</DropdownMenuLabel>
           {projects.map((candidate) => (
             <DropdownMenuItem
               key={candidate.id}

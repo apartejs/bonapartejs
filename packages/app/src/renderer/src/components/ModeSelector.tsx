@@ -1,8 +1,27 @@
 import type { PlayModeDto } from '@aparte/bonaparte-shared';
-import { useEffect, useRef, useState } from 'react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  cn,
+} from '@aparte/bonaparte-plugin-sdk/ui';
+import { ChevronDown } from 'lucide-react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { MENU_LABEL } from './menu-styles.js';
 
 const MODES: PlayModeDto[] = ['lecture', 'repetition', 'plume', 'impro'];
+
+/** The dot picks up the mode's tone: a glance is enough to know whether the agent has a free hand. */
+const MODE_TONE: Record<PlayModeDto, string> = {
+  lecture: 'text-muted-foreground',
+  repetition: 'text-foreground',
+  plume: 'text-primary',
+  impro: 'text-destructive',
+};
 
 interface ModeSelectorProps {
   mode: PlayModeDto;
@@ -10,7 +29,7 @@ interface ModeSelectorProps {
 }
 
 /**
- * Play mode selector, mounted in the composer's `footerLeft`.
+ * Play mode selector, mounted in the composer's toolbar.
  *
  * The mode decides what the agent is allowed to do ON THE NEXT MESSAGE: it
  * belongs to the act of sending, not to the dashboard — hence its place in
@@ -18,63 +37,58 @@ interface ModeSelectorProps {
  *
  * A native `<select>` can't display two lines per option, and a mode's name
  * alone doesn't say what it allows: "Improv" doesn't warn of anything. Hence
- * the panel — name, colored dot, one line of description.
+ * the menu — name, coloured dot, one line of description. It opens UPWARD:
+ * the composer is at the bottom of the window.
  */
 export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
   const { t } = useTranslate();
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: MouseEvent): void => {
-      if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [open]);
 
   return (
-    <span className="mode-wrap" ref={wrapRef}>
-      <button
-        type="button"
-        className={`mode-button mode-${mode} aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--pill aparte-btn--sm`}
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        title={t.modes.hint}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(
+            'mode-button h-7 rounded-full bg-muted px-2.5 text-xs font-normal',
+            `mode-${mode}`,
+            MODE_TONE[mode],
+          )}
+          title={t.modes.hint}
+        >
+          <span className="mode-dot size-[7px] shrink-0 rounded-full bg-current" aria-hidden="true" />
+          <span className="text-foreground">{t.modes[mode]}</span>
+          <ChevronDown className="size-3 opacity-70" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="mode-menu w-[min(360px,calc(100vw-48px))]"
       >
-        <span className="mode-dot" aria-hidden="true" />
-        {t.modes[mode]}
-        <span className="mode-caret" aria-hidden="true">
-          ▾
-        </span>
-      </button>
-
-      {open && (
-        /* The panel opens UPWARD: the composer is at the bottom of the window. */
-        <div className="mode-menu aparte-popover aparte-menu" role="menu">
-          <p className="conv-menu-label">{t.modes.hint}</p>
+        <DropdownMenuLabel className={MENU_LABEL}>{t.modes.hint}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={mode} onValueChange={(value) => onModeChange(value as PlayModeDto)}>
           {MODES.map((value) => (
-            <button
+            <DropdownMenuRadioItem
               key={value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={value === mode}
-              className={`mode-option aparte-menu__item${value === mode ? ' mode-option-active' : ''}`}
-              onClick={() => {
-                onModeChange(value);
-                setOpen(false);
-              }}
+              value={value}
+              className={cn('mode-option items-start py-1.5', value === mode && 'mode-option-active')}
             >
-              <span className="mode-option-head">
-                <span className={`mode-dot mode-${value}`} aria-hidden="true" />
-                {t.modes[value]}
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className={cn('mode-option-head flex items-center gap-1.5 text-[12.5px]', MODE_TONE[value])}>
+                  <span className="mode-dot size-[7px] shrink-0 rounded-full bg-current" aria-hidden="true" />
+                  <span className="text-foreground">{t.modes[value]}</span>
+                </span>
+                <span className="mode-option-desc text-[11.5px] leading-snug text-muted-foreground">
+                  {t.modes.descriptions[value]}
+                </span>
               </span>
-              <span className="mode-option-desc">{t.modes.descriptions[value]}</span>
-            </button>
+            </DropdownMenuRadioItem>
           ))}
-        </div>
-      )}
-    </span>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
