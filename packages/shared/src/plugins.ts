@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import type { BonaparteLocale } from './locale.js';
 
 /** Identifiant : minuscules, chiffres et tirets — il sert de nom de dossier. */
 const pluginId = z
@@ -17,13 +18,32 @@ const pluginId = z
   .regex(/^[a-z][a-z0-9-]*$/, 'id : minuscules, chiffres et tirets, commençant par une lettre');
 
 /**
+ * A label shown to the user — a tab title, a plugin name. Visible strings
+ * follow the UI rule (fr/en), so a manifest may give both forms; English is
+ * the required one, the wire language and the fallback. A plain string is
+ * still accepted: it is displayed as is, whatever the locale.
+ */
+function localizedLabel(max: number) {
+  const text = z.string().min(1).max(max);
+  return z.union([text, z.object({ en: text, fr: text.optional() })]);
+}
+
+export type LocalizedText = string | { en: string; fr?: string };
+
+/** Resolves a manifest label for a locale, falling back to English. */
+export function localize(text: LocalizedText, locale: BonaparteLocale): string {
+  if (typeof text === 'string') return text;
+  return text[locale] ?? text.en;
+}
+
+/**
  * Une vue montée dans le panneau d'outillage (à droite). Chaque vue est
  * souveraine sur son contenu : le panneau ne fournit que l'onglet et la place.
  */
 export const toolingViewSchema = z.object({
   id: z.string().min(1).max(64),
-  /** Titre d'onglet par défaut (l'i18n du plugin peut le remplacer). */
-  title: z.string().min(1).max(48),
+  /** Tab title, in one or both locales. */
+  title: localizedLabel(48),
   /** Glyphe court affiché dans l'onglet — un caractère ou deux. */
   icon: z.string().max(4).optional(),
   /** Ordre indicatif dans le menu d'ouverture ; à défaut, ordre de découverte. */
@@ -76,9 +96,9 @@ export const configFieldSchema = z.object({
 
 export const pluginManifestSchema = z.object({
   id: pluginId,
-  name: z.string().min(1).max(64),
+  name: localizedLabel(64),
   version: z.string().min(1).max(32),
-  description: z.string().max(240).optional(),
+  description: localizedLabel(240).optional(),
   /**
    * Points d'entrée. `node` tourne dans le main process (outils, backends) ;
    * `renderer` est importé paresseusement à l'affichage d'une vue.
@@ -106,9 +126,9 @@ export type PluginConfigField = z.infer<typeof configFieldSchema>;
 /** État d'un plugin tel que l'UI le voit. */
 export interface PluginStatusDto {
   id: string;
-  name: string;
+  name: LocalizedText;
   version: string;
-  description?: string;
+  description?: LocalizedText;
   enabled: boolean;
   active: boolean;
   /** Renseigné quand le manifeste est invalide ou l'activation a échoué. */

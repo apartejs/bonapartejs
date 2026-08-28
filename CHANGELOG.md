@@ -56,6 +56,8 @@ published.
   directory, disk, GPU) as a localised table with exit code.
 - **Electron E2E** (Playwright) with a never-shown window and an isolated data
   directory.
+- Plugin manifests carry their labels (name, description, tab title) in both
+  locales; the UI picks the current one and falls back to English.
 
 ### Changed
 

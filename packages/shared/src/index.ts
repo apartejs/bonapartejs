@@ -11,10 +11,8 @@ export * from './plugins.js';
 // bas, a besoin du type lui-même.
 import type { PluginStatusDto } from './plugins.js';
 
-/** Locales supportées par bonaparte (UI et messages du harness). */
-export type BonaparteLocale = 'fr' | 'en';
-
-export const BONAPARTE_LOCALES: readonly BonaparteLocale[] = ['fr', 'en'];
+export * from './locale.js';
+import type { BonaparteLocale } from './locale.js';
 
 /**
  * Canaux IPC main↔renderer. Un seul endroit fait autorité : le preload et le

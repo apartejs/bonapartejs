@@ -1,7 +1,8 @@
-import type {
-  BackendConfigDto,
-  PluginStatusDto,
-  ResolvedSettingDto,
+import {
+  localize,
+  type BackendConfigDto,
+  type PluginStatusDto,
+  type ResolvedSettingDto,
 } from '@aparte/bonaparte-shared';
 import { SettingsForm } from '@aparte/bonaparte-plugin-sdk';
 import { useCallback, useEffect, useState } from 'react';
@@ -166,7 +167,7 @@ export function SettingsHub({
               {plugins.length === 0 && <li className="setting-help">{t.settings.noPlugins}</li>}
               {plugins.map((plugin) => (
                 <li key={plugin.id} className="plugin-row">
-                  <span className="plugin-name">{plugin.name}</span>
+                  <span className="plugin-name">{localize(plugin.name, locale)}</span>
                   <span className="plugin-version">{plugin.version}</span>
                   <span
                     className={plugin.error ? 'plugin-state-failed' : 'plugin-state-active'}
@@ -174,7 +175,7 @@ export function SettingsHub({
                     {plugin.error ? t.settings.pluginFailed : t.settings.pluginActive}
                   </span>
                   {plugin.description && (
-                    <p className="setting-help">{plugin.description}</p>
+                    <p className="setting-help">{localize(plugin.description, locale)}</p>
                   )}
                   {/* Un plugin cassé se montre avec son erreur : le faire
                       disparaître laisserait l'utilisateur sans explication. */}

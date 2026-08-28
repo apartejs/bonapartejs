@@ -13,6 +13,12 @@
  * PEUT ouvrir.
  */
 
+import {
+  localize,
+  type BonaparteLocale,
+  type PluginStatusDto,
+} from '@aparte/bonaparte-shared';
+
 /** Une vue ouvrable, telle que le manifeste d'un plugin la déclare. */
 export interface ToolingViewDescriptor {
   pluginId: string;
@@ -24,6 +30,30 @@ export interface ToolingViewDescriptor {
   multiple: boolean;
   /** Accélérateur affiché dans le menu — indicatif, la fenêtre le câble. */
   shortcut?: string;
+}
+
+/**
+ * What the active plugins can open, in the order they suggest, with every
+ * title resolved for the locale — a tab title is a UI string like any other.
+ */
+export function listViews(
+  plugins: PluginStatusDto[],
+  locale: BonaparteLocale,
+): ToolingViewDescriptor[] {
+  return plugins
+    .filter((plugin) => plugin.active)
+    .flatMap((plugin) =>
+      plugin.views.map((view) => ({
+        pluginId: plugin.id,
+        viewId: view.id,
+        title: localize(view.title, locale),
+        ...(view.icon ? { icon: view.icon } : {}),
+        order: view.order ?? 100,
+        multiple: view.multiple,
+        ...(view.shortcut ? { shortcut: view.shortcut } : {}),
+      })),
+    )
+    .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
 }
 
 /** Un onglet ouvert. `instanceId` est l'identité de la session côté Node. */

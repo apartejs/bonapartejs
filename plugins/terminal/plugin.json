@@ -1,8 +1,11 @@
 {
   "id": "terminal",
-  "name": "Terminal",
+  "name": { "en": "Terminal", "fr": "Terminal" },
   "version": "0.1.0",
-  "description": "Un shell dans le projet ouvert, à côté du chat.",
+  "description": {
+    "en": "A shell in the open project, next to the chat.",
+    "fr": "Un shell dans le projet ouvert, à côté du chat."
+  },
   "entry": {
     "node": "./dist/node.js",
     "renderer": "./renderer.tsx"
@@ -11,7 +14,7 @@
     "toolingViews": [
       {
         "id": "shell",
-        "title": "Terminal",
+        "title": { "en": "Terminal", "fr": "Terminal" },
         "icon": "▮",
         "order": 30,
         "multiple": true,

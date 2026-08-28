@@ -1,9 +1,11 @@
 import type { PluginStatusDto } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslate } from '../i18n/LocaleProvider.js';
 import {
   EMPTY_TABS,
   activateTab,
   closeTab,
+  listViews,
   openTab,
   pruneTabs,
   readTabs,
@@ -42,24 +44,11 @@ interface Options {
  */
 export function useToolingTabs({ conversationId, plugins, onOpen }: Options): ToolingTabsApi {
   const [state, setState] = useState<ToolingTabsState>(EMPTY_TABS);
+  const { locale } = useTranslate();
 
   const views = useMemo<ToolingViewDescriptor[]>(
-    () =>
-      plugins
-        .filter((plugin) => plugin.active)
-        .flatMap((plugin) =>
-          plugin.views.map((view) => ({
-            pluginId: plugin.id,
-            viewId: view.id,
-            title: view.title,
-            ...(view.icon ? { icon: view.icon } : {}),
-            order: view.order ?? 100,
-            multiple: view.multiple,
-            ...(view.shortcut ? { shortcut: view.shortcut } : {}),
-          })),
-        )
-        .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title)),
-    [plugins],
+    () => listViews(plugins, locale),
+    [plugins, locale],
   );
 
   // Changer de conversation change de jeu d'onglets : on relit le sien.

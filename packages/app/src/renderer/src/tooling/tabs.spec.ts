@@ -1,8 +1,10 @@
+import type { PluginStatusDto } from '@aparte/bonaparte-shared';
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_TABS,
   activateTab,
   closeTab,
+  listViews,
   openTab,
   pruneTabs,
   readTabs,
@@ -10,6 +12,29 @@ import {
   type ToolingTabsState,
   type ToolingViewDescriptor,
 } from './tabs.js';
+
+describe('listViews', () => {
+  const browser: PluginStatusDto = {
+    id: 'browser',
+    name: { en: 'Tooled browser', fr: 'Navigateur outillé' },
+    version: '0.1.0',
+    enabled: true,
+    active: true,
+    views: [{ id: 'page', title: { en: 'Browser', fr: 'Navigateur' }, multiple: true, order: 40 }],
+    toolNames: [],
+  };
+
+  it('localises the titles of the views the active plugins declare', () => {
+    // A tab title is a UI string: it follows the locale like every other
+    // label, instead of showing whatever language the manifest was written in.
+    expect(listViews([browser], 'fr').map((view) => view.title)).toEqual(['Navigateur']);
+    expect(listViews([browser], 'en').map((view) => view.title)).toEqual(['Browser']);
+  });
+
+  it('ignores inactive plugins', () => {
+    expect(listViews([{ ...browser, active: false }], 'en')).toEqual([]);
+  });
+});
 
 const terminal: ToolingViewDescriptor = {
   pluginId: 'terminal',

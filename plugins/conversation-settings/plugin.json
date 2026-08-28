@@ -1,12 +1,15 @@
 {
   "id": "conversation-settings",
-  "name": "Réglages de conversation",
+  "name": { "en": "Conversation settings", "fr": "Réglages de conversation" },
   "version": "0.1.0",
-  "description": "Température, échantillonnage et modèle de la conversation ouverte.",
+  "description": {
+    "en": "Temperature, sampling and model of the open conversation.",
+    "fr": "Température, échantillonnage et modèle de la conversation ouverte."
+  },
   "entry": { "renderer": "./renderer.tsx" },
   "contributes": {
     "toolingViews": [
-      { "id": "settings", "title": "Conversation", "icon": "◐", "order": 10 }
+      { "id": "settings", "title": { "en": "Conversation", "fr": "Conversation" }, "icon": "◐", "order": 10 }
     ]
   }
 }

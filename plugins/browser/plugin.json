@@ -1,8 +1,11 @@
 {
   "id": "browser",
-  "name": "Navigateur outillé",
+  "name": { "en": "Tooled browser", "fr": "Navigateur outillé" },
   "version": "0.1.0",
-  "description": "Une page web à côté du chat, dont l'agent peut lire la console et le DOM.",
+  "description": {
+    "en": "A web page next to the chat, whose console and DOM the agent can read.",
+    "fr": "Une page web à côté du chat, dont l'agent peut lire la console et le DOM."
+  },
   "entry": {
     "node": "./dist/node.js",
     "renderer": "./renderer.tsx"
@@ -11,7 +14,7 @@
     "toolingViews": [
       {
         "id": "page",
-        "title": "Navigateur",
+        "title": { "en": "Browser", "fr": "Navigateur" },
         "icon": "◫",
         "order": 40,
         "multiple": true,

@@ -1,8 +1,11 @@
 {
   "id": "project-launcher",
-  "name": "Lanceur de projet",
+  "name": { "en": "Project launcher", "fr": "Lanceur de projet" },
   "version": "0.1.0",
-  "description": "Scripts du projet ouvert, lançables d'un clic, avec détection du port.",
+  "description": {
+    "en": "The open project's scripts, one click away, with port detection.",
+    "fr": "Scripts du projet ouvert, lançables d'un clic, avec détection du port."
+  },
   "entry": {
     "node": "./dist/node.js",
     "renderer": "./renderer.tsx"
@@ -11,7 +14,7 @@
     "toolingViews": [
       {
         "id": "launcher",
-        "title": "Projet",
+        "title": { "en": "Project", "fr": "Projet" },
         "icon": "▶",
         "order": 20
       }
