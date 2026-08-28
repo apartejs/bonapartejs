@@ -54,23 +54,23 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.13.0
-        version: 0.13.0
+        specifier: 0.13.1
+        version: 0.13.1
       '@aparte/locale-fr':
-        specifier: 0.13.0
-        version: 0.13.0(@aparte/core@0.13.0)
+        specifier: 0.13.1
+        version: 0.13.1(@aparte/core@0.13.1)
       '@aparte/plugin-marked':
-        specifier: 0.13.0
-        version: 0.13.0(@aparte/core@0.13.0)(marked@18.0.10)
+        specifier: 0.13.1
+        version: 0.13.1(@aparte/core@0.13.1)(marked@18.0.10)
       '@aparte/plugin-shiki':
-        specifier: 0.13.0
-        version: 0.13.0(@aparte/core@0.13.0)(shiki@4.4.3)
+        specifier: 0.13.1
+        version: 0.13.1(@aparte/core@0.13.1)(shiki@4.4.3)
       '@aparte/plugin-streaming-markdown':
-        specifier: 0.13.0
-        version: 0.13.0(@aparte/core@0.13.0)(streaming-markdown@0.2.15)
+        specifier: 0.13.1
+        version: 0.13.1(@aparte/core@0.13.1)(streaming-markdown@0.2.15)
       '@aparte/react':
-        specifier: 0.13.0
-        version: 0.13.0(@aparte/core@0.13.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: 0.13.1
+        version: 0.13.1(@aparte/core@0.13.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@shikijs/langs':
         specifier: ^4.4.3
         version: 4.4.3
@@ -151,8 +151,8 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 0.13.0
-        version: 0.13.0
+        specifier: 0.13.1
+        version: 0.13.1
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -301,42 +301,42 @@ importers:
 
 packages:
 
-  '@aparte/core@0.13.0':
-    resolution: {integrity: sha512-xialZwyzmepbwXMW792rWsSmEU+XeDZ/R7sgWHN+n/lcs7ROOM/PV0KZdZnPJUDf8CiceG6InOsMu4lCAwLZCw==}
+  '@aparte/core@0.13.1':
+    resolution: {integrity: sha512-NtKdr8ZWVXiNiS9inLjwLdgaCN9e5y5xUeDCtgC8SI4tywGrc94cpiwYkzaDzqfm2fqj2akqeNTZTB8SKoooig==}
     engines: {node: '>=18'}
 
-  '@aparte/locale-fr@0.13.0':
-    resolution: {integrity: sha512-hRszgR6OE7mM0yiaCyiUtwryaVee1E6/z4EI+W7iclxfRE2LvpDSKLK9M+SbIFTf/nL+UWKwDKvrdjVwK5eoPQ==}
+  '@aparte/locale-fr@0.13.1':
+    resolution: {integrity: sha512-OJkbxgPyKHKF7ZZO9yGJ0MZIP3RsQSXrVar9pcIm2wjHlt5EruH4C2A6e5Ipbxye6Bnhoc5uSiLStMnf6KT4BQ==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=0.13.0 <1.0.0'
+      '@aparte/core': '>=0.13.1 <1.0.0'
 
-  '@aparte/plugin-marked@0.13.0':
-    resolution: {integrity: sha512-TGgelzhTsjxa3f4Ns80sz8f1X0aXNmyZA1cAZG3u+nMxiwOMxn4YPMWdOsVZwAe8Alk7cnxR0J9mfPi1rKyqsA==}
+  '@aparte/plugin-marked@0.13.1':
+    resolution: {integrity: sha512-7ZAfAAm/djouLImHvh2Zm082RTWaGmiheCx+CsGpbEazW8XR/wSZz1wODiCyfOFzsHm+JxMrxVhj8CU8e+xEwA==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=0.13.0 <1.0.0'
+      '@aparte/core': '>=0.13.1 <1.0.0'
       marked: ^18.0.0
 
-  '@aparte/plugin-shiki@0.13.0':
-    resolution: {integrity: sha512-b6GvVJNfeh2yRpmVqdufi8DB11ecl4EqILxRDteu3YTikgi6YIBkx7z5SueUGrbEhxvl+9+lgffxeCCk5ZIlzA==}
+  '@aparte/plugin-shiki@0.13.1':
+    resolution: {integrity: sha512-r2G+9PHVU3v4OIHnIvzULvpOLw9BkO1NLUMyc1r/penIiKevRtBqdOD7zjo03s82dJ1R7t/D1SDBcIdROaWRWw==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=0.13.0 <1.0.0'
+      '@aparte/core': '>=0.13.1 <1.0.0'
       shiki: ^4.0.0
 
-  '@aparte/plugin-streaming-markdown@0.13.0':
-    resolution: {integrity: sha512-bS/MtcHYMiMlvdvkgpVDRYJSAGTxjoEZnFEJE6UNIP/xZR0sJ8ZpfAF+CzOaqmYD0B3kyOkQUOyp6baMb0mYxw==}
+  '@aparte/plugin-streaming-markdown@0.13.1':
+    resolution: {integrity: sha512-NNA25L4F+ENFLpS3dma8P/aG1/Hb52LJbrUjLueLitIo1maG32TBnzsEdZlEkBlQxLSYOZpCwnQJgjrXExlBCg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=0.13.0 <1.0.0'
+      '@aparte/core': '>=0.13.1 <1.0.0'
       streaming-markdown: ^0.2.15
 
-  '@aparte/react@0.13.0':
-    resolution: {integrity: sha512-MFjUA4548y+XJiTgaigmYckBG3IyrzieewMjXQNeNE4mCIHYLWCJkVVjMzDsSnTjAQFeaP6OJcJudWjWJdHfdw==}
+  '@aparte/react@0.13.1':
+    resolution: {integrity: sha512-e0AI+1M518/DYWEbm/m8Hq1BYLl33mWmaoDFDbKE1CnIk7eF+2EWZK+sUZnGaDBorXyIy/S2rkQi4vxeibvzNg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=0.13.0 <1.0.0'
+      '@aparte/core': '>=0.13.1 <1.0.0'
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -3414,30 +3414,30 @@ packages:
 
 snapshots:
 
-  '@aparte/core@0.13.0': {}
+  '@aparte/core@0.13.1': {}
 
-  '@aparte/locale-fr@0.13.0(@aparte/core@0.13.0)':
+  '@aparte/locale-fr@0.13.1(@aparte/core@0.13.1)':
     dependencies:
-      '@aparte/core': 0.13.0
+      '@aparte/core': 0.13.1
 
-  '@aparte/plugin-marked@0.13.0(@aparte/core@0.13.0)(marked@18.0.10)':
+  '@aparte/plugin-marked@0.13.1(@aparte/core@0.13.1)(marked@18.0.10)':
     dependencies:
-      '@aparte/core': 0.13.0
+      '@aparte/core': 0.13.1
       marked: 18.0.10
 
-  '@aparte/plugin-shiki@0.13.0(@aparte/core@0.13.0)(shiki@4.4.3)':
+  '@aparte/plugin-shiki@0.13.1(@aparte/core@0.13.1)(shiki@4.4.3)':
     dependencies:
-      '@aparte/core': 0.13.0
+      '@aparte/core': 0.13.1
       shiki: 4.4.3
 
-  '@aparte/plugin-streaming-markdown@0.13.0(@aparte/core@0.13.0)(streaming-markdown@0.2.15)':
+  '@aparte/plugin-streaming-markdown@0.13.1(@aparte/core@0.13.1)(streaming-markdown@0.2.15)':
     dependencies:
-      '@aparte/core': 0.13.0
+      '@aparte/core': 0.13.1
       streaming-markdown: 0.2.15
 
-  '@aparte/react@0.13.0(@aparte/core@0.13.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@aparte/react@0.13.1(@aparte/core@0.13.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
-      '@aparte/core': 0.13.0
+      '@aparte/core': 0.13.1
       react: 19.2.8
       react-dom: 19.2.8(react@19.2.8)
 
