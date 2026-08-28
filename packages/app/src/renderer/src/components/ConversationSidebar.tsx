@@ -66,8 +66,15 @@ export function ConversationSidebar({
     const close = (event: MouseEvent): void => {
       if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
     };
+    const escape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', escape);
+    };
   }, [menuOpen]);
 
   const sorted = useMemo(() => {
@@ -97,21 +104,33 @@ export function ConversationSidebar({
       <li key={conversation.id}>
         <button
           type="button"
-          className={`conv-item${active ? ' conv-item-active' : ''}`}
+          // The chosen row wears the kit's mark: a tint and a bar on the
+          // start edge, the same look the library gives its own lists.
+          className={`conv-item${active ? ' conv-item-active aparte-mark' : ''}`}
           onClick={() => onSelect(conversation.id)}
           disabled={busy || active}
           aria-current={active ? 'true' : undefined}
         >
-          <span className="conv-item-title">
-            {conversation.title || t.conversations.untitled}
+          <span className="conv-item-line">
+            <span className="conv-item-title">
+              {conversation.title || t.conversations.untitled}
+            </span>
+            {/* The badge only shows if a state REALLY exists on disk: this is
+                our product promise, it stands on hard evidence or not at all. */}
+            {conversation.hasKvState && (
+              <span
+                className="conv-kv aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm"
+                title={t.conversations.kvReadyHint}
+              >
+                {t.conversations.kvReady}
+              </span>
+            )}
           </span>
           <span className="conv-item-meta">
             {/* In flat-list mode, the project becomes useful again on the
                 row; grouped, it would be repeated under its own heading. */}
             {grouping === 'flat' && (
-              <span
-                className={`${conversation.projectName ? 'conv-project' : 'conv-noproject'} aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm`}
-              >
+              <span className={conversation.projectName ? 'conv-project' : 'conv-noproject'}>
                 {conversation.projectName ?? t.conversations.noProject}
               </span>
             )}
@@ -122,16 +141,6 @@ export function ConversationSidebar({
             )}
             <span className="conv-date">{relativeDate(conversation.updatedAt, locale)}</span>
           </span>
-          {/* The badge only shows if a state REALLY exists on disk: this is
-              our product promise, it stands on hard evidence or not at all. */}
-          {conversation.hasKvState && (
-            <span
-              className="conv-kv aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm"
-              title={t.conversations.kvReadyHint}
-            >
-              {t.conversations.kvReady}
-            </span>
-          )}
         </button>
       </li>
     );
@@ -152,17 +161,6 @@ export function ConversationSidebar({
           >
             <DotsGlyph />
           </button>
-          <button
-            type="button"
-            className="icon-button aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-            onClick={onCreate}
-            disabled={busy}
-            title={t.conversations.create}
-            aria-label={t.conversations.create}
-          >
-            <PlusGlyph />
-          </button>
-
           {menuOpen && (
             <div className="conv-menu aparte-popover aparte-menu" role="menu">
               <p className="conv-menu-label aparte-menu__label">{t.conversations.organise}</p>
@@ -221,6 +219,17 @@ export function ConversationSidebar({
           )}
         </span>
       </div>
+
+      {/* The first thing one does here, as a button one can read — not a
+          glyph in a corner. */}
+      <button
+        type="button"
+        className="conv-new aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+        onClick={onCreate}
+        disabled={busy}
+      >
+        <PlusGlyph /> {t.conversations.create}
+      </button>
 
       {conversations.length === 0 && projects.length === 0 ? (
         <p className="conv-empty">{t.conversations.empty}</p>

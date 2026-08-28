@@ -115,6 +115,10 @@ export const FR: AppTranslations = {
       'Changer de modèle reconstruit le contexte : l’état sauvegardé ne vaut que pour le modèle qui l’a produit.',
   },
   tooling: {
+    homeHint: 'Ouvrez une vue, ou lancez un script du projet et suivez-le dans le navigateur.',
+    homeScripts: 'Scripts du projet',
+    homeRun: 'lance le script',
+    homeRunOpen: 'lance le script et ouvre sa page',
     open: 'Ouvrir une vue',
     openMenu: 'Ouvrir',
     close: 'Fermer l’onglet',

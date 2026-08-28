@@ -114,6 +114,10 @@ export const EN: AppTranslations = {
       'Switching models rebuilds the context: a saved state only holds for the model that produced it.',
   },
   tooling: {
+    homeHint: 'Open a view, or run one of the project’s scripts and follow it in the browser.',
+    homeScripts: 'Project scripts',
+    homeRun: 'runs the script',
+    homeRunOpen: 'runs the script and opens its page',
     open: 'Open a view',
     openMenu: 'Open',
     close: 'Close tab',

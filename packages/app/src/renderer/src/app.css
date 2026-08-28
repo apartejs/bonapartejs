@@ -725,15 +725,21 @@ button.primary {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px 12px 8px;
+  padding: 12px 10px 6px 14px;
 }
 
 .conv-sidebar-title {
-  font-family: var(--bp-serif);
-  font-size: 13px;
-  letter-spacing: 0.04em;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--aparte-text-muted);
+}
+
+.conv-new {
+  margin: 0 10px 10px;
+  justify-content: flex-start;
+  gap: 6px;
 }
 
 .conv-empty {
@@ -751,15 +757,20 @@ button.primary {
   min-height: 0;
 }
 
+/*
+ * A row: the title on its line, the rest muted underneath. No frame — the
+ * chosen row is told by the kit's mark (a tint and a bar on the start
+ * edge), the hovered one by a surface.
+ */
 .conv-item {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 8px 10px;
-  margin-bottom: 2px;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  gap: 2px;
+  padding: 7px 10px 7px 12px;
+  margin-bottom: 1px;
+  border: 0;
+  border-radius: 7px;
   background: transparent;
   text-align: start;
   cursor: pointer;
@@ -770,20 +781,30 @@ button.primary {
   background: var(--aparte-surface-2);
 }
 
-.conv-item-active {
-  background: var(--aparte-surface-2);
-  border-color: var(--aparte-primary);
+.conv-item-active,
+.conv-item-active:disabled {
+  opacity: 1;
+  color: inherit;
   cursor: default;
 }
 
 .conv-item:disabled:not(.conv-item-active) {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: default;
 }
 
+.conv-item-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .conv-item-title {
-  font-size: 13.5px;
-  line-height: 1.3;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -791,14 +812,23 @@ button.primary {
 
 .conv-item-meta {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 11.5px;
+  align-items: center;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.3;
   color: var(--aparte-text-muted);
 }
 
-.conv-project {
-  font-family: var(--bp-mono);
+.conv-item-meta > * + *::before {
+  content: '·';
+  margin: 0 5px;
+  opacity: 0.6;
+}
+
+.conv-project,
+.conv-noproject {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -810,21 +840,19 @@ button.primary {
 
 .conv-date {
   margin-inline-start: auto;
+  padding-inline-start: 8px;
+  flex: none;
   white-space: nowrap;
 }
 
 /* The differentiator, stated soberly — and only when it's true. */
 .conv-kv {
-  align-self: flex-start;
-  margin-top: 2px;
+  flex: none;
   font-family: var(--bp-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  padding: 1px 7px;
-  border-radius: 999px;
-  color: var(--aparte-success);
-  border: 1px solid color-mix(in srgb, var(--aparte-success) 40%, transparent);
-  background: color-mix(in srgb, var(--aparte-success) 8%, transparent);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  line-height: 15px;
+  padding: 0 5px;
 }
 
 /* ── Tooling panel (right side) ─────────────────────────────────────────── */
@@ -1047,17 +1075,6 @@ button.primary {
 }
 
 .tooling-menu-empty,
-.tooling-empty {
-  margin: 0;
-  color: var(--aparte-text-muted);
-  font-size: 12.5px;
-}
-
-.tooling-empty {
-  padding: 18px 4px;
-  text-align: center;
-  line-height: 1.55;
-}
 
 .tooling-body {
   flex: 1;
@@ -1349,15 +1366,9 @@ button.primary {
 }
 
 .script-url {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--aparte-primary);
+  color: var(--aparte-text-secondary);
   font-family: var(--bp-mono);
   font-size: 11.5px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-align: start;
 }
 
 .script-pending,
@@ -1501,4 +1512,112 @@ pre.shiki {
   align-self: flex-start;
   justify-self: start;
   width: auto;
+}
+
+/* ── Tooling home: the panel with no tab open ─────────────────────────── */
+
+.tooling-home {
+  padding: 14px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tooling-home-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--aparte-text-muted);
+}
+
+.tooling-home-views {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.tooling-home-view {
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.tooling-home-view-icon {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.tooling-home-view-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+
+.tooling-home-section,
+.browser-scripts-title {
+  margin: 0 0 8px;
+  font-family: var(--bp-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aparte-text-muted);
+}
+
+.tooling-home-script-list,
+.browser-script-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tooling-home-script-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tooling-home-script-hint {
+  font-size: 11.5px;
+  color: var(--aparte-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.browser-following {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--aparte-text-muted);
+}
+
+.script-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.script-links .script-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
 }

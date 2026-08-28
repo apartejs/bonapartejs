@@ -7,7 +7,7 @@
  * that isn't listening.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { definePlugin, type PluginNodeContext } from '@aparte/bonaparte-plugin-sdk';
@@ -30,6 +30,30 @@ const URL_PATTERN = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?[^\s"
 
 /** Output kept per script: enough to diagnose, not a full log. */
 const MAX_LINES = 200;
+
+/**
+ * Brings a script down WITH its tree. On Windows the script runs through a
+ * shell, and killing the shell alone leaves the dev server it started
+ * running — and listening — after the tab, or the app, is gone.
+ */
+function killTree(child: ChildProcess): void {
+  if (process.platform === 'win32' && child.pid) {
+    try {
+      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        windowsHide: true,
+        timeout: 5_000,
+      });
+      return;
+    } catch {
+      /* fall through to the plain kill */
+    }
+  }
+  try {
+    child.kill();
+  } catch {
+    /* already gone */
+  }
+}
 
 async function readScripts(projectRoot: string): Promise<ScriptEntry[]> {
   try {
@@ -68,13 +92,7 @@ export default definePlugin({
     const running = new Map<string, RunningScript>();
 
     const stopAll = (): void => {
-      for (const entry of running.values()) {
-        try {
-          entry.child.kill();
-        } catch {
-          /* already gone */
-        }
-      }
+      for (const entry of running.values()) killTree(entry.child);
       running.clear();
     };
 
@@ -147,11 +165,7 @@ export default definePlugin({
       const { script } = (payload ?? {}) as { script?: string };
       const entry = script ? running.get(script) : undefined;
       if (!entry) return { stopped: false };
-      try {
-        entry.child.kill();
-      } catch {
-        /* already gone */
-      }
+      killTree(entry.child);
       running.delete(entry.name);
       return { stopped: true };
     });

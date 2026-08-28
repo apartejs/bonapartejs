@@ -209,3 +209,27 @@ describe('per-conversation persistence', () => {
     expect(() => writeTabs(hostile, 'conv-a', EMPTY_TABS as ToolingTabsState)).not.toThrow();
   });
 });
+
+describe('a view opened by another view', () => {
+  const browser: ToolingViewDescriptor = {
+    pluginId: 'browser',
+    viewId: 'page',
+    title: 'Browser',
+    order: 40,
+    multiple: true,
+  };
+
+  it('a tab carries the payload it was opened with', () => {
+    // "Open this URL in a browser tab", asked by the launcher: the payload
+    // travels with the tab, and the view reads it when it mounts.
+    const state = openTab(EMPTY_TABS, browser, { url: 'http://localhost:5174/' });
+
+    expect(state.tabs[0]?.init).toEqual({ url: 'http://localhost:5174/' });
+  });
+
+  it('a tab opened without payload carries none', () => {
+    const state = openTab(EMPTY_TABS, browser);
+
+    expect(state.tabs[0]?.init).toBeUndefined();
+  });
+});

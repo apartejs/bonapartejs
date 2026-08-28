@@ -9,6 +9,22 @@ interface BrowserState {
   error?: string;
 }
 
+interface ScriptEntry {
+  name: string;
+  command: string;
+}
+
+interface RunningEntry {
+  name: string;
+  url: string | null;
+  exitCode: number | null;
+}
+
+interface ScriptsReply {
+  scripts: ScriptEntry[];
+  running: RunningEntry[];
+}
+
 const LABELS = {
   fr: {
     title: 'Navigateur',
@@ -19,6 +35,9 @@ const LABELS = {
     failed: 'Chargement impossible :',
     console: 'Console',
     quiet: 'Rien dans la console.',
+    scripts: 'Lancer un script du projet et ouvrir sa page',
+    following: 'Script lancé — en attente de son adresse…',
+    gaveUp: 'Le script n’a annoncé aucune adresse. Son journal est dans l’onglet Projet.',
   },
   en: {
     title: 'Browser',
@@ -29,8 +48,14 @@ const LABELS = {
     failed: 'Could not load:',
     console: 'Console',
     quiet: 'Nothing in the console.',
+    scripts: 'Run a project script and open its page',
+    following: 'Script started — waiting for its address…',
+    gaveUp: 'The script announced no address. Its output is in the Project tab.',
   },
 } as const;
+
+/** How long a followed script gets to announce its address. */
+const FOLLOW_TIMEOUT_MS = 60_000;
 
 /**
  * Tooled browser — React side.
@@ -45,11 +70,20 @@ const LABELS = {
  * sending the rectangle once a page had opened) left the view with no place
  * as soon as the opening failed, and a view with no place takes over the
  * whole window: the application would disappear behind a blank page.
+ *
+ * With no page yet, the tab offers the project's scripts: one click runs
+ * one and FOLLOWS it — the page opens here the moment the server announces
+ * its address. Opened by the launcher with a URL, it shows it at once.
  */
-export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
+export default function BrowserView({ locale, instanceId, projectRoot, init }: ToolingViewProps) {
   const labels = LABELS[locale] ?? LABELS.en;
   const [url, setUrl] = useState('');
   const [state, setState] = useState<BrowserState>({ url: null, open: false, messages: [] });
+  const [scripts, setScripts] = useState<ScriptEntry[]>([]);
+  const [following, setFollowing] = useState<string | null>(
+    typeof init?.['followScript'] === 'string' ? (init['followScript'] as string) : null,
+  );
+  const [gaveUp, setGaveUp] = useState(false);
   const slotRef = useRef<HTMLDivElement>(null);
 
   // Every command carries the tab: the panel allows opening several
@@ -110,19 +144,85 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
     [invoke],
   );
 
-  const open = useCallback(async () => {
-    if (!url.trim()) return;
-    const reply = (await invoke('open', { url })) as { url?: string; error?: string };
-    // The full state arrives on the next polling round; what matters here
-    // is that the zone exists to receive the native view, and that any
-    // failure gets reported.
-    setState((current) => ({
-      ...current,
-      url: reply.url ?? current.url,
-      open: true,
-      ...(reply.error ? { error: reply.error } : { error: undefined }),
-    }));
-  }, [invoke, url]);
+  const openUrl = useCallback(
+    async (target: string) => {
+      if (!target.trim()) return;
+      setUrl(target);
+      const reply = (await invoke('open', { url: target })) as { url?: string; error?: string };
+      // The full state arrives on the next polling round; what matters here
+      // is that the zone exists to receive the native view, and that any
+      // failure gets reported.
+      setState((current) => ({
+        ...current,
+        url: reply.url ?? current.url,
+        open: true,
+        ...(reply.error ? { error: reply.error } : { error: undefined }),
+      }));
+    },
+    [invoke],
+  );
+
+  // Opened with a URL by another view: show it at once.
+  const initialUrl = typeof init?.['url'] === 'string' ? (init['url'] as string) : null;
+  useEffect(() => {
+    if (initialUrl) void openUrl(initialUrl);
+  }, [initialUrl, openUrl]);
+
+  // The project's scripts, from the launcher plugin — nothing when it is off.
+  useEffect(() => {
+    if (!projectRoot) {
+      setScripts([]);
+      return;
+    }
+    let cancelled = false;
+    void window.bonaparte
+      .invokePlugin('project-launcher', 'scripts', { projectRoot })
+      .then((reply) => {
+        if (!cancelled) setScripts((reply as ScriptsReply).scripts ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setScripts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRoot]);
+
+  // Following a script: poll the launcher until the server announces its
+  // address, then open it here. A script that never does gets a word, not
+  // a spinner for ever.
+  useEffect(() => {
+    if (!following || !projectRoot) return;
+    let cancelled = false;
+    const started = Date.now();
+    const timer = setInterval(() => {
+      void window.bonaparte
+        .invokePlugin('project-launcher', 'scripts', { projectRoot })
+        .then((reply) => {
+          if (cancelled) return;
+          const live = (reply as ScriptsReply).running.find((entry) => entry.name === following);
+          if (live?.url) {
+            setFollowing(null);
+            void openUrl(live.url);
+          } else if (!live || live.exitCode !== null || Date.now() - started > FOLLOW_TIMEOUT_MS) {
+            setFollowing(null);
+            setGaveUp(true);
+          }
+        })
+        .catch(() => undefined);
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [following, projectRoot, openUrl]);
+
+  const runAndFollow = async (script: string): Promise<void> => {
+    if (!projectRoot) return;
+    setGaveUp(false);
+    await window.bonaparte.invokePlugin('project-launcher', 'run', { projectRoot, script });
+    setFollowing(script);
+  };
 
   const close = useCallback(async () => {
     await invoke('close');
@@ -135,7 +235,7 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
         className="browser-bar aparte-field-group"
         onSubmit={(event) => {
           event.preventDefault();
-          void open();
+          void openUrl(url);
         }}
       >
         <input
@@ -172,7 +272,38 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
             </div>
           </div>
         ) : (
-          !state.open && <p className="setting-help">{labels.hint}</p>
+          !state.open && (
+            <div className="browser-empty">
+              {following ? (
+                <p className="browser-following">
+                  <span className="aparte-spinner aparte-spinner--sm" aria-hidden="true" />{' '}
+                  {labels.following}
+                </p>
+              ) : (
+                scripts.length > 0 && (
+                  <section className="browser-scripts">
+                    <p className="browser-scripts-title">{labels.scripts}</p>
+                    <ul className="browser-script-list">
+                      {scripts.map((script) => (
+                        <li key={script.name}>
+                          <button
+                            type="button"
+                            className="browser-script aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                            onClick={() => void runAndFollow(script.name)}
+                            title={script.command}
+                          >
+                            <span aria-hidden="true">▶</span> {script.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )
+              )}
+              {gaveUp && <p className="setting-help">{labels.gaveUp}</p>}
+              <p className="setting-help">{labels.hint}</p>
+            </div>
+          )
         )}
       </div>
 
@@ -186,7 +317,7 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
           ) : (
             <ul className="browser-console-list">
               {state.messages.map((entry, index) => (
-                <li key={`${entry.at}-${index}`} className={`console-${entry.level}`}>
+                <li key={entry.at + '-' + index} className={'console-' + entry.level}>
                   {entry.text}
                 </li>
               ))}

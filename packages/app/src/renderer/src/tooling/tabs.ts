@@ -61,6 +61,12 @@ export interface ToolingTab {
   viewId: string;
   title: string;
   icon?: string;
+  /**
+   * What the tab was opened WITH, by another view — the URL a browser should
+   * show, the script whose page it should follow. Read by the view when it
+   * mounts; absent for a tab opened from the menu.
+   */
+  init?: Record<string, unknown>;
 }
 
 export interface ToolingTabsState {
@@ -97,6 +103,7 @@ function sameView(tab: ToolingTab, view: ToolingViewDescriptor): boolean {
 export function openTab(
   state: ToolingTabsState,
   view: ToolingViewDescriptor,
+  init?: Record<string, unknown>,
 ): ToolingTabsState {
   if (!view.multiple) {
     const existing = state.tabs.find((tab) => sameView(tab, view));
@@ -110,6 +117,7 @@ export function openTab(
     viewId: view.viewId,
     title: view.title,
     ...(view.icon ? { icon: view.icon } : {}),
+    ...(init ? { init } : {}),
   };
   return { tabs: [...state.tabs, tab], activeId: tab.instanceId, seq };
 }

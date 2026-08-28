@@ -119,6 +119,11 @@ export interface AppTranslations {
     switchWarning: string;
   };
   tooling: {
+    /** The panel with no tab: what it can open, and the project's scripts. */
+    homeHint: string;
+    homeScripts: string;
+    homeRun: string;
+    homeRunOpen: string;
     heading: string;
     empty: string;
     collapse: string;

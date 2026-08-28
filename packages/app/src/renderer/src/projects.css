@@ -67,51 +67,43 @@
 }
 
 .conv-group + .conv-group {
-  margin-top: 6px;
+  margin-top: 10px;
 }
 
 .conv-group-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px 4px;
+  padding: 6px 14px 3px 10px;
 }
 
+/* A project heading: a name, its count — the kit's ghost button so the
+   name is clickable (it opens the project) without looking like a link. */
 .conv-group-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 0;
+  justify-content: flex-start;
   text-align: start;
-  font-family: var(--bp-serif);
-  font-size: 12.5px;
-  color: var(--aparte-text);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-
-.conv-group-title:hover {
-  text-decoration: underline;
-  text-decoration-style: dotted;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--aparte-text-secondary);
 }
 
 .conv-group-title-dim {
-  color: var(--aparte-text-secondary);
-  font-style: italic;
+  padding: 0 8px;
+  font-weight: 500;
+  color: var(--aparte-text-muted);
   cursor: default;
 }
 
 .conv-group-count {
   flex: 0 0 auto;
-  padding: 0 6px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  color: var(--aparte-text-secondary);
-  background: var(--aparte-surface-2);
-  border-radius: 999px;
+  color: var(--aparte-text-muted);
 }
 
 .conv-group-empty {
@@ -122,13 +114,13 @@
 }
 
 .conv-model {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
-  max-width: 96px;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--bp-mono);
-  font-size: 10px;
-  color: var(--aparte-text-secondary);
+  font-size: 10.5px;
 }
 
 /* ── Conversation header ───────────────────────────────────────────────── */

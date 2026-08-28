@@ -20,7 +20,9 @@ export interface ToolingTabsApi {
   views: ToolingViewDescriptor[];
   tabs: ToolingTab[];
   active: ToolingTab | null;
-  open: (view: ToolingViewDescriptor) => void;
+  open: (view: ToolingViewDescriptor, init?: Record<string, unknown>) => void;
+  /** Opens a view by identity — what a view asks for another. False when no active plugin offers it. */
+  openView: (pluginId: string, viewId: string, init?: Record<string, unknown>) => boolean;
   close: (instanceId: string) => void;
   activate: (instanceId: string) => void;
 }
@@ -73,11 +75,21 @@ export function useToolingTabs({ conversationId, plugins, onOpen }: Options): To
   );
 
   const open = useCallback(
-    (view: ToolingViewDescriptor) => {
-      update((current) => openTab(current, view));
+    (view: ToolingViewDescriptor, init?: Record<string, unknown>) => {
+      update((current) => openTab(current, view, init));
       onOpen?.();
     },
     [update, onOpen],
+  );
+
+  const openView = useCallback(
+    (pluginId: string, viewId: string, init?: Record<string, unknown>): boolean => {
+      const view = views.find((v) => v.pluginId === pluginId && v.viewId === viewId);
+      if (!view) return false;
+      open(view, init);
+      return true;
+    },
+    [views, open],
   );
 
   const close = useCallback(
@@ -119,6 +131,7 @@ export function useToolingTabs({ conversationId, plugins, onOpen }: Options): To
     tabs: state.tabs,
     active: state.tabs.find((tab) => tab.instanceId === state.activeId) ?? null,
     open,
+    openView,
     close,
     activate,
   };

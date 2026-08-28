@@ -325,6 +325,10 @@ export function App() {
       }
       setOpened(history);
       setView('chat');
+      // The tooling follows the conversation's project from the start — the
+      // launcher said "open a folder" until the first navigation.
+      const project = await window.bonaparte.currentProject();
+      setProjectRoot(project?.root ?? null);
       await refreshConversations();
       setPlugins(await window.bonaparte.listPlugins());
     })();

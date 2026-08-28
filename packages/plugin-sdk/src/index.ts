@@ -132,6 +132,16 @@ export interface ToolingViewProps {
    */
   instanceId: string;
   locale: 'fr' | 'en';
+  /**
+   * What this tab was opened with by another view — a URL to show, a script
+   * whose page to follow. Absent for a tab opened from the menu.
+   */
+  init?: Record<string, unknown>;
+  /**
+   * Asks the panel to open another view — the browser on a URL, say. False
+   * when no active plugin offers it: the caller then falls back on its own.
+   */
+  openView?: (pluginId: string, viewId: string, init?: Record<string, unknown>) => boolean;
 }
 
 export { SettingsForm } from './SettingsForm.js';

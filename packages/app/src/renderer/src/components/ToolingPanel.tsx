@@ -3,6 +3,7 @@ import { useTranslate } from '../i18n/LocaleProvider.js';
 import { loadPluginView, type ToolingViewComponent } from '../plugins/views.js';
 import type { ToolingTabsApi } from '../tooling/use-tooling-tabs.js';
 import { FlankToggle } from './FlankToggle.js';
+import { ToolingHome } from './ToolingHome.js';
 import { ToolingTabs } from './ToolingTabs.js';
 
 interface ToolingPanelProps {
@@ -72,7 +73,7 @@ export function ToolingPanel({
 
       <div className="tooling-body" role="tabpanel">
         {!active ? (
-          <p className="tooling-empty">{t.tooling.emptyHint}</p>
+          <ToolingHome tooling={tooling} projectRoot={projectRoot} />
         ) : failed ? (
           <p className="tooling-error">{t.tooling.loadFailed}</p>
         ) : View ? (
@@ -84,6 +85,8 @@ export function ToolingPanel({
             projectRoot={projectRoot}
             conversationId={conversationId}
             locale={locale}
+            {...(active.init ? { init: active.init } : {})}
+            openView={tooling.openView}
           />
         ) : null}
       </div>

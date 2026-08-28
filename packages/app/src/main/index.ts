@@ -2,6 +2,12 @@ import { join } from 'node:path';
 import { BrowserWindow, Menu, app, ipcMain } from 'electron';
 import { Harness } from './harness.js';
 
+// An isolated data directory isolates EVERYTHING: the renderer's localStorage
+// (a conversation's tooling tabs) lives in Electron's userData, which would
+// otherwise leak across profiles — and across E2E runs sharing an id.
+const isolatedDataDir = process.env['BONAPARTE_DATA_DIR'];
+if (isolatedDataDir) app.setPath('userData', join(isolatedDataDir, 'electron'));
+
 const harness = new Harness();
 
 /**

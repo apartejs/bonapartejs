@@ -77,6 +77,19 @@ published.
   orphan be killed at the next start, the live configuration every KV
   manifest is checked against. Tested against the fake server with a fake
   spawn; the Electron harness only wires it.
+- **The project's scripts, one click away — and their page, one more.** The
+  tooling panel with no tab open is a home now: every view one click away,
+  and the project's `package.json` scripts, each launched and followed
+  into a browser tab that opens the page the moment the server announces
+  its address. The browser tab offers the same list while it shows no page;
+  the launcher's "Open in the browser" opens the page inside bonaparte (the
+  OS browser stays one click away). A view can now open another view with
+  a payload — that is how the launcher hands a URL to the browser.
+- **The conversations sidebar, redrawn**: a real "New conversation" button,
+  project headings with their count, one line per conversation (its title,
+  the KV badge when a state really exists) and one muted line underneath
+  (model, time — the project in the flat list); the chosen conversation
+  wears the kit's mark instead of a frame.
 - **The apartéJS UI kit dresses every control of the shell**: buttons
   (intent × fill), fields and field groups, switches for boolean settings,
   badges in the status strip and the sidebar, alerts for notices, menus and
@@ -185,6 +198,14 @@ published.
   consent nobody would give — hung the shutdown on the turn: the turn is
   cut, what arrived is committed, the state is saved, pending approvals are
   answered with a refusal.
+- At startup the tooling did not know the conversation's project until
+  the first navigation: the launcher said "open a folder" for a
+  conversation that had one.
+- Stopping a project script killed its shell and left the dev server it
+  had started running — and listening — behind; the whole tree goes down.
+- An isolated data directory (`BONAPARTE_DATA_DIR`) now isolates Electron's
+  own storage too: a conversation's tooling tabs, kept in localStorage,
+  leaked across profiles and across E2E runs sharing a conversation id.
 - On a fresh install the very first message got no reply on screen: the
   screen had been mounted before any conversation existed and ignored the
   events of the one the message created. A conversation exists from the

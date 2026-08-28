@@ -26,7 +26,8 @@ const LABELS = {
     none: 'Ce projet ne déclare aucun script.',
     run: 'Lancer',
     stop: 'Arrêter',
-    open: 'Ouvrir',
+    open: 'Ouvrir dans le navigateur',
+    openOutside: 'Ouvrir à l’extérieur',
     exited: 'terminé',
     starting: 'démarrage…',
   },
@@ -36,7 +37,8 @@ const LABELS = {
     none: 'This project declares no script.',
     run: 'Run',
     stop: 'Stop',
-    open: 'Open',
+    open: 'Open in the browser',
+    openOutside: 'Open outside',
     exited: 'exited',
     starting: 'starting…',
   },
@@ -47,7 +49,7 @@ const LABELS = {
  * click. The URL only appears once the server has actually announced it in
  * its output — offering a link before it is listening would be a guess.
  */
-export default function ProjectLauncherView({ projectRoot, locale }: ToolingViewProps) {
+export default function ProjectLauncherView({ projectRoot, locale, openView }: ToolingViewProps) {
   const labels = LABELS[locale] ?? LABELS.en;
   const [state, setState] = useState<ScriptsReply | null>(null);
 
@@ -136,13 +138,31 @@ export default function ProjectLauncherView({ projectRoot, locale }: ToolingView
                         {labels.exited} ({live.exitCode})
                       </span>
                     ) : live.url ? (
-                      <button
-                        type="button"
-                        className="script-url aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
-                        onClick={() => void window.bonaparte.openExternal(live.url as string)}
-                      >
-                        {labels.open} {live.url}
-                      </button>
+                      <span className="script-links">
+                        <code className="script-url">{live.url}</code>
+                        {/* Inside bonaparte first — the agent can read that page;
+                            the OS browser stays one click away. */}
+                        <button
+                          type="button"
+                          className="aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                          onClick={() => {
+                            if (!openView?.('browser', 'page', { url: live.url })) {
+                              void window.bonaparte.openExternal(live.url as string);
+                            }
+                          }}
+                        >
+                          {labels.open}
+                        </button>
+                        <button
+                          type="button"
+                          className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
+                          aria-label={labels.openOutside}
+                          title={labels.openOutside}
+                          onClick={() => void window.bonaparte.openExternal(live.url as string)}
+                        >
+                          ↗
+                        </button>
+                      </span>
                     ) : (
                       <span className="script-pending aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
                         {labels.starting}
