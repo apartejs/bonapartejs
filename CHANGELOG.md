@@ -100,6 +100,9 @@ published.
 - Highlighted code inside the chat (tool inputs and outputs) sat on
   GitHub's palette, inlined by shiki; its surface follows the aparté theme
   tokens now.
+- Two messages sent while a reply was still streaming ran two turns at once
+  on the one slot and corrupted the conversation log; a session now runs
+  one turn at a time, the next message queues behind the one in flight.
 - The last user-visible strings that bypassed the translations follow the
   locale now: the settings catalog, the doctor's details, the native file
   pickers' filter names, the model pickers' size units, the CLI's help. A
