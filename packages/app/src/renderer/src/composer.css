@@ -234,17 +234,26 @@
   box-shadow: 0 16px 38px rgb(0 0 0 / 42%);
 }
 
-.mode-option {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* A two-line row (name with its dot, then the description) on the kit's
+   menu item: a grid whose first column is the kit's check gutter, spanning
+   both lines. Specificity above the kit's single class on purpose. */
+.mode-menu .mode-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: center;
   width: 100%;
-  padding: 7px 9px;
   text-align: start;
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
+}
+
+.mode-menu .mode-option::before {
+  grid-row: 1 / span 2;
+}
+
+.mode-menu .mode-option-head,
+.mode-menu .mode-option-desc {
+  grid-column: 2;
 }
 
 .mode-option:hover {
@@ -264,7 +273,7 @@
 }
 
 .mode-option-desc {
-  padding-inline-start: 14px;
+  padding-inline-start: 16px;
   font-size: 11.5px;
   line-height: 1.45;
   color: var(--aparte-text-secondary);

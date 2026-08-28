@@ -44,12 +44,14 @@ export function ThinkingToggle({ conversationId }: ThinkingToggleProps) {
   return (
     <button
       type="button"
-      className={`think-button${on ? ' think-button-on' : ''}`}
+      className={`think-button aparte-btn aparte-btn--neutral aparte-btn--pill aparte-btn--sm ${
+        on ? 'think-button-on aparte-btn--soft' : 'aparte-btn--ghost'
+      }`}
       onClick={() => void toggle()}
       aria-pressed={on}
       title={`${t.thinking.label} ${on ? t.thinking.on : t.thinking.off} — ${t.thinking.hint}`}
     >
-      <span className="think-glyph" aria-hidden="true">
+      <span className="think-glyph aparte-btn__icon" aria-hidden="true">
         {on ? '◐' : '○'}
       </span>
       {t.thinking.label}

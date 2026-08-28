@@ -59,6 +59,8 @@ test('opening the conversation announces the vanished model', async () => {
   const window = await app.firstWindow();
   await window.locator('.app-shell').waitFor();
   await expect(window.locator('body')).toContainText('ALPHA message');
+  // The fixture's config says English: it must win over the machine's locale.
+  await expect(window.locator('.status-strip')).toContainText('Settings');
 
   await expect(window.locator('.missing-model')).toContainText('gone.gguf');
 });

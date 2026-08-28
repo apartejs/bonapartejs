@@ -62,8 +62,9 @@ export function ProjectDialog({
         <h2>{project ? t.projectDialog.editTitle : t.projectDialog.createTitle}</h2>
 
         <label className="field">
-          <span className="field-label">{t.projectDialog.name}</span>
+          <span className="field-label aparte-field-label">{t.projectDialog.name}</span>
           <input
+            className="aparte-field"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t.projectDialog.namePlaceholder}
@@ -77,30 +78,37 @@ export function ProjectDialog({
             <li key={root}>
               <code title={root}>{root}</code>
               {index === 0 && roots.length > 1 && (
-                <em className="root-default">{t.projectDialog.defaultRoot}</em>
+                <em className="root-default aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
+                  {t.projectDialog.defaultRoot}
+                </em>
               )}
               <span className="root-actions">
                 <button
                   type="button"
+                  className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
                   onClick={() => move(index, -1)}
                   disabled={index === 0}
                   title={t.projectDialog.moveUp}
+                  aria-label={t.projectDialog.moveUp}
                 >
                   ↑
                 </button>
                 <button
                   type="button"
+                  className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
                   onClick={() => move(index, 1)}
                   disabled={index === roots.length - 1}
                   title={t.projectDialog.moveDown}
+                  aria-label={t.projectDialog.moveDown}
                 >
                   ↓
                 </button>
                 <button
                   type="button"
-                  className="root-remove"
+                  className="root-remove aparte-btn aparte-btn--danger aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
                   onClick={() => setRoots(roots.filter((r) => r !== root))}
                   title={t.projectDialog.removeRoot}
+                  aria-label={t.projectDialog.removeRoot}
                 >
                   ✕
                 </button>
@@ -108,7 +116,11 @@ export function ProjectDialog({
             </li>
           ))}
           <li className="root-add">
-            <button type="button" onClick={() => void addRoot()}>
+            <button
+              type="button"
+              className="aparte-btn aparte-btn--neutral aparte-btn--outline aparte-btn--block"
+              onClick={() => void addRoot()}
+            >
               + {t.projectDialog.addRoot}
             </button>
           </li>
@@ -119,17 +131,26 @@ export function ProjectDialog({
 
         <div className="modal-actions">
           {project && onDelete && (
-            <button type="button" className="danger" onClick={onDelete} disabled={busy}>
+            <button
+              type="button"
+              className="danger aparte-btn aparte-btn--danger aparte-btn--outline"
+              onClick={onDelete}
+              disabled={busy}
+            >
               {t.projectDialog.delete}
             </button>
           )}
           <span className="modal-spacer" />
-          <button type="button" onClick={onCancel}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--neutral aparte-btn--ghost"
+            onClick={onCancel}
+          >
             {t.projectDialog.cancel}
           </button>
           <button
             type="button"
-            className="primary"
+            className="primary aparte-btn aparte-btn--primary aparte-btn--solid"
             disabled={!canSave}
             onClick={() => onSave(name.trim(), roots)}
           >

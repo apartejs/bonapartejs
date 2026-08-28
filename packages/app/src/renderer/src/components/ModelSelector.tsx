@@ -62,20 +62,20 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
     <span className="model-wrap" ref={wrapRef}>
       <button
         type="button"
-        className="model-button"
+        className="model-button aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--pill aparte-btn--sm"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         disabled={busy}
         title={modelName ?? t.models.pick}
       >
-        <span className="model-glyph" aria-hidden="true">
+        <span className="model-glyph aparte-btn__icon" aria-hidden="true">
           ◈
         </span>
         <span className="model-name">{modelName ?? t.models.pick}</span>
       </button>
 
       {open && (
-        <div className="model-menu popover" role="menu" aria-label={t.models.pick}>
+        <div className="model-menu aparte-popover aparte-menu" role="menu" aria-label={t.models.pick}>
           {/* The head stays put while the list scrolls: with dozens of GGUF
               files on a machine, the search is the way in, and the label
               says what this menu is even halfway down the list. */}
@@ -84,6 +84,7 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
             {models !== null && models.length > 0 && (
               <span className="model-search">
                 <input
+                  className="aparte-field aparte-field--sm"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={t.picker.searchPlaceholder}
@@ -92,7 +93,12 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
                   aria-label={t.picker.searchPlaceholder}
                 />
                 {query && (
-                  <button type="button" onClick={() => setQuery('')} aria-label="✕">
+                  <button
+                    type="button"
+                    className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
+                    onClick={() => setQuery('')}
+                    aria-label={t.common.clear}
+                  >
                     ✕
                   </button>
                 )}
@@ -115,7 +121,7 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
                     type="button"
                     role="menuitemradio"
                     aria-checked={current}
-                    className="model-item"
+                    className="model-item aparte-menu__item"
                     disabled={current}
                     onClick={() => {
                       setOpen(false);

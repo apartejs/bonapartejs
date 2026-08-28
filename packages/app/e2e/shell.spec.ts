@@ -73,6 +73,20 @@ test('the chat lib is mounted and no segment falls back to unknown', async () =>
   expect(await window.locator('.segment-unknown').count()).toBe(0);
 });
 
+test('the built-in plugins are discovered from the built entry', async () => {
+  // `electron out/main/index.js` makes the app path the ENTRY's directory,
+  // two levels below the package: the plugins were silently absent from
+  // every E2E, and the tooling panel offered no view.
+  const window = await app.firstWindow();
+  const plugins = await window.evaluate(() => window.bonaparte.listPlugins());
+  expect(plugins.map((plugin) => plugin.id).sort()).toEqual([
+    'browser',
+    'conversation-settings',
+    'project-launcher',
+    'terminal',
+  ]);
+});
+
 test('no console error at startup', async () => {
   const window = await app.firstWindow();
   const errors: string[] = [];

@@ -77,7 +77,11 @@ export function SettingsHub({
     <div className="settings-hub">
       <header className="settings-hub-head">
         <h2 className="settings-hub-title">{t.settings.heading}</h2>
-        <button type="button" onClick={onClose}>
+        <button
+          type="button"
+          className="aparte-btn aparte-btn--neutral aparte-btn--ghost"
+          onClick={onClose}
+        >
           {t.settings.close}
         </button>
       </header>
@@ -100,8 +104,9 @@ export function SettingsHub({
           {section === 'general' && (
             <div className="settings-form">
               <div className="setting-row">
-                <span className="setting-label">{t.actions.toggleLocale}</span>
+                <span className="setting-label">{t.settings.language}</span>
                 <select
+                  className="aparte-field aparte-field--sm"
                   value={locale}
                   onChange={(event) => setLocale(event.target.value as 'fr' | 'en')}
                 >
@@ -111,13 +116,21 @@ export function SettingsHub({
               </div>
               <div className="setting-row">
                 <span className="setting-label">{t.actions.toggleTheme}</span>
-                <button type="button" onClick={onToggleTheme}>
+                <button
+                  type="button"
+                  className="aparte-btn aparte-btn--neutral aparte-btn--soft"
+                  onClick={onToggleTheme}
+                >
                   {t.actions.toggleTheme}
                 </button>
               </div>
               <div className="setting-row">
                 <span className="setting-label">{t.settings.launch}</span>
-                <button type="button" onClick={onChangeEngine}>
+                <button
+                  type="button"
+                  className="aparte-btn aparte-btn--neutral aparte-btn--soft"
+                  onClick={onChangeEngine}
+                >
                   {engine ? engineLabel(engine) : t.status.notConnected}
                 </button>
               </div>
@@ -152,6 +165,7 @@ export function SettingsHub({
               <div className="plugin-actions">
                 <button
                   type="button"
+                  className="aparte-btn aparte-btn--secondary aparte-btn--soft aparte-btn--sm"
                   disabled={reloading}
                   onClick={() => {
                     setReloading(true);
@@ -172,7 +186,11 @@ export function SettingsHub({
                   <span className="plugin-name">{localize(plugin.name, locale)}</span>
                   <span className="plugin-version">{plugin.version}</span>
                   <span
-                    className={plugin.error ? 'plugin-state-failed' : 'plugin-state-active'}
+                    className={
+                      plugin.error
+                        ? 'plugin-state-failed aparte-badge aparte-badge--danger aparte-badge--soft aparte-badge--sm'
+                        : 'plugin-state-active aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm'
+                    }
                   >
                     {plugin.error ? t.settings.pluginFailed : t.settings.pluginActive}
                   </span>

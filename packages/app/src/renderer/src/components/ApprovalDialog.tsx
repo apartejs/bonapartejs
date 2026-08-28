@@ -25,15 +25,23 @@ export function ApprovalDialog({ request, onRespond }: ApprovalDialogProps) {
         <p className="approval-tool">{request.tool}</p>
         <pre className="approval-preview">{preview(request)}</pre>
         <div className="approval-actions">
-          <button type="button" onClick={() => onRespond(false)}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--neutral aparte-btn--outline"
+            onClick={() => onRespond(false)}
+          >
             {t.approval.refuse}
           </button>
-          <button type="button" onClick={() => onRespond(true, true)}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--secondary aparte-btn--soft"
+            onClick={() => onRespond(true, true)}
+          >
             {t.approval.always}
           </button>
           <button
             type="button"
-            className="primary"
+            className="primary aparte-btn aparte-btn--primary aparte-btn--solid"
             autoFocus
             onClick={() => onRespond(true)}
           >

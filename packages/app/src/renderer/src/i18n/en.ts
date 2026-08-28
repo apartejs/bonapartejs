@@ -8,6 +8,9 @@ export const EN: AppTranslations = {
     toggleTheme: 'Theme',
     toggleLocale: 'Français',
   },
+  common: {
+    clear: 'Clear',
+  },
   setup: {
     eyebrow: 'curtain up',
     title: 'Connect the engine',
@@ -80,6 +83,7 @@ export const EN: AppTranslations = {
     thinking: 'Reasoning',
   },
   settings: {
+    language: 'Language',
     heading: 'Settings',
     general: 'General',
     sampling: 'Sampling',

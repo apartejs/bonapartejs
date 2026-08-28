@@ -41,7 +41,10 @@
 }
 
 .conv-menu-item {
-  display: block;
+  /* A row of the kit's menu: the check gutter, then the label. */
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-2);
   width: 100%;
   padding: 6px 8px;
   text-align: start;

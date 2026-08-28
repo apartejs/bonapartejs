@@ -103,12 +103,12 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
         <h1>{t.setup.title}</h1>
         <p className="setup-intro">{t.setup.intro}</p>
 
-        <div className="segmented" role="tablist">
+        <div className="segmented aparte-tabs aparte-tabs--segmented" role="tablist">
           <button
             type="button"
             role="tab"
             aria-selected={intent === 'managed'}
-            className={intent === 'managed' ? 'active' : ''}
+            className={`aparte-tabs__tab${intent === 'managed' ? ' active' : ''}`}
             onClick={() => setIntent('managed')}
           >
             {t.setup.intentManaged}
@@ -117,7 +117,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
             type="button"
             role="tab"
             aria-selected={intent === 'existing'}
-            className={intent === 'existing' ? 'active' : ''}
+            className={`aparte-tabs__tab${intent === 'existing' ? ' active' : ''}`}
             onClick={() => setIntent('existing')}
           >
             {t.setup.intentExisting}
@@ -128,12 +128,15 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
           <>
             <p className="setup-note">{t.setup.managedNote}</p>
             <label className="field">
-              <span className="field-label">
+              <span className="field-label aparte-field-label">
                 {t.setup.binPath}
-                {binDetected && <em className="field-hint"> — {t.setup.detected}</em>}
+                {binDetected && (
+                  <em className="field-hint aparte-field-hint"> — {t.setup.detected}</em>
+                )}
               </span>
-              <span className="field-row">
+              <span className="field-row aparte-field-group">
                 <input
+                  className="aparte-field"
                   value={binPath}
                   onChange={(e) => {
                     setBinPath(e.target.value);
@@ -142,29 +145,40 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
                   placeholder={t.setup.binPathPlaceholder}
                   spellCheck={false}
                 />
-                <button type="button" onClick={() => void browse('binary')}>
+                <button
+                  type="button"
+                  className="aparte-field-group__suffix aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
+                  onClick={() => void browse('binary')}
+                >
                   {t.setup.browse}
                 </button>
               </span>
             </label>
             {binMissing && !binPath && (
-              <div className="install-hint">
-                <p>{t.setup.notInstalled}</p>
-                <code>winget install ggml.llamacpp</code>
-                <div className="install-hint-actions">
-                  <button type="button" onClick={() => void copyWinget()}>
-                    {wingetCopied ? '✓' : t.setup.installWinget}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void window.bonaparte.openExternal(
-                        'https://github.com/ggml-org/llama.cpp/releases',
-                      )
-                    }
-                  >
-                    {t.setup.openReleases}
-                  </button>
+              <div className="install-hint aparte-alert aparte-alert--info">
+                <div className="aparte-alert__body">
+                  <p className="aparte-alert__message">{t.setup.notInstalled}</p>
+                  <code>winget install ggml.llamacpp</code>
+                  <div className="install-hint-actions">
+                    <button
+                      type="button"
+                      className="aparte-btn aparte-btn--neutral aparte-btn--soft aparte-btn--sm"
+                      onClick={() => void copyWinget()}
+                    >
+                      {wingetCopied ? '✓' : t.setup.installWinget}
+                    </button>
+                    <button
+                      type="button"
+                      className="aparte-btn aparte-btn--neutral aparte-btn--outline aparte-btn--sm"
+                      onClick={() =>
+                        void window.bonaparte.openExternal(
+                          'https://github.com/ggml-org/llama.cpp/releases',
+                        )
+                      }
+                    >
+                      {t.setup.openReleases}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -173,9 +187,10 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
           <>
             <p className="setup-note">{t.setup.existingNote}</p>
             <label className="field">
-              <span className="field-label">{t.setup.endpointUrl}</span>
-              <span className="field-row">
+              <span className="field-label aparte-field-label">{t.setup.endpointUrl}</span>
+              <span className="field-row aparte-field-group">
                 <input
+                  className="aparte-field"
                   value={url}
                   onChange={(e) => {
                     setUrl(e.target.value);
@@ -187,6 +202,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
                 />
                 <button
                   type="button"
+                  className="aparte-field-group__suffix aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
                   onClick={() => void runProbe()}
                   disabled={probing || url.trim() === ''}
                 >
@@ -195,28 +211,45 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
               </span>
             </label>
 
-            {probeFailed && <p className="setup-error">{t.setup.probeFailed}</p>}
+            {probeFailed && (
+              <div className="setup-error aparte-alert aparte-alert--danger" role="alert">
+                <div className="aparte-alert__body">
+                  <p className="aparte-alert__message">{t.setup.probeFailed}</p>
+                </div>
+              </div>
+            )}
 
             {probe && (
-              <div className="probe-result">
-                <p>
-                  <strong>{t.setup.foundLlama}</strong>
-                  {' — '}
-                  {t.setup.persistenceYes}
-                </p>
-                {probe.model && <p className="probe-model">{probe.model}</p>}
+              <div className="probe-result aparte-alert aparte-alert--success">
+                <div className="aparte-alert__body">
+                  <p className="aparte-alert__message">
+                    <strong>{t.setup.foundLlama}</strong>
+                    {' — '}
+                    {t.setup.persistenceYes}
+                  </p>
+                  {probe.model && <p className="probe-model">{probe.model}</p>}
+                </div>
               </div>
             )}
           </>
         )}
 
         {error && (
-          <p className="setup-error">
-            {t.setup.failed} — {error}
-          </p>
+          <div className="setup-error aparte-alert aparte-alert--danger" role="alert">
+            <div className="aparte-alert__body">
+              <p className="aparte-alert__message">
+                {t.setup.failed} — {error}
+              </p>
+            </div>
+          </div>
         )}
 
-        <button type="button" className="primary" disabled={!canSubmit} onClick={submit}>
+        <button
+          type="button"
+          className="primary aparte-btn aparte-btn--primary aparte-btn--solid aparte-btn--lg"
+          disabled={!canSubmit}
+          onClick={submit}
+        >
           {busy ? t.setup.starting : t.setup.start}
         </button>
       </section>

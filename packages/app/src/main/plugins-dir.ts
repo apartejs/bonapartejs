@@ -18,13 +18,18 @@ export interface PluginsDirInput {
  * - A packaged app (installer, later) carries them in its resources.
  * - `npx @aparte/bonaparte` runs an app directory assembled inside the CLI
  *   package, with the plugins shipped under it.
- * - In the monorepo, `packages/app` sits two levels below the root `plugins/`.
+ * - In the monorepo, `packages/app` sits two levels below the root `plugins/`
+ *   — and the built entry (`electron out/main/index.js`, what Playwright
+ *   launches) makes the app path the ENTRY's directory, two more levels down.
  */
 export function resolvePluginsDir(input: PluginsDirInput): string {
   const override = input.env['BONAPARTE_PLUGINS_DIR'];
   if (override) return override;
   if (input.isPackaged) return join(input.resourcesPath, 'plugins');
-  const shipped = join(input.appPath, 'plugins');
-  if (input.exists(shipped)) return shipped;
-  return join(input.appPath, '..', '..', 'plugins');
+  const candidates = [
+    join(input.appPath, 'plugins'),
+    join(input.appPath, '..', '..', 'plugins'),
+    join(input.appPath, '..', '..', '..', '..', 'plugins'),
+  ];
+  return candidates.find((candidate) => input.exists(candidate)) ?? candidates[1]!;
 }

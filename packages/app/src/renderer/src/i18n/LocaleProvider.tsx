@@ -48,15 +48,27 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // The main process must know the language from the start — it names the
-  // native dialogs' filters and picks the model's reply language — not only
-  // after the user switches. The stored config catches up with the locale
-  // the renderer detected, once, on mount.
+  // The stored config is the durable choice, shared with the main process
+  // (it names the native dialogs' filters and picks the model's reply
+  // language). When it names a locale, the renderer follows it — a config
+  // edited by hand, or written by a test, must win over what the browser
+  // guessed. When it names none, the renderer's detection is written there
+  // once, so the main process knows the language from the start.
   useEffect(() => {
     void window.bonaparte?.getConfig().then((config) => {
-      if (config.locale !== locale) {
-        void window.bonaparte.setConfig({ ...config, locale });
+      if (config.locale === 'fr' || config.locale === 'en') {
+        if (config.locale !== locale) {
+          setLocaleState(config.locale);
+          document.documentElement.lang = config.locale;
+          try {
+            localStorage.setItem(STORAGE_KEY, config.locale);
+          } catch {
+            /* non-blocking */
+          }
+        }
+        return;
       }
+      void window.bonaparte.setConfig({ ...config, locale });
     });
     // Mount only: switches go through setLocale, which writes the config itself.
   }, []);

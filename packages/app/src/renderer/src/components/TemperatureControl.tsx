@@ -69,24 +69,27 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
     <span className="temp-wrap" ref={wrapRef}>
       <button
         type="button"
-        className={`temp-button${setting.overridden ? ' temp-button-set' : ''}`}
+        className={`temp-button aparte-btn aparte-btn--neutral aparte-btn--pill aparte-btn--sm ${
+          setting.overridden ? 'temp-button-set aparte-btn--soft' : 'aparte-btn--ghost'
+        }`}
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         title={`${t.temperature.label} — ${
           setting.overridden ? t.temperature.thisConversation : t.settings.inherited
         }`}
       >
-        <span className="temp-glyph" aria-hidden="true">
+        <span className="temp-glyph aparte-btn__icon" aria-hidden="true">
           ◑
         </span>
         {value.toLocaleString()}
       </button>
 
       {open && (
-        <div className="temp-menu popover" role="dialog" aria-label={t.temperature.label}>
+        <div className="temp-menu aparte-popover" role="dialog" aria-label={t.temperature.label}>
           <p className="conv-menu-label">{t.temperature.label}</p>
           <input
             type="range"
+            className="aparte-range"
             min={min}
             max={max}
             step={setting.step ?? 0.05}
@@ -103,7 +106,11 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
               {setting.overridden ? t.temperature.thisConversation : t.settings.inherited}
             </span>
             {setting.overridden && (
-              <button type="button" className="temp-reset" onClick={() => void reset()}>
+              <button
+                type="button"
+                className="temp-reset aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
+                onClick={() => void reset()}
+              >
                 {t.settings.reset}
               </button>
             )}

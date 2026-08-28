@@ -71,6 +71,30 @@ published.
 - The composer's model menu has a search field and a head that stays
   visible while the list scrolls; the project chip of a conversation offers
   the existing projects before creating one.
+- **`EngineSupervisor`** in core owns the engine's life cycle — the
+  managed llama-server spawned on demand and replaced only when the model
+  changes, the remote endpoint joined on demand, the pid trace that lets an
+  orphan be killed at the next start, the live configuration every KV
+  manifest is checked against. Tested against the fake server with a fake
+  spawn; the Electron harness only wires it.
+- **The apartéJS UI kit dresses every control of the shell**: buttons
+  (intent × fill), fields and field groups, switches for boolean settings,
+  badges in the status strip and the sidebar, alerts for notices, menus and
+  popovers for the composer's mode, model and temperature pickers, the
+  sidebar's organise menu, the header's project popover and the tooling
+  panel's view menu, segmented tabs on the setup panel, `kbd` hints. Light
+  and dark come from the `--aparte-*` tokens; the app's own stylesheet
+  keeps layout and state hooks only. Every scroll area wears the chat's
+  scrollbar.
+- **`ConversationEngine`** in core owns the open conversation: which one
+  holds the slot, its session, the turn in flight and what it produced so
+  far, the state to save before the slot changes hands. Browsing is
+  read-only — a reply streaming in one conversation keeps streaming while
+  another is read, completes and is persisted; opening another conversation
+  waits for the turn in flight and saves the first one's state; cancelling
+  keeps what arrived; an explicit model choice replaces the pin (the old
+  path silently kept the pinned model). Tested against the fake server; the
+  harness is wired to it next.
 
 ### Changed
 
@@ -83,6 +107,14 @@ published.
 - The OpenAI-compatible backend and endpoint detection were removed
   (2026-08-19): bonaparte drives llama.cpp only, because no OpenAI façade
   exposes the state it persists.
+- **The context size, the KV cache quantization and the GPU layers belong
+  to the engine**, set once in Settings, not to a conversation: two
+  conversations on one model share one server instead of restarting it,
+  and changing one of these settings stops the server (its state saved
+  first) so the next message brings it up with the new values. The model
+  picker no longer asks for a context size; the context gauge reads what
+  the server holds. A state saved under another context size is refused by
+  its manifest and announced as a re-prefill.
 - apartéJS 0.2 → 0.14: the library is consumed in lockstep; each bump is
   checked against a friction journal and contract tests on the rules the chat
   loop depends on. With 0.14.0 the highlighting provider takes a light/dark
@@ -109,6 +141,21 @@ published.
   pickers' filter names, the model pickers' size units, the CLI's help. A
   new conversation is stored untitled and named by the interface in its own
   language, until its first message names it.
+- The renderer guessed its language from the browser and overwrote the
+  stored choice at every start; a locale set in the configuration now wins,
+  and the detection is written there only when nothing was set.
+- Launched from its built entry (`electron out/main/index.js`, what the
+  Electron E2E does), the app looked for the built-in plugins next to the
+  entry and found none — the tooling panel offered no view in every E2E.
+  The resolver walks up to the repository's `plugins/` from the entry as
+  well; an E2E asserts the four plugins are discovered.
+- A cancelled turn threw away the text that had arrived; the loop now
+  commits it as the assistant's turn — it is what the server's KV cache
+  holds — and ends the turn without running tool calls parsed before the
+  cut.
+- The managed server's pid trace outlived a clean shutdown (Electron quits
+  before the child's exit event fires): it is erased when the server is
+  stopped.
 - The context gauge reported zero cached prompt tokens on every real turn:
   llama-server puts `prompt_progress` in intermediate stream events and the
   authoritative count in the final event's `timings.cache_n`, while the

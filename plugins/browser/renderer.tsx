@@ -132,21 +132,30 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   return (
     <div className="plugin-view browser-view">
       <form
-        className="browser-bar"
+        className="browser-bar aparte-field-group"
         onSubmit={(event) => {
           event.preventDefault();
           void open();
         }}
       >
         <input
-          className="browser-url"
+          className="browser-url aparte-field aparte-field--sm"
           value={url}
           placeholder={labels.placeholder}
           onChange={(event) => setUrl(event.target.value)}
         />
-        <button type="submit">{labels.go}</button>
+        <button
+          type="submit"
+          className="aparte-field-group__suffix aparte-btn aparte-btn--primary aparte-btn--solid aparte-btn--sm"
+        >
+          {labels.go}
+        </button>
         {state.open && (
-          <button type="button" onClick={() => void close()}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--neutral aparte-btn--outline aparte-btn--sm"
+            onClick={() => void close()}
+          >
             {labels.close}
           </button>
         )}
@@ -155,9 +164,13 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
       {/* Reserved zone: the native view lands exactly here. */}
       <div className="browser-slot" ref={slotRef}>
         {state.error ? (
-          <p className="browser-failed">
-            {labels.failed} {state.error}
-          </p>
+          <div className="browser-failed aparte-alert aparte-alert--danger" role="alert">
+            <div className="aparte-alert__body">
+              <p className="aparte-alert__message">
+                {labels.failed} {state.error}
+              </p>
+            </div>
+          </div>
         ) : (
           !state.open && <p className="setting-help">{labels.hint}</p>
         )}

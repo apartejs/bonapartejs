@@ -12,6 +12,10 @@ export interface AppTranslations {
     toggleTheme: string;
     toggleLocale: string;
   };
+  /** Small strings shared across unrelated controls. */
+  common: {
+    clear: string;
+  };
   setup: {
     eyebrow: string;
     title: string;
@@ -83,6 +87,8 @@ export interface AppTranslations {
     thinking: string;
   };
   settings: {
+    /** Label of the language field in the General section. */
+    language: string;
     heading: string;
     general: string;
     sampling: string;

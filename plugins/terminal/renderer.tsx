@@ -236,6 +236,7 @@ export default function TerminalView({
         <label className="pty-shell">
           <span>{t.shell}</span>
           <select
+            className="aparte-field aparte-field--sm"
             value={shellId ?? ''}
             disabled={shells.length === 0}
             onChange={(e) => void open(e.target.value)}
@@ -252,14 +253,30 @@ export default function TerminalView({
           </select>
         </label>
         {exited && (
-          <button type="button" onClick={() => void open(shellId)}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--neutral aparte-btn--soft aparte-btn--sm"
+            onClick={() => void open(shellId)}
+          >
             {t.restart}
           </button>
         )}
       </div>
 
-      {mode === 'basic' && <p className="pty-warning">{t.degraded}</p>}
-      {exited && <p className="pty-warning">{t.exited}</p>}
+      {mode === 'basic' && (
+        <div className="pty-warning aparte-alert aparte-alert--warning" role="status">
+          <div className="aparte-alert__body">
+            <p className="aparte-alert__message">{t.degraded}</p>
+          </div>
+        </div>
+      )}
+      {exited && (
+        <div className="pty-warning aparte-alert aparte-alert--neutral" role="status">
+          <div className="aparte-alert__body">
+            <p className="aparte-alert__message">{t.exited}</p>
+          </div>
+        </div>
+      )}
 
       <div className="pty-host" ref={hostRef} />
     </div>

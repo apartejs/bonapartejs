@@ -109,7 +109,9 @@ export function ConversationSidebar({
             {/* In flat-list mode, the project becomes useful again on the
                 row; grouped, it would be repeated under its own heading. */}
             {grouping === 'flat' && (
-              <span className={conversation.projectName ? 'conv-project' : 'conv-noproject'}>
+              <span
+                className={`${conversation.projectName ? 'conv-project' : 'conv-noproject'} aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm`}
+              >
                 {conversation.projectName ?? t.conversations.noProject}
               </span>
             )}
@@ -123,7 +125,10 @@ export function ConversationSidebar({
           {/* The badge only shows if a state REALLY exists on disk: this is
               our product promise, it stands on hard evidence or not at all. */}
           {conversation.hasKvState && (
-            <span className="conv-kv" title={t.conversations.kvReadyHint}>
+            <span
+              className="conv-kv aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm"
+              title={t.conversations.kvReadyHint}
+            >
               {t.conversations.kvReady}
             </span>
           )}
@@ -139,7 +144,7 @@ export function ConversationSidebar({
         <span className="conv-sidebar-tools" ref={menuRef}>
           <button
             type="button"
-            className="icon-button"
+            className="icon-button aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
             onClick={() => setMenuOpen(!menuOpen)}
             title={t.conversations.organise}
             aria-label={t.conversations.organise}
@@ -149,7 +154,7 @@ export function ConversationSidebar({
           </button>
           <button
             type="button"
-            className="icon-button"
+            className="icon-button aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
             onClick={onCreate}
             disabled={busy}
             title={t.conversations.create}
@@ -159,56 +164,52 @@ export function ConversationSidebar({
           </button>
 
           {menuOpen && (
-            <div className="conv-menu popover" role="menu">
-              <p className="conv-menu-label">{t.conversations.organise}</p>
+            <div className="conv-menu aparte-popover aparte-menu" role="menu">
+              <p className="conv-menu-label aparte-menu__label">{t.conversations.organise}</p>
               <button
                 type="button"
                 role="menuitemradio"
                 aria-checked={grouping === 'project'}
-                className="conv-menu-item"
+                className="conv-menu-item aparte-menu__item"
                 onClick={() => onGroupingChange('project')}
               >
-                {grouping === 'project' ? '✓ ' : ''}
                 {t.conversations.byProject}
               </button>
               <button
                 type="button"
                 role="menuitemradio"
                 aria-checked={grouping === 'flat'}
-                className="conv-menu-item"
+                className="conv-menu-item aparte-menu__item"
                 onClick={() => onGroupingChange('flat')}
               >
-                {grouping === 'flat' ? '✓ ' : ''}
                 {t.conversations.oneList}
               </button>
 
-              <p className="conv-menu-label">{t.conversations.sortBy}</p>
+              <p className="conv-menu-label aparte-menu__label">{t.conversations.sortBy}</p>
               <button
                 type="button"
                 role="menuitemradio"
                 aria-checked={sort === 'updated'}
-                className="conv-menu-item"
+                className="conv-menu-item aparte-menu__item"
                 onClick={() => onSortChange('updated')}
               >
-                {sort === 'updated' ? '✓ ' : ''}
                 {t.conversations.sortUpdated}
               </button>
               <button
                 type="button"
                 role="menuitemradio"
                 aria-checked={sort === 'title'}
-                className="conv-menu-item"
+                className="conv-menu-item aparte-menu__item"
                 onClick={() => onSortChange('title')}
               >
-                {sort === 'title' ? '✓ ' : ''}
                 {t.conversations.sortTitle}
               </button>
 
-              <p className="conv-menu-label">{t.conversations.projects}</p>
+              <p className="conv-menu-label aparte-menu__label">{t.conversations.projects}</p>
               <button
                 type="button"
                 role="menuitem"
-                className="conv-menu-item"
+                className="conv-menu-item aparte-menu__item"
                 onClick={() => {
                   setMenuOpen(false);
                   onCreateProject();
@@ -230,7 +231,7 @@ export function ConversationSidebar({
               <div className="conv-group-head">
                 <button
                   type="button"
-                  className="conv-group-title"
+                  className="conv-group-title aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
                   onClick={() => onEditProject(project.id)}
                   title={t.conversations.editProject}
                 >

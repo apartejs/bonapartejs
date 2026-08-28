@@ -68,11 +68,15 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
 
   return (
     <div className="tooling-tabs">
-      <div className="tooling-tablist" role="tablist" aria-label={t.tooling.heading}>
+      <div
+        className="tooling-tablist aparte-tabs aparte-tabs--underline"
+        role="tablist"
+        aria-label={t.tooling.heading}
+      >
         {tooling.tabs.map((tab) => (
           <span
             key={tab.instanceId}
-            className={`tooling-tab${
+            className={`tooling-tab aparte-tabs__tab${
               tab.instanceId === tooling.active?.instanceId ? ' tooling-tab-active' : ''
             }`}
           >
@@ -93,7 +97,7 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
             </button>
             <button
               type="button"
-              className="tooling-tab-close"
+              className="tooling-tab-close aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
               onClick={() => tooling.close(tab.instanceId)}
               aria-label={`${t.tooling.close} — ${tab.title}`}
               title={t.tooling.close}
@@ -107,7 +111,7 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
       <button
         ref={buttonRef}
         type="button"
-        className="icon-button"
+        className="icon-button aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
         onClick={() => (anchor ? setAnchor(null) : place())}
         aria-expanded={anchor !== null}
         aria-label={t.tooling.open}
@@ -119,7 +123,7 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
       {anchor && (
         <div
           ref={menuRef}
-          className="tooling-menu popover"
+          className="tooling-menu aparte-popover aparte-menu"
           role="menu"
           aria-label={t.tooling.openMenu}
           style={{ top: anchor.top, right: anchor.right }}
@@ -132,7 +136,7 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
                 key={`${view.pluginId}:${view.viewId}`}
                 type="button"
                 role="menuitem"
-                className="tooling-menu-item"
+                className="tooling-menu-item aparte-menu__item"
                 onClick={() => {
                   tooling.open(view);
                   setAnchor(null);
@@ -142,7 +146,9 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
                   {view.icon ?? '▫'}
                 </span>
                 <span className="tooling-menu-title">{view.title}</span>
-                {view.shortcut && <kbd className="tooling-menu-shortcut">{view.shortcut}</kbd>}
+                {view.shortcut && (
+                  <kbd className="tooling-menu-shortcut aparte-kbd">{view.shortcut}</kbd>
+                )}
               </button>
             ))
           )}

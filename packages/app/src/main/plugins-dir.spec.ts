@@ -34,3 +34,16 @@ describe('resolvePluginsDir', () => {
     expect(resolvePluginsDir(base)).toBe(join(base.appPath, '..', '..', 'plugins'));
   });
 });
+
+describe('resolvePluginsDir — the built entry', () => {
+  it('finds the monorepo plugins from the built entry, two levels below the package', () => {
+    // Playwright and `electron out/main/index.js` make `app.getAppPath()`
+    // the ENTRY's directory, not the package's: packages/app/out/main. The
+    // plugins were silently absent from every Electron E2E.
+    const entry = join('C:', 'work', 'packages', 'app', 'out', 'main');
+    const repoPlugins = join('C:', 'work', 'plugins');
+    expect(resolvePluginsDir({ ...base, appPath: entry, exists: (p) => p === repoPlugins })).toBe(
+      repoPlugins,
+    );
+  });
+});

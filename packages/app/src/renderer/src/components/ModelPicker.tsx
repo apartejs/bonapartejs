@@ -78,8 +78,9 @@ export function ModelPicker({
 
         {models !== null && models.length > 0 && (
           <label className="field picker-search">
-            <span className="field-row">
+            <span className="field-row aparte-field-group">
               <input
+                className="aparte-field"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t.picker.searchPlaceholder}
@@ -87,7 +88,12 @@ export function ModelPicker({
                 autoFocus
               />
               {query && (
-                <button type="button" onClick={() => setQuery('')}>
+                <button
+                  type="button"
+                  className="aparte-field-group__suffix aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
+                  aria-label={t.common.clear}
+                  onClick={() => setQuery('')}
+                >
                   ✕
                 </button>
               )}
@@ -106,19 +112,22 @@ export function ModelPicker({
             {visible.map((model) => (
               <li key={model.path}>
                 <label
-                  className={`model-row ${effective === model.path ? 'selected' : ''}`}
+                  className={`model-row aparte-field-choice aparte-field-choice--boxed ${effective === model.path ? 'selected aparte-field-choice--selected' : ''}`}
                   title={model.path}
                 >
                   <input
                     type="radio"
                     name="model"
+                    className="aparte-radio"
                     checked={effective === model.path}
                     onChange={() => setSelected(model.path)}
                   />
                   <span className="model-name">{model.name}</span>
                   <span className="model-meta">
                     {formatSize(model.sizeBytes, t.units)}
-                    <span className={`model-source source-${model.source}`}>
+                    <span
+                      className={`model-source source-${model.source} aparte-badge aparte-badge--neutral aparte-badge--outline aparte-badge--sm`}
+                    >
                       {model.source}
                     </span>
                   </span>
@@ -129,18 +138,27 @@ export function ModelPicker({
         )}
 
         {error && (
-          <p className="setup-error">
-            {t.setup.failed} — {error}
-          </p>
+          <div className="setup-error aparte-alert aparte-alert--danger" role="alert">
+            <div className="aparte-alert__body">
+              <p className="aparte-alert__message">
+                {t.setup.failed} — {error}
+              </p>
+            </div>
+          </div>
         )}
 
         <div className="picker-actions">
-          <button type="button" onClick={() => void browse()} disabled={busy}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--neutral aparte-btn--outline"
+            onClick={() => void browse()}
+            disabled={busy}
+          >
             {t.picker.manual}
           </button>
           <button
             type="button"
-            className="primary"
+            className="primary aparte-btn aparte-btn--primary aparte-btn--solid"
             disabled={busy || !effective}
             onClick={() => effective && onPick(effective)}
           >

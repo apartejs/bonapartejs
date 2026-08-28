@@ -38,7 +38,7 @@ export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
     <span className="mode-wrap" ref={wrapRef}>
       <button
         type="button"
-        className={`mode-button mode-${mode}`}
+        className={`mode-button mode-${mode} aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--pill aparte-btn--sm`}
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         title={t.modes.hint}
@@ -52,7 +52,7 @@ export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
 
       {open && (
         /* The panel opens UPWARD: the composer is at the bottom of the window. */
-        <div className="mode-menu" role="menu">
+        <div className="mode-menu aparte-popover aparte-menu" role="menu">
           <p className="conv-menu-label">{t.modes.hint}</p>
           {MODES.map((value) => (
             <button
@@ -60,7 +60,7 @@ export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
               type="button"
               role="menuitemradio"
               aria-checked={value === mode}
-              className={`mode-option${value === mode ? ' mode-option-active' : ''}`}
+              className={`mode-option aparte-menu__item${value === mode ? ' mode-option-active' : ''}`}
               onClick={() => {
                 onModeChange(value);
                 setOpen(false);

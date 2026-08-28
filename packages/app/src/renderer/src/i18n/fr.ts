@@ -8,6 +8,9 @@ export const FR: AppTranslations = {
     toggleTheme: 'Thème',
     toggleLocale: 'English',
   },
+  common: {
+    clear: 'Effacer',
+  },
   setup: {
     eyebrow: 'premier lever de rideau',
     title: 'Brancher le moteur',
@@ -81,6 +84,7 @@ export const FR: AppTranslations = {
     thinking: 'Réflexion',
   },
   settings: {
+    language: 'Langue',
     heading: 'Réglages',
     general: 'Général',
     sampling: 'Échantillonnage',

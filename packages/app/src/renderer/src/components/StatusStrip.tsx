@@ -41,6 +41,33 @@ function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
 }
 
+/** aparté badge intent + fill for the engine status pill. */
+function statusPillClass(status: BackendStatusDto): string {
+  switch (status) {
+    case 'ready':
+      return 'aparte-badge--success aparte-badge--soft';
+    case 'starting':
+    case 'restarting':
+      return 'aparte-badge--info aparte-badge--soft';
+    case 'crashed':
+      return 'aparte-badge--danger aparte-badge--soft';
+    default:
+      return 'aparte-badge--neutral aparte-badge--outline';
+  }
+}
+
+/** aparté badge classes shared by every `.status-chip` variant. */
+function chipClass(kind: 'ok' | 'dim' | 'err'): string {
+  switch (kind) {
+    case 'ok':
+      return 'aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm';
+    case 'err':
+      return 'aparte-badge aparte-badge--danger aparte-badge--soft aparte-badge--sm';
+    default:
+      return 'aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm';
+  }
+}
+
 export function StatusStrip({
   backendStatus,
   engine,
@@ -74,7 +101,9 @@ export function StatusStrip({
     <footer className="status-strip">
       <div className="status-left">
         <Mascotte state={mascotteFor(backendStatus, streaming)} />
-        <span className={`status-pill status-${backendStatus}`}>
+        <span
+          className={`status-pill status-${backendStatus} aparte-badge aparte-badge--sm ${statusPillClass(backendStatus)}`}
+        >
           {t.status[backendStatus]}
         </span>
         {/* This bar now carries only what's GLOBAL: engine state, loaded
@@ -83,7 +112,10 @@ export function StatusStrip({
             decides what the agent is allowed to do on the next message, so
             it belongs to the act of sending. */}
         {modelName && (
-          <span className="status-chip chip-model" title={modelName}>
+          <span
+            className="status-chip chip-model aparte-badge aparte-badge--neutral aparte-badge--outline aparte-badge--sm"
+            title={modelName}
+          >
             {modelName}
           </span>
         )}
@@ -104,10 +136,14 @@ export function StatusStrip({
         )}
 
         {restore && restore.restored === false && restore.reason === 'not-connected' ? (
-          <span className="status-chip chip-dim">{t.status.notConnected}</span>
+          <span className={`status-chip chip-dim ${chipClass('dim')}`}>
+            {t.status.notConnected}
+          </span>
         ) : restore ? (
           <span
-            className={`status-chip ${restore.restored ? 'chip-ok' : 'chip-dim'}`}
+            className={`status-chip ${restore.restored ? 'chip-ok' : 'chip-dim'} ${chipClass(
+              restore.restored ? 'ok' : 'dim',
+            )}`}
             title={
               restore.restored
                 ? undefined
@@ -120,7 +156,7 @@ export function StatusStrip({
           </span>
         ) : null}
         {lastStats && lastStats.promptMs > 0 && (
-          <span className="status-chip chip-dim">
+          <span className={`status-chip chip-dim ${chipClass('dim')}`}>
             {t.status.prefill} {formatMs(lastStats.promptMs)}
             {cachePct !== null && ` · ${t.status.cacheShare} ${cachePct}%`}
           </span>
@@ -129,16 +165,28 @@ export function StatusStrip({
 
       <div className="status-right">
         {saveState !== 'idle' && (
-          <span className={saveState === 'saved' ? 'chip-ok status-chip' : 'chip-err status-chip'}>
+          <span
+            className={`status-chip ${saveState === 'saved' ? 'chip-ok' : 'chip-err'} ${chipClass(
+              saveState === 'saved' ? 'ok' : 'err',
+            )}`}
+          >
             {saveState === 'saved' ? t.status.saved : t.status.saveFailed}
           </span>
         )}
         {canPersistKv && (
-          <button type="button" onClick={onSave}>
+          <button
+            type="button"
+            className="aparte-btn aparte-btn--neutral aparte-btn--soft aparte-btn--sm"
+            onClick={onSave}
+          >
             {t.status.save}
           </button>
         )}
-        <button type="button" onClick={onOpenSettings}>
+        <button
+          type="button"
+          className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
+          onClick={onOpenSettings}
+        >
           {t.settings.heading}
         </button>
       </div>

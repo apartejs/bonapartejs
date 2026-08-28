@@ -48,16 +48,21 @@ export function SettingsForm({ settings, scope, labels, locale, onChange }: Sett
       {visible.map((setting) => (
         <div className="setting-row" key={setting.key}>
           <div className="setting-head">
-            <label className="setting-label" htmlFor={`set-${scope}-${setting.key}`}>
+            <label
+              className="setting-label aparte-field-label"
+              htmlFor={`set-${scope}-${setting.key}`}
+            >
               {localize(setting.label, locale)}
             </label>
             {!setting.overridden && (
-              <span className="setting-inherited">{labels.inherited}</span>
+              <span className="setting-inherited aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
+                {labels.inherited}
+              </span>
             )}
             {setting.overridden && (
               <button
                 type="button"
-                className="setting-reset"
+                className="setting-reset aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
                 onClick={() => onChange(setting.key, undefined)}
               >
                 {labels.reset}
@@ -68,7 +73,7 @@ export function SettingsForm({ settings, scope, labels, locale, onChange }: Sett
           <Control setting={setting} scope={scope} locale={locale} onChange={onChange} />
 
           {setting.description && (
-            <p className="setting-help">{localize(setting.description, locale)}</p>
+            <p className="setting-help aparte-field-hint">{localize(setting.description, locale)}</p>
           )}
           {setting.invalidatesKv && (
             <p className="setting-warning">{labels.kvWarning}</p>
@@ -79,7 +84,7 @@ export function SettingsForm({ settings, scope, labels, locale, onChange }: Sett
       {hasAdvanced && (
         <button
           type="button"
-          className="setting-advanced-toggle"
+          className="setting-advanced-toggle aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
           onClick={() => setShowAdvanced((shown) => !shown)}
           aria-expanded={showAdvanced}
         >
@@ -108,6 +113,8 @@ function Control({
       <input
         id={id}
         type="checkbox"
+        role="switch"
+        className="aparte-switch"
         checked={setting.value === true}
         onChange={(event) => onChange(setting.key, event.target.checked)}
       />
@@ -118,6 +125,7 @@ function Control({
     return (
       <select
         id={id}
+        className="aparte-field aparte-field--sm"
         value={String(setting.value ?? '')}
         onChange={(event) => onChange(setting.key, event.target.value)}
       >
@@ -135,6 +143,7 @@ function Control({
       <input
         id={id}
         type="number"
+        className="aparte-field aparte-field--sm"
         value={setting.value === undefined ? '' : String(setting.value)}
         {...(setting.min !== undefined ? { min: setting.min } : {})}
         {...(setting.max !== undefined ? { max: setting.max } : {})}
@@ -154,6 +163,7 @@ function Control({
     <input
       id={id}
       type="text"
+      className="aparte-field aparte-field--sm"
       value={String(setting.value ?? '')}
       onChange={(event) =>
         onChange(setting.key, event.target.value === '' ? undefined : event.target.value)

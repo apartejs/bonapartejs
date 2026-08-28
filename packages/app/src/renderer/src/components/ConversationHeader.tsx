@@ -100,12 +100,12 @@ export function ConversationHeader({
 
       <button
         type="button"
-        className={`conv-chip ${project ? 'conv-chip-project' : 'conv-chip-dim'}`}
+        className={`conv-chip ${project ? 'conv-chip-project' : 'conv-chip-dim'} aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--pill aparte-btn--sm`}
         onClick={() => setPanel(panel === 'project' ? 'none' : 'project')}
         title={project ? project.name : t.header.noProjectHint}
         aria-expanded={panel === 'project'}
       >
-        <span className="conv-chip-icon" aria-hidden="true">
+        <span className="conv-chip-icon aparte-btn__icon" aria-hidden="true">
           ▤
         </span>
         {project ? project.name : t.header.noProject}
@@ -113,7 +113,7 @@ export function ConversationHeader({
 
       {editing ? (
         <input
-          className="conv-title-input"
+          className="conv-title-input aparte-field aparte-field--sm"
           value={draft}
           autoFocus
           onChange={(e) => setDraft(e.target.value)}
@@ -130,7 +130,7 @@ export function ConversationHeader({
       ) : (
         <button
           type="button"
-          className="conv-title"
+          className="conv-title aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
           onClick={() => setEditing(true)}
           title={t.header.rename}
         >
@@ -142,16 +142,21 @@ export function ConversationHeader({
 
       <button
         type="button"
-        className="conv-header-more"
+        className="conv-header-more aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
         onClick={() => setPanel(panel === 'move' ? 'none' : 'move')}
         aria-expanded={panel === 'move'}
+        aria-label={t.header.actions}
         title={t.header.actions}
       >
         ···
       </button>
 
       {panel === 'project' && (
-        <div className="conv-popover popover" role="dialog" aria-label={t.header.projectPanel}>
+        <div
+          className="conv-popover aparte-popover"
+          role="dialog"
+          aria-label={t.header.projectPanel}
+        >
           {project ? (
             <>
               <p className="conv-popover-name">{project.name}</p>
@@ -165,13 +170,19 @@ export function ConversationHeader({
                     <li key={root} title={root}>
                       <code>{root}</code>
                       {index === 0 && project.roots.length > 1 && (
-                        <em className="conv-popover-default">{t.header.defaultRoot}</em>
+                        <em className="conv-popover-default aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
+                          {t.header.defaultRoot}
+                        </em>
                       )}
                     </li>
                   ))
                 )}
               </ul>
-              <button type="button" className="conv-popover-action" onClick={onEditProject}>
+              <button
+                type="button"
+                className="conv-popover-action aparte-btn aparte-btn--secondary aparte-btn--soft aparte-btn--block aparte-btn--sm"
+                onClick={onEditProject}
+              >
                 {t.header.editProject}
               </button>
             </>
@@ -183,12 +194,12 @@ export function ConversationHeader({
                   one that already exists. */}
               {projects.length > 0 && (
                 <>
-                  <p className="conv-popover-label">{t.header.moveTo}</p>
+                  <p className="conv-popover-label aparte-menu__label">{t.header.moveTo}</p>
                   {projects.map((candidate) => (
                     <button
                       key={candidate.id}
                       type="button"
-                      className="conv-popover-item"
+                      className="conv-popover-item aparte-menu__item"
                       disabled={busy}
                       onClick={() => {
                         onMoveToProject(candidate.id);
@@ -202,7 +213,7 @@ export function ConversationHeader({
               )}
               <button
                 type="button"
-                className="conv-popover-action"
+                className="conv-popover-action aparte-btn aparte-btn--secondary aparte-btn--soft aparte-btn--block aparte-btn--sm"
                 onClick={onCreateProject}
                 disabled={busy}
               >
@@ -214,14 +225,14 @@ export function ConversationHeader({
       )}
 
       {panel === 'move' && (
-        <div className="conv-popover conv-popover-right popover" role="menu">
-          <p className="conv-popover-label">{t.header.moveTo}</p>
+        <div className="conv-popover conv-popover-right aparte-popover aparte-menu" role="menu">
+          <p className="conv-popover-label aparte-menu__label">{t.header.moveTo}</p>
           {projects.map((candidate) => (
             <button
               key={candidate.id}
               type="button"
               role="menuitem"
-              className="conv-popover-item"
+              className="conv-popover-item aparte-menu__item"
               disabled={candidate.id === project?.id}
               onClick={() => {
                 onMoveToProject(candidate.id);
@@ -235,7 +246,7 @@ export function ConversationHeader({
             <button
               type="button"
               role="menuitem"
-              className="conv-popover-item conv-popover-danger"
+              className="conv-popover-item conv-popover-danger aparte-menu__item"
               onClick={() => {
                 onMoveToProject(null);
                 setPanel('none');

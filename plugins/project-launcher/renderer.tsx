@@ -105,15 +105,23 @@ export default function ProjectLauncherView({ projectRoot, locale }: ToolingView
           {state.scripts.map((script) => {
             const live = runningByName.get(script.name);
             return (
-              <li className="script-card" key={script.name}>
+              <li className="script-card aparte-card" key={script.name}>
                 <div className="script-head">
                   <span className="script-name">{script.name}</span>
                   {live ? (
-                    <button type="button" onClick={() => void stop(script.name)}>
+                    <button
+                      type="button"
+                      className="aparte-btn aparte-btn--danger aparte-btn--soft aparte-btn--sm"
+                      onClick={() => void stop(script.name)}
+                    >
                       {labels.stop}
                     </button>
                   ) : (
-                    <button type="button" onClick={() => void run(script.name)}>
+                    <button
+                      type="button"
+                      className="aparte-btn aparte-btn--primary aparte-btn--soft aparte-btn--sm"
+                      onClick={() => void run(script.name)}
+                    >
                       ▶ {labels.run}
                     </button>
                   )}
@@ -124,19 +132,21 @@ export default function ProjectLauncherView({ projectRoot, locale }: ToolingView
                 {live && (
                   <div className="script-state">
                     {live.exitCode !== null ? (
-                      <span className="script-exited">
+                      <span className="script-exited aparte-badge aparte-badge--danger aparte-badge--soft aparte-badge--sm">
                         {labels.exited} ({live.exitCode})
                       </span>
                     ) : live.url ? (
                       <button
                         type="button"
-                        className="script-url"
+                        className="script-url aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
                         onClick={() => void window.bonaparte.openExternal(live.url as string)}
                       >
                         {labels.open} {live.url}
                       </button>
                     ) : (
-                      <span className="script-pending">{labels.starting}</span>
+                      <span className="script-pending aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
+                        {labels.starting}
+                      </span>
                     )}
                   </div>
                 )}

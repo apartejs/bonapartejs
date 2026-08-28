@@ -1523,3 +1523,11 @@ pre.shiki {
 .app-shell *::-webkit-scrollbar-thumb:hover {
   background: var(--aparte-secondary);
 }
+
+/* A kit button in a setting row is an action, not a field: it keeps its own
+   width instead of stretching to the row's. */
+.setting-row > .aparte-btn {
+  align-self: flex-start;
+  justify-self: start;
+  width: auto;
+}
