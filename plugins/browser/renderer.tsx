@@ -5,7 +5,7 @@ interface BrowserState {
   url: string | null;
   open: boolean;
   messages: { level: string; text: string; at: string }[];
-  /** Message du dernier chargement qui a échoué, s'il y en a un. */
+  /** Message of the last load that failed, if any. */
   error?: string;
 }
 
@@ -33,18 +33,18 @@ const LABELS = {
 } as const;
 
 /**
- * Navigateur outillé — côté React.
+ * Tooled browser — React side.
  *
- * La page est une vue NATIVE : elle n'est pas dans le DOM, donc rien ne la
- * suit quand la fenêtre bouge. Ce composant réserve une zone et envoie son
- * rectangle au main à chaque changement de taille.
+ * The page is a NATIVE view: it isn't in the DOM, so nothing follows it
+ * when the window moves. This component reserves a zone and sends its
+ * rectangle to the main process on every size change.
  *
- * Le rectangle part dès le MONTAGE, sans attendre qu'une page soit chargée.
- * C'est la moitié Node qui décide de poser la vue quand elle en reçoit un — et
- * elle ne pose rien sans. L'inverse (n'envoyer le rectangle qu'une fois la page
- * ouverte) laissait une vue sans place dès que l'ouverture échouait, et une vue
- * sans place occupe toute la fenêtre : l'application disparaissait derrière
- * une page blanche.
+ * The rectangle is sent right from MOUNT, without waiting for a page to be
+ * loaded. It's the Node half that decides to place the view once it
+ * receives one — and it places nothing without one. The opposite (only
+ * sending the rectangle once a page had opened) left the view with no place
+ * as soon as the opening failed, and a view with no place takes over the
+ * whole window: the application would disappear behind a blank page.
  */
 export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   const labels = LABELS[locale] ?? LABELS.en;
@@ -52,9 +52,9 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   const [state, setState] = useState<BrowserState>({ url: null, open: false, messages: [] });
   const slotRef = useRef<HTMLDivElement>(null);
 
-  // Chaque commande porte l'onglet : le panneau permet d'ouvrir plusieurs
-  // navigateurs, et deux pages natives sur la même fenêtre doivent savoir
-  // laquelle est laquelle.
+  // Every command carries the tab: the panel allows opening several
+  // browsers, and two native pages on the same window need to know which
+  // is which.
   const invoke = useCallback(
     (command: string, payload?: Record<string, unknown>) =>
       window.bonaparte.invokePlugin('browser', command, { ...payload, instanceId }),
@@ -78,8 +78,8 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
     const observer = new ResizeObserver(sendBounds);
     if (slotRef.current) observer.observe(slotRef.current);
     window.addEventListener('resize', sendBounds);
-    // Le panneau peut aussi bouger sans changer de taille (repli du menu) :
-    // un rafraîchissement régulier coûte moins qu'une page mal placée.
+    // The panel can also move without changing size (the menu collapsing):
+    // a regular refresh costs less than a misplaced page.
     const timer = setInterval(sendBounds, 1000);
     return () => {
       observer.disconnect();
@@ -91,18 +91,18 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   useEffect(() => {
     const timer = setInterval(() => {
       void invoke('state').then((next) =>
-        // Le message d'échec survit à la scrutation : c'est la seule trace
-        // qu'a l'utilisateur, et elle ne doit pas s'effacer au bout d'une
-        // seconde. Une ouverture réussie la remplace.
+        // The failure message survives polling: it's the only trace the
+        // user has, and it must not vanish after a second. A successful
+        // opening replaces it.
         setState((current) => ({ ...(next as BrowserState), error: current.error })),
       );
     }, 1000);
     return () => clearInterval(timer);
   }, [invoke]);
 
-  // On quitte l'onglet : la page reste chargée mais QUITTE la fenêtre. Sans
-  // ça, une vue native — qui n'est pas dans le DOM — resterait posée par-dessus
-  // l'onglet suivant.
+  // We're leaving the tab: the page stays loaded but LEAVES the window.
+  // Without this, a native view — which isn't in the DOM — would stay
+  // sitting on top of the next tab.
   useEffect(
     () => () => {
       void invoke('detach');
@@ -113,9 +113,9 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
   const open = useCallback(async () => {
     if (!url.trim()) return;
     const reply = (await invoke('open', { url })) as { url?: string; error?: string };
-    // L'état complet arrive au tour de scrutation suivant ; ce qui compte ici
-    // est que la zone existe pour recevoir la vue native, et que l'échec
-    // éventuel se dise.
+    // The full state arrives on the next polling round; what matters here
+    // is that the zone exists to receive the native view, and that any
+    // failure gets reported.
     setState((current) => ({
       ...current,
       url: reply.url ?? current.url,
@@ -152,7 +152,7 @@ export default function BrowserView({ locale, instanceId }: ToolingViewProps) {
         )}
       </form>
 
-      {/* Zone réservée : la vue native vient se poser exactement ici. */}
+      {/* Reserved zone: the native view lands exactly here. */}
       <div className="browser-slot" ref={slotRef}>
         {state.error ? (
           <p className="browser-failed">

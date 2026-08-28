@@ -10,8 +10,8 @@ interface ShellChoice {
 }
 
 /**
- * Paquet d'acquittement. Doit rester <= au seuil bas de l'hôte, sinon le
- * producteur, mis en pause, ne repartirait jamais.
+ * Acknowledgment batch size. Must stay <= the host's low watermark, or the
+ * producer, once paused, would never resume.
  */
 const ACK_SIZE = 5_000;
 
@@ -35,11 +35,11 @@ const LABELS = {
 } as const;
 
 /**
- * Couleurs du terminal, LUES dans le thème de l'app.
+ * Terminal colors, READ from the app's theme.
  *
- * xterm veut des valeurs concrètes en JavaScript, pas des `var()` : on résout
- * donc les tokens à la main. Les coder en dur laissait un rectangle noir en
- * thème clair — un terminal illisible est pire qu'un terminal absent.
+ * xterm wants concrete values in JavaScript, not `var()`: so we resolve the
+ * tokens by hand. Hardcoding them left a black rectangle in light theme — an
+ * unreadable terminal is worse than no terminal at all.
  */
 function readTheme(): { background: string; foreground: string } {
   const styles = getComputedStyle(document.documentElement);
@@ -52,22 +52,22 @@ function readTheme(): { background: string; foreground: string } {
 }
 
 /**
- * Terminal : xterm.js branché sur un vrai PTY.
+ * Terminal: xterm.js wired to a real PTY.
  *
- * L'ancienne vue était un champ de commande et un `<div>` de sortie, avec les
- * séquences ANSI retirées côté Node — donc pas un terminal, une console de
- * log. Ici l'émulateur reçoit les octets BRUTS : couleurs, curseur, effacement
- * d'écran, programmes interactifs.
+ * The old view was a command field and an output `<div>`, with ANSI
+ * sequences stripped on the Node side — so not a terminal, a log console.
+ * Here the emulator receives the RAW bytes: colors, cursor, screen clearing,
+ * interactive programs.
  *
- * Le shell se choisit parmi ceux réellement installés (PowerShell, Git Bash,
- * WSL…), comme dans VS Code : proposer un shell absent, c'est promettre un
- * terminal qui ne s'ouvrira pas.
+ * The shell is chosen among those actually installed (PowerShell, Git Bash,
+ * WSL…), as in VS Code: offering a shell that isn't there is promising a
+ * terminal that won't open.
  *
- * Les données sont POUSSÉES par la moitié Node, et cette vue ACQUITTE ce
- * qu'elle a écrit. L'acquittement se fait dans le callback de `term.write`,
- * c'est-à-dire quand xterm a réellement analysé les octets — pas quand on les a
- * reçus. C'est ce qui rend la contre-pression honnête : le producteur s'arrête
- * parce que l'écran est en retard, pas parce que le réseau l'est.
+ * Data is PUSHED by the Node half, and this view ACKNOWLEDGES what it has
+ * written. The acknowledgment happens in the `term.write` callback, i.e.
+ * when xterm has actually parsed the bytes — not when they were received.
+ * That's what makes the back-pressure honest: the producer stops because
+ * the screen is behind, not because the network is.
  */
 export default function TerminalView({
   locale,
@@ -75,12 +75,12 @@ export default function TerminalView({
   instanceId,
 }: ToolingViewProps) {
   const t = LABELS[locale === 'en' ? 'en' : 'fr'];
-  // Les vues de plugins passent par le pont typé de l'app, pas par une prop :
-  // c'est le chemin unique renderer → moitié Node, et il se démonte avec le
-  // plugin (cf. le plugin navigateur).
+  // Plugin views go through the app's typed bridge, not through a prop:
+  // it's the single renderer → Node half path, and it tears down with the
+  // plugin (cf. the browser plugin).
   //
-  // Chaque commande porte l'`instanceId` : plusieurs terminaux peuvent être
-  // ouverts, et rien ne doit laisser croire à la moitié Node qu'ils sont un.
+  // Every command carries the `instanceId`: several terminals can be open
+  // at once, and nothing should let the Node half believe they are one.
   const invoke = useCallback(
     (command: string, payload?: Record<string, unknown>) =>
       window.bonaparte.invokePlugin('terminal', command, { ...payload, instanceId }),
@@ -91,10 +91,10 @@ export default function TerminalView({
   const fitRef = useRef<FitAddon | null>(null);
   const [shells, setShells] = useState<ShellChoice[]>([]);
   const [shellId, setShellId] = useState<string | null>(null);
-  const [mode, setMode] = useState<'pty' | 'basique' | null>(null);
+  const [mode, setMode] = useState<'pty' | 'basic' | null>(null);
   const [exited, setExited] = useState(false);
 
-  /** Ouvre (ou réouvre) une session et pose le curseur de lecture. */
+  /** Opens (or reopens) a session and places the read cursor. */
   const open = useCallback(
     async (id: string | null) => {
       const term = termRef.current;
@@ -108,7 +108,7 @@ export default function TerminalView({
         cols: term.cols,
         rows: term.rows,
       })) as {
-        mode?: 'pty' | 'basique';
+        mode?: 'pty' | 'basic';
         shellId?: string;
         history?: string;
         error?: string;
@@ -120,15 +120,15 @@ export default function TerminalView({
       }
       setMode(reply.mode ?? null);
       if (reply.shellId) setShellId(reply.shellId);
-      // Session déjà vivante : on réaffiche ce qui a défilé sans la vue.
-      // L'historique n'est PAS acquitté — il n'a jamais été compté comme poussé.
+      // Session already alive: we redisplay what scrolled by without the
+      // view. The history is NOT acknowledged — it was never counted as pushed.
       if (reply.history) term.write(reply.history);
     },
     [invoke, projectRoot],
   );
 
-  // Montage de l'émulateur : une seule fois, et démonté proprement — un
-  // Terminal qui survit à sa vue garde des écouteurs et une frame de rendu.
+  // Mounting the emulator: only once, and torn down cleanly — a Terminal
+  // that outlives its view keeps listeners and a render frame around.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -152,9 +152,10 @@ export default function TerminalView({
       void invoke('write', { data });
     });
 
-    // Le thème se change à chaud (attribut sur <html>) : xterm ayant COPIÉ les
-    // couleurs à sa construction, il faut les lui redonner. Sans ça, basculer
-    // en clair laisse un terminal sombre au milieu d'une interface claire.
+    // The theme changes live (attribute on <html>): since xterm COPIED the
+    // colors at construction time, they must be given back to it. Without
+    // this, switching to light leaves a dark terminal in the middle of a
+    // light interface.
     const themeWatcher = new MutationObserver(() => {
       term.options.theme = readTheme();
     });
@@ -168,7 +169,7 @@ export default function TerminalView({
         fit.fit();
         void invoke('resize', { cols: term.cols, rows: term.rows });
       } catch {
-        /* le conteneur peut être masqué : rien à redimensionner */
+        /* the container may be hidden: nothing to resize */
       }
     });
     observer.observe(host);
@@ -186,27 +187,28 @@ export default function TerminalView({
       term.dispose();
       termRef.current = null;
       fitRef.current = null;
-      // On quitte l'onglet sans le fermer : le shell doit CONTINUER (c'est ce
-      // qu'on attend d'un terminal) mais cesser de pousser vers une vue morte.
-      // Sans ce signal, la contre-pression mettrait le PTY en pause, l'écart
-      // ne redescendrait jamais, et le shell resterait figé au retour.
+      // We leave the tab without closing it: the shell must CONTINUE
+      // (that's what's expected of a terminal) but stop pushing to a dead
+      // view. Without this signal, back-pressure would pause the PTY, the
+      // gap would never come back down, and the shell would stay frozen
+      // on return.
       void invoke('detach');
     };
-    // Volontairement hors des dépendances : `open` change avec projectRoot,
-    // et remonter l'émulateur à chaque changement de dossier tuerait la
-    // session du shell. L'ouverture initiale suffit ; changer de shell passe
-    // par le sélecteur.
+    // Deliberately left out of the dependencies: `open` changes with
+    // projectRoot, and remounting the emulator on every folder change would
+    // kill the shell session. The initial opening is enough; changing shell
+    // goes through the selector.
   }, [invoke]);
 
-  // Abonnement aux données poussées. On acquitte par paquets, pour ne pas
-  // faire un aller-retour IPC par octet — même logique que le CharCountAckSize
-  // de VS Code.
+  // Subscription to pushed data. We acknowledge in batches, so as not to
+  // do an IPC round trip per byte — same logic as VS Code's
+  // CharCountAckSize.
   useEffect(() => {
     let unacked = 0;
     const unsubscribe = window.bonaparte.onPluginEvent((message) => {
       const { pluginId, event, payload } = message;
-      // Le filtre porte sur l'INSTANCE : sans lui, deux terminaux ouverts
-      // afficheraient chacun la sortie de l'autre.
+      // The filter is on the INSTANCE: without it, two open terminals
+      // would each display the other's output.
       if (pluginId !== 'terminal' || message.instanceId !== instanceId) return;
       if (event === 'exit') {
         setExited(true);
@@ -214,8 +216,9 @@ export default function TerminalView({
       }
       if (event !== 'data' || typeof payload !== 'string') return;
       const chunk = payload;
-      // L'acquittement part du callback de xterm : il signifie « affiché »,
-      // pas « reçu ». Sans ça, on relancerait le producteur trop tôt.
+      // The acknowledgment comes from xterm's callback: it means
+      // "displayed," not "received." Without this, we would restart the
+      // producer too early.
       termRef.current?.write(chunk, () => {
         unacked += chunk.length;
         if (unacked >= ACK_SIZE) {
@@ -255,7 +258,7 @@ export default function TerminalView({
         )}
       </div>
 
-      {mode === 'basique' && <p className="pty-warning">{t.degraded}</p>}
+      {mode === 'basic' && <p className="pty-warning">{t.degraded}</p>}
       {exited && <p className="pty-warning">{t.exited}</p>}
 
       <div className="pty-host" ref={hostRef} />

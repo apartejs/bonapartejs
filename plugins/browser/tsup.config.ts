@@ -6,6 +6,6 @@ export default defineConfig({
   dts: false,
   clean: true,
   target: 'node20',
-  // electron est fourni par l'hôte : le bundler ne doit jamais l'embarquer.
+  // electron is provided by the host: the bundler must never bundle it.
   external: ['@aparte/bonaparte-plugin-sdk', 'electron', 'react'],
 });

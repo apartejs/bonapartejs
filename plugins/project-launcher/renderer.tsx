@@ -43,9 +43,9 @@ const LABELS = {
 } as const;
 
 /**
- * Nouvel-onglet projet-aware : les scripts du dossier ouvert, lançables d'un
- * clic. L'URL n'apparaît que lorsque le serveur l'a réellement annoncée dans
- * sa sortie — proposer un lien avant qu'il n'écoute serait deviner.
+ * Project-aware new-tab: the open folder's scripts, launchable with one
+ * click. The URL only appears once the server has actually announced it in
+ * its output — offering a link before it is listening would be a guess.
  */
 export default function ProjectLauncherView({ projectRoot, locale }: ToolingViewProps) {
   const labels = LABELS[locale] ?? LABELS.en;
@@ -65,8 +65,8 @@ export default function ProjectLauncherView({ projectRoot, locale }: ToolingView
 
   useEffect(() => {
     void refresh();
-    // Les serveurs de dev annoncent leur URL avec un délai : on relit
-    // périodiquement plutôt que de figer un état incomplet.
+    // Dev servers announce their URL with a delay: we poll periodically
+    // rather than freezing an incomplete state.
     const timer = setInterval(() => void refresh(), 2000);
     return () => clearInterval(timer);
   }, [refresh]);

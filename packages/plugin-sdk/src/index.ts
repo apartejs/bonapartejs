@@ -1,18 +1,18 @@
 /**
- * @aparte/bonaparte-plugin-sdk — ce qu'un auteur de plugin consomme.
+ * @aparte/bonaparte-plugin-sdk — what a plugin author consumes.
  *
- * Principe directeur, emprunté aux noyaux de plugins qui tiennent la route :
- * **tout ce qu'un plugin enregistre passe par son contexte, et le contexte
- * défait tout à la désactivation**. Un auteur n'a aucune liste de
- * désinscriptions à tenir — donc rien à oublier. C'est la condition pour
- * qu'une vue (voire un outil) puisse être remplacée sans redémarrer l'app.
+ * Guiding principle, borrowed from plugin kernels that hold up over time:
+ * **everything a plugin registers goes through its context, and the context
+ * undoes all of it on deactivation**. An author keeps no list of
+ * unregistrations to maintain — so nothing to forget. That's the condition
+ * for a view (or even a tool) to be replaceable without restarting the app.
  */
 
 import type { BonaparteBridge } from '@aparte/bonaparte-shared';
 
 /**
- * Le pont exposé par le preload. Le déclarer ici évite à chaque plugin de
- * redéclarer le global — et garantit que tous parlent le MÊME contrat.
+ * The bridge exposed by the preload. Declaring it here saves every plugin
+ * from redeclaring the global — and guarantees they all speak the SAME contract.
  */
 declare global {
   interface Window {
@@ -28,7 +28,7 @@ export type {
   ToolingViewContribution,
 } from '@aparte/bonaparte-shared';
 
-/** Résultat d'un outil, tel que le modèle le recevra. */
+/** A tool's result, as the model will receive it. */
 export interface PluginToolResult {
   ok: boolean;
   content: string;
@@ -36,7 +36,7 @@ export interface PluginToolResult {
 
 export interface PluginToolInvocation {
   args: Record<string, unknown>;
-  /** Racine du projet ouvert — absente si la conversation n'en a pas. */
+  /** Root of the open project — absent if the conversation has none. */
   projectRoot?: string;
   signal: AbortSignal;
 }
@@ -45,63 +45,64 @@ export type PluginToolHandler = (
   invocation: PluginToolInvocation,
 ) => Promise<PluginToolResult>;
 
-/** Commande appelable depuis la vue du plugin. */
+/** Command callable from the plugin's view. */
 export type PluginCommandHandler = (payload: unknown) => Promise<unknown> | unknown;
 
 /**
- * Contexte Node d'un plugin actif (main process). Tout enregistrement est
- * réversible : le hôte défait l'ensemble au `deactivate`.
+ * Node context of an active plugin (main process). Every registration is
+ * reversible: the host undoes all of it on `deactivate`.
  */
 export interface PluginNodeContext {
   readonly pluginId: string;
   /**
-   * Branche le handler d'un outil DÉCLARÉ dans le manifeste. Un outil non
-   * déclaré est refusé : le manifeste reste la source de vérité, lisible
-   * sans exécuter le plugin.
+   * Wires the handler for a tool DECLARED in the manifest. A tool that isn't
+   * declared is refused: the manifest stays the source of truth, readable
+   * without executing the plugin.
    */
   registerToolHandler(name: string, handler: PluginToolHandler): void;
   /**
-   * Expose une commande à la VUE du plugin. C'est le seul chemin renderer →
-   * moitié Node : il passe par l'hôte, donc il se démonte avec le plugin.
+   * Exposes a command to the plugin's VIEW. It's the only renderer →
+   * Node-half path: it goes through the host, so it unmounts with the plugin.
    */
   registerCommand(name: string, handler: PluginCommandHandler): void;
-  /** Valeur d'un réglage du plugin (portée globale). */
+  /** Value of a plugin setting (global scope). */
   getConfig<T = unknown>(key: string): T | undefined;
   /**
-   * Pousse un événement vers la VUE du plugin, sans qu'elle ait à interroger.
+   * Pushes an event to the plugin's VIEW, without it having to poll.
    *
-   * Rend `false` quand la vue est en RETARD : l'appelant doit alors cesser de
-   * lire sa source (mettre son PTY en pause, par exemple) jusqu'à ce que
-   * `onDrain` se déclenche. Même convention que les flux Node — `write()` puis
-   * `'drain'` — parce qu'elle est déjà connue.
+   * Returns `false` when the view is BEHIND: the caller must then stop
+   * reading its source (pausing its PTY, for instance) until `onDrain`
+   * fires. Same convention as Node streams — `write()` then `'drain'` —
+   * since it's already familiar.
    *
-   * Sans cette contre-pression, un producteur rapide fait perdre des données :
-   * c'est la leçon que VS Code a tirée pour son terminal.
+   * Without this back-pressure, a fast producer loses data: that's the
+   * lesson VS Code learned for its terminal.
    */
   emit(event: string, payload: unknown): boolean;
-  /** La vue a rattrapé : le producteur peut reprendre. */
+  /** The view has caught up: the producer may resume. */
   onDrain(listener: () => void): void;
   /**
-   * Canal vers UNE instance de vue — un onglet du panneau.
+   * Channel to ONE view instance — a tab in the panel.
    *
-   * Le panneau permet d'ouvrir plusieurs onglets du même type : deux
-   * terminaux, trois navigateurs. La contre-pression est donc comptée par
-   * instance, sinon un onglet qui déborde figerait ses voisins. Un plugin
-   * multi-instances ouvre un canal par session et le garde à côté d'elle.
+   * The panel allows opening several tabs of the same type: two terminals,
+   * three browsers. Back-pressure is therefore counted per instance,
+   * otherwise one overflowing tab would freeze its neighbors. A
+   * multi-instance plugin opens one channel per session and keeps it
+   * alongside it.
    */
   channel(instanceId: string): PluginInstanceChannel;
-  /** Nettoyage supplémentaire à exécuter au démontage. */
+  /** Extra cleanup to run on unmount. */
   onDispose(dispose: () => void | Promise<void>): void;
-  /** Journalise en préfixant par l'id du plugin. */
+  /** Logs, prefixed with the plugin's id. */
   log(message: string): void;
 }
 
-/** Point d'entrée Node d'un plugin : `export default definePlugin({...})`. */
-/** Canal vers une instance de vue. Même contrat que `emit`/`onDrain`, ciblé. */
+/** Node entry point of a plugin: `export default definePlugin({...})`. */
+/** Channel to a view instance. Same contract as `emit`/`onDrain`, targeted. */
 export interface PluginInstanceChannel {
   emit(event: string, payload: unknown): boolean;
   onDrain(listener: () => void): void;
-  /** L'onglet est fermé : le compteur est oublié et le canal devient muet. */
+  /** The tab is closed: the counter is forgotten and the channel goes silent. */
   dispose(): void;
 }
 
@@ -114,20 +115,20 @@ export function definePlugin(plugin: PluginNodeModule): PluginNodeModule {
 }
 
 /**
- * Ce qu'une vue reçoit du panneau d'outillage. Le panneau ne fournit que
- * l'onglet et la place : la vue est souveraine sur son contenu.
+ * What a view receives from the tooling panel. The panel only provides the
+ * tab and the space: the view is sovereign over its content.
  */
 export interface ToolingViewProps {
-  /** Projet de la conversation ouverte — absent si elle n'en a pas. */
+  /** Project of the open conversation — absent if it has none. */
   projectRoot: string | null;
-  /** Conversation ouverte, pour les vues qui s'y rattachent. */
+  /** Open conversation, for views that attach to it. */
   conversationId: string | null;
   /**
-   * Identité de CET onglet.
+   * Identity of THIS tab.
    *
-   * Le panneau permettant d'ouvrir plusieurs onglets du même type, la vue ne
-   * peut plus supposer qu'elle est seule : elle passe cet identifiant à chaque
-   * commande, et ne retient que les événements qui le portent.
+   * Since the panel allows opening several tabs of the same type, the view
+   * can no longer assume it's alone: it passes this identifier with every
+   * command, and only keeps the events that carry it.
    */
   instanceId: string;
   locale: 'fr' | 'en';

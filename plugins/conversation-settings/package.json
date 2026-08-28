@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "echo \"vue rendue par le bundle de l'app (import.meta.glob)\"",
+    "build": "echo \"view bundled with the app (import.meta.glob)\"",
     "typecheck": "echo ok",
     "test": "echo ok"
   },

@@ -1,30 +1,30 @@
 /**
- * Terminal — moitié Node.
+ * Terminal — Node half.
  *
- * Un VRAI pseudo-terminal via `node-pty` : programmes interactifs, couleurs,
- * taille de fenêtre, plein écran. On ne filtre PLUS les séquences ANSI — c'est
- * xterm.js qui les interprète côté vue. Les retirer, c'était afficher du texte
- * en prétendant que c'était un terminal.
+ * A REAL pseudo-terminal via `node-pty`: interactive programs, colors,
+ * window size, full screen. We no longer filter ANSI sequences — it's
+ * xterm.js that interprets them on the view side. Stripping them meant
+ * displaying text while pretending it was a terminal.
  *
- * `node-pty` est un binding natif. Vérifié le 2026-08-20 : il charge sous
- * Electron 43 SANS recompilation (ABI compatible, ConPTY livré avec le
- * paquet). Le repli reste là pour les machines où il manquerait, mais il est
- * annoncé comme dégradé, pas présenté comme un terminal.
+ * `node-pty` is a native binding. Verified on 2026-08-20: it loads under
+ * Electron 43 WITHOUT recompilation (ABI compatible, ConPTY shipped with the
+ * package). The fallback stays in place for machines where it might be
+ * missing, but it is announced as degraded, not presented as a terminal.
  *
- * Transport : les données sont POUSSÉES vers la vue (`ctx.emit`), avec la
- * contre-pression du SDK — reprise du modèle de VS Code. `emit` rend `false`
- * quand la vue est en retard : on cesse alors de lire le PTY, et on reprend sur
- * `onDrain`. Rien n'est perdu, parce que le producteur s'arrête au lieu qu'un
- * tampon s'élague.
+ * Transport: data is PUSHED to the view (`ctx.emit`), with the SDK's
+ * back-pressure — borrowed from VS Code's model. `emit` returns `false`
+ * when the view is behind: we then stop reading the PTY, and resume on
+ * `onDrain`. Nothing is lost, because the producer stops instead of a
+ * buffer being trimmed.
  *
- * Un terminal PAR ONGLET : le panneau d'outillage permet d'en ouvrir autant
- * qu'on veut, chacun avec son shell, son dossier et son propre canal de
- * contre-pression — un `cat` d'un gros fichier ne doit pas figer le voisin.
- * L'`instanceId` que la vue transmet EST l'identité de la session.
+ * One terminal PER TAB: the tooling panel allows opening as many as
+ * wanted, each with its own shell, its own folder and its own
+ * back-pressure channel — a `cat` of a big file must not freeze its
+ * neighbor. The `instanceId` the view passes IS the session's identity.
  *
- * Reste une différence avec VS Code, assumée : leur PTY tourne dans un PROCESS
- * dédié, donc un crash natif n'emporte pas la fenêtre. Chez nous il vit dans le
- * main process.
+ * One difference from VS Code remains, and it's accepted: their PTY runs
+ * in a dedicated PROCESS, so a native crash doesn't take down the window.
+ * Here it lives in the main process.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -37,9 +37,9 @@ import {
 } from '@aparte/bonaparte-plugin-sdk';
 
 /**
- * Historique conservé pour la RÉOUVERTURE de la vue : quand l'onglet se
- * remonte, il faut réafficher ce qui a défilé. Ce n'est plus un tampon de
- * transport — les données partent par `emit` au fil de l'eau.
+ * History kept for REOPENING the view: when the tab remounts, whatever
+ * scrolled by must be redisplayed. It is no longer a transport buffer —
+ * data goes out via `emit` as it streams.
  */
 const MAX_HISTORY_CHARS = 200_000;
 
@@ -51,10 +51,10 @@ interface PtyLike {
   onExit(listener: (code: number | null) => void): void;
 }
 
-type Mode = 'pty' | 'basique';
+type Mode = 'pty' | 'basic';
 
 export interface ShellChoice {
-  /** Identifiant stable, utilisé par la vue pour demander ce shell. */
+  /** Stable identifier, used by the view to request this shell. */
   id: string;
   label: string;
   command: string;
@@ -62,10 +62,10 @@ export interface ShellChoice {
 }
 
 /**
- * Shells réellement présents sur la machine.
+ * Shells actually present on the machine.
  *
- * On ne propose que ce qui existe : une liste qui offre « pwsh » sur une
- * machine sans PowerShell 7 promet un terminal qui ne s'ouvrira pas.
+ * We only offer what exists: a list that offers "pwsh" on a machine
+ * without PowerShell 7 promises a terminal that won't open.
  */
 function availableShells(): ShellChoice[] {
   const found: ShellChoice[] = [];
@@ -76,7 +76,7 @@ function availableShells(): ShellChoice[] {
     if (existsSync(powershell)) {
       found.push({ id: 'powershell', label: 'Windows PowerShell', command: powershell, args: [] });
     }
-    // PowerShell 7+ s'installe hors System32 et n'est pas toujours là.
+    // PowerShell 7+ installs outside System32 and isn't always there.
     for (const candidate of [
       join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'PowerShell', '7', 'pwsh.exe'),
     ]) {
@@ -86,7 +86,7 @@ function availableShells(): ShellChoice[] {
     }
     const cmd = process.env['COMSPEC'] ?? join(system, 'System32', 'cmd.exe');
     if (existsSync(cmd)) {
-      found.push({ id: 'cmd', label: 'Invite de commandes', command: cmd, args: [] });
+      found.push({ id: 'cmd', label: 'Command Prompt', command: cmd, args: [] });
     }
     for (const candidate of [
       join(process.env['ProgramFiles'] ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
@@ -125,7 +125,7 @@ function availableShells(): ShellChoice[] {
   return found;
 }
 
-/** Enveloppe un process ordinaire dans la même forme qu'un PTY. */
+/** Wraps an ordinary process in the same shape as a PTY. */
 function wrapChild(child: ChildProcess): PtyLike {
   return {
     write: (data) => child.stdin?.write(data),
@@ -138,7 +138,7 @@ function wrapChild(child: ChildProcess): PtyLike {
   };
 }
 
-/** Le vrai PTY s'il est chargeable ; sinon `null`, sans faire de bruit. */
+/** The real PTY if it can be loaded; otherwise `null`, without making noise. */
 async function tryPty(
   shell: ShellChoice,
   cwd: string,
@@ -146,8 +146,8 @@ async function tryPty(
   rows: number,
 ): Promise<PtyLike | null> {
   try {
-    // Spécificateur calculé : le compilateur ne doit pas exiger que le paquet
-    // existe, puisque tout l'intérêt est qu'il puisse manquer.
+    // Computed specifier: the compiler must not require the package to
+    // exist, since the whole point is that it may be missing.
     const optional = 'node-pty';
     const nodePty = (await import(optional)) as unknown as {
       spawn: (
@@ -183,30 +183,30 @@ async function tryPty(
 
 interface Session {
   pty: PtyLike;
-  /** Canal de contre-pression PROPRE à cet onglet. */
+  /** Back-pressure channel SPECIFIC to this tab. */
   channel: PluginInstanceChannel;
   mode: Mode;
   shellId: string;
-  /** Historique brut, pour réafficher à la réouverture de l'onglet. */
+  /** Raw history, to redisplay when the tab reopens. */
   history: string;
   exited: boolean;
-  /** Le PTY est-il en pause parce que la vue n'a pas suivi ? */
+  /** Is the PTY paused because the view didn't keep up? */
   paused: boolean;
-  /** Ce qui est arrivé PENDANT la pause, à pousser à la reprise. */
+  /** What arrived DURING the pause, to push on resume. */
   pending: string;
   /**
-   * L'onglet est-il DÉMONTÉ ? Le panneau ne monte que la vue active : un
-   * terminal d'arrière-plan continue de produire, mais personne ne l'affiche
-   * ni ne l'acquitte. Détaché, on n'émet plus rien et on ne garde que
-   * l'historique (borné) — sinon `pending` grossirait sans fin derrière une
-   * vue qui n'existe plus.
+   * Is the tab DETACHED? The panel only mounts the active view: a
+   * background terminal keeps producing, but nothing displays or
+   * acknowledges it. Once detached, we no longer emit anything and only
+   * keep the (bounded) history — otherwise `pending` would grow forever
+   * behind a view that no longer exists.
    */
   detached: boolean;
 }
 
 export default definePlugin({
   activate(ctx: PluginNodeContext) {
-    /** Une session par onglet ouvert, indexée par son `instanceId`. */
+    /** One session per open tab, indexed by its `instanceId`. */
     const sessions = new Map<string, Session>();
 
     const close = (instanceId: string): void => {
@@ -215,18 +215,18 @@ export default definePlugin({
       try {
         session.pty.kill();
       } catch {
-        /* déjà parti */
+        /* already gone */
       }
       session.channel.dispose();
       sessions.delete(instanceId);
     };
 
-    // Les shells meurent avec le plugin : pas de process qui traîne.
+    // Shells die with the plugin: no lingering process.
     ctx.onDispose(() => {
       for (const instanceId of [...sessions.keys()]) close(instanceId);
     });
 
-    /** L'onglet, tel que chaque commande le nomme. */
+    /** The tab, as each command names it. */
     const idOf = (payload: unknown): string =>
       typeof (payload as { instanceId?: unknown } | null)?.instanceId === 'string'
         ? (payload as { instanceId: string }).instanceId
@@ -249,12 +249,12 @@ export default definePlugin({
       const instanceId = idOf(payload);
 
       const existing = sessions.get(instanceId);
-      // Changer de shell DANS le même onglet veut dire remplacer son terminal.
+      // Changing shell WITHIN the same tab means replacing its terminal.
       if (existing && shellId && existing.shellId !== shellId) close(instanceId);
       const live = sessions.get(instanceId);
       if (live) {
-        // La vue se remonte sur une session vivante : elle se rattache et
-        // reçoit l'historique pour réafficher ce qui a défilé sans elle.
+        // The view remounts onto a live session: it reattaches and
+        // receives the history to redisplay what scrolled by without it.
         live.detached = false;
         return {
           mode: live.mode,
@@ -276,7 +276,7 @@ export default definePlugin({
       const session: Session = {
         pty,
         channel: ctx.channel(instanceId),
-        mode: real ? 'pty' : 'basique',
+        mode: real ? 'pty' : 'basic',
         shellId: shell.id,
         history: '',
         exited: false,
@@ -286,19 +286,19 @@ export default definePlugin({
       };
 
       /**
-       * Pousse vers CET onglet, et s'arrête s'il est en retard.
+       * Pushes to THIS tab, and stops if it's behind.
        *
-       * node-pty n'expose pas de pause : on ne peut pas cesser de recevoir. On
-       * accumule donc dans `pending` — mais borné par la contre-pression, qui
-       * empêche l'écart de grandir indéfiniment, là où l'ancien tampon
-       * élaguait silencieusement.
+       * node-pty exposes no pause: we cannot stop receiving. So we
+       * accumulate into `pending` — but bounded by the back-pressure,
+       * which keeps the gap from growing forever, unlike the old buffer
+       * that trimmed silently.
        */
       const push = (data: string): void => {
         session.history += data;
         if (session.history.length > MAX_HISTORY_CHARS) {
           session.history = session.history.slice(session.history.length - MAX_HISTORY_CHARS);
         }
-        // Onglet démonté : l'historique suffit, il sera rejoué au remontage.
+        // Tab detached: the history is enough, it will be replayed on remount.
         if (session.detached) {
           session.pending = '';
           return;
@@ -323,7 +323,7 @@ export default definePlugin({
         session.channel.emit('exit', null);
       });
       sessions.set(instanceId, session);
-      ctx.log(`${shell.label} démarré (${session.mode}) dans ${workdir}`);
+      ctx.log(`${shell.label} started (${session.mode}) in ${workdir}`);
       return { mode: session.mode, shellId: shell.id, history: '', exited: false };
     });
 
@@ -343,9 +343,10 @@ export default definePlugin({
     });
 
     /**
-     * La vue s'en va sans que l'onglet soit fermé (on passe à un autre onglet).
-     * Le shell CONTINUE de tourner — c'est ce qu'on attend d'un terminal — mais
-     * il cesse d'émettre vers une vue qui n'écoute plus.
+     * The view leaves without the tab being closed (switching to another
+     * tab). The shell KEEPS running — that's what's expected of a
+     * terminal — but it stops emitting toward a view that's no longer
+     * listening.
      */
     ctx.registerCommand('detach', async (payload) => {
       const session = sessions.get(idOf(payload));

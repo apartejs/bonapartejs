@@ -1,10 +1,10 @@
 /**
- * Lanceur de projet — moitié Node.
+ * Project launcher — Node half.
  *
- * Deux services : lister les scripts du projet ouvert (pour la vue ET pour
- * l'agent), et en lancer un en surveillant sa sortie pour y repérer l'URL du
- * serveur de développement. Détecter le port plutôt que de le deviner évite
- * de proposer une adresse qui n'écoute pas.
+ * Two services: list the open project's scripts (for the view AND for the
+ * agent), and launch one while watching its output to spot the dev server's
+ * URL. Detecting the port rather than guessing it avoids offering an address
+ * that isn't listening.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -25,10 +25,10 @@ interface RunningScript {
   exitCode: number | null;
 }
 
-/** Première URL http(s) annoncée par un serveur de dev dans sa sortie. */
+/** First http(s) URL announced by a dev server in its output. */
 const URL_PATTERN = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?[^\s"']*/i;
 
-/** Sorties gardées par script : de quoi diagnostiquer, pas un journal complet. */
+/** Output kept per script: enough to diagnose, not a full log. */
 const MAX_LINES = 200;
 
 async function readScripts(projectRoot: string): Promise<ScriptEntry[]> {
@@ -44,7 +44,7 @@ async function readScripts(projectRoot: string): Promise<ScriptEntry[]> {
   }
 }
 
-/** Gestionnaire de paquets déduit du lockfile — pas d'hypothèse gratuite. */
+/** Package manager inferred from the lockfile — no free-standing assumption. */
 async function detectPackageManager(projectRoot: string): Promise<string> {
   const lockfiles: [string, string][] = [
     ['pnpm-lock.yaml', 'pnpm'],
@@ -57,7 +57,7 @@ async function detectPackageManager(projectRoot: string): Promise<string> {
       await readFile(join(projectRoot, file), 'utf8');
       return manager;
     } catch {
-      /* lockfile suivant */
+      /* next lockfile */
     }
   }
   return 'npm';
@@ -72,14 +72,14 @@ export default definePlugin({
         try {
           entry.child.kill();
         } catch {
-          /* déjà parti */
+          /* already gone */
         }
       }
       running.clear();
     };
 
-    // Les process lancés meurent avec le plugin : rien ne doit survivre à son
-    // démontage, pas plus qu'à la fermeture de l'app.
+    // Spawned processes die with the plugin: nothing should survive its
+    // teardown, any more than it survives the app closing.
     ctx.onDispose(stopAll);
 
     ctx.registerCommand('scripts', async (payload) => {
@@ -102,7 +102,7 @@ export default definePlugin({
         projectRoot?: string;
         script?: string;
       };
-      if (!projectRoot || !script) throw new Error('projectRoot et script sont requis');
+      if (!projectRoot || !script) throw new Error('projectRoot and script are required');
       if (running.has(script)) return { alreadyRunning: true };
 
       const manager = await detectPackageManager(projectRoot);
@@ -150,14 +150,14 @@ export default definePlugin({
       try {
         entry.child.kill();
       } catch {
-        /* déjà parti */
+        /* already gone */
       }
       running.delete(entry.name);
       return { stopped: true };
     });
 
-    // Le même savoir, offert à l'agent : il n'a plus à deviner les commandes
-    // du projet ni à lire package.json lui-même.
+    // The same knowledge, offered to the agent: it no longer has to guess
+    // the project's commands nor read package.json itself.
     ctx.registerToolHandler('list_project_scripts', async ({ projectRoot }) => {
       if (!projectRoot) {
         return {

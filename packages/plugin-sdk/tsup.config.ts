@@ -7,6 +7,6 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   target: 'node20',
-  // React vient de l'hôte : deux copies casseraient les hooks.
+  // React comes from the host: two copies would break the hooks.
   external: ['react', 'react/jsx-runtime'],
 });

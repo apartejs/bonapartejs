@@ -1,22 +1,22 @@
 /**
- * @aparte/bonaparte-shared — types et schémas partagés entre le harness
- * (@aparte/bonaparte-core), l'app Electron et les plugins.
+ * @aparte/bonaparte-shared — types and schemas shared between the harness
+ * (@aparte/bonaparte-core), the Electron app and the plugins.
  *
- * Zéro dépendance workspace : ce paquet est une feuille du graphe.
+ * Zero workspace dependency: this package is a leaf of the graph.
  */
 
-/** Contrat de plugin : manifeste déclaratif et statuts. */
+/** Plugin contract: declarative manifest and statuses. */
 export * from './plugins.js';
-// Un `export *` ne met rien dans la portée locale : le contrat du pont, plus
-// bas, a besoin du type lui-même.
+// An `export *` puts nothing in local scope: the bridge contract, further
+// down, needs the type itself.
 import type { PluginStatusDto } from './plugins.js';
 
 export * from './locale.js';
 import type { BonaparteLocale } from './locale.js';
 
 /**
- * Canaux IPC main↔renderer. Un seul endroit fait autorité : le preload et le
- * main importent ces constantes, jamais de littéraux en double.
+ * main↔renderer IPC channels. A single place has authority: the preload and
+ * the main import these constants, never duplicate literals.
  */
 export const IPC = {
   appVersion: 'app.version',
@@ -56,7 +56,7 @@ export const IPC = {
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   evApproval: 'ev.approval',
-  /** Événements poussés main → renderer. */
+  /** Events pushed main → renderer. */
   evAgent: 'ev.agent',
   evPlugin: 'ev.plugin',
   evBackendStatus: 'ev.backendStatus',
@@ -65,9 +65,8 @@ export const IPC = {
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
 
 /**
- * Config du MOTEUR llama.cpp (persistée dans global.json). Le modèle n'en
- * fait pas partie : c'est une propriété de chaque conversation, choisie
- * depuis l'inventaire.
+ * llama.cpp ENGINE config (persisted in global.json). The model is not part
+ * of it: it's a property of each conversation, chosen from the inventory.
  */
 export type BackendConfigDto =
   | { mode: 'remote'; url: string }
@@ -78,10 +77,10 @@ export type BackendConfigDto =
     };
 
 /**
- * Ce qu'une URL s'est révélée être. Un seul protocole : bonaparte ne pilote
- * que llama.cpp, seul à offrir la persistance de contexte qui justifie le
- * produit. `remote` n'est pas un autre fournisseur — c'est le même serveur,
- * simplement pas lancé par nous.
+ * What a URL turned out to be. A single protocol: bonaparte only drives
+ * llama.cpp, the only one to offer the context persistence that justifies
+ * the product. `remote` is not another provider — it's the same server,
+ * simply not launched by us.
  */
 export interface EndpointProbeDto {
   protocol: 'llamacpp';
@@ -90,7 +89,7 @@ export interface EndpointProbeDto {
   totalSlots?: number;
 }
 
-/** Modèle découvert par l'inventaire (scan des emplacements connus). */
+/** Model discovered by the inventory (scan of known locations). */
 export interface ModelInfoDto {
   path: string;
   name: string;
@@ -101,27 +100,27 @@ export interface ModelInfoDto {
 
 export interface AppConfigDto {
   backend?: BackendConfigDto;
-  /** Modèle par défaut des nouvelles conversations (réglable dans Réglages). */
+  /** Default model for new conversations (configurable in Settings). */
   defaultModel?: {
     path: string;
     nCtx?: number;
   };
   /**
-   * Historique des dossiers récents — de l'app, pas d'une conversation. Le
-   * projet lui-même appartient à la conversation ouverte : on doit pouvoir
-   * discuter sans dossier, et tenir deux conversations sur deux dossiers.
+   * History of recent folders — of the app, not of a conversation. The
+   * project itself belongs to the open conversation: it must be possible to
+   * chat without a folder, and hold two conversations on two folders.
    */
   recentProjects?: string[];
-  /** Dernière conversation ouverte, rouverte au démarrage suivant. */
+  /** Last open conversation, reopened on the next startup. */
   currentConversationId?: string;
   mode?: PlayModeDto;
-  /** Réglages globaux (échantillonnage + lancement), résolus par couches. */
+  /** Global settings (sampling + launch), resolved in layers. */
   settings?: Record<string, unknown>;
-  /** Langue de l'utilisateur — pilote l'UI ET la langue de réponse du modèle. */
+  /** User's language — drives the UI AND the model's reply language. */
   locale?: BonaparteLocale;
 }
 
-/** Modes de jeu (lexique théâtre) — cf. moteur de permissions. */
+/** Play modes (theater vocabulary) — see the permissions engine. */
 export type PlayModeDto = 'lecture' | 'repetition' | 'plume' | 'impro';
 
 export interface ProjectDto {
@@ -131,11 +130,11 @@ export interface ProjectDto {
 }
 
 /**
- * Un projet : une entité NOMMÉE portant un ensemble ORDONNÉ de racines.
+ * A project: a NAMED entity carrying an ORDERED set of roots.
  *
- * Le projet définit ce que le modèle peut VOIR ; la conversation définit
- * comment un tour s'exécute. La première racine est le défaut des chemins
- * relatifs — l'ordre est donc porteur de sens, pas cosmétique.
+ * The project defines what the model can SEE; the conversation defines how
+ * a turn executes. The first root is the default for relative paths — so
+ * the order carries meaning, it isn't cosmetic.
  */
 export interface ProjectSummaryDto {
   id: string;
@@ -143,26 +142,26 @@ export interface ProjectSummaryDto {
   roots: string[];
 }
 
-/** Une conversation dans la liste du menu — assez pour l'afficher et choisir. */
+/** A conversation in the menu list — enough to display and pick it. */
 export interface ConversationSummaryDto {
   id: string;
   title: string;
   updatedAt: string;
-  /** Projet de rattachement — absent = « sans projet », cas licite. */
+  /** Attached project — absent = "no project", a valid case. */
   projectId?: string;
-  /** Nom du projet, si la conversation en a un. */
+  /** Project name, if the conversation has one. */
   projectName?: string;
-  /** Modèle épinglé, s'il l'est. */
+  /** Pinned model, if there is one. */
   modelName?: string;
-  /** Un état KV existe sur disque : la reprise sera instantanée. */
+  /** A KV state exists on disk: resuming will be instant. */
   hasKvState: boolean;
 }
 
-/** Comment le menu latéral s'organise — préférence persistée en global. */
+/** How the side menu is organized — preference persisted globally. */
 export type SidebarGroupingDto = 'project' | 'flat';
 export type SidebarSortDto = 'updated' | 'title';
 
-/** Un réglage résolu, tel que l'UI l'affiche : valeur ET provenance. */
+/** A resolved setting, as the UI displays it: value AND provenance. */
 export interface ResolvedSettingDto {
   key: string;
   label: string;
@@ -174,17 +173,17 @@ export interface ResolvedSettingDto {
   step?: number;
   advanced?: boolean;
   value: unknown;
-  /** Couche qui fournit la valeur : 'default' | 'global' | 'conversation'. */
+  /** Layer that provides the value: 'default' | 'global' | 'conversation'. */
   from: string;
-  /** La portée affichée surcharge-t-elle explicitement ce réglage ? */
+  /** Does the displayed scope explicitly override this setting? */
   overridden: boolean;
-  /** Changer ce réglage invalide les états KV sauvegardés. */
+  /** Changing this setting invalidates saved KV states. */
   invalidatesKv: boolean;
 }
 
 export type SettingScopeDto = 'global' | 'conversation';
 
-/** Demande d'autorisation poussée au renderer pendant la boucle. */
+/** Approval request pushed to the renderer during the loop. */
 export interface ApprovalRequestDto {
   id: string;
   tool: string;
@@ -195,7 +194,7 @@ export interface ApprovalRequestDto {
 export interface ApprovalResponseDto {
   id: string;
   granted: boolean;
-  /** Mémoriser la règle pour ce projet (« toujours autoriser »). */
+  /** Remember the rule for this project ("always allow"). */
   always?: boolean;
 }
 
@@ -221,7 +220,7 @@ export interface CompletionStatsDto {
   progress?: PromptProgressDto;
 }
 
-/** Événement de flux agent, sérialisé sur l'IPC. */
+/** Agent stream event, serialized over the IPC. */
 export type AgentEventDto =
   | { type: 'token'; text: string }
   | { type: 'thinking'; text: string }
@@ -244,14 +243,14 @@ export interface ConversationOpenResultDto {
   conversationId: string;
   events: ConversationEventDto[];
   restore: RestoreDto;
-  /** Modèle épinglé à la conversation. */
+  /** Model pinned to the conversation. */
   modelPath?: string;
   modelName?: string;
-  /** Taille de contexte de la conversation — dénominateur de la jauge. */
+  /** Context size of the conversation — denominator of the gauge. */
   nCtx?: number;
 }
 
-/** L'ouverture exige un choix de modèle (nouvelle conversation en managé). */
+/** Opening requires a model choice (new conversation in managed mode). */
 export interface NeedsModelDto {
   needsModel: true;
   conversationId: string;
@@ -259,7 +258,7 @@ export interface NeedsModelDto {
 
 export type ConversationOpenReplyDto = ConversationOpenResultDto | NeedsModelDto;
 
-/** Pré-remplissage du panneau de configuration (détection machine). */
+/** Pre-fill for the configuration panel (machine detection). */
 export interface SetupSuggestionDto {
   binPath?: string;
 }
@@ -267,71 +266,71 @@ export interface SetupSuggestionDto {
 export type PickFileKind = 'binary' | 'gguf';
 
 /**
- * Contrat du pont preload → renderer (window.bonaparte). Le preload
- * l'implémente, le renderer le consomme — jamais d'ipcRenderer brut exposé.
+ * Contract of the preload → renderer bridge (window.bonaparte). The preload
+ * implements it, the renderer consumes it — never a raw ipcRenderer exposed.
  */
 export interface BonaparteBridge {
   suggestSetup(): Promise<SetupSuggestionDto>;
   pickFile(kind: PickFileKind): Promise<string | null>;
   scanModels(): Promise<ModelInfoDto[]>;
-  /** Vérifie qu'un llama-server répond bien à cette URL (mode distant). */
+  /** Checks that a llama-server does respond at this URL (remote mode). */
   probeEndpoint(url: string): Promise<EndpointProbeDto | null>;
-  /** N'ouvre que des URLs https d'une liste blanche (main process). */
+  /** Only opens https URLs from an allowlist (main process). */
   openExternal(url: string): Promise<void>;
   getVersion(): Promise<string>;
   getConfig(): Promise<AppConfigDto>;
   setConfig(config: AppConfigDto): Promise<void>;
   getBackendStatus(): Promise<BackendStatusDto>;
   startBackend(config: BackendConfigDto): Promise<BackendStatusDto>;
-  /** Enregistre le moteur sans s'y connecter (démarrage à froid). */
+  /** Registers the engine without connecting to it (cold start). */
   registerBackend(config: BackendConfigDto): Promise<void>;
   /**
-   * Historique d'une conversation, SANS réveiller le moteur. C'est le chemin
-   * de la consultation et de la bascule : lire n'a jamais besoin du cache KV,
-   * qui ne sert qu'à la génération suivante.
+   * History of a conversation, WITHOUT waking the engine. This is the path
+   * for viewing and switching: reading never needs the KV cache, which only
+   * serves the next generation.
    */
   conversationHistory(select?: string): Promise<ConversationOpenReplyDto>;
-  /** Toutes les conversations, la plus récemment touchée en tête. */
+  /** All conversations, the most recently touched one first. */
   listConversations(): Promise<ConversationSummaryDto[]>;
   /**
-   * Crée une conversation et rend son id. Le projet est optionnel : discuter
-   * sans dossier est un usage normal, pas un état dégradé.
+   * Creates a conversation and returns its id. The project is optional:
+   * chatting without a folder is normal usage, not a degraded state.
    */
   createConversation(projectRoot?: string): Promise<string>;
   renameConversation(id: string, title: string): Promise<void>;
-  /** Plugins découverts, avec leurs vues et leurs erreurs éventuelles. */
+  /** Discovered plugins, with their views and any errors. */
   listPlugins(): Promise<PluginStatusDto[]>;
   /**
-   * Démonte puis re-active tous les plugins, sans redémarrer l'app — donc sans
-   * recharger le modèle. Rend l'inventaire à jour.
+   * Unmounts then re-activates all plugins, without restarting the app —
+   * so without reloading the model. Returns the up-to-date inventory.
    */
   reloadPlugins(): Promise<PluginStatusDto[]>;
   /**
-   * S'abonne aux événements POUSSÉS par la moitié Node d'un plugin.
+   * Subscribes to events PUSHED by a plugin's Node half.
    *
-   * La vue doit acquitter ce qu'elle a consommé (`ackPluginData`) : sans
-   * acquittement, l'hôte met le producteur en pause au seuil haut et il ne
-   * repart jamais. C'est le prix de ne rien perdre.
+   * The view must acknowledge what it has consumed (`ackPluginData`):
+   * without acknowledgment, the host pauses the producer at the high
+   * threshold and it never resumes. That's the price of losing nothing.
    */
   onPluginEvent(
     listener: (e: {
       pluginId: string;
-      /** Instance de vue visée — chaîne vide pour un plugin à vue unique. */
+      /** Targeted view instance — empty string for a single-view plugin. */
       instanceId: string;
       event: string;
       payload: unknown;
     }) => void,
   ): () => void;
   /**
-   * Déclare `bytes` octets consommés par UNE instance, pour la laisser
-   * repartir. Les autres onglets ne sont pas touchés.
+   * Declares `bytes` bytes consumed by ONE instance, to let it resume.
+   * The other tabs are not affected.
    */
   ackPluginData(pluginId: string, instanceId: string, bytes: number): void;
-  /** Appelle une commande de la moitié Node d'un plugin, depuis sa vue. */
+  /** Calls a command on a plugin's Node half, from its view. */
   invokePlugin(pluginId: string, command: string, payload?: unknown): Promise<unknown>;
-  /** Réglages d'une portée, valeurs résolues et provenance comprises. */
+  /** Settings for a scope, resolved values including provenance. */
   getSettings(scope: SettingScopeDto): Promise<ResolvedSettingDto[]>;
-  /** Pose une surcharge ; `undefined` la retire et rend l'héritage. */
+  /** Sets an override; `undefined` removes it and restores inheritance. */
   setSetting(scope: SettingScopeDto, key: string, value: unknown): Promise<void>;
   openConversation(
     id?: string,
@@ -343,20 +342,20 @@ export interface BonaparteBridge {
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;
   onBackendStatus(listener: (status: BackendStatusDto) => void): () => void;
 
-  /** Ouvre un dossier de projet (dialogue natif) ; null si annulé. */
+  /** Opens a project folder (native dialog); null if canceled. */
   openProject(): Promise<ProjectDto | null>;
   currentProject(): Promise<ProjectDto | null>;
 
-  /** Tous les projets, pour grouper le menu et proposer un déplacement. */
+  /** All projects, to group the menu and offer a move. */
   listProjects(): Promise<ProjectSummaryDto[]>;
   createProject(name: string, roots?: string[]): Promise<ProjectSummaryDto>;
   renameProject(id: string, name: string): Promise<ProjectSummaryDto>;
-  /** Remplace les racines EN CONSERVANT l'ordre donné (il est sémantique). */
+  /** Replaces the roots WHILE KEEPING the given order (it is meaningful). */
   setProjectRoots(id: string, roots: string[]): Promise<ProjectSummaryDto>;
   removeProject(id: string): Promise<void>;
-  /** Sélecteur de dossier, sans effet de bord : rend juste le chemin choisi. */
+  /** Folder picker, with no side effect: just returns the chosen path. */
   pickDirectory(): Promise<string | null>;
-  /** Rattache une conversation à un projet, ou l'en détache avec `null`. */
+  /** Attaches a conversation to a project, or detaches it with `null`. */
   setConversationProject(
     conversationId: string,
     projectId: string | null,

@@ -1,31 +1,31 @@
 /**
- * Navigateur outillé — moitié Node (main process).
+ * Tooled browser — Node half (main process).
  *
- * Une `WebContentsView` native est posée par-dessus la fenêtre, à l'endroit
- * que la vue React lui indique. Ce n'est pas un élément du DOM : rien ne la
- * positionne toute seule, c'est au renderer d'envoyer son rectangle à chaque
- * redimensionnement — sinon la page flotte au mauvais endroit.
+ * A native `WebContentsView` is placed on top of the window, at the spot
+ * the React view tells it to. It's not a DOM element: nothing positions it
+ * on its own, it's up to the renderer to send its rectangle on every
+ * resize — otherwise the page floats in the wrong place.
  *
- * L'intérêt n'est pas d'avoir un navigateur, c'est que l'AGENT puisse lire ce
- * qu'il affiche : console, DOM, capture. Un aller-retour « lance le serveur,
- * ouvre la page, dis-moi l'erreur » devient possible sans copier-coller.
+ * The point isn't to have a browser, it's for the AGENT to be able to read
+ * what it displays: console, DOM, capture. A round trip like "start the
+ * server, open the page, tell me the error" becomes possible without
+ * copy-pasting.
  *
- * Une page PAR ONGLET du panneau. Comme la vue native se pose PAR-DESSUS la
- * fenêtre, la page d'un onglet inactif recouvrirait l'onglet visible : on la
- * retire donc de la fenêtre au démontage, sans la détruire — l'onglet garde
- * son URL, sa console et son historique de navigation.
+ * One page PER TAB of the panel. Since the native view sits ON TOP OF the
+ * window, an inactive tab's page would cover the visible tab: so it gets
+ * removed from the window on teardown, without being destroyed — the tab
+ * keeps its URL, its console and its navigation history.
  *
- * RÈGLE : une page ne rejoint la fenêtre qu'une fois qu'on sait OÙ la mettre.
- * Une vue posée sans rectangle occupe toute la fenêtre et masque l'application
- * entière — c'est arrivé, et ça s'est vu : une URL qui ne se chargeait pas
- * faisait échouer la commande d'ouverture, donc la vue React n'apprenait
- * jamais qu'elle devait envoyer son rectangle, et la page restait sur toute la
- * fenêtre. Poser la vue seulement quand un rectangle arrive supprime cette
- * classe de panne au lieu de la rattraper.
+ * RULE: a page only joins the window once we know WHERE to put it. A view
+ * placed without a rectangle takes over the whole window and hides the
+ * entire application — this happened, and it showed: a URL that failed to
+ * load made the open command fail, so the React view never learned it had
+ * to send its rectangle, and the page stayed over the whole window. Placing
+ * the view only when a rectangle arrives removes this whole class of
+ * failure instead of catching it after the fact.
  *
- * Les outils de l'agent visent la page VISIBLE (le dernier onglet attaché) :
- * c'est ce que « la page ouverte dans le navigateur latéral » veut dire pour
- * l'utilisateur qui la regarde.
+ * The agent's tools target the VISIBLE page (the last attached tab): that's
+ * what "the page open in the side browser" means to the user looking at it.
  */
 
 import { writeFile } from 'node:fs/promises';
@@ -34,9 +34,9 @@ import { join } from 'node:path';
 import { BrowserWindow, WebContentsView } from 'electron';
 import { definePlugin, type PluginNodeContext } from '@aparte/bonaparte-plugin-sdk';
 
-/** Messages de console conservés : de quoi diagnostiquer, pas un journal. */
+/** Console messages kept: enough to diagnose, not a log. */
 const MAX_MESSAGES = 200;
-/** Ce qu'on rend du DOM — au-delà, on tronque en le disant. */
+/** How much of the DOM we return — beyond that, we truncate and say so. */
 const MAX_DOM_CHARS = 8_000;
 
 interface ConsoleEntry {
@@ -51,20 +51,20 @@ interface Page {
   view: WebContentsView;
   url: string | null;
   messages: ConsoleEntry[];
-  /** La vue native est-elle actuellement posée sur la fenêtre ? */
+  /** Is the native view currently placed on the window? */
   attached: boolean;
 }
 
 export default definePlugin({
   activate(ctx: PluginNodeContext) {
-    /** Une page par onglet, indexée par son `instanceId`. */
+    /** One page per tab, indexed by its `instanceId`. */
     const pages = new Map<string, Page>();
-    /** L'onglet visible — la cible des outils de l'agent. */
+    /** The visible tab — the target of the agent's tools. */
     let visibleId: string | null = null;
 
     const host = (): BrowserWindow | null => BrowserWindow.getAllWindows()[0] ?? null;
 
-    /** L'onglet, tel que chaque commande le nomme. */
+    /** The tab, as each command names it. */
     const idOf = (payload: unknown): string =>
       typeof (payload as { instanceId?: unknown } | null)?.instanceId === 'string'
         ? (payload as { instanceId: string }).instanceId
@@ -75,7 +75,7 @@ export default definePlugin({
       try {
         host()?.contentView.removeChildView(page.view);
       } catch {
-        /* fenêtre déjà partie */
+        /* window already gone */
       }
       page.attached = false;
     };
@@ -94,8 +94,8 @@ export default definePlugin({
       if (visibleId === instanceId) visibleId = null;
     };
 
-    // Les vues natives meurent avec le plugin : sinon elles resteraient posées
-    // sur la fenêtre, sans plus personne pour les déplacer ni les fermer.
+    // Native views die with the plugin: otherwise they would stay placed
+    // on the window, with no one left to move or close them.
     ctx.onDispose(() => {
       for (const instanceId of [...pages.keys()]) destroy(instanceId);
     });
@@ -109,16 +109,16 @@ export default definePlugin({
 
       const created = new WebContentsView({
         webPreferences: {
-          // Une page tierce n'a aucune raison d'accéder à Node : le
-          // navigateur est un outil d'observation, pas une porte.
+          // A third-party page has no reason to access Node: the
+          // browser is an observation tool, not a door.
           nodeIntegration: false,
           contextIsolation: true,
           sandbox: true,
         },
       });
-      // Rectangle vide d'emblée : si quoi que ce soit posait cette vue sur la
-      // fenêtre avant que la vue React n'ait donné sa place, elle serait
-      // invisible plutôt qu'envahissante.
+      // Empty rectangle from the start: if anything placed this view on
+      // the window before the React view had given it a place, it would
+      // be invisible rather than invasive.
       created.setBounds({ x: 0, y: 0, width: 0, height: 0 });
       const page: Page = { view: created, url: null, messages: [], attached: false };
       created.webContents.on('console-message', (_event, level, message) => {
@@ -130,15 +130,15 @@ export default definePlugin({
         if (page.messages.length > MAX_MESSAGES) page.messages.shift();
       });
       pages.set(instanceId, page);
-      // Pas d'`attach` ici : c'est l'arrivée d'un rectangle qui pose la vue.
+      // No `attach` here: it's the arrival of a rectangle that places the view.
       visibleId = instanceId;
       return page;
     };
 
     /**
-     * La page que l'agent observe : celle qu'on regarde. À défaut d'onglet
-     * visible, la seule ouverte — au-delà, l'ambiguïté est réelle et on le dit
-     * plutôt que de tirer au sort.
+     * The page the agent observes: the one being looked at. Absent a
+     * visible tab, the only open one — beyond that, the ambiguity is real
+     * and we say so rather than pick one at random.
      */
     const agentPage = (): Page | null => {
       if (visibleId) return pages.get(visibleId) ?? null;
@@ -158,14 +158,14 @@ export default definePlugin({
 
     ctx.registerCommand('open', async (payload) => {
       const { url } = (payload ?? {}) as { url?: string };
-      if (!url) throw new Error('url requise');
+      if (!url) throw new Error('url is required');
       const target = /^https?:\/\//i.test(url) ? url : `http://${url}`;
       const page = ensurePage(idOf(payload));
       page.messages.length = 0;
       page.url = target;
-      // Un chargement qui échoue ne doit PAS faire échouer la commande : la vue
-      // React attend une réponse pour savoir qu'elle a une page à placer. Sans
-      // ça, une URL injoignable laissait une vue native sans rectangle.
+      // A load that fails must NOT make the command fail: the React view
+      // is waiting for a response to know it has a page to place. Without
+      // this, an unreachable URL left a native view without a rectangle.
       try {
         await page.view.webContents.loadURL(target);
         return { url: target };
@@ -177,19 +177,20 @@ export default definePlugin({
       }
     });
 
-    /** Rectangle envoyé par la vue React : la vue native n'est pas dans le DOM. */
+    /** Rectangle sent by the React view: the native view isn't in the DOM. */
     ctx.registerCommand('bounds', async (payload) => {
       const { x, y, width, height } = (payload ?? {}) as Record<string, number>;
       const instanceId = idOf(payload);
       const page = pages.get(instanceId);
       if (!page || !width || !height) {
-        // Rectangle absent ou vide : on ne pose rien, et on RETIRE ce qui l'est
-        // déjà. Une vue sans place n'a aucune raison d'être sur la fenêtre.
+        // No rectangle, or an empty one: we place nothing, and we REMOVE
+        // whatever already is. A view with no place has no reason to be
+        // on the window.
         if (page) detach(page);
         return { placed: false };
       }
-      // Recevoir un rectangle veut dire « je suis à l'écran » : la page
-      // rejoint la fenêtre et devient la cible des outils de l'agent.
+      // Receiving a rectangle means "I'm on screen": the page joins the
+      // window and becomes the target of the agent's tools.
       attach(page);
       visibleId = instanceId;
       page.view.setBounds({
@@ -211,9 +212,9 @@ export default definePlugin({
     });
 
     /**
-     * On quitte l'onglet sans le fermer : la page reste chargée, mais elle
-     * QUITTE la fenêtre — sinon elle recouvrirait l'onglet qu'on vient
-     * d'afficher, puisqu'une vue native ignore le DOM.
+     * We leave the tab without closing it: the page stays loaded, but it
+     * LEAVES the window — otherwise it would cover the tab we just
+     * displayed, since a native view ignores the DOM.
      */
     ctx.registerCommand('detach', async (payload) => {
       const instanceId = idOf(payload);
@@ -229,16 +230,16 @@ export default definePlugin({
       return { closed: true };
     });
 
-    // ── Ce que l'agent peut faire de cette page ──────────────────────────
+    // ── What the agent can do with this page ──────────────────────────
 
     ctx.registerToolHandler('browser_open', async ({ args }) => {
       const url = typeof args['url'] === 'string' ? args['url'] : '';
       if (!url) return { ok: false, content: 'Argument "url" is required.' };
       const target = /^https?:\/\//i.test(url) ? url : `http://${url}`;
       try {
-        // L'agent charge dans la page VISIBLE. Il n'ouvre pas d'onglet : les
-        // onglets appartiennent à l'utilisateur, et une page sans onglet pour
-        // la porter n'aurait ni place sur la fenêtre ni personne pour la voir.
+        // The agent loads into the VISIBLE page. It doesn't open a tab:
+        // tabs belong to the user, and a page with no tab to carry it
+        // would have neither a place on the window nor anyone to see it.
         const page = requirePage();
         page.messages.length = 0;
         await page.view.webContents.loadURL(target);
@@ -278,8 +279,9 @@ export default definePlugin({
       const selector = typeof args['selector'] === 'string' ? args['selector'] : 'body';
       try {
         const page = requirePage();
-        // Le sélecteur est injecté en JSON : une apostrophe dans un sélecteur
-        // ne doit pas pouvoir refermer la chaîne et exécuter autre chose.
+        // The selector is injected as JSON: an apostrophe in a selector
+        // must not be able to close the string early and execute
+        // something else.
         const html = (await page.view.webContents.executeJavaScript(
           `(() => { const el = document.querySelector(${JSON.stringify(selector)});
             return el ? el.outerHTML : null; })()`,
@@ -309,8 +311,8 @@ export default definePlugin({
         const file = join(tmpdir(), `bonaparte-capture-${Date.now()}.png`);
         await writeFile(file, image.toPNG());
         const size = image.getSize();
-        // Le chemin, pas l'image : le modèle ne voit pas les pixels. C'est
-        // l'utilisateur qui ouvrira le fichier.
+        // The path, not the image: the model doesn't see pixels. It's
+        // the user who will open the file.
         return {
           ok: true,
           content: `Screenshot saved to ${file} (${size.width}x${size.height}). You cannot see it; describe it to the user only if they open it.`,

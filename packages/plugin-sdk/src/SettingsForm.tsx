@@ -2,8 +2,8 @@ import type { ResolvedSettingDto, SettingScopeDto } from '@aparte/bonaparte-shar
 import { useState } from 'react';
 
 /**
- * Libellés fournis par l'hôte. Le SDK reste agnostique de l'i18n de l'app :
- * il ne connaît ni les locales, ni le provider — seulement ces cinq chaînes.
+ * Labels provided by the host. The SDK stays agnostic of the app's i18n:
+ * it knows neither the locales nor the provider — only these five strings.
  */
 export interface SettingsFormLabels {
   advanced: string;
@@ -20,14 +20,15 @@ interface SettingsFormProps {
 }
 
 /**
- * Un réglage est défini une fois et rendu partout — hub global comme panneau
- * de conversation. Deux choses ne sont jamais tues :
+ * A setting is defined once and rendered everywhere — the global hub as much
+ * as the conversation panel. Two things are never left unsaid:
  *
- * - **D'où vient la valeur.** Un champ non surchargé affiche « hérité », avec
- *   le bouton pour revenir à l'héritage quand il l'est. Sans ça, l'utilisateur
- *   ne sait pas s'il regarde son choix ou un défaut.
- * - **Ce que le changement coûte.** Les paramètres qui entrent au manifest KV
- *   invalident les contextes sauvegardés : c'est dit AVANT, pas constaté après.
+ * - **Where the value comes from.** A field that isn't overridden shows
+ *   "inherited", with the button to revert to inheritance when it is one.
+ *   Without that, the user can't tell whether they're looking at their own
+ *   choice or a default.
+ * - **What the change costs.** Settings that enter the KV manifest invalidate
+ *   saved contexts: that's said BEFORE, not found out after.
  */
 export function SettingsForm({ settings, scope, labels, onChange }: SettingsFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -130,7 +131,7 @@ function Control({
         {...(setting.max !== undefined ? { max: setting.max } : {})}
         {...(setting.step !== undefined ? { step: setting.step } : {})}
         onChange={(event) =>
-          // Un champ vidé rend l'héritage plutôt que d'écrire NaN.
+          // An emptied field yields to inheritance rather than writing NaN.
           onChange(
             setting.key,
             event.target.value === '' ? undefined : Number(event.target.value),

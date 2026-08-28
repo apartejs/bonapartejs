@@ -1,21 +1,21 @@
 /**
- * Contrat de plugin — manifeste DÉCLARATIF (modèle `contributes` de VS Code).
+ * Plugin contract — DECLARATIVE manifest (VS Code's `contributes` model).
  *
- * Le manifeste est lu et validé SANS exécuter la moindre ligne du plugin :
- * c'est ce qui permet d'afficher la liste des plugins, de détecter un conflit
- * d'identifiants ou une vue en double avant toute activation, et de refuser
- * proprement un plugin cassé au lieu de planter l'app à son chargement.
+ * The manifest is read and validated WITHOUT executing a single line of the
+ * plugin: that's what allows displaying the plugin list, detecting an id
+ * conflict or a duplicate view before any activation, and cleanly rejecting
+ * a broken plugin instead of crashing the app on load.
  */
 
 import { z } from 'zod';
 import type { BonaparteLocale } from './locale.js';
 
-/** Identifiant : minuscules, chiffres et tirets — il sert de nom de dossier. */
+/** Identifier: lowercase letters, digits and hyphens — it serves as the folder name. */
 const pluginId = z
   .string()
   .min(2)
   .max(64)
-  .regex(/^[a-z][a-z0-9-]*$/, 'id : minuscules, chiffres et tirets, commençant par une lettre');
+  .regex(/^[a-z][a-z0-9-]*$/, 'id: lowercase letters, digits and hyphens, starting with a letter');
 
 /**
  * A label shown to the user — a tab title, a plugin name. Visible strings
@@ -37,59 +37,59 @@ export function localize(text: LocalizedText, locale: BonaparteLocale): string {
 }
 
 /**
- * Une vue montée dans le panneau d'outillage (à droite). Chaque vue est
- * souveraine sur son contenu : le panneau ne fournit que l'onglet et la place.
+ * A view mounted in the tooling panel (on the right). Each view is
+ * sovereign over its content: the panel only provides the tab and the space.
  */
 export const toolingViewSchema = z.object({
   id: z.string().min(1).max(64),
   /** Tab title, in one or both locales. */
   title: localizedLabel(48),
-  /** Glyphe court affiché dans l'onglet — un caractère ou deux. */
+  /** Short glyph shown in the tab — one or two characters. */
   icon: z.string().max(4).optional(),
-  /** Ordre indicatif dans le menu d'ouverture ; à défaut, ordre de découverte. */
+  /** Indicative order in the open menu; falls back to discovery order. */
   order: z.number().int().optional(),
   /**
-   * Plusieurs instances simultanées autorisées.
+   * Several simultaneous instances allowed.
    *
-   * Deux terminaux ou deux pages ont un sens : ce sont deux sessions. Deux fois
-   * les réglages de la conversation, non — le second n'aurait rien de plus à
-   * montrer. Le défaut est donc `false` : une vue s'ouvre en un exemplaire tant
-   * qu'elle n'a pas dit le contraire.
+   * Two terminals or two pages make sense: they're two sessions. Two times
+   * the conversation's settings, no — the second one would have nothing more
+   * to show. The default is therefore `false`: a view opens as a single
+   * instance until it has said otherwise.
    */
   multiple: z.boolean().default(false),
-  /** Accélérateur suggéré, affiché dans le menu d'ouverture (ex. « Ctrl+T »). */
+  /** Suggested shortcut, shown in the open menu (e.g. "Ctrl+T"). */
   shortcut: z.string().max(24).optional(),
 });
 
-/** Un outil que le plugin ajoute à l'inventaire de l'agent. */
+/** A tool that the plugin adds to the agent's inventory. */
 export const agentToolContributionSchema = z.object({
   name: z
     .string()
     .min(1)
     .max(64)
-    .regex(/^[a-z][a-z0-9_]*$/, 'nom d’outil : minuscules et underscores'),
+    .regex(/^[a-z][a-z0-9_]*$/, 'tool name: lowercase letters and underscores'),
   description: z.string().min(1).max(400),
-  /** Effet dominant — pilote le moteur de permissions. */
+  /** Dominant effect — drives the permissions engine. */
   effect: z.enum(['read', 'write', 'execute']),
   /**
-   * Schéma JSON des arguments. Il n'est PAS décoratif : la grammaire des
-   * appels d'outils en est dérivée, donc un outil sans schéma est un outil
-   * que le modèle ne peut appeler qu'avec un objet vide.
+   * JSON schema of the arguments. It is NOT decorative: the tool-call
+   * grammar is derived from it, so a tool without a schema is a tool
+   * the model can only call with an empty object.
    */
   inputSchema: z.record(z.string(), z.unknown()).optional(),
 });
 
-/** Un réglage exposé par le plugin dans le hub Réglages. */
+/** A setting exposed by the plugin in the Settings hub. */
 export const configFieldSchema = z.object({
   key: z.string().min(1).max(64),
   label: z.string().min(1).max(80),
   type: z.enum(['string', 'number', 'boolean', 'select']),
-  /** Pour `select` uniquement. */
+  /** For `select` only. */
   options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
   description: z.string().max(240).optional(),
   /**
-   * Portées où le réglage est modifiable. Un réglage global-seul n'apparaît
-   * pas dans les réglages d'une conversation, et réciproquement.
+   * Scopes where the setting is editable. A global-only setting doesn't
+   * appear in a conversation's settings, and vice versa.
    */
   scopes: z.array(z.enum(['global', 'conversation'])).min(1),
 });
@@ -100,8 +100,8 @@ export const pluginManifestSchema = z.object({
   version: z.string().min(1).max(32),
   description: localizedLabel(240).optional(),
   /**
-   * Points d'entrée. `node` tourne dans le main process (outils, backends) ;
-   * `renderer` est importé paresseusement à l'affichage d'une vue.
+   * Entry points. `node` runs in the main process (tools, backends);
+   * `renderer` is lazily imported when a view is displayed.
    */
   entry: z
     .object({
@@ -123,7 +123,7 @@ export type ToolingViewContribution = z.infer<typeof toolingViewSchema>;
 export type AgentToolContribution = z.infer<typeof agentToolContributionSchema>;
 export type PluginConfigField = z.infer<typeof configFieldSchema>;
 
-/** État d'un plugin tel que l'UI le voit. */
+/** State of a plugin as the UI sees it. */
 export interface PluginStatusDto {
   id: string;
   name: LocalizedText;
@@ -131,7 +131,7 @@ export interface PluginStatusDto {
   description?: LocalizedText;
   enabled: boolean;
   active: boolean;
-  /** Renseigné quand le manifeste est invalide ou l'activation a échoué. */
+  /** Set when the manifest is invalid or activation has failed. */
   error?: string;
   views: ToolingViewContribution[];
   toolNames: string[];

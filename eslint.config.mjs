@@ -16,7 +16,7 @@ export default tseslint.config(
     },
   },
   {
-    // Les specs inspectent du JSON brut (réponses HTTP) : any y est légitime.
+    // Specs inspect raw JSON (HTTP responses): any is legitimate there.
     files: ['**/*.spec.ts', '**/*.spec.tsx'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
@@ -26,8 +26,8 @@ export default tseslint.config(
     files: ['**/*.ts', '**/*.tsx'],
     plugins: { '@nx': nx },
     rules: {
-      // Frontières structurelles du monorepo — la garantie que core reste
-      // du Node pur et que les plugins ne dépendent que du SDK.
+      // Structural boundaries of the monorepo — the guarantee that core stays
+      // pure Node and that plugins depend only on the SDK.
       '@nx/enforce-module-boundaries': [
         'error',
         {

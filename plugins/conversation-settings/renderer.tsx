@@ -2,7 +2,7 @@ import type { ResolvedSettingDto } from '@aparte/bonaparte-shared';
 import { SettingsForm, type ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
 import { useCallback, useEffect, useState } from 'react';
 
-/** Libellés du plugin — il ne dépend pas de l'i18n de l'app. */
+/** Plugin labels — it does not depend on the app's i18n. */
 const LABELS = {
   fr: {
     title: 'Cette conversation',
@@ -21,12 +21,12 @@ const LABELS = {
 } as const;
 
 /**
- * Réglages de la conversation ouverte.
+ * Settings for the currently open conversation.
  *
- * Démonstration du principe « un réglage défini une fois, rendu partout » :
- * cette vue n'a aucun formulaire à elle. Elle affiche les mêmes champs que le
- * hub, dans la portée `conversation` — donc uniquement ceux qui s'y règlent,
- * chacun disant s'il est hérité du global.
+ * Demonstrates the "one setting defined once, rendered everywhere" principle:
+ * this view has no form of its own. It shows the same fields as the hub, in
+ * the `conversation` scope — so only the ones settable there, each stating
+ * whether it is inherited from global.
  */
 export default function ConversationSettingsView({
   conversationId,
