@@ -72,6 +72,8 @@ async function makeRig(
     nCtx?: number;
     /** Context size the FAKE SERVER enforces: a longer prompt is refused with a 400. */
     serverNCtx?: number;
+    /** The fake server flags the final event as truncated (the context ceiling). */
+    truncate?: boolean;
     modelExists?: boolean;
     engine?: Partial<ConversationEngineOptions>;
   } = {},
@@ -83,6 +85,7 @@ async function makeRig(
     msPerToken: options.msPerToken ?? 2,
     ...(options.paceMs !== undefined ? { paceMs: options.paceMs } : {}),
     ...(options.serverNCtx !== undefined ? { nCtx: options.serverNCtx } : {}),
+    ...(options.truncate ? { truncate: true } : {}),
     responder: () => replies[Math.min(turn++, replies.length - 1)] ?? '',
     files: disk,
   });
@@ -388,6 +391,21 @@ describe('ConversationEngine — the context is finite (D-22)', () => {
     expect(turns()).toBe(0);
     expect((await store.loadEvents('conv-a')).filter((e) => e.type === 'user')).toHaveLength(0);
     expect(events.some((e) => e.event.type === 'error')).toBe(false);
+  });
+
+  it('a reply cut at the context ceiling is reported as truncated, not a clean end', async () => {
+    // Paul, 2026-08-28: on a resumed conversation the model kept "stopping
+    // before the end". The server cuts the generation at the context ceiling
+    // (--no-context-shift, slot.truncated), and any stop was read as a clean
+    // finish. The turn now carries the fact that it was cut.
+    const { engine, events } = await makeRig({ replies: ['half an ans'], truncate: true });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'go on');
+
+    const end = events.find((e) => e.event.type === 'turn_end')?.event;
+    expect(end?.type).toBe('turn_end');
+    if (end?.type !== 'turn_end') return;
+    expect(end.truncated).toBe(true);
   });
 
   it('a server that refuses the prompt as too long is reported as an overflow, not as an error', async () => {

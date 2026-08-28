@@ -80,6 +80,8 @@ export const FR: AppTranslations = {
       'Le contexte est plein ({used} tokens sur {limit}) : ce message, avec la place d’une réponse, n’y tient pas. Rien n’a été envoyé. Ouvrez une nouvelle conversation, ou relevez le plafond dans les réglages — la compaction viendra plus tard.',
     contextOverflowUnknown:
       'Le serveur refuse ce message : son contexte est plein, il n’y tient pas. Rien n’a été envoyé. Ouvrez une nouvelle conversation — la compaction viendra plus tard.',
+    replyTruncated:
+      'La réponse a été coupée : le contexte est plein. Elle est incomplète. Ouvrez une nouvelle conversation, ou relevez le plafond de contexte dans les réglages — la compaction viendra plus tard.',
     missingModel: 'Le modèle « {name} » n’est plus sur cette machine.',
     chooseModel: 'Choisir un modèle',
     placeholder: 'Écrivez à bonaparte…',

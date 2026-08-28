@@ -30,6 +30,8 @@ export interface FakeLlamaServerOptions {
    * with the 400 the real server sends when context shift is off.
    */
   nCtx?: number;
+  /** When true, the final event carries truncated:true — the context ceiling, mid-generation. */
+  truncate?: boolean;
   /** Text generated for a given prompt (default: 'ok'). */
   responder?: (prompt: string) => string;
   /** Number of slots (default 1). */
@@ -177,6 +179,7 @@ export async function startFakeLlamaServer(
       tokens_predicted: predicted,
       tokens_evaluated: tokens.length,
       tokens_cached: tokens.length + predicted,
+      ...(options.truncate ? { truncated: true } : {}),
       timings: {
         cache_n: cached,
         prompt_n: uncached,

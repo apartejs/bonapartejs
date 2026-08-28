@@ -949,6 +949,7 @@ export class Harness {
             promptUncachedTokens: Math.max(0, event.promptTokens - event.cachedTokens),
             predictedTokens: event.predictedTokens,
             predictedMs: 0,
+            ...(event.truncated ? { truncated: true } : {}),
             progress: {
               total: event.promptTokens,
               cache: event.cachedTokens,

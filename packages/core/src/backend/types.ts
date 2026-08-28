@@ -68,6 +68,12 @@ export interface CompletionStats {
    * and what the next message adds to.
    */
   contextTokens?: number;
+  /**
+   * The server cut the generation because the context filled up
+   * (`--no-context-shift`): the reply is incomplete, not finished. Surfaced
+   * so the truncation is explained instead of a silently short answer.
+   */
+  truncated?: boolean;
 }
 
 export type CompletionEvent =

@@ -226,6 +226,8 @@ export interface CompletionStatsDto {
   progress?: PromptProgressDto;
   /** Tokens the slot holds after the turn — prompt and reply — the gauge's numerator. */
   contextTokens?: number;
+  /** The server cut the reply at the context ceiling: it is incomplete, not finished. */
+  truncated?: boolean;
 }
 
 /** Agent stream event, serialized over the IPC. */

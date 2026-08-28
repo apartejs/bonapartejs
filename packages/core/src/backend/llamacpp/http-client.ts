@@ -166,6 +166,9 @@ export class LlamaCppHttpClient {
             predictedTokens: Number(timings['predicted_n'] ?? 0),
             predictedMs: Number(timings['predicted_ms'] ?? 0),
             contextTokens: Number(event['tokens_cached'] ?? 0),
+            // The server sets this when it stopped at the context ceiling
+            // (server-context.cpp: slot.truncated). The reply is incomplete.
+            truncated: event['truncated'] === true,
             progress: {
               total,
               cache: cached,

@@ -253,6 +253,14 @@ published.
 
 ### Fixed
 
+- **A reply cut at the context ceiling now says so.** On a resumed, deep
+  conversation the model "kept stopping before the end": the server cuts
+  the generation when the context fills up (`--no-context-shift`,
+  `slot.truncated`), and any stop was read as a clean finish — a silently
+  short answer. The turn now carries that it was cut, and the thread shows
+  "the reply was cut short: the context is full", pointing at a new
+  conversation or a higher context cap.
+
 - **Three findings of the security audit, fixed the same evening.** A rule
   "always allow `pnpm test`" also allowed `pnpm test && curl … | sh`: the
   word boundary stopped `pnpm testament` but let every shell operator

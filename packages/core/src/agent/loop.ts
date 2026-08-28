@@ -63,6 +63,8 @@ export type AgentEvent =
       predictedTokens: number;
       /** What the slot holds after the turn — prompt and reply. */
       contextTokens: number;
+      /** The last completion of the turn was cut at the context ceiling. */
+      truncated: boolean;
     }
   /**
    * The message cannot fit — with room for a reply — in the server's
@@ -112,6 +114,7 @@ export class AgentLoop {
       let promptTokens = 0;
       let predictedTokens = 0;
       let contextTokens = 0;
+      let truncated = false;
       let raw: string | undefined;
 
       try {
@@ -143,6 +146,7 @@ export class AgentLoop {
               promptTokens = event.stats.progress?.total ?? 0;
               predictedTokens = event.stats.predictedTokens;
               contextTokens = event.stats.contextTokens ?? 0;
+              truncated = event.stats.truncated ?? false;
               raw = event.raw;
               break;
           }
@@ -177,6 +181,7 @@ export class AgentLoop {
           promptTokens,
           predictedTokens,
           contextTokens,
+          truncated,
         };
         return;
       }
@@ -206,6 +211,7 @@ export class AgentLoop {
           promptTokens,
           predictedTokens,
           contextTokens,
+          truncated,
         };
         return;
       }

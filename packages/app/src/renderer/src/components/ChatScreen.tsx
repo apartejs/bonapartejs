@@ -271,7 +271,14 @@ export function ChatScreen({
 
         case 'done':
           onStats(event.stats);
-          finish(state, 'completed');
+          if (event.stats.truncated) {
+            chatRef.current.addSegment({
+              id: `seg-error-${state.seq++}`,
+              type: 'error',
+              content: t.chat.replyTruncated,
+            });
+          }
+          finish(state, event.stats.truncated ? 'error' : 'completed');
           break;
 
         case 'error':
@@ -324,6 +331,7 @@ export function ChatScreen({
     t.chat.contextOverflow,
     t.chat.contextOverflowUnknown,
     t.chat.errorPrefix,
+    t.chat.replyTruncated,
     t.chat.thinking,
   ]);
 

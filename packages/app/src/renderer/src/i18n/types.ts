@@ -81,6 +81,8 @@ export interface AppTranslations {
     contextOverflow: string;
     /** Same, when the engine declares no context size (remote). */
     contextOverflowUnknown: string;
+    /** A reply the server cut at the context ceiling — incomplete, not finished. */
+    replyTruncated: string;
     /** Banner at open; `{name}` is the file name of the vanished model. */
     missingModel: string;
     chooseModel: string;
