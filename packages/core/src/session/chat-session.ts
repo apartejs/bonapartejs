@@ -17,6 +17,7 @@ import type {
   KvStore,
   LiveBackendConfig,
   RestoreOutcome,
+  SeedOutcome,
 } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
@@ -50,7 +51,40 @@ export type OpenResult = {
   session: ChatSession;
   /** 'unsupported': the backend does not have the kvPersistence capability. */
   restore: RestoreOutcome | { restored: false; reason: 'unsupported' };
+  /** When nothing of the conversation's own was restored: what the shared prefix did. */
+  seed?: SeedOutcome;
 };
+
+/**
+ * The shared prefix. Every conversation of a (model, tools, project) begins
+ * with the same rendered system block, and a restored state serves as the
+ * prefix of a longer, different prompt (proved for real on 2026-08-28). So
+ * the first one prefills that block once and saves it as a seed; the next
+ * ones restore the seed and only prefill what is theirs. A failure here
+ * costs nothing but the seed: the turn prefills as it always did.
+ */
+async function seedPrefix(
+  backend: Backend,
+  kv: KvStore,
+  idSlot: number,
+  conversationId: string,
+  live: LiveBackendConfig,
+): Promise<SeedOutcome | undefined> {
+  if (!backend.slots || !backend.prefixText || !backend.prefill) return undefined;
+  const prefix = backend.prefixText(conversationId);
+  if (!prefix) return undefined;
+  const key = kv.seedKey(prefix, live);
+  const found = await kv.restoreSeed(backend.slots, idSlot, key, live);
+  if (found.restored) return found;
+  try {
+    const nTokens = await backend.prefill(conversationId, idSlot);
+    if (nTokens <= 0) return found;
+    await kv.saveSeed(backend.slots, idSlot, key, live, nTokens);
+    return { restored: false, created: true, nTokens };
+  } catch {
+    return found;
+  }
+}
 
 export class ChatSession {
   private constructor(
@@ -132,7 +166,11 @@ export class ChatSession {
       conversationId,
       live,
     );
-    return { session, restore };
+    if (restore.restored) return { session, restore };
+    // Nothing of its own to restore: the conversation starts from the seed
+    // of its prefix — or prepares it for the next one that starts this way.
+    const seed = await seedPrefix(backend, kv, options.idSlot ?? 0, conversationId, live);
+    return { session, restore, ...(seed ? { seed } : {}) };
   }
 
   get id(): string {

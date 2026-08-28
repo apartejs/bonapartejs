@@ -127,7 +127,9 @@ export async function startFakeLlamaServer(
     const uncached = tokens.length - cached;
     const promptMs = uncached * msPerToken;
 
-    const text = responder(prompt);
+    // `n_predict: 0` is a prefill: nothing generated, the responder not
+    // consulted — as the real server behaves (verified on b10217).
+    const text = body['n_predict'] === 0 ? '' : responder(prompt);
     slots.set(idSlot, prompt + text);
 
     res.writeHead(200, {

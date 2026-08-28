@@ -358,10 +358,14 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
       for (const event of await store.loadEvents('smoke-seed-a')) {
         await store.appendEvent('smoke-seed-b', event);
       }
+      // B opens first: a fresh conversation restores (or prepares) the shared
+      // prefix seed on open — the state restored LAST is the one the slot
+      // holds. Then A's state, explicitly: that is what a branch will do
+      // inside its own open, once branching exists.
+      const { session: b } = await ChatSession.open(base, 'smoke-seed-b');
       const restored = await base.kv.restoreState(backend.slots!, 0, 'smoke-seed-a', base.live);
       expect(restored.restored).toBe(true);
 
-      const { session: b } = await ChatSession.open(base, 'smoke-seed-b');
       const out = await collect(
         b.send('Now reply with exactly the word BRAVO. Do not use any tool.'),
       );
@@ -374,6 +378,41 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
       expect(stats?.cachedTokens ?? 0).toBeGreaterThanOrEqual(
         Math.floor(manifest.promptTokenCount * 0.9),
       );
+    },
+    TURN_TIMEOUT_MS,
+  );
+
+  it(
+    'the seed prepared by one fresh conversation serves the next one from the cache',
+    async () => {
+      // Prefix seeds (D-75): a fresh conversation prefills its system block
+      // once and saves it; the next fresh one restores that seed and its
+      // first turn is served from the cache. Two ids nobody opened before.
+      const one = await ChatSession.open(base, 'smoke-seed-fresh-one');
+      console.log(`[smoke] seed, first open: ${JSON.stringify(one.seed)}`);
+      // A seed may already exist from the earlier cases (same prefix): either
+      // it was restored, or it was just created — never nothing.
+      expect(one.seed).toBeDefined();
+      expect(one.seed?.restored || (one.seed && 'created' in one.seed && one.seed.created)).toBe(true);
+
+      const two = await ChatSession.open(base, 'smoke-seed-fresh-two');
+      console.log(`[smoke] seed, second open: ${JSON.stringify(two.seed)}`);
+      expect(two.seed?.restored).toBe(true);
+      const seeded = two.seed?.restored ? two.seed.nRestored : 0;
+      expect(seeded).toBeGreaterThan(0);
+
+      const out = await collect(
+        two.session.send('Reply with exactly the word DELTA. Do not use any tool.'),
+      );
+      const stats = turnEnd(out.events);
+      console.log(
+        `[smoke] seeded first turn: ${stats?.cachedTokens} tokens served from the seed ` +
+          `(the seed holds ${seeded}), prefill ${stats?.promptMs} ms`,
+      );
+      expect(out.text.toUpperCase()).toContain('DELTA');
+      // The server samples one token on n_predict 0 and the prefix match
+      // drops it: everything up to it must come from the cache.
+      expect(stats?.cachedTokens ?? 0).toBeGreaterThanOrEqual(seeded - 1);
     },
     TURN_TIMEOUT_MS,
   );

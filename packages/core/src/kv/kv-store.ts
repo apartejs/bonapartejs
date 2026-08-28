@@ -15,6 +15,7 @@
  * on which the answer is an announced re-prefill, never a crash.
  */
 
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SlotApi } from '../backend/types.js';
@@ -57,8 +58,32 @@ export type RestoreOutcome =
   | { restored: true; manifest: KvManifest; nRestored: number }
   | { restored: false; reason: RestoreRefusalReason };
 
+/**
+ * A prefix seed: the rendered system block of a (model, tools, project)
+ * prefilled once and saved, so that every conversation starting the same
+ * way restores it instead of computing it again. Keyed by the prefix text,
+ * the model and the K/V types — not by n_ctx: a seed only has to fit.
+ */
+export interface SeedManifest extends LiveBackendConfig {
+  schemaVersion: 1;
+  key: string;
+  promptTokenCount: number;
+  slotFileBytes: number;
+  savedAt: string;
+}
+
+export type SeedOutcome =
+  /** An existing seed now sits in the slot. */
+  | { restored: true; nRestored: number }
+  /** No seed existed: the prefix was prefilled and saved for the next conversation. */
+  | { restored: false; created: true; nTokens: number }
+  /** Nothing restored, nothing created — the reason says why. */
+  | { restored: false; created: false; reason: RestoreRefusalReason };
+
+type Restorable = Pick<KvManifest, 'modelFingerprint' | 'promptTokenCount' | 'cacheTypeK' | 'cacheTypeV'>;
+
 export function canRestore(
-  manifest: KvManifest,
+  manifest: Restorable,
   live: LiveBackendConfig,
 ): RestoreVerdict {
   if (manifest.modelFingerprint !== live.modelFingerprint) {
@@ -176,6 +201,77 @@ export class KvStore {
       return { restored: true, manifest, nRestored: result.nRestored };
     } catch {
       return { restored: false, reason: 'refused' };
+    }
+  }
+
+  // ── Prefix seeds ─────────────────────────────────────────────────────
+
+  /** Identity of a seed: the rendered prefix, the model, the K/V types. n_ctx is not part of it — a seed only has to fit. */
+  seedKey(prefixText: string, live: LiveBackendConfig): string {
+    return createHash('sha256')
+      .update(live.modelFingerprint)
+      .update('\n')
+      .update(`${live.cacheTypeK}/${live.cacheTypeV}`)
+      .update('\n')
+      .update(prefixText)
+      .digest('hex')
+      .slice(0, 32);
+  }
+
+  seedFilename(key: string): string {
+    return `seed-${key}.slot`;
+  }
+
+  private seedManifestPath(key: string): string {
+    return join(this.manifestDir, 'seeds', `${key}.manifest.json`);
+  }
+
+  async saveSeed(
+    slots: SlotApi,
+    idSlot: number,
+    key: string,
+    live: LiveBackendConfig,
+    promptTokenCount: number,
+  ): Promise<SeedManifest> {
+    const result = await slots.save(idSlot, this.seedFilename(key));
+    const manifest: SeedManifest = {
+      schemaVersion: 1,
+      key,
+      ...live,
+      promptTokenCount: promptTokenCount > 0 ? promptTokenCount : result.nSaved,
+      slotFileBytes: result.nWritten,
+      savedAt: new Date().toISOString(),
+    };
+    await mkdir(join(this.manifestDir, 'seeds'), { recursive: true });
+    await writeFile(this.seedManifestPath(key), JSON.stringify(manifest, null, 2), 'utf8');
+    return manifest;
+  }
+
+  async restoreSeed(
+    slots: SlotApi,
+    idSlot: number,
+    key: string,
+    live: LiveBackendConfig,
+  ): Promise<SeedOutcome> {
+    let raw: string;
+    try {
+      raw = await readFile(this.seedManifestPath(key), 'utf8');
+    } catch {
+      return { restored: false, created: false, reason: 'missing' };
+    }
+    let manifest: SeedManifest;
+    try {
+      manifest = JSON.parse(raw) as SeedManifest;
+    } catch {
+      return { restored: false, created: false, reason: 'corrupt' };
+    }
+    const verdict = canRestore(manifest, live);
+    if (!verdict.ok) return { restored: false, created: false, reason: verdict.reason };
+    try {
+      const result = await slots.restore(idSlot, this.seedFilename(key));
+      return { restored: true, nRestored: result.nRestored };
+    } catch {
+      return { restored: false, created: false, reason: 'refused' };
     }
   }
 }

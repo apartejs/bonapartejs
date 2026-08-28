@@ -278,10 +278,18 @@ export type RestoreDto =
   | { restored: true; nRestored: number }
   | { restored: false; reason: string };
 
+/** What the shared prefix did at open, when nothing of the conversation's own was restored. */
+export interface SeedDto {
+  /** true: an existing seed was restored; false: the prefix was prepared for the next conversation. */
+  restored: boolean;
+  tokens: number;
+}
+
 export interface ConversationOpenResultDto {
   conversationId: string;
   events: ConversationEventDto[];
   restore: RestoreDto;
+  seed?: SeedDto;
   /** Model pinned to the conversation. */
   modelPath?: string;
   modelName?: string;

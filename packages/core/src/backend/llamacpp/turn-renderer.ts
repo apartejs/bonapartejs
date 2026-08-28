@@ -9,7 +9,7 @@
  */
 
 import type { ToolDefLike, TranscriptEntry } from '../types.js';
-import { PromptLog } from '../../wire/qwen-template.js';
+import { PromptLog, renderSystem } from '../../wire/qwen-template.js';
 import {
   buildSystemPrompt,
   renderToolResults,
@@ -36,6 +36,11 @@ export class TranscriptRenderer {
 
   restore(systemPrompt: string): void {
     this.frozenSystemPrompt = systemPrompt;
+  }
+
+  /** The frozen system block exactly as every prompt of this conversation begins — empty until frozen. */
+  get prefix(): string {
+    return this.frozenSystemPrompt === null ? '' : renderSystem(this.frozenSystemPrompt);
   }
 
   /**

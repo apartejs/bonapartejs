@@ -155,9 +155,23 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   survives navigation, approvals on apartéJS's elicitation panel, the apartéJS
   UI kit on every control — all done, 13 Electron E2E against the fake server;
   left in phase 1: the announced cost of a model switch, per-project
-  allowlists · J4 MCP · J5 npx distribution.
+  allowlists · **2026-08-28 (evening)**: Tailwind + shadcn/ui shell on the
+  React palette; prefix seeds (`KvStore.seedKey/saveSeed/restoreSeed`,
+  restored or prepared at every fresh open, D-75); the KV manifest relaxed
+  to what llama.cpp cannot check itself — the model file and the K/V types
+  — n_ctx only has to hold the saved tokens and a build change no longer
+  re-prefills (D-73); a per-conversation context cap (D-74); a security
+  audit (private `.claude/audit/07`) with three findings fixed · J4 MCP ·
+  J5 npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
   the outcome of each case.
+  - **2026-08-28 (evening) — 6/6 green.** Same model and build. New case:
+    **prefix seeds** — a fresh conversation restores the shared prefix
+    (518 tokens, the whole system block) and its first turn is served
+    entirely from it (518 cached, prefill 16.5 ms); `n_predict: 0` leaves
+    exactly the prefix in the slot. The branch case now opens B before
+    restoring A's state: a fresh open restores the seed over the slot, so
+    the state restored last is the one that serves — 599 of 599 again.
   - **2026-08-28 — 5/5 green.** Qwen3-1.7B Q4_K_M (unsloth), unified `llama`
     CLI build b10217-ddd4ec142, Windows, `-c 8192`, K/V f16, one slot,
     sampling temperature 0.2 / seed 42. Real tool call → execution → result

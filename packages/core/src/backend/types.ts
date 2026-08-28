@@ -230,6 +230,20 @@ export interface Backend {
     system: SystemSpec,
     tools: ToolDefLike[],
   ): void;
+  /**
+   * The rendered prefix every turn of this conversation starts with — the
+   * frozen system block, byte for byte. Absent while nothing is frozen.
+   * What a prefix seed is keyed on (see KvStore).
+   */
+  prefixText?(conversationId: string): string | undefined;
+  /**
+   * Prefills the prefix alone into a slot, generating nothing — `n_predict:
+   * 0` on llama-server (verified on b10217: the slot holds exactly the
+   * prefix afterwards; should a build sample one token there, the prefix
+   * match of the next prompt drops it). Resolves with the tokens the slot
+   * then holds, recorded with the seed.
+   */
+  prefill?(conversationId: string, idSlot: number): Promise<number>;
   /** Low-level primitive — useful for raw-completion backends. */
   complete(request: CompletionRequest): AsyncIterable<CompletionEvent>;
   props(): Promise<ServerProps>;

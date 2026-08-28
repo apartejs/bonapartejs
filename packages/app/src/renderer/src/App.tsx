@@ -544,6 +544,7 @@ export function App() {
         nCtx={view === 'chat' ? (opened?.nCtx ?? null) : null}
         contextAtOpen={view === 'chat' ? (opened?.contextTokens ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
+        seed={view === 'chat' ? (opened?.seed ?? null) : null}
         lastStats={lastStats}
         resources={resources}
         saveState={saveState}

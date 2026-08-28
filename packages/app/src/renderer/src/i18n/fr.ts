@@ -215,6 +215,7 @@ export const FR: AppTranslations = {
     notConnected: 'moteur non connecté',
     restored: 'contexte restauré',
     notRestored: 'reprise à froid',
+    seeded: 'préfixe partagé',
     reasons: {
       missing: 'aucun état sauvegardé',
       unsupported: 'backend sans persistance',

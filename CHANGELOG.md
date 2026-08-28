@@ -15,6 +15,17 @@ published.
 
 ### Added
 
+- **Prefix seeds: a new conversation starts from a prefix already
+  computed.** Every conversation of a (model, tools, project) begins with
+  the same system block, and a restored state serves as the prefix of a
+  longer, different prompt — proved for real on 2026-08-28. So the first
+  conversation prefills that block once (`n_predict: 0`) and saves it as a
+  seed, keyed by the rendered prefix, the model and the K/V types — not
+  by the context size, a seed only has to fit; every later one restores
+  the seed and only prefills what is its own. The status strip says
+  "prefix shared · N tokens" when that happened. The gauge counts the
+  prefix from the moment the conversation opens.
+
 - **A conversation may cap its own context.** Two settings, global and per
   conversation — "Cap the context" (off by default) and "Context cap" — so
   a conversation refuses a message once it would exceed the cap, instead of

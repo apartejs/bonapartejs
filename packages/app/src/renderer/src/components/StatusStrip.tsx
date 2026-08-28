@@ -4,6 +4,7 @@ import type {
   CompletionStatsDto,
   ResourceSampleDto,
   RestoreDto,
+  SeedDto,
 } from '@aparte/bonaparte-shared';
 import { Badge, Button, Progress, cn } from '@aparte/bonaparte-plugin-sdk/ui';
 import { Mascotte } from '../mascotte/Mascotte.js';
@@ -20,6 +21,8 @@ interface StatusStripProps {
   /** Tokens in the slot when the conversation opened (a restored state), until the first turn. */
   contextAtOpen: number | null;
   restore: RestoreDto | null;
+  /** The shared prefix at open — shown when it was restored, the conversation having no state of its own. */
+  seed: SeedDto | null;
   lastStats: CompletionStatsDto | null;
   /** The machine, sampled every few seconds — null until the first sample. */
   resources: ResourceSampleDto | null;
@@ -87,6 +90,7 @@ export function StatusStrip({
   nCtx,
   contextAtOpen,
   restore,
+  seed,
   lastStats,
   resources,
   saveState,
@@ -158,7 +162,11 @@ export function StatusStrip({
           </span>
         )}
 
-        {restore && restore.restored === false && restore.reason === 'not-connected' ? (
+        {restore && restore.restored === false && seed?.restored ? (
+          <Badge variant="secondary" className={chipClass('ok')}>
+            {`${t.status.seeded} · ${seed.tokens} tokens`}
+          </Badge>
+        ) : restore && restore.restored === false && restore.reason === 'not-connected' ? (
           <Badge variant="secondary" className={chipClass('dim')}>
             {t.status.notConnected}
           </Badge>

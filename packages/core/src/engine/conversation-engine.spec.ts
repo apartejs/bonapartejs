@@ -438,6 +438,51 @@ describe('ConversationEngine — the context is finite (D-22)', () => {
   });
 });
 
+describe('ConversationEngine — a shared prefix seeds every fresh conversation', () => {
+  // Paul, 2026-08-28: "start from something ready-made, since the system
+  // prompt is the same". The property was proved for real on 2026-08-28
+  // (545 of 545 saved tokens reused by a branch): a restored state serves
+  // as the prefix of a longer, different prompt. So the first conversation
+  // of a (model, tools, project) prefills the system prompt once and saves
+  // it as a seed; every later one restores the seed and only prefills what
+  // is its own.
+  it('the first fresh conversation prepares the seed, the next one starts from it', async () => {
+    const { engine, disk, events } = await makeRig({ replies: ['first', 'second'] });
+
+    const first = await engine.open('conv-a', MODEL);
+    expect(first).toMatchObject({ seed: { restored: false, created: true } });
+    if (!('seed' in first) || !first.seed) return;
+    expect(first.seed.restored === false && first.seed.created ? first.seed.nTokens : 0).toBeGreaterThan(0);
+    expect([...disk.keys()].some((name) => name.startsWith('seed-'))).toBe(true);
+    // The slot holds the prefix already: the gauge says so at open.
+    expect(first.contextTokens).toBeGreaterThan(0);
+
+    const second = await engine.open('conv-b', MODEL);
+    expect(second).toMatchObject({ restore: { restored: false }, seed: { restored: true } });
+    if (!('seed' in second) || !second.seed?.restored) return;
+    expect(second.seed.nRestored).toBe(first.contextTokens);
+
+    await engine.send('conv-b', 'hello');
+    const end = events.find((e) => e.conversationId === 'conv-b' && e.event.type === 'turn_end')?.event;
+    expect(end?.type).toBe('turn_end');
+    if (end?.type !== 'turn_end') return;
+    // The first turn of the second conversation was served from the seed.
+    expect(end.cachedTokens).toBeGreaterThanOrEqual(second.seed.nRestored);
+  });
+
+  it('a conversation with a state of its own does not touch the seed', async () => {
+    const { engine } = await makeRig({ replies: ['one', 'two'] });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'hello');
+    await engine.saveState();
+    await engine.open('conv-b', MODEL);
+
+    const back = await engine.open('conv-a', MODEL);
+    expect(back).toMatchObject({ restore: { restored: true } });
+    expect('seed' in back ? back.seed : undefined).toBeUndefined();
+  });
+});
+
 describe('readableEvents — a turn reads back the way it was seen', () => {
   it('keeps the tool calls, their results and the reasoning of a turn, in order, as one assistant event', async () => {
     // Reported by Paul on 2026-08-28: after a reload the tool calls of the

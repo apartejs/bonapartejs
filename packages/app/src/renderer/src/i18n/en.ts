@@ -214,6 +214,7 @@ export const EN: AppTranslations = {
     notConnected: 'engine not connected',
     restored: 'context restored',
     notRestored: 'cold start',
+    seeded: 'prefix shared',
     reasons: {
       missing: 'no saved state',
       unsupported: 'backend without persistence',

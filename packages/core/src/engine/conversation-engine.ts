@@ -91,6 +91,8 @@ export interface Opened {
   /** Tokens already in the slot after the restore — the gauge's numerator at open. */
   contextTokens: number;
   restore: OpenResult['restore'];
+  /** What the shared prefix did when nothing of the conversation's own was restored. */
+  seed?: OpenResult['seed'];
   events: ReadableEvent[];
 }
 
@@ -304,7 +306,7 @@ export class ConversationEngine {
 
     const context = (await this.options.context?.(conversationId)) ?? {};
     const roots = (await this.options.rootsOf?.(conversationId)) ?? [];
-    const { session, restore } = await ChatSession.open(
+    const { session, restore, seed } = await ChatSession.open(
       {
         backend,
         kv: this.options.kv,
@@ -325,9 +327,15 @@ export class ConversationEngine {
     );
     this.session = session;
     this.activeId = conversationId;
-    // A restored state says how full the slot is; a fresh prefill says
-    // nothing until its first turn ends.
-    this.contextUsed = restore.restored ? restore.nRestored : 0;
+    // A restored state says how full the slot is; so does a seed, restored
+    // or just prepared; a fresh prefill says nothing until its first turn.
+    this.contextUsed = restore.restored
+      ? restore.nRestored
+      : seed?.restored
+        ? seed.nRestored
+        : seed?.created
+          ? seed.nTokens
+          : 0;
 
     return {
       conversationId,
@@ -335,6 +343,7 @@ export class ConversationEngine {
       ...(live.nCtx > 0 ? { nCtx: live.nCtx } : {}),
       contextTokens: this.contextUsed,
       restore,
+      ...(seed ? { seed } : {}),
       events: readableEvents(await store.loadEvents(conversationId)),
     };
   }

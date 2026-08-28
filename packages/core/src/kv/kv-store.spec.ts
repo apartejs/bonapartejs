@@ -193,3 +193,61 @@ describe('KvStore (against the fake llama-server)', () => {
     expect(outcome).toEqual({ restored: false, reason: 'corrupt' });
   });
 });
+
+describe('KvStore — prefix seeds', () => {
+  let servers: FakeLlamaServer[] = [];
+  let dirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(servers.map((s) => s.close()));
+    servers = [];
+    await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
+    dirs = [];
+  });
+
+  async function rig(): Promise<{ slots: SlotApi; client: LlamaCppHttpClient; store: KvStore; dir: string }> {
+    const server = await startFakeLlamaServer({ msPerToken: 10, responder: () => '' });
+    servers.push(server);
+    const dir = await mkdtemp(join(tmpdir(), 'bp-seeds-'));
+    dirs.push(dir);
+    const client = new LlamaCppHttpClient(server.url);
+    const slots: SlotApi = {
+      save: (idSlot, filename) => client.saveSlot(idSlot, filename),
+      restore: (idSlot, filename) => client.restoreSlot(idSlot, filename),
+      erase: (idSlot) => client.eraseSlot(idSlot),
+    };
+    return { slots, client, store: new KvStore(dir), dir };
+  }
+
+  it('keys a seed by the rendered prefix, the model and the cache types — never by n_ctx', () => {
+    const store = new KvStore('unused');
+    const key = store.seedKey('<system>abc</system>', LIVE);
+    expect(key).toMatch(/^[0-9a-f]{32}$/);
+    expect(store.seedKey('<system>abc</system>', { ...LIVE, nCtx: 1024 })).toBe(key);
+    expect(store.seedKey('<system>abd</system>', LIVE)).not.toBe(key);
+    expect(store.seedKey('<system>abc</system>', { ...LIVE, modelFingerprint: 'other' })).not.toBe(key);
+    expect(store.seedKey('<system>abc</system>', { ...LIVE, cacheTypeK: 'f16', cacheTypeV: 'f16' })).not.toBe(key);
+  });
+
+  it('saves a seed from the slot and restores it into an empty one', async () => {
+    const { slots, client, store } = await rig();
+    const prefix = 'p'.repeat(200);
+    for await (const _ of client.complete({ prompt: prefix, idSlot: 0, nPredict: 0 })) { /* prefill */ }
+    const key = store.seedKey(prefix, LIVE);
+
+    const manifest = await store.saveSeed(slots, 0, key, LIVE, 50);
+    expect(manifest.promptTokenCount).toBe(50);
+    await client.eraseSlot(0);
+
+    const outcome = await store.restoreSeed(slots, 0, key, LIVE);
+    expect(outcome).toMatchObject({ restored: true, nRestored: 50 });
+  });
+
+  it('reports a seed that does not exist, and one that no longer fits', async () => {
+    const { slots, store } = await rig();
+    expect(await store.restoreSeed(slots, 0, 'nope', LIVE)).toEqual({ restored: false, created: false, reason: 'missing' });
+    const key = store.seedKey('x', LIVE);
+    await store.saveSeed(slots, 0, key, LIVE, 5000);
+    expect(await store.restoreSeed(slots, 0, key, { ...LIVE, nCtx: 1024 })).toEqual({ restored: false, created: false, reason: 'nCtx' });
+  });
+});

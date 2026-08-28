@@ -235,6 +235,8 @@ export interface AppTranslations {
     notConnected: string;
     restored: string;
     notRestored: string;
+    /** The conversation had no state of its own, but its prefix was shared: what it started from. */
+    seeded: string;
     reasons: Record<string, string>;
     prefill: string;
     cacheShare: string;

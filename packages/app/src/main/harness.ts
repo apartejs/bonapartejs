@@ -856,6 +856,18 @@ export class Harness {
       ...(opened.nCtx !== undefined ? { nCtx: opened.nCtx } : {}),
       contextTokens: opened.contextTokens,
       events: opened.events,
+      ...(opened.seed
+        ? {
+            seed: {
+              restored: opened.seed.restored,
+              tokens: opened.seed.restored
+                ? opened.seed.nRestored
+                : opened.seed.created
+                  ? opened.seed.nTokens
+                  : 0,
+            },
+          }
+        : {}),
       restore: opened.restore.restored
         ? { restored: true, nRestored: opened.restore.nRestored }
         : { restored: false, reason: opened.restore.reason },
