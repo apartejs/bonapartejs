@@ -23,6 +23,7 @@ import {
   defaultScanRoots,
   EngineSupervisor,
   HARNESS_SETTINGS,
+  APP_SETTINGS,
   CONTEXT_SETTINGS,
   KV_INVALIDATING_KEYS,
   KvStore,
@@ -107,9 +108,24 @@ export class Harness {
     pidFile: join(bonaparteDataDir(), 'managed-server.pid'),
     beforeUnload: () => this.conversations.saveState().then(() => undefined),
   });
-  private readonly unsubscribeEngineStatus = this.supervisor.onStatusChange((status) =>
-    this.emit(IPC.evBackendStatus, status),
-  );
+  private readonly unsubscribeEngineStatus = this.supervisor.onStatusChange((status) => {
+    this.emit(IPC.evBackendStatus, status);
+    // A model just loaded: arm the inactivity timer. A stop clears it.
+    if (status === 'ready') void this.armIdleTimer();
+    else if (status === 'stopped' || status === 'crashed') this.clearIdleTimer();
+  });
+
+  /** Closing the window keeps bonaparte in the tray rather than quitting. Cached for the sync close handler. */
+  private closeToTrayCached = true;
+  get closeToTray(): boolean {
+    return this.closeToTrayCached;
+  }
+  /** UI locale, cached synchronously for the main process (the tray menu). */
+  private localeCached: 'fr' | 'en' = 'fr';
+  get uiLocale(): 'fr' | 'en' {
+    return this.localeCached;
+  }
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * Scope of the OPEN conversation — not of the application.
    *
@@ -258,6 +274,59 @@ export class Harness {
     }
     this.registerBuiltinTools();
     if (config.mode) this.permissions.setMode(config.mode as PlayMode);
+    await this.refreshAppBehaviour();
+  }
+
+  /**
+   * Application behaviour, resolved from the global settings: whether the
+   * window closes to the tray, and whether an idle model unloads itself.
+   */
+  private async refreshAppBehaviour(): Promise<void> {
+    const resolved = resolveSettings(APP_SETTINGS, await this.settingLayers(), 'global');
+    const value = (key: string): unknown => resolved.find((setting) => setting.key === key)?.value;
+    this.closeToTrayCached = value('closeToTray') !== false;
+    this.localeCached = (await this.loadConfig()).locale === 'en' ? 'en' : 'fr';
+    // Re-arming reads the new idle config (it may have just changed).
+    if (this.supervisor.loaded) await this.armIdleTimer();
+    else this.clearIdleTimer();
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  /**
+   * Arms (or re-arms) the inactivity timer. When it fires with nothing in
+   * flight, the active conversation's state is saved and the model is
+   * unloaded — its memory freed, the next message reloading it. The way LM
+   * Studio's idle TTL and Ollama's keep_alive behave.
+   */
+  private async armIdleTimer(): Promise<void> {
+    this.clearIdleTimer();
+    const resolved = resolveSettings(APP_SETTINGS, await this.settingLayers(), 'global');
+    const value = (key: string): unknown => resolved.find((setting) => setting.key === key)?.value;
+    if (value('idleUnload') === false) return;
+    const minutes = typeof value('idleUnloadMinutes') === 'number' ? (value('idleUnloadMinutes') as number) : 15;
+    this.idleTimer = setTimeout(() => void this.onIdle(), Math.max(1, minutes) * 60_000);
+    this.idleTimer.unref?.();
+  }
+
+  private async onIdle(): Promise<void> {
+    this.idleTimer = null;
+    // A turn in flight is activity: leave the model be, and look again later.
+    if (this.conversations.inFlight()) {
+      await this.armIdleTimer();
+      return;
+    }
+    if (!this.supervisor.loaded) return;
+    console.log('[idle] no activity: saving the conversation state and unloading the model');
+    await this.conversations.saveState().catch(() => undefined);
+    // Stopping the server frees the model; the status change tells the UI,
+    // and the next message brings it back up (with its state restored).
+    await this.supervisor.stop().catch(() => undefined);
   }
 
   /**
@@ -534,6 +603,7 @@ export class Harness {
     else settings[key] = value;
     await this.saveConfig({ ...config, settings });
     this.syncPluginConfig(settings);
+    await this.refreshAppBehaviour();
     if (LAUNCH_KEYS.has(key) && config.backend) {
       // The server no longer matches its parameters: it goes down now (its
       // state saved first) and the next message brings it up with the new
@@ -927,6 +997,7 @@ export class Harness {
   }
 
   async send(text: string): Promise<void> {
+    void this.armIdleTimer();
     const id = await this.ensureConversationId();
     const outcome = await this.conversations.send(id, text);
     if (outcome) {
@@ -996,6 +1067,7 @@ export class Harness {
     // shutdown: nobody is left to answer, so the answer is no.
     for (const pending of this.pendingApprovals.values()) pending.resolve(false);
     this.pendingApprovals.clear();
+    this.clearIdleTimer();
     this.resources.stop();
     this.machineProbes.dispose();
     await this.conversations.close();

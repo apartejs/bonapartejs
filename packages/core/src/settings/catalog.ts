@@ -139,6 +139,51 @@ export const CONTEXT_SETTINGS: SettingField[] = [
   },
 ];
 
+/**
+ * Application behaviour, beyond a conversation: what closing the window does,
+ * and whether an idle model unloads itself. Asked by Paul (2026-08-28) — a
+ * tray to keep bonaparte waiting, and an inactivity timeout, the way LM
+ * Studio (idle TTL) and Ollama (keep_alive) unload a model nobody is using.
+ */
+export const APP_SETTINGS: SettingField[] = [
+  {
+    key: 'closeToTray',
+    label: { en: 'Keep running when the window is closed', fr: 'Rester ouvert quand on ferme la fenêtre' },
+    description: {
+      en: 'Closing the window sends bonaparte to the notification area instead of quitting. Quit for good from the tray icon.',
+      fr: 'Fermer la fenêtre envoie bonaparte dans la zone de notification au lieu de quitter. Quitter pour de bon depuis l’icône du bandeau.',
+    },
+    type: 'boolean',
+    scopes: ['global'],
+    default: true,
+  },
+  {
+    key: 'idleUnload',
+    label: { en: 'Unload the model when idle', fr: 'Décharger le modèle en cas d’inactivité' },
+    description: {
+      en: 'After a while with no message, save the conversation’s state and free the model’s memory. The next message reloads it.',
+      fr: 'Après un moment sans message, sauvegarder l’état de la conversation et libérer la mémoire du modèle. Le message suivant le recharge.',
+    },
+    type: 'boolean',
+    scopes: ['global'],
+    default: true,
+  },
+  {
+    key: 'idleUnloadMinutes',
+    label: { en: 'Idle before unloading (minutes)', fr: 'Inactivité avant déchargement (minutes)' },
+    description: {
+      en: 'Minutes of inactivity before the model is unloaded.',
+      fr: 'Minutes d’inactivité avant que le modèle soit déchargé.',
+    },
+    type: 'number',
+    scopes: ['global'],
+    default: 15,
+    min: 1,
+    step: 1,
+    showFor: { idleUnload: ['true'] },
+  },
+];
+
 export const LAUNCH_SETTINGS: SettingField[] = [
   {
     key: 'nCtx',
@@ -206,6 +251,7 @@ export const LAUNCH_SETTINGS: SettingField[] = [
 export const HARNESS_SETTINGS: SettingField[] = [
   ...SAMPLING_SETTINGS,
   ...CONTEXT_SETTINGS,
+  ...APP_SETTINGS,
   ...LAUNCH_SETTINGS,
 ];
 

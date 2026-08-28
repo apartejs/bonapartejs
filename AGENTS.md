@@ -161,8 +161,9 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   to what llama.cpp cannot check itself — the model file and the K/V types
   — n_ctx only has to hold the saved tokens and a build change no longer
   re-prefills (D-73); a per-conversation context cap (D-74); a security
-  audit (private `.claude/audit/07`) with three findings fixed · J4 MCP ·
-  J5 npx distribution.
+  audit (private `.claude/audit/07`) with three findings fixed; a tray icon
+  with close-to-tray (D-76) and an idle model unload (D-77) · J4 MCP · J5
+  npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
   the outcome of each case.
   - **2026-08-28 (evening) — 6/6 green.** Same model and build. New case:

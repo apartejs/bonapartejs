@@ -182,6 +182,7 @@ export {
   LAUNCH_SETTINGS,
   SAMPLING_SETTINGS,
   CONTEXT_SETTINGS,
+  APP_SETTINGS,
 } from './settings/catalog.js';
 
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────

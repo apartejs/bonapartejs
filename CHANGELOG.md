@@ -15,6 +15,17 @@ published.
 
 ### Added
 
+- **A tray icon, and closing keeps bonaparte waiting.** Closing the window
+  sends bonaparte to the notification area (Windows/Linux) or the menu bar
+  (macOS) instead of quitting — its model kept warm, a click brings the
+  window back, and "Quit" from the tray is the way out. A setting ("Keep
+  running when the window is closed", on by default) turns it off, so the
+  X quits for good.
+- **An idle model unloads itself.** After a while with no message (15
+  minutes by default, a setting), the active conversation's state is saved
+  and the model is unloaded — its memory freed — and the next message
+  reloads it. The way LM Studio's idle TTL and Ollama's keep_alive behave.
+
 - **A "+" on each project** in the sidebar creates a new conversation right
   in that project, not the current one.
 - **The RAM chip shows bonaparte's own footprint** (the app plus the model

@@ -75,8 +75,11 @@ export function SettingsHub({
   // Sampling keys are the ones also adjustable per conversation.
   const samplingKeys = new Set(['temperature', 'topP', 'topK', 'minP', 'seed']);
   const sampling = settings.filter((setting) => samplingKeys.has(setting.key));
+  const appKeys = new Set(['closeToTray', 'idleUnload', 'idleUnloadMinutes']);
+  const appSettings = settings.filter((setting) => appKeys.has(setting.key));
   const launch = settings.filter(
-    (setting) => !samplingKeys.has(setting.key) && !setting.key.startsWith('plugin:'),
+    (setting) =>
+      !samplingKeys.has(setting.key) && !appKeys.has(setting.key) && !setting.key.startsWith('plugin:'),
   );
   const pluginSettings = (id: string) =>
     settings.filter((setting) => setting.key.startsWith(`plugin:${id}:`));
@@ -158,6 +161,15 @@ export function SettingsHub({
                   {engine ? engineLabel(engine) : t.status.notConnected}
                 </Button>
               </div>
+              {appSettings.length > 0 && (
+                <SettingsForm
+                  settings={appSettings}
+                  scope="global"
+                  labels={labels}
+                  locale={locale}
+                  onChange={(key, value) => void change(key, value)}
+                />
+              )}
             </div>
           )}
 
