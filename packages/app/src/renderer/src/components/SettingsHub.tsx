@@ -18,12 +18,12 @@ interface SettingsHubProps {
 }
 
 /**
- * Hub Réglages — un seul endroit pour tout ce qui est global.
+ * Settings hub — a single place for everything global.
  *
- * Les sections « Échantillonnage » et « Moteur et modèle » sont rendues par le
- * MÊME moteur de formulaire que le panneau de conversation : un réglage est
- * décrit une fois dans le catalogue du harness et apparaît partout où sa
- * portée l'autorise, avec sa provenance affichée.
+ * The "Sampling" and "Engine and model" sections are rendered by the SAME
+ * form engine as the conversation panel: a setting is described once in the
+ * harness's catalog and appears everywhere its scope allows, with its origin
+ * displayed.
  */
 export function SettingsHub({
   engine,
@@ -61,7 +61,7 @@ export function SettingsHub({
     kvWarning: t.settings.kvWarning,
   };
 
-  // Les clés d'échantillonnage sont celles réglables aussi par conversation.
+  // Sampling keys are the ones also adjustable per conversation.
   const samplingKeys = new Set(['temperature', 'topP', 'topK', 'minP', 'seed']);
   const sampling = settings.filter((setting) => samplingKeys.has(setting.key));
   const launch = settings.filter((setting) => !samplingKeys.has(setting.key));
@@ -144,9 +144,9 @@ export function SettingsHub({
 
           {section === 'plugins' && (
             <>
-              {/* Recharger à chaud plutôt que redémarrer : la moitié Node d'un
-                  plugin est chargée une fois au démarrage, et redémarrer l'app
-                  recharge le modèle en VRAM. L'hôte est réversible pour ça. */}
+              {/* Hot reload rather than restart: a plugin's Node half is
+                  loaded once at startup, and restarting the app reloads the
+                  model into VRAM. The host is reversible for this reason. */}
               <div className="plugin-actions">
                 <button
                   type="button"
@@ -177,8 +177,9 @@ export function SettingsHub({
                   {plugin.description && (
                     <p className="setting-help">{localize(plugin.description, locale)}</p>
                   )}
-                  {/* Un plugin cassé se montre avec son erreur : le faire
-                      disparaître laisserait l'utilisateur sans explication. */}
+                  {/* A broken plugin shows itself along with its error:
+                      making it disappear would leave the user without an
+                      explanation. */}
                   {plugin.error && <p className="setting-warning">{plugin.error}</p>}
                 </li>
               ))}

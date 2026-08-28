@@ -1,5 +1,5 @@
 interface FlankToggleProps {
-  /** Quel flanc : le glyphe est le même, retourné. */
+  /** Which flank: the glyph is the same, flipped. */
   side: 'start' | 'end';
   collapsed: boolean;
   label: string;
@@ -8,18 +8,18 @@ interface FlankToggleProps {
 }
 
 /**
- * Bascule d'un flanc — UNE icône, deux états.
+ * Toggle for a flank — ONE icon, two states.
  *
- * L'ancienne version changeait de glyphe selon l'état (`▊ ` puis `▎▊`) : deux
- * dessins pour un seul bouton, donc rien à quoi l'œil s'accroche. Codex fait
- * l'inverse, et c'est ce que Paul a remarqué : « on dirait que c'est la même
- * icône ». C'en est une seule ; seul son REMPLISSAGE dit si le flanc est
- * ouvert. Le bouton, lui, ne bouge jamais de l'extrémité de la barre.
+ * The old version swapped glyphs depending on the state (`▊ ` then `▎▊`):
+ * two drawings for a single button, so nothing for the eye to latch onto.
+ * Codex does the opposite, and that's what Paul noticed: "it looks like it's
+ * the same icon." It IS a single one; only its FILL says whether the flank
+ * is open. The button itself never moves from the end of the bar.
  *
- * Le glyphe est le pictogramme désormais conventionnel (VS Code, Codex,
- * Linear) : un cadre avec un tiers rempli du côté concerné. En logique
- * `start`/`end` plutôt que gauche/droite — en RTL, le flanc des conversations
- * change de bord, pas de rôle.
+ * The glyph is the now-conventional pictogram (VS Code, Codex, Linear): a
+ * frame with a third filled in on the relevant side. Using `start`/`end`
+ * logic rather than left/right — in RTL, the conversations flank changes
+ * side, not role.
  */
 export function FlankToggle({
   side,
@@ -48,8 +48,9 @@ export function FlankToggle({
           stroke="currentColor"
           strokeWidth="1.25"
         />
-        {/* Le refend et le pavé plein sont toujours dans le DOM : c'est
-            l'opacité qui parle, donc la transition est possible. */}
+        {/* The seam line and the filled block are always in the DOM: it's
+            the opacity that speaks, which is what makes the transition
+            possible. */}
         <line
           x1="10.4"
           y1="2.6"

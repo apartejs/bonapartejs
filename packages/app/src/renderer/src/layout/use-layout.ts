@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
- * Disposition du shell : largeurs et replis des deux flancs.
+ * Shell layout: widths and collapse state of both flanks.
  *
- * C'est une préférence d'AFFICHAGE, donc locale — la faire passer par l'IPC
- * ferait redémarrer le main process pour un panneau qu'on tire à la souris,
- * et redémarrer recharge le modèle en VRAM. Le compromis serait absurde.
+ * This is a DISPLAY preference, hence local — routing it through IPC would
+ * restart the main process for a panel someone is dragging with the mouse,
+ * and restarting reloads the model into VRAM. The trade-off would be absurd.
  *
- * Les largeurs sont bornées à l'écriture ET à la lecture : un `localStorage`
- * bricolé à la main, ou une fenêtre devenue plus petite, ne doit pas pouvoir
- * produire un panneau inutilisable qu'on ne saurait plus rattraper.
+ * Widths are bounded both on write AND on read: a `localStorage` hand-edited
+ * by hand, or a window that has become smaller, must not be able to produce
+ * an unusable panel that can no longer be recovered.
  */
 
 export interface LayoutBounds {
@@ -47,7 +47,7 @@ function persist(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch {
-    /* mode privé, quota : une préférence perdue n'est pas une panne */
+    /* private mode, quota: a lost preference isn't a failure */
   }
 }
 
@@ -61,8 +61,8 @@ export interface LayoutState {
   toggleSidebar: () => void;
   togglePanel: () => void;
   /**
-   * Déplie le panneau s'il est replié. Ouvrir un onglet doit le montrer :
-   * un terminal ouvert derrière un panneau fermé n'existe pas pour l'œil.
+   * Expands the panel if it's collapsed. Opening a tab must show it: a
+   * terminal opened behind a closed panel doesn't exist to the eye.
    */
   expandPanel: () => void;
 }
@@ -115,8 +115,8 @@ export function useLayout(): LayoutState {
     });
   }, []);
 
-  // Raccourcis de VS Code, parce qu'ils sont déjà dans les doigts de tout le
-  // monde : Ctrl+B pour le flanc principal, Ctrl+Alt+B pour le secondaire.
+  // VS Code's shortcuts, because they're already in everyone's fingers:
+  // Ctrl+B for the primary flank, Ctrl+Alt+B for the secondary one.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'b') return;

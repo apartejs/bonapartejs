@@ -10,15 +10,15 @@ interface ModeSelectorProps {
 }
 
 /**
- * Sélecteur de mode de jeu, monté dans le `footerLeft` du composeur.
+ * Play mode selector, mounted in the composer's `footerLeft`.
  *
- * Le mode décide de ce que l'agent s'autorise AU PROCHAIN MESSAGE : il
- * appartient au geste d'envoyer, pas au tableau de bord — d'où sa place dans la
- * rangée basse du composeur, et non plus dans la barre de statut.
+ * The mode decides what the agent is allowed to do ON THE NEXT MESSAGE: it
+ * belongs to the act of sending, not to the dashboard — hence its place in
+ * the composer's bottom row, no longer in the status bar.
  *
- * Un `<select>` natif ne sait pas afficher deux lignes par option, et le nom
- * seul d'un mode ne dit pas ce qu'il autorise : « Impro » ne prévient de rien.
- * D'où le panneau — nom, pastille colorée, une ligne de description.
+ * A native `<select>` can't display two lines per option, and a mode's name
+ * alone doesn't say what it allows: "Improv" doesn't warn of anything. Hence
+ * the panel — name, colored dot, one line of description.
  */
 export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
   const { t } = useTranslate();
@@ -51,7 +51,7 @@ export function ModeSelector({ mode, onModeChange }: ModeSelectorProps) {
       </button>
 
       {open && (
-        /* Le panneau s'ouvre vers le HAUT : le composeur est en bas de fenêtre. */
+        /* The panel opens UPWARD: the composer is at the bottom of the window. */
         <div className="mode-menu" role="menu">
           <p className="conv-menu-label">{t.modes.hint}</p>
           {MODES.map((value) => (

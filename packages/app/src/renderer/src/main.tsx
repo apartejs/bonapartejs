@@ -13,21 +13,21 @@ import { LocaleProvider } from './i18n/LocaleProvider.js';
 
 bootstrapAparte();
 
-// La coloration syntaxique s'installe en tâche de fond : elle est asynchrone
-// (shiki charge ses grammaires à la demande) et rien ne justifie de retarder
-// le premier rendu pour elle — le premier bloc de code arrive des secondes
-// plus tard. Un échec ne doit pas empêcher l'app de démarrer : on rendrait
-// alors du code non colorisé, pas un écran blanc.
+// Syntax highlighting installs itself in the background: it is asynchronous
+// (shiki loads its grammars on demand) and nothing justifies delaying the
+// first render for it — the first code block arrives seconds later. A
+// failure must not prevent the app from starting: we would then render
+// non-highlighted code, not a blank screen.
 void bootstrapHighlighting(
   document.documentElement.getAttribute('data-aparte-theme') === 'dark'
     ? 'dark'
     : 'light',
 ).catch((error: unknown) => {
-  console.warn('coloration syntaxique indisponible', error);
+  console.warn('syntax highlighting unavailable', error);
 });
 
 const root = document.getElementById('root');
-if (!root) throw new Error('#root introuvable');
+if (!root) throw new Error('#root not found');
 
 createRoot(root).render(
   <StrictMode>

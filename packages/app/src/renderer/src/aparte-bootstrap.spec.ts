@@ -7,28 +7,28 @@ import {
 } from '@aparte/core';
 import { bootstrapAparte, bootstrapHighlighting } from './aparte-bootstrap.js';
 
-/** Les types de segments que notre boucle émet réellement (ChatScreen). */
+/** The segment types our loop actually emits (ChatScreen). */
 const EMITTED = ['text', 'thinking', 'tool_call', 'error'] as const;
 
-describe('bootstrap aparté', () => {
-  it('enregistre les renderers des segments qu’on émet', () => {
-    // Historique : la lib n'enregistrait ses renderers que dans le
-    // constructeur d'`AparteClient` — que bonaparte n'instancie JAMAIS
-    // (invariant : pas de seconde boucle côté renderer). Depuis 0.5.0-alpha.0
-    // ils s'installent au premier segment ; on garde l'appel et ce test, parce
-    // que le symptôme (« [Unknown segment type: …] ») était silencieux côté
-    // produit : le chat marchait, seul le CONTENU disparaissait.
+describe('aparté bootstrap', () => {
+  it('registers the renderers for the segments we emit', () => {
+    // History: the lib only registered its renderers in `AparteClient`'s
+    // constructor — which bonaparte NEVER instantiates (invariant: no second
+    // loop on the renderer side). Since 0.5.0-alpha.0 they install themselves
+    // on the first segment; we keep the call and this test, because the
+    // symptom ("[Unknown segment type: …]") was silent from the product's
+    // point of view: the chat worked, only the CONTENT disappeared.
     bootstrapAparte();
 
     for (const type of EMITTED) {
-      expect(getSegmentRenderer(type), `renderer manquant : ${type}`).toBeDefined();
+      expect(getSegmentRenderer(type), `missing renderer: ${type}`).toBeDefined();
     }
   });
 
-  it('installe un moteur de rendu Markdown', () => {
-    // Sans fournisseur, `renderMarkdown` rend la chaîne INCHANGÉE : le modèle
-    // affiche ses astérisques et ses dièses en clair. Un agent de code qui
-    // répond en Markdown brut est illisible.
+  it('installs a Markdown rendering engine', () => {
+    // Without a provider, `renderMarkdown` returns the string UNCHANGED: the
+    // model displays its asterisks and hashes as plain text. A coding agent
+    // that replies in raw Markdown is unreadable.
     bootstrapAparte();
 
     const html = aparteGlobalConfig.renderMarkdown('**gras** et `code`');
@@ -36,38 +36,37 @@ describe('bootstrap aparté', () => {
     expect(html).toContain('<code>');
   });
 
-  it('installe le rendu Markdown incrémental pour le streaming', () => {
-    // Le fournisseur « one-shot » ne sert qu'aux messages finis. Sans le
-    // fournisseur incrémental, chaque token re-parserait tout le message :
-    // exactement ce qu'on ne peut pas se permettre sur un modèle local qui
-    // débite pendant des minutes.
+  it('installs incremental Markdown rendering for streaming', () => {
+    // The "one-shot" provider only serves finished messages. Without the
+    // incremental provider, every token would re-parse the whole message:
+    // exactly what we can't afford with a local model that streams for
+    // minutes at a time.
     bootstrapAparte();
 
     const target = {} as HTMLElement;
     expect(aparteGlobalConfig.createStreamingMarkdownRenderer(target)).not.toBeNull();
   });
 
-  it('installe la coloration syntaxique, de façon asynchrone', async () => {
-    // Construire le highlighter est un `await`, tenu HORS du chemin de
-    // premier rendu.
+  it('installs syntax highlighting, asynchronously', async () => {
+    // Building the highlighter is an `await`, kept OFF the first-render path.
     await bootstrapHighlighting('dark');
 
     expect(aparteGlobalConfig.hasHighlightProvider()).toBe(true);
   });
 
-  it('colorise les langages qu’on a choisi d’embarquer', async () => {
+  it('highlights the languages we chose to bundle', async () => {
     await bootstrapHighlighting('dark');
 
     for (const lang of ['typescript', 'python', 'rust', 'bash', 'json']) {
       const html = await aparteGlobalConfig.highlightCode('const a = 1;', lang);
-      expect(html, `pas de coloration pour ${lang}`).toContain('shiki');
+      expect(html, `no highlighting for ${lang}`).toContain('shiki');
     }
   });
 
-  it('retombe en texte brut sur un langage absent, sans lever', async () => {
-    // Contrepartie ASSUMÉE du bundle maîtrisé : nos grammaires sont figées.
-    // Ce qui n'est pas embarqué ne doit pas casser l'affichage — un modèle
-    // qui répond en Brainfuck reste lisible.
+  it('falls back to plain text on a missing language, without throwing', async () => {
+    // ACCEPTED trade-off of the controlled bundle: our grammars are frozen.
+    // What isn't bundled must not break the display — a model that replies
+    // in Brainfuck stays readable.
     await bootstrapHighlighting('dark');
 
     await expect(
@@ -75,9 +74,9 @@ describe('bootstrap aparté', () => {
     ).resolves.toBeTypeOf('string');
   });
 
-  it('suit le thème de l’app sans reconstruire le highlighter', async () => {
-    // Le HTML produit par shiki fige les couleurs : sans ré-enregistrement,
-    // un thème clair garderait du code sur fond sombre.
+  it('follows the app’s theme without rebuilding the highlighter', async () => {
+    // The HTML produced by shiki freezes the colors: without re-registering,
+    // a light theme would keep code on a dark background.
     await bootstrapHighlighting('light');
     const light = await aparteGlobalConfig.highlightCode('const a = 1;', 'typescript');
 
@@ -90,28 +89,28 @@ describe('bootstrap aparté', () => {
 });
 
 /**
- * Deux règles de la lib dont ChatScreen dépend DIRECTEMENT, et qui ont changé
- * sans que rien ne casse : la compilation passait, les tests passaient, et le
- * comportement était faux à l'écran. Elles sont épinglées ici pour que le
- * prochain changement de contrat se voie en rouge plutôt qu'en production.
+ * Two rules of the lib that ChatScreen depends on DIRECTLY, and that changed
+ * without anything breaking: the build passed, the tests passed, and the
+ * behavior was wrong on screen. They are pinned here so that the next
+ * contract change shows up red rather than in production.
  */
-describe('contrat de la lib dont dépend la boucle', () => {
-  it('un segment sans `isStreaming` n’est PAS considéré comme fini', () => {
-    // C'est pour ça que `finish()` appelle `updateMessage(id, { status })` :
-    // c'est le seul geste qui referme les segments du tour. Sans lui, la lib
-    // les tient pour toujours en cours — pas de dernier passage du Markdown,
-    // pas de coloration de la dernière ligne de code.
+describe('lib contract the loop depends on', () => {
+  it('a segment without `isStreaming` is NOT considered finished', () => {
+    // This is why `finish()` calls `updateMessage(id, { status })`: it's the
+    // only action that closes the turn's segments. Without it, the lib holds
+    // them as forever in progress — no final Markdown pass, no highlighting
+    // of the last code line.
     const open = { id: 's1', type: 'text', content: 'bonjour' } as AparteSegment;
 
     expect(isSegmentSettled(open)).toBe(false);
     expect(isSegmentSettled({ ...open, isStreaming: false })).toBe(true);
   });
 
-  it('un raisonnement sans `collapsed` est REPLIÉ', () => {
-    // Depuis 0.10.0, l'absence vaut fermé (avant, elle valait ouvert). Notre
-    // segment de réflexion doit donc dire `collapsed: false` explicitement,
-    // sinon le modèle réfléchit une minute derrière un bloc fermé — l'écran
-    // vide qu'on voulait précisément éviter.
+  it('a reasoning segment without `collapsed` is COLLAPSED', () => {
+    // Since 0.10.0, absence means closed (before, it meant open). Our
+    // reasoning segment must therefore say `collapsed: false` explicitly,
+    // otherwise the model thinks for a minute behind a closed block — the
+    // empty screen we specifically wanted to avoid.
     bootstrapAparte();
     const renderer = getSegmentRenderer('thinking');
     const render = (segment: AparteSegment): string => {

@@ -16,7 +16,7 @@ import {
 } from './tabs.js';
 
 export interface ToolingTabsApi {
-  /** Ce que les plugins actifs savent ouvrir, dans l'ordre qu'ils suggèrent. */
+  /** What the active plugins know how to open, in the order they suggest. */
   views: ToolingViewDescriptor[];
   tabs: ToolingTab[];
   active: ToolingTab | null;
@@ -29,18 +29,18 @@ interface Options {
   conversationId: string | null;
   plugins: PluginStatusDto[];
   /**
-   * Appelé quand une vue s'ouvre. Le panneau peut être replié — un raccourci
-   * qui ouvrirait un onglet invisible ne servirait à rien.
+   * Called when a view opens. The panel may be collapsed — a shortcut that
+   * opened an invisible tab would be useless.
    */
   onOpen?: () => void;
 }
 
 /**
- * Les onglets du panneau d'outillage, rangés SOUS la conversation.
+ * The tooling panel's tabs, filed UNDER the conversation.
  *
- * L'état vit ici plutôt que dans le panneau, parce que la bande d'onglets est
- * dans l'EN-TÊTE (modèle Codex) et le contenu dans le panneau : deux
- * composants, un seul état, tenu par la coquille.
+ * The state lives here rather than in the panel, because the tab strip is in
+ * the HEADER (Codex-style) and the content in the panel: two components, one
+ * single state, held by the shell.
  */
 export function useToolingTabs({ conversationId, plugins, onOpen }: Options): ToolingTabsApi {
   const [state, setState] = useState<ToolingTabsState>(EMPTY_TABS);
@@ -51,12 +51,12 @@ export function useToolingTabs({ conversationId, plugins, onOpen }: Options): To
     [plugins, locale],
   );
 
-  // Changer de conversation change de jeu d'onglets : on relit le sien.
+  // Changing conversation changes the tab set: we reread its own.
   useEffect(() => {
     setState(readTabs(window.localStorage, conversationId));
   }, [conversationId]);
 
-  // Un plugin désactivé laisse des onglets orphelins : on les écarte.
+  // A deactivated plugin leaves orphaned tabs: we discard them.
   useEffect(() => {
     setState((current) => pruneTabs(current, views));
   }, [views]);
@@ -91,11 +91,10 @@ export function useToolingTabs({ conversationId, plugins, onOpen }: Options): To
   );
 
   /**
-   * Les accélérateurs déclarés par les plugins sont réellement câblés — un
-   * raccourci affiché dans un menu et inopérant est pire que pas de raccourci.
-   * Ils vivent ici, et non dans le panneau : le panneau replié n'est pas monté,
-   * et `Ctrl+&#96;` doit ouvrir un terminal même dans ce cas (c'est ce que fait
-   * n'importe quel éditeur).
+   * Shortcuts declared by plugins are actually wired up — a shortcut shown
+   * in a menu that doesn't work is worse than no shortcut at all. They live
+   * here, not in the panel: a collapsed panel isn't mounted, and `Ctrl+&#96;`
+   * must open a terminal even in that case (which is what any editor does).
    */
   useEffect(() => {
     const shortcuts = views.filter((view) => view.shortcut);

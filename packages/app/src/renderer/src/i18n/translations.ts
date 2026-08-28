@@ -1,6 +1,6 @@
 /**
- * i18n de l'UI — une locale = un fichier (fr.ts, en.ts), l'interface dans
- * types.ts. Ce module est le point d'entrée stable.
+ * UI i18n — one locale = one file (fr.ts, en.ts), the interface in
+ * types.ts. This module is the stable entry point.
  */
 
 import type { BonaparteLocale } from '@aparte/bonaparte-shared';

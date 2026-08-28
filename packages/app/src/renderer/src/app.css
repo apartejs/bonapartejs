@@ -1,22 +1,21 @@
-/* Typo de l'identité — piles système uniquement, aucune fonte réseau. */
+/* Identity typeface — system stacks only, no network font. */
 :root {
   --bp-serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
   --bp-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --bp-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 
   /*
-   * ── Mouvement ─────────────────────────────────────────────────────────
+   * ── Motion ────────────────────────────────────────────────────────────
    *
-   * Une seule échelle, pour toute l'app. Ce qui manquait n'était pas de la
-   * vitesse : c'était de la COURBE. Une transition linéaire de 120 ms se voit
-   * comme un saut ; la même durée avec un départ vif et une arrivée longue se
-   * lit comme un mouvement. `--bp-ease` part fort et se pose (c'est la courbe
-   * des feuilles iOS et de Codex) ; `--bp-ease-out` ne fait que se poser, pour
-   * ce qui apparaît.
+   * A single scale, for the whole app. What was missing wasn't speed: it was
+   * the CURVE. A linear 120 ms transition reads as a jump; the same duration
+   * with a brisk start and a long settle reads as a movement. `--bp-ease`
+   * starts strong and settles (it's the curve of iOS sheets and of Codex);
+   * `--bp-ease-out` only settles, for things that appear.
    *
-   * Trois durées, et pas plus : ce qui répond au doigt (survol, focus), ce qui
-   * s'ouvre (menus, bulles), ce qui déplace la mise en page (flancs). Passé
-   * 400 ms on attend l'interface ; en dessous de 100 ms on ne voit rien.
+   * Three durations, no more: what responds to the pointer (hover, focus),
+   * what opens (menus, bubbles), what shifts the layout (flanks). Past
+   * 400 ms you're waiting on the interface; under 100 ms you see nothing.
    */
   --bp-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --bp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -25,17 +24,17 @@
   --bp-slow: 400ms;
 
   /*
-   * Hauteur des deux barres du haut — celle de la conversation et celle du
-   * panneau. Elles appartiennent à des colonnes différentes, mais doivent se
-   * lire comme une seule ligne : la valeur est donc partagée, pas recopiée.
+   * Height of the two top bars — the conversation's and the panel's. They
+   * belong to different columns, but must read as a single line: the value
+   * is therefore shared, not copy-pasted.
    */
   --bp-bar: 44px;
 }
 
 /*
- * Tout ce qui réagit au pointeur le fait en fondu. La liste est explicite —
- * un `* { transition: all }` animerait aussi la mise en page, ce qui donne des
- * interfaces qui traînent.
+ * Everything that reacts to the pointer does so with a fade. The list is
+ * explicit — a `* { transition: all }` would also animate the layout, which
+ * produces interfaces that drag.
  */
 button,
 a,
@@ -58,9 +57,10 @@ summary,
 }
 
 /*
- * Ce qui s'ouvre par-dessus le reste : menus, bulles, panneaux volants. Un
- * léger recul et une échelle de 97 % suffisent à donner une origine au
- * mouvement — l'élément vient de son bouton, il n'apparaît pas de nulle part.
+ * What opens on top of everything else: menus, bubbles, floating panels. A
+ * slight pullback and a 97% scale are enough to give the movement an
+ * origin — the element comes from its button, it doesn't appear out of
+ * nowhere.
  */
 @keyframes bp-popover-in {
   from {
@@ -79,9 +79,9 @@ summary,
 }
 
 /*
- * Les modales, elles, viennent du centre : elles n'ont pas de bouton d'origine.
- * Le voile monte en fondu pendant que la carte se pose — décaler les deux
- * suffit à donner de la profondeur, sans rien de spectaculaire.
+ * Modals, on the other hand, come from the center: they have no originating
+ * button. The backdrop fades in while the card settles — offsetting the two
+ * is enough to give depth, without anything flashy.
  */
 @keyframes bp-veil-in {
   from {
@@ -112,9 +112,9 @@ summary,
 }
 
 /*
- * Le respect de `prefers-reduced-motion` n'est pas une option : pour une
- * partie des gens, ces mouvements donnent la nausée. On coupe tout, sans rien
- * casser d'autre (les états finaux sont les mêmes).
+ * Honoring `prefers-reduced-motion` is not optional: for some people, these
+ * movements cause nausea. We cut everything, without breaking anything else
+ * (the final states are the same).
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -202,7 +202,7 @@ button.primary {
   display: flex;
 }
 
-/* ── Chat (la lib exige une chaîne de hauteurs contrainte) ─────────── */
+/* ── Chat (the lib requires a constrained height chain) ────────────── */
 
 .chat-wrap {
   flex: 1;
@@ -342,7 +342,7 @@ button.primary {
   line-height: 1.5;
 }
 
-/* Groupe intégré : champ + bouton Parcourir dans le même encadré. */
+/* Integrated group: field + Browse button in the same frame. */
 .field-row {
   display: flex;
   align-items: stretch;
@@ -417,7 +417,7 @@ button.primary {
   gap: 8px;
 }
 
-/* ── Sélecteur de modèles ──────────────────────────────────────────── */
+/* ── Model picker ──────────────────────────────────────────────────── */
 
 .picker-search {
   margin-bottom: 10px;
@@ -603,7 +603,7 @@ button.primary {
   margin-top: 6px;
 }
 
-/* ── Barre de statut ───────────────────────────────────────────────── */
+/* ── Status bar ────────────────────────────────────────────────────── */
 
 .status-strip {
   display: flex;
@@ -672,7 +672,7 @@ button.primary {
   color: var(--aparte-error);
 }
 
-/* ── Mascotte ──────────────────────────────────────────────────────── */
+/* ── Mascot ────────────────────────────────────────────────────────── */
 
 .mascotte {
   font-family: var(--bp-serif);
@@ -736,7 +736,7 @@ button.primary {
   }
 }
 
-/* ── Menu des conversations ─────────────────────────────────────────────── */
+/* ── Conversations menu ─────────────────────────────────────────────────── */
 
 .app-body {
   flex: 1;
@@ -745,7 +745,7 @@ button.primary {
 }
 
 .conv-sidebar {
-  /* La largeur vient du slot, qui est redimensionnable. */
+  /* The width comes from the slot, which is resizable. */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -846,7 +846,7 @@ button.primary {
   white-space: nowrap;
 }
 
-/* Le différenciateur, dit sobrement — et seulement quand il est vrai. */
+/* The differentiator, stated soberly — and only when it's true. */
 .conv-kv {
   align-self: flex-start;
   margin-top: 2px;
@@ -860,10 +860,10 @@ button.primary {
   background: color-mix(in srgb, var(--aparte-success) 8%, transparent);
 }
 
-/* ── Panneau d'outillage (droite) ───────────────────────────────────────── */
+/* ── Tooling panel (right side) ─────────────────────────────────────────── */
 
 .tooling-panel {
-  /* La largeur vient du slot, qui est redimensionnable. */
+  /* The width comes from the slot, which is resizable. */
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -872,9 +872,9 @@ button.primary {
 }
 
 /*
- * Barre du panneau : même hauteur que celle de la conversation, même bordure
- * basse. Le flanc des conversations monte donc jusqu'en haut de la fenêtre,
- * tandis que ces deux barres n'occupent que leurs colonnes.
+ * Panel bar: same height as the conversation's, same bottom border. The
+ * conversations flank therefore rises all the way to the top of the window,
+ * while these two bars only occupy their own columns.
  */
 .tooling-bar {
   display: flex;
@@ -894,7 +894,7 @@ button.primary {
   padding: 6px 2px 0 8px;
 }
 
-/* La bande d'onglets défile ; le bouton `+` reste, lui, toujours atteignable. */
+/* The tab strip scrolls; the `+` button, on the other hand, stays always reachable. */
 .tooling-tablist {
   display: flex;
   align-items: stretch;
@@ -923,8 +923,8 @@ button.primary {
   color: var(--aparte-text);
 }
 
-/* L'onglet actif se raccroche au panneau qu'il ouvre : il partage son fond et
-   mord d'un pixel sur la bordure de la barre. */
+/* The active tab latches onto the panel it opens: it shares its background
+   and bites one pixel into the bar's border. */
 .tooling-tab-active {
   background: var(--aparte-bg);
   border-color: var(--aparte-border);
@@ -949,10 +949,10 @@ button.primary {
 }
 
 /*
- * La croix ne se montre que sur l'onglet actif ou au survol : une rangée de
- * croix permanentes fait un panneau bruyant, et l'occasion de fermer un onglet
- * par mégarde. Elle garde sa PLACE dans les deux cas (opacité, pas display),
- * pour que les onglets ne sautent pas au passage de la souris.
+ * The close cross only shows on the active tab or on hover: a row of
+ * permanent crosses makes for a noisy panel, and an opportunity to close a
+ * tab by mistake. It keeps its PLACE in both cases (opacity, not display),
+ * so tabs don't jump around when the mouse passes over.
  */
 .tooling-tab-close {
   padding: 6px 8px 6px 2px;
@@ -982,15 +982,15 @@ button.primary {
 }
 
 /*
- * ── Bouton-icône ──────────────────────────────────────────────────────────
+ * ── Icon button ───────────────────────────────────────────────────────────
  *
- * UNE définition pour tous : le `+` du panneau, celui du flanc, les menus
- * d'actions. Il y en avait trois, de trois tailles — dont une pastille de
- * 12 px de police autour d'un `+` écrit en caractère, ce qui donnait un signe
- * minuscule perdu au milieu de sa bordure.
+ * ONE definition for all of them: the panel's `+`, the flank's, the action
+ * menus. There used to be three, in three sizes — including a chip with a
+ * 12 px font size around a `+` character, which gave a tiny sign lost in the
+ * middle of its border.
  *
- * Même gabarit que la bascule des flancs (28 px), donc deux boutons voisins ne
- * se lisent jamais comme un défaut d'alignement.
+ * Same footprint as the flank toggle (28 px), so two neighboring buttons
+ * never read as a misalignment.
  */
 .icon-button {
   flex: 0 0 auto;
@@ -1024,10 +1024,11 @@ button.primary {
 }
 
 /*
- * Position FIXE, ancrée sur le bouton par JavaScript. La zone qui porte la
- * bande d'onglets coupe ce qui dépasse (elle se replie en glissant) : un menu
- * posé en absolu à l'intérieur se faisait couper avec, et le clic ouvrait un
- * menu invisible. `fixed` échappe au découpage des ancêtres.
+ * FIXED position, anchored to the button by JavaScript. The area that
+ * carries the tab strip clips whatever overflows it (it collapses by
+ * sliding): a menu placed absolutely inside it got clipped along with it,
+ * and the click opened an invisible menu. `fixed` escapes the ancestors'
+ * clipping.
  */
 .tooling-menu {
   position: fixed;
@@ -1110,7 +1111,7 @@ button.primary {
   color: var(--aparte-text-muted);
 }
 
-/* ── Jauge de contexte ──────────────────────────────────────────────────── */
+/* ── Context gauge ──────────────────────────────────────────────────────── */
 
 .context-gauge {
   display: inline-flex;
@@ -1135,12 +1136,12 @@ button.primary {
   background: var(--aparte-primary);
 }
 
-/* Le contexte qui se remplit est une information utile AVANT la saturation. */
+/* The context filling up is useful information BEFORE saturation. */
 .context-gauge-hot {
   background: var(--aparte-error);
 }
 
-/* ── Hub Réglages ───────────────────────────────────────────────────────── */
+/* ── Settings hub ───────────────────────────────────────────────────────── */
 
 .settings-hub {
   position: fixed;
@@ -1208,7 +1209,7 @@ button.primary {
   padding: 18px 22px;
 }
 
-/* ── Formulaire de réglages (hub ET panneau de conversation) ────────────── */
+/* ── Settings form (hub AND conversation panel) ──────────────────────────── */
 
 .settings-form {
   display: flex;
@@ -1233,7 +1234,7 @@ button.primary {
   font-size: 13.5px;
 }
 
-/* Dire d'où vient une valeur vaut mieux que laisser deviner. */
+/* Saying where a value comes from beats leaving it to guesswork. */
 .setting-inherited {
   font-family: var(--bp-mono);
   font-size: 10.5px;
@@ -1338,7 +1339,7 @@ button.primary {
   color: var(--aparte-error);
 }
 
-/* ── Lanceur de projet ──────────────────────────────────────────────────── */
+/* ── Project launcher ───────────────────────────────────────────────────── */
 
 .script-list {
   list-style: none;
@@ -1399,7 +1400,7 @@ button.primary {
   color: var(--aparte-text-muted);
 }
 
-/* ── Navigateur outillé ─────────────────────────────────────────────────── */
+/* ── Tooled browser ─────────────────────────────────────────────────────── */
 
 .browser-view {
   display: flex;
@@ -1425,10 +1426,10 @@ button.primary {
   font-size: 12px;
 }
 
-/* La vue native se pose EXACTEMENT sur cette zone : elle n'est pas dans le
-   DOM, donc ce bloc n'est qu'une réservation de place. */
-/* Un chargement qui échoue le dit DANS la zone de la page : c'est là que
-   l'utilisateur regarde, et la vue native, elle, n'affichera rien. */
+/* The native view sits EXACTLY on this area: it is not in the DOM, so this
+   block is only a placeholder reserving space. */
+/* A failed load says so INSIDE the page area: that's where the user is
+   looking, and the native view itself will display nothing. */
 .browser-failed {
   margin: 0;
   padding: 10px 12px;

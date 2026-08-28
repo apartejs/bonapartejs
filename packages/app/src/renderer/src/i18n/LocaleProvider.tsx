@@ -16,7 +16,7 @@ function initialLocale(): BonaparteLocale {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'fr' || stored === 'en') return stored;
   } catch {
-    /* localStorage indisponible : détection navigateur */
+    /* localStorage unavailable: browser detection */
   }
   return navigator.language.toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
@@ -37,11 +37,11 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      /* non bloquant */
+      /* non-blocking */
     }
     document.documentElement.lang = next;
-    // Le harness a besoin de la locale : elle décide de la langue dans
-    // laquelle le modèle répond (le protocole, lui, reste anglais).
+    // The harness needs the locale: it decides the language the model
+    // replies in (the protocol itself stays English).
     void window.bonaparte?.getConfig().then((config) =>
       window.bonaparte.setConfig({ ...config, locale: next }),
     );
@@ -59,6 +59,6 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 
 export function useTranslate(): LocaleContextValue {
   const ctx = useContext(LocaleContext);
-  if (!ctx) throw new Error('useTranslate doit être utilisé sous <LocaleProvider>');
+  if (!ctx) throw new Error('useTranslate must be used under <LocaleProvider>');
   return ctx;
 }

@@ -3,22 +3,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
 interface TemperatureControlProps {
-  /** Change à chaque conversation ouverte : la valeur est portée par elle. */
+  /** Changes on every open conversation: the value is carried by it. */
   conversationId: string | null;
 }
 
 /**
- * Température de la conversation, dans la rangée du composeur.
+ * Conversation's temperature, in the composer's row.
  *
- * Elle était dans le panneau d'outillage, à droite, avec les réglages
- * « avancés ». C'était le mauvais endroit : la température n'est pas un
- * réglage d'atelier, c'est ce qui décide du ton du PROCHAIN message — même
- * famille que le mode de jeu et le modèle, donc même place.
+ * It used to be in the tooling panel, on the right, with the "advanced"
+ * settings. That was the wrong place: temperature isn't a workshop setting,
+ * it's what decides the tone of the NEXT message — same family as the play
+ * mode and the model, hence the same spot.
  *
- * L'échantillonnage se change à chaud : contrairement aux paramètres de
- * lancement, il n'entre pas au manifest KV et n'invalide donc aucun état
- * sauvegardé. On peut le bouger en pleine conversation sans rien payer, et
- * c'est précisément ce qui justifie de le mettre à portée de main.
+ * Sampling changes on the fly: unlike launch parameters, it doesn't enter
+ * the KV manifest and therefore invalidates no saved state. It can be moved
+ * mid-conversation at no cost, and that's precisely what justifies putting
+ * it within reach.
  */
 export function TemperatureControl({ conversationId }: TemperatureControlProps) {
   const { t } = useTranslate();
@@ -46,7 +46,7 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
 
   const change = useCallback(
     async (value: number) => {
-      // Optimiste : le curseur doit suivre le doigt, pas l'aller-retour IPC.
+      // Optimistic: the slider must follow the finger, not the IPC round trip.
       setSetting((current) => (current ? { ...current, value, overridden: true } : current));
       await window.bonaparte.setSetting('conversation', 'temperature', value);
       await load();
@@ -96,8 +96,9 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
           />
           <div className="temp-row">
             <span className="temp-value">{value.toLocaleString()}</span>
-            {/* La provenance est dite : sans elle, on ne sait pas si on règle
-                cette conversation ou si on lit le défaut global. */}
+            {/* The origin is stated: without it, you can't tell whether
+                you're adjusting this conversation or reading the global
+                default. */}
             <span className="temp-origin">
               {setting.overridden ? t.temperature.thisConversation : t.settings.inherited}
             </span>

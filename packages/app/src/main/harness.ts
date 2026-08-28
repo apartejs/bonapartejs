@@ -1,9 +1,9 @@
 /**
- * Pont entre @aparte/bonaparte-core et Electron : possède le MOTEUR (config
- * llama.cpp managé ou distant), la session de chat active et la config app.
- * Le modèle n'est pas un paramètre du moteur : chaque conversation épingle le
- * sien, et le serveur managé est (re)lancé avec le modèle de la conversation
- * active. Toute la logique métier vit dans core — ici, uniquement du câblage.
+ * Bridge between @aparte/bonaparte-core and Electron: owns the ENGINE (managed
+ * or remote llama.cpp config), the active chat session, and the app config.
+ * The model is not a parameter of the engine: each conversation pins its own,
+ * and the managed server is (re)started with the model of the active
+ * conversation. All business logic lives in core — here, only wiring.
  */
 
 import { execFile, spawn, spawnSync } from 'node:child_process';
@@ -67,13 +67,13 @@ import {
 import { app, dialog, shell } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
 
-/** Seules destinations externes autorisées depuis le renderer. */
+/** Only external destinations allowed from the renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
 const MANAGED_PORT = 8763;
 
-// Le prompt système est désormais construit par ChatSession depuis
-// l'inventaire d'outils, puis figé dans la conversation (J2).
+// The system prompt is now built by ChatSession from the tool inventory,
+// then frozen into the conversation (J2).
 
 const execFileAsync = promisify(execFile);
 
@@ -81,8 +81,8 @@ function realSpawn(binPath: string, args: string[]): ProcessHandle {
   const child = spawn(binPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
-    // POSIX : le serveur devient chef de son groupe, pour qu'on puisse
-    // abattre tout l'arbre d'un coup (cf. kill).
+    // POSIX: the server becomes the leader of its own process group, so we
+    // can bring down the whole tree at once (see kill).
     ...(process.platform === 'win32' ? {} : { detached: true }),
   });
   child.stderr?.on('data', (chunk: Buffer) => {
@@ -96,14 +96,16 @@ function realSpawn(binPath: string, args: string[]): ProcessHandle {
         cb(code);
       }),
     kill: () => {
-      // Windows : le CLI unifié `llama serve` est un lanceur qui spawne le
-      // vrai serveur en enfant — child.kill() ne tuerait que le lanceur et
-      // laisserait le modèle chargé en VRAM. taskkill /T abat tout l'arbre.
+      // Windows: the unified `llama serve` CLI is a launcher that spawns the
+      // real server as a child — child.kill() would only kill the launcher
+      // and leave the model loaded in VRAM. taskkill /T brings down the whole
+      // tree.
       //
-      // SYNCHRONE volontairement : à la fermeture, un taskkill asynchrone
-      // n'a pas le temps de démarrer avant qu'Electron ne quitte, et le
-      // serveur survit à l'app (constaté : un llama-server orphelin de
-      // 24 Go). Bloquer ~50 ms au shutdown est le prix de la certitude.
+      // Deliberately SYNCHRONOUS: on shutdown, an asynchronous taskkill
+      // doesn't have time to start before Electron quits, and the server
+      // survives the app (observed in practice: an orphaned 24 GB
+      // llama-server). Blocking for ~50 ms at shutdown is the price of
+      // certainty.
       if (process.platform === 'win32' && child.pid) {
         try {
           spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
@@ -111,10 +113,10 @@ function realSpawn(binPath: string, args: string[]): ProcessHandle {
             timeout: 5_000,
           });
         } catch {
-          child.kill(); // dernier recours
+          child.kill(); // last resort
         }
       } else {
-        // POSIX : tuer le groupe de process, pas seulement le lanceur.
+        // POSIX: kill the process group, not just the launcher.
         try {
           if (child.pid) process.kill(-child.pid, 'SIGTERM');
           else child.kill();
@@ -134,7 +136,7 @@ function modelDisplayName(modelPath: string): string {
   return basename(modelPath).replace(/\.gguf$/i, '');
 }
 
-/** Tag de build du binaire (ex. b10217-ddd4ec142) — 'unknown' en dernier recours. */
+/** Build tag of the binary (e.g. b10217-ddd4ec142) — 'unknown' as a last resort. */
 async function readBuildTag(binPath: string): Promise<string> {
   try {
     const { stdout, stderr } = await execFileAsync(binPath, ['--version'], {
@@ -152,10 +154,10 @@ async function readBuildTag(binPath: string): Promise<string> {
 }
 
 /**
- * Trace du serveur managé en cours, pour le nettoyer au démarrage suivant si
- * l'app est morte sans arrêt propre (crash, kill -9, rechargement à chaud en
- * développement). Sinon un modèle de plusieurs Go reste en mémoire sans que
- * rien ne le rattache à quoi que ce soit.
+ * Trace of the currently running managed server, to clean it up on the next
+ * startup if the app died without a clean shutdown (crash, kill -9, hot
+ * reload in development). Otherwise a model of several GB stays in memory
+ * with nothing left attaching it to anything.
  */
 const PID_FILE = join(bonaparteDataDir(), 'managed-server.pid');
 
@@ -165,7 +167,7 @@ async function rememberSpawnedPid(pid: number | undefined): Promise<void> {
     await mkdir(dirname(PID_FILE), { recursive: true });
     await writeFile(PID_FILE, String(pid), 'utf8');
   } catch {
-    /* la trace est un confort, jamais un prérequis */
+    /* the trace is a convenience, never a prerequisite */
   }
 }
 
@@ -173,11 +175,11 @@ async function forgetSpawnedPid(): Promise<void> {
   try {
     await rm(PID_FILE, { force: true });
   } catch {
-    /* idem */
+    /* same */
   }
 }
 
-/** Le process existe-t-il encore ET est-ce bien un llama ? (garde anti-recyclage de PID) */
+/** Does the process still exist AND is it actually a llama? (guard against PID recycling) */
 function isOrphanLlama(pid: number): boolean {
   if (process.platform !== 'win32') {
     try {
@@ -195,7 +197,7 @@ function isOrphanLlama(pid: number): boolean {
   return /llama/i.test(listed.stdout ?? '');
 }
 
-/** Abat un serveur managé resté seul après une fin brutale de l'app. */
+/** Kills a managed server left orphaned after the app ended abruptly. */
 async function killOrphanedServer(): Promise<void> {
   let recorded: string;
   try {
@@ -207,7 +209,7 @@ async function killOrphanedServer(): Promise<void> {
   await forgetSpawnedPid();
   if (!Number.isInteger(pid) || pid <= 0 || !isOrphanLlama(pid)) return;
 
-  console.log(`[llama-server] orphelin détecté (pid ${pid}) — arrêt`);
+  console.log(`[llama-server] orphan detected (pid ${pid}) — stopping`);
   if (process.platform === 'win32') {
     spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
       windowsHide: true,
@@ -220,17 +222,17 @@ async function killOrphanedServer(): Promise<void> {
       try {
         process.kill(pid, 'SIGTERM');
       } catch {
-        /* déjà parti */
+        /* already gone */
       }
     }
   }
 }
 
 /**
- * Identifiant de conversation. Il ne dérive PLUS du projet : une conversation
- * existe pour elle-même, avec ou sans dossier, et on doit pouvoir en tenir
- * plusieurs sur le même projet. L'horodatage en tête garde les dossiers
- * lisibles et triés sur disque.
+ * Conversation identifier. It no longer derives from the project: a
+ * conversation exists on its own, with or without a folder, and it must be
+ * possible to hold several of them on the same project. The leading
+ * timestamp keeps folders readable and sorted on disk.
  */
 function newConversationId(): string {
   return `${Date.now().toString(36)}-${randomBytes(4).toString('hex')}`;
@@ -240,11 +242,11 @@ export class Harness {
   private window: BrowserWindow | null = null;
   private engine: BackendConfigDto | null = null;
   /**
-   * Périmètre de la conversation OUVERTE — pas de l'application.
+   * Scope of the OPEN conversation — not of the application.
    *
-   * Les racines viennent du PROJET auquel la conversation est rattachée : un
-   * seul endroit à éditer, un seul endroit pour les permissions. Vide est un
-   * cas normal (conversation sans projet) : les outils marchent, sans
+   * The roots come from the PROJECT the conversation is attached to: one
+   * single place to edit, one single place for permissions. Empty is a
+   * normal case (conversation without a project): the tools work, without
    * confinement.
    */
   private roots: string[] = [];
@@ -253,8 +255,8 @@ export class Harness {
   private readonly pluginHost = new PluginHost({
     registry: this.registry,
     logger: (message) => console.log(message),
-    // `core` ne connaît pas Electron : c'est ici qu'un événement de plugin
-    // devient un message IPC vers la fenêtre.
+    // `core` doesn't know about Electron: this is where a plugin event
+    // becomes an IPC message to the window.
     emit: (pluginId, instanceId, event, payload) => {
       this.emit(IPC.evPlugin, { pluginId, instanceId, event, payload });
     },
@@ -269,7 +271,7 @@ export class Harness {
   >();
   private backend: Backend | null = null;
   private live: LiveBackendConfig | null = null;
-  /** Modèle actuellement chargé par le serveur managé. */
+  /** Model currently loaded by the managed server. */
   private loadedModelPath: string | null = null;
   private session: ChatSession | null = null;
   private unsubscribeStatus: (() => void) | null = null;
@@ -282,18 +284,18 @@ export class Harness {
   private readonly configPath = join(bonaparteDataDir(), 'config', 'global.json');
 
   /**
-   * Les outils disque suivent le projet : sans projet, ils ne sont PAS dans
-   * l'inventaire (donc inémettables), et en ouvrir un les annonce par un
-   * delta d'inventaire dans les conversations en cours.
+   * Disk tools follow the project: without a project, they are NOT in the
+   * inventory (hence unemittable), and opening one announces them via an
+   * inventory delta in ongoing conversations.
    */
   /**
-   * Les outils intégrés sont TOUJOURS disponibles. Le projet est leur
-   * périmètre — avec lui, les chemins y sont confinés ; sans lui, ils partent
-   * du dossier personnel — mais il n'a jamais été leur condition d'existence.
+   * Built-in tools are ALWAYS available. The project is their scope — with
+   * one, paths are confined to it; without one, they start from the home
+   * folder — but it was never their condition of existence.
    *
-   * (L'ancienne version conditionnait l'enregistrement à « le registre est
-   * vide », ce que les outils de plugins rendaient faux : les outils fichiers
-   * ne s'enregistraient plus jamais, en silence.)
+   * (The previous version conditioned registration on "the registry is
+   * empty", which the plugin tools made false: the file tools would silently
+   * stop registering ever again.)
    */
   private registerBuiltinTools(): void {
     const present = new Set(this.registry.list().map((tool) => tool.name));
@@ -308,15 +310,15 @@ export class Harness {
     this.window = window;
   }
 
-  /** Restaure projet et mode depuis la config au démarrage. */
+  /** Restores project and mode from config at startup. */
   async restoreSession(): Promise<void> {
-    // Avant tout : un serveur laissé par une session morte brutalement.
+    // First of all: a server left behind by a session that died abruptly.
     await killOrphanedServer();
     await this.purgeLegacyConversations();
     await this.loadPlugins();
     const config = await this.loadConfig();
-    // On rouvre la dernière conversation, et c'est ELLE qui dit s'il y a un
-    // projet. Rien n'est chargé en VRAM ici : seulement de la méta.
+    // We reopen the last conversation, and it is THAT conversation that says
+    // whether there is a project. Nothing is loaded into VRAM here: only meta.
     if (config.currentConversationId && (await this.store.exists(config.currentConversationId))) {
       this.currentConversationId = config.currentConversationId;
       this.roots = await this.rootsOf(config.currentConversationId);
@@ -326,15 +328,15 @@ export class Harness {
   }
 
   /**
-   * Table rase des conversations d'ancienne forme (décision de Paul, 2026-08-20).
+   * Clean slate for old-shape conversations (Paul's decision, 2026-08-20).
    *
-   * Avant la refonte, une conversation portait son dossier elle-même
-   * (`projectRoot`). Le périmètre appartient désormais au PROJET. Écrire du code
-   * de compatibilité pour quelques conversations n'avait pas de sens : on les
-   * supprime avec leur état KV, et on le DIT dans le journal plutôt que de les
-   * faire disparaître en silence.
+   * Before the redesign, a conversation carried its own folder
+   * (`projectRoot`). The scope now belongs to the PROJECT. Writing
+   * compatibility code for a handful of conversations didn't make sense: we
+   * delete them along with their KV state, and we SAY so in the log rather
+   * than making them disappear silently.
    *
-   * La détection porte sur le JSON brut : le champ n'existe plus dans le type.
+   * Detection is based on the raw JSON: the field no longer exists in the type.
    */
   private async purgeLegacyConversations(): Promise<void> {
     const dir = join(bonaparteDataDir(), 'conversations');
@@ -354,16 +356,16 @@ export class Harness {
       if (!raw.includes('"projectRoot"')) continue;
       await this.store.remove(id);
       await this.kv.forget(id);
-      console.log(`[conversations] ancienne forme purgée : ${id}`);
+      console.log(`[conversations] old-shape conversation purged: ${id}`);
     }
   }
 
   /**
-   * Racines en vigueur pour une conversation : celles de SON projet.
+   * Roots in effect for a conversation: those of ITS project.
    *
-   * Une conversation sans projet, ou dont le projet a été supprimé, rend un
-   * périmètre vide — ce qui est un état licite, pas une erreur : les outils
-   * marchent, simplement sans confinement.
+   * A conversation without a project, or whose project has been deleted,
+   * yields an empty scope — which is a legitimate state, not an error: the
+   * tools work, simply without confinement.
    */
   private async rootsOf(conversationId: string): Promise<string[]> {
     const { projectId } = await this.store.meta(conversationId);
@@ -371,7 +373,7 @@ export class Harness {
     return (await this.projects.get(projectId))?.roots ?? [];
   }
 
-  /** Nom du projet pour l'affichage, ou rien s'il n'y en a pas. */
+  /** Project name for display, or nothing if there is none. */
   private async projectNameOf(
     projectId: string | undefined,
   ): Promise<{ projectName?: string }> {
@@ -380,7 +382,7 @@ export class Harness {
     return project ? { projectName: project.name } : {};
   }
 
-  /** Conversation courante, créée à la volée si l'app n'en a encore aucune. */
+  /** Current conversation, created on the fly if the app doesn't have one yet. */
   private async ensureConversationId(): Promise<string> {
     if (this.currentConversationId) return this.currentConversationId;
     const metas = await this.store.listMeta();
@@ -407,7 +409,7 @@ export class Harness {
         ...(meta.projectId ? { projectId: meta.projectId } : {}),
         ...(await this.projectNameOf(meta.projectId)),
         ...(meta.modelPath ? { modelName: modelDisplayName(meta.modelPath) } : {}),
-        // Une reprise instantanée se promet sur pièce : l'état doit exister.
+        // An instant resume is only promised on the evidence: the state must exist.
         hasKvState: await this.kv.has(meta.id),
       })),
     );
@@ -431,8 +433,8 @@ export class Harness {
   // ── Plugins ────────────────────────────────────────────────────────────
 
   /**
-   * Dossier des plugins. En développement il vit à la racine du dépôt ; une
-   * fois l'app empaquetée, dans les ressources.
+   * Plugins folder. In development it lives at the root of the repo; once
+   * the app is packaged, inside the resources.
    */
   private pluginsDir(): string {
     return app.isPackaged
@@ -441,37 +443,37 @@ export class Harness {
   }
 
   /**
-   * Compteur de rechargement, utilisé comme cache-buster d'import ESM.
+   * Reload counter, used as an ESM import cache-buster.
    *
-   * `import()` mémoïse par URL : sans ce paramètre, réactiver un plugin
-   * re-jouerait l'ANCIEN module même après recompilation. C'est le seul moyen
-   * d'oublier un module ESM déjà chargé.
+   * `import()` memoizes by URL: without this parameter, reactivating a plugin
+   * would replay the OLD module even after recompilation. This is the only
+   * way to make an already-loaded ESM module forgotten.
    */
   private pluginGeneration = 0;
 
   /**
-   * Recharge les plugins À CHAUD : démontage complet puis re-découverte.
+   * Reloads plugins HOT: full teardown then re-discovery.
    *
-   * C'est exactement ce pour quoi l'hôte a été rendu réversible — tout ce qu'un
-   * plugin a enregistré part avec son contexte. Sans ça, retoucher la moitié
-   * Node d'un plugin imposait de redémarrer l'app, donc de recharger le modèle
-   * en VRAM : plusieurs dizaines de secondes pour trois lignes de plugin.
+   * This is exactly what the host was made reversible for — everything a
+   * plugin registered leaves with its context. Without this, touching a
+   * plugin's Node half required restarting the app, hence reloading the
+   * model into VRAM: several dozen seconds for three lines of plugin code.
    */
   async reloadPlugins(): Promise<PluginStatusDto[]> {
     await this.pluginHost.deactivateAll();
     this.pluginGeneration += 1;
     await this.loadPlugins();
-    // L'inventaire d'outils a pu changer : les conversations en cours
-    // l'apprendront par un delta à leur prochaine ouverture.
+    // The tool inventory may have changed: ongoing conversations will learn
+    // about it via a delta on their next opening.
     this.registerBuiltinTools();
     this.session = null;
     return this.listPlugins();
   }
 
   /**
-   * Découvre puis active les plugins. Un plugin qui échoue est CONSERVÉ avec
-   * son erreur — le hub Réglages doit pouvoir le montrer plutôt que de le
-   * faire disparaître sans explication.
+   * Discovers then activates plugins. A plugin that fails is KEPT along with
+   * its error — the Settings hub must be able to show it rather than making
+   * it disappear without explanation.
    */
   async loadPlugins(): Promise<void> {
     const found = await this.pluginHost.discover(this.pluginsDir());
@@ -491,7 +493,7 @@ export class Harness {
         await this.pluginHost.activate(plugin.id, module);
       } catch (error) {
         console.error(
-          `[plugins] ${plugin.id} n'a pas pu être activé :`,
+          `[plugins] ${plugin.id} could not be activated:`,
           error instanceof Error ? error.message : error,
         );
       }
@@ -502,9 +504,9 @@ export class Harness {
     return this.pluginHost.status();
   }
 
-  // ── Réglages ───────────────────────────────────────────────────────────
+  // ── Settings ───────────────────────────────────────────────────────────
 
-  /** Champs du harness plus ceux contribués par les plugins actifs. */
+  /** Harness fields plus those contributed by active plugins. */
   private settingFields(): SettingField[] {
     const fromPlugins = this.pluginHost
       .status()
@@ -539,7 +541,7 @@ export class Harness {
       value: setting.value,
       from: setting.from,
       overridden: setting.overridden,
-      // L'interface doit prévenir AVANT le changement, pas constater après.
+      // The UI must warn BEFORE the change, not observe it after the fact.
       invalidatesKv: KV_INVALIDATING_KEYS.has(setting.key),
     }));
   }
@@ -549,8 +551,8 @@ export class Harness {
       const id = this.currentConversationId;
       if (!id) return;
       await this.store.setSetting(id, key, value);
-      // La session porte l'échantillonnage : elle sera rouverte au prochain
-      // message avec les nouvelles valeurs.
+      // The session carries the sampling params: it will be reopened on the
+      // next message with the new values.
       this.session = null;
       return;
     }
@@ -562,7 +564,7 @@ export class Harness {
     this.session = null;
   }
 
-  /** Échantillonnage effectif de la conversation ouverte. */
+  /** Effective sampling for the open conversation. */
   private async currentSampling(): Promise<SamplingParams> {
     const resolved = resolveSettings(
       SAMPLING_SETTINGS,
@@ -579,14 +581,14 @@ export class Harness {
       ...(value('topP') !== undefined ? { topP: value('topP') } : {}),
       ...(value('topK') !== undefined ? { topK: value('topK') } : {}),
       ...(value('minP') !== undefined ? { minP: value('minP') } : {}),
-      // -1 = « aléatoire » : ne pas l'envoyer plutôt qu'envoyer une graine fixe.
+      // -1 = "random": don't send it rather than sending a fixed seed.
       ...(seed !== undefined && seed >= 0 ? { seed } : {}),
     };
   }
 
   /**
-   * Titre tiré du premier message, et de lui seul : renommer plus tard
-   * écraserait un titre que l'utilisateur a pu choisir lui-même.
+   * Title drawn from the first message, and from it alone: renaming later
+   * would overwrite a title the user may have chosen themselves.
    */
   private async titleFromFirstMessage(text: string): Promise<void> {
     const id = this.currentConversationId;
@@ -598,16 +600,16 @@ export class Harness {
       if (!line) return;
       await this.store.setTitle(id, line.length > 60 ? `${line.slice(0, 57)}…` : line);
     } catch {
-      /* un titre est un confort : jamais de quoi faire échouer un envoi */
+      /* a title is a convenience: never something that should fail a send */
     }
   }
 
   /**
-   * Vue « projet » exposée au renderer.
+   * "Project" view exposed to the renderer.
    *
-   * Intérimaire : le DTO ne porte encore qu'une racine, celle par défaut. Les
-   * écrans qui montreront le projet complet — nom, N racines, édition — sont
-   * l'étape 2, et c'est là que ce DTO deviendra un vrai projet.
+   * Interim: the DTO still carries only one root, the default one. The
+   * screens that will show the full project — name, N roots, editing — are
+   * step 2, and that's when this DTO will become a real project.
    */
   private project(recents: string[] = []): ProjectDto | null {
     const primary = this.roots[0];
@@ -624,7 +626,7 @@ export class Harness {
     return this.project(config.recentProjects ?? []);
   }
 
-  // ── Projets ────────────────────────────────────────────────────────────
+  // ── Projects ───────────────────────────────────────────────────────────
 
   async listProjects(): Promise<ProjectSummaryDto[]> {
     const projects = await this.projects.list();
@@ -644,16 +646,16 @@ export class Harness {
 
   async setProjectRoots(id: string, roots: string[]): Promise<ProjectSummaryDto> {
     const project = await this.projects.setRoots(id, roots);
-    // Le périmètre a bougé : la session en cours porte l'ancien, il faut la
-    // reconstruire pour que le delta soit annoncé au modèle à la réouverture.
+    // The scope has changed: the ongoing session carries the old one, it must
+    // be rebuilt so the delta gets announced to the model on reopening.
     await this.refreshRoots();
     return { id: project.id, name: project.name, roots: project.roots };
   }
 
   async removeProject(id: string): Promise<void> {
-    // Les conversations du projet ne sont PAS supprimées : elles deviennent
-    // « sans projet », donc sans confinement. Perdre un dossier ne doit jamais
-    // perdre un historique.
+    // The project's conversations are NOT deleted: they become "without a
+    // project", hence without confinement. Losing a folder must never mean
+    // losing a history.
     for (const meta of await this.store.listMeta()) {
       if (meta.projectId === id) await this.store.setProjectId(meta.id, undefined);
     }
@@ -669,7 +671,7 @@ export class Harness {
     await this.refreshRoots();
   }
 
-  /** Sélecteur de dossier pur : aucun effet de bord, juste le chemin. */
+  /** Pure folder picker: no side effect, just the path. */
   async pickDirectory(): Promise<string | null> {
     if (!this.window) return null;
     const result = await dialog.showOpenDialog(this.window, {
@@ -679,11 +681,11 @@ export class Harness {
   }
 
   /**
-   * Recalcule le périmètre de la conversation ouverte et invalide la session.
+   * Recomputes the scope of the open conversation and invalidates the session.
    *
-   * La session porte le périmètre avec lequel elle a été construite : la
-   * laisser en place ferait travailler le modèle sur un décor périmé. La
-   * reconstruire déclenche le delta au prochain envoi.
+   * The session carries the scope it was built with: leaving it in place
+   * would make the model work against a stale backdrop. Rebuilding it
+   * triggers the delta on the next send.
    */
   private async refreshRoots(): Promise<void> {
     if (!this.currentConversationId) return;
@@ -700,10 +702,10 @@ export class Harness {
     const picked = result.canceled ? null : (result.filePaths[0] ?? null);
     if (!picked) return null;
 
-    // Le dossier appartient au PROJET, et la conversation appartient à un
-    // projet. Choisir un dossier depuis une conversation sans projet en crée
-    // donc un, nommé d'après le dossier ; depuis une conversation qui en a
-    // déjà un, le dossier s'ajoute à ses racines.
+    // The folder belongs to the PROJECT, and the conversation belongs to a
+    // project. Picking a folder from a conversation without a project
+    // therefore creates one, named after the folder; from a conversation that
+    // already has one, the folder is added to its roots.
     const id = await this.ensureConversationId();
     const { projectId } = await this.store.meta(id);
 
@@ -742,7 +744,7 @@ export class Harness {
     await this.saveConfig({ ...config, mode });
   }
 
-  /** Demande l'accord de l'utilisateur ; résolue par respondToApproval. */
+  /** Asks for the user's consent; resolved by respondToApproval. */
   private readonly approve = (request: {
     id: string;
     tool: string;
@@ -751,7 +753,7 @@ export class Harness {
   }): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
       if (!this.window || this.window.isDestroyed()) {
-        resolve(false); // pas d'interlocuteur : fail-safe
+        resolve(false); // no one to ask: fail-safe
         return;
       }
       this.pendingApprovals.set(request.id, {
@@ -770,8 +772,8 @@ export class Harness {
     this.pendingApprovals.delete(response.id);
 
     if (response.granted && response.always) {
-      // « Toujours autoriser » : pour une commande, la règle porte sur son
-      // premier mot (ex. « pnpm »), pas sur la ligne entière.
+      // "Always allow": for a command, the rule applies to its first word
+      // (e.g. "pnpm"), not the whole line.
       const prefix = pending.request.command?.trim().split(/\s+/)[0];
       this.permissions.remember({
         tool: pending.request.tool,
@@ -792,8 +794,8 @@ export class Harness {
       const raw = JSON.parse(await readFile(this.configPath, 'utf8')) as {
         backend?: BackendConfigDto & { modelPath?: string; nCtx?: number };
       };
-      // Migration : les anciennes configs portaient modelPath/nCtx dans le
-      // moteur — ils appartiennent désormais à chaque conversation.
+      // Migration: old configs carried modelPath/nCtx on the engine — they
+      // now belong to each conversation.
       if (raw.backend) {
         delete raw.backend.modelPath;
         delete raw.backend.nCtx;
@@ -814,13 +816,13 @@ export class Harness {
   }
 
   /**
-   * Configure le moteur. Distant : connexion immédiate. Managé : le serveur
-   * démarrera au premier openConversation (il lui faut un modèle).
+   * Configures the engine. Remote: immediate connection. Managed: the server
+   * will start on the first openConversation (it needs a model).
    */
   /**
-   * Enregistre le moteur SANS s'y connecter : au démarrage, bonaparte ne doit
-   * ni pinger un endpoint (certains serveurs chargent le modèle à la moindre
-   * requête), ni lancer un llama-server. Utiliser `connect()` pour l'activer.
+   * Registers the engine WITHOUT connecting to it: on startup, bonaparte must
+   * neither ping an endpoint (some servers load the model on the slightest
+   * request) nor launch a llama-server. Use `connect()` to activate it.
    */
   async registerEngine(config: BackendConfigDto): Promise<void> {
     await this.teardownBackend();
@@ -870,13 +872,13 @@ export class Harness {
     this.session = null;
   }
 
-  /** Modèle + nCtx actuellement servis par le serveur managé. */
+  /** Model + nCtx currently served by the managed server. */
   private loadedNCtx: number | null = null;
 
-  /** Garantit un serveur managé chargé avec CE modèle et CE nCtx. */
+  /** Guarantees a managed server loaded with THIS model and THIS nCtx. */
   private async ensureManagedBackend(modelPath: string, nCtx: number): Promise<void> {
     if (!this.engine || this.engine.mode !== 'managed') {
-      throw new Error('Moteur managé non configuré.');
+      throw new Error('Managed engine not configured.');
     }
     if (
       this.backend &&
@@ -887,7 +889,7 @@ export class Harness {
       return;
     }
 
-    // Bascule de modèle : on sauvegarde l'état de la session courante avant.
+    // Model switch: we save the current session's state beforehand.
     await this.saveKv();
     if (this.backend) {
       this.unsubscribeStatus?.();
@@ -900,7 +902,7 @@ export class Harness {
       mode: 'managed',
       binPath: this.engine.binPath,
       spawnFn: realSpawn,
-      // CLI unifié `llama` → sous-commande serve ; binaire historique → rien.
+      // Unified `llama` CLI → serve subcommand; legacy binary → nothing.
       commandPrefix: detectServeCommandPrefix(this.engine.binPath),
       launch: {
         modelPath,
@@ -937,19 +939,19 @@ export class Harness {
     modelPath?: string,
     nCtx?: number,
   ): Promise<ConversationOpenReplyDto> {
-    if (!this.engine) throw new Error('Moteur non configuré.');
+    if (!this.engine) throw new Error('Engine not configured.');
     id ??= await this.ensureConversationId();
 
-    // Bascule : l'état de la conversation qu'on quitte doit être sauvegardé
-    // AVANT d'en ouvrir une autre, sinon son cache est perdu et la reprise
-    // coûtera un re-prefill complet — exactement ce qu'on prétend éviter.
+    // Switch: the state of the conversation we're leaving must be saved
+    // BEFORE opening another one, otherwise its cache is lost and resuming
+    // will cost a full re-prefill — exactly what we claim to avoid.
     if (this.session && this.currentConversationId && this.currentConversationId !== id) {
       await this.session.save().catch(() => false);
       this.session = null;
     }
     if (await this.store.exists(id)) await this.setCurrentConversation(id);
 
-    // Résout modèle + nCtx : méta épinglée > paramètres > défaut des Réglages.
+    // Resolves model + nCtx: pinned meta > parameters > Settings default.
     const defaults = (await this.loadConfig()).defaultModel;
     let convModel: string | undefined;
     let convNCtx: number | undefined;
@@ -969,11 +971,11 @@ export class Harness {
       if (!convModel) return { needsModel: true, conversationId: id };
       await this.ensureManagedBackend(convModel, convNCtx ?? 8192);
     } else if (!convModel) {
-      // Distant : le modèle est celui du serveur — informatif.
+      // Remote: the model is whatever the server has — informational only.
       convModel = this.loadedModelPath ?? 'remote';
     }
 
-    if (!this.backend || !this.live) throw new Error('Backend non démarré.');
+    if (!this.backend || !this.live) throw new Error('Backend not started.');
 
     if (!(await this.store.exists(id))) {
       await this.store.create(id, {
@@ -991,7 +993,7 @@ export class Harness {
         permissions: this.permissions,
         ...(this.roots.length > 0 ? { roots: this.roots } : {}),
         approve: this.approve,
-        // Le fil est anglais ; seule la langue de réponse suit l'utilisateur.
+        // The thread is in English; only the reply language follows the user.
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
         sampling: await this.currentSampling(),
         live: this.live,
@@ -1006,15 +1008,15 @@ export class Harness {
       modelPath: convModel,
       modelName: modelDisplayName(convModel),
       ...(convNCtx !== undefined ? { nCtx: convNCtx } : {}),
-      // Service et résultats d'outils restent hors de l'UI : ils vivent dans
-      // le transcript, pas dans la conversation lue.
+      // Tool calls and their results stay out of the UI: they live in the
+      // transcript, not in the conversation being read.
       events: events
         .flatMap((event): ConversationEventDto[] => {
           if (event.type === 'user') {
             return [{ type: 'user', text: event.text, at: event.at }];
           }
-          // Une ligne de log abîmée saute, elle n'emporte pas l'ouverture
-          // de la conversation avec elle.
+          // A corrupted log line is skipped, it doesn't take the opening of
+          // the conversation down with it.
           if (event.type === 'assistant' && event.entry) {
             return [
               {
@@ -1034,18 +1036,19 @@ export class Harness {
   }
 
   /**
-   * Historique d'une conversation SANS toucher au moteur : lancer l'app ne
-   * doit ni réveiller un serveur, ni charger un modèle en VRAM. La connexion
-   * n'a lieu qu'au premier message.
+   * History of a conversation WITHOUT touching the engine: launching the app
+   * must neither wake a server nor load a model into VRAM. The connection
+   * only happens on the first message.
    */
   async conversationHistory(select?: string): Promise<ConversationOpenReplyDto> {
-    // Basculer de conversation est une opération de LECTURE : l'historique
-    // vient du log sur disque, jamais du cache KV — celui-ci n'accélère que la
-    // génération suivante. Consulter ses conversations ne doit donc charger
-    // aucun modèle ni réveiller le moteur.
+    // Switching conversation is a READ operation: the history comes from the
+    // log on disk, never from the KV cache — the latter only speeds up the
+    // next generation. Browsing one's conversations must therefore load no
+    // model and wake no engine.
     if (select && select !== this.currentConversationId) {
-      // L'état de celle qu'on quitte est sauvegardé si une session tournait :
-      // sinon son cache serait perdu et y revenir coûterait un re-prefill.
+      // The state of the one we're leaving is saved if a session was
+      // running: otherwise its cache would be lost and coming back to it
+      // would cost a re-prefill.
       if (this.session) {
         await this.session.save().catch(() => false);
         this.session = null;
@@ -1073,8 +1076,8 @@ export class Harness {
           if (event.type === 'user') {
             return [{ type: 'user', text: event.text, at: event.at }];
           }
-          // Une ligne de log abîmée saute, elle n'emporte pas l'ouverture
-          // de la conversation avec elle.
+          // A corrupted log line is skipped, it doesn't take the opening of
+          // the conversation down with it.
           if (event.type === 'assistant' && event.entry) {
             return [
               { type: 'assistant', text: stripThink(event.entry.text), at: event.at },
@@ -1088,13 +1091,13 @@ export class Harness {
   }
 
   async send(text: string): Promise<void> {
-    // Connexion paresseuse : c'est le premier message qui réveille le moteur.
+    // Lazy connection: it's the first message that wakes the engine.
     if (!this.session && this.engine) {
       const reply = await this.openConversation();
       if ('needsModel' in reply) {
         this.emit(IPC.evAgent, {
           type: 'error',
-          message: 'Aucun modèle choisi pour cette conversation.',
+          message: 'No model chosen for this conversation.',
         } satisfies AgentEventDto);
         return;
       }
@@ -1102,12 +1105,12 @@ export class Harness {
     if (!this.session) {
       this.emit(IPC.evAgent, {
         type: 'error',
-        message: 'Aucune conversation ouverte.',
+        message: 'No conversation open.',
       } satisfies AgentEventDto);
       return;
     }
-    // Le premier message donne son titre à la conversation : un menu où tout
-    // s'appelle « Nouvelle conversation » ne sert à rien.
+    // The first message gives the conversation its title: a menu where
+    // everything is called "New conversation" is useless.
     await this.titleFromFirstMessage(text);
 
     try {
@@ -1158,7 +1161,7 @@ export class Harness {
             } satisfies AgentEventDto);
             break;
           default:
-            break; // mutations du log : persistées par la session
+            break; // log mutations: persisted by the session
         }
       }
     } catch (error) {
@@ -1174,15 +1177,15 @@ export class Harness {
     try {
       return await this.session.save();
     } catch (error) {
-      console.error('[kv] sauvegarde échouée :', error);
+      console.error('[kv] save failed:', error);
       return false;
     }
   }
 
   async shutdown(): Promise<void> {
     await this.saveKv();
-    // Les plugins d'abord : ils tiennent des serveurs de dev, un shell, une
-    // vue native. Tout ça doit tomber avec l'app, pas lui survivre.
+    // Plugins first: they hold dev servers, a shell, a native view. All of
+    // that must go down with the app, not outlive it.
     await this.pluginHost.deactivateAll().catch(() => undefined);
     await this.backend?.stop().catch(() => undefined);
   }
@@ -1199,7 +1202,7 @@ export class Harness {
     return scanModels(defaultScanRoots());
   }
 
-  /** Vérifie qu'un llama-server répond bien à cette URL (mode distant). */
+  /** Checks that a llama-server actually responds at this URL (remote mode). */
   async probeEndpointUrl(url: string): Promise<EndpointProbeDto | null> {
     return probeEndpoint(url);
   }
@@ -1304,7 +1307,7 @@ export class Harness {
     );
     ipcMain.handle(IPC.openExternal, async (_e, url: string) => {
       if (!EXTERNAL_URL_ALLOWLIST.some((re) => re.test(url))) {
-        throw new Error(`URL externe refusée : ${url}`);
+        throw new Error(`External URL refused: ${url}`);
       }
       await shell.openExternal(url);
     });

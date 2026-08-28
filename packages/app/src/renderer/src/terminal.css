@@ -1,7 +1,7 @@
 /*
- * Vue terminal (plugin) — xterm.js a besoin d'une chaîne de hauteurs
- * contrainte : sans `min-height: 0` sur chaque maillon, l'addon `fit` calcule
- * une taille qui grandit indéfiniment et le terminal déborde du panneau.
+ * Terminal view (plugin) — xterm.js needs a constrained height chain:
+ * without `min-height: 0` on every link, the `fit` addon computes a size
+ * that grows indefinitely and the terminal overflows the panel.
  */
 
 .pty-view {
@@ -59,19 +59,19 @@
   min-height: 0;
   overflow: hidden;
   padding: 6px 8px;
-  /* Le fond SUIT le thème : en dur, le terminal restait noir en thème clair. */
+  /* The background FOLLOWS the theme: hardcoded, the terminal stayed black in light theme. */
   background: var(--aparte-bg);
   border: 1px solid var(--aparte-border);
   border-radius: 9px;
 }
 
-/* xterm pose ses propres dimensions : on lui donne la place, pas de marges. */
+/* xterm sets its own dimensions: we give it the space, no margins. */
 .pty-host .xterm,
 .pty-host .xterm-viewport {
   height: 100% !important;
 }
 
-/* ── Actions de la section Plugins ─────────────────────────────────────── */
+/* ── Plugins section actions ───────────────────────────────────────────── */
 
 .plugin-actions {
   display: flex;

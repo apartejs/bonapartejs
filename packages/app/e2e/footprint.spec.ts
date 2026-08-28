@@ -1,14 +1,14 @@
 /**
- * Budget d'empreinte — la seule façon de tenir une promesse d'optimisation.
+ * Footprint budget — the only way to keep an optimization promise.
  *
- * bonaparte est un harnais pour modèles LOCAUX : il partage la machine avec
- * 20 Go de poids et plusieurs gigaoctets de cache KV. Annoncer « on est
- * léger » sans le mesurer ne vaut rien ; un budget qu'aucun test n'applique
- * est un vœu. Ce test échoue si l'app grossit, et le chiffre qu'il affiche
- * est celui qu'on a le droit de revendiquer.
+ * bonaparte is a harness for LOCAL models: it shares the machine with 20 GB
+ * of weights and several gigabytes of KV cache. Claiming "we're lightweight"
+ * without measuring it is worthless; a budget no test enforces is just a
+ * wish. This test fails if the app grows, and the number it prints is the
+ * one we're entitled to claim.
  *
- * Mesuré au repos, fenêtre ouverte, sans conversation : c'est le plancher,
- * pas le pire cas.
+ * Measured at rest, window open, no conversation: this is the floor, not the
+ * worst case.
  */
 
 import {
@@ -22,20 +22,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Plafond au repos, en mémoire PRIVÉE.
+ * Ceiling at rest, in PRIVATE memory.
  *
- * `workingSetSize` a d'abord servi ici — c'était une erreur, démontrée : le
- * MÊME commit mesurait 341 Mo un soir et 463 Mo une heure plus tard. Le
- * working set inclut les pages partagées et suit le rognage de l'OS selon la
- * pression mémoire de la machine ; il varie de ±35 % sans qu'une ligne de code
- * ait bougé. Un test qui échoue pour des raisons étrangères au code est pire
- * qu'aucun test : on finit par l'ignorer.
+ * `workingSetSize` was used here first — that was a mistake, proven: the
+ * SAME commit measured 341 MB one evening and 463 MB an hour later. The
+ * working set includes shared pages and follows the OS's trimming based on
+ * the machine's memory pressure; it varies by ±35% without a single line of
+ * code having moved. A test that fails for reasons unrelated to the code is
+ * worse than no test: it ends up being ignored.
  *
- * `privateBytes` est la mémoire que le processus possède réellement. Mesure du
- * 2026-08-20 : ~200 Mo sur quatre processus.
+ * `privateBytes` is the memory the process actually owns. Measured on
+ * 2026-08-20: ~200 MB across four processes.
  *
- * Réserve de portabilité : `privateBytes` est renseigné sur Windows ; ailleurs
- * il peut valoir 0, et on retombe alors sur le working set faute de mieux.
+ * Portability caveat: `privateBytes` is populated on Windows; elsewhere it
+ * may be 0, in which case we fall back to the working set for lack of
+ * anything better.
  */
 const BUDGET_MO = 320;
 
@@ -62,48 +63,49 @@ test.afterAll(async () => {
   await app?.close();
 });
 
-test('l’app tient dans son budget mémoire', async () => {
-  // Mesurer dès l'ouverture de la fenêtre donne un chiffre flatteur (~275 Mo)
-  // : le rendu n'a pas fini de s'installer. Ce n'est pas une condition qu'on
-  // peut sonder, juste une stabilisation — on laisse deux secondes, et on
-  // annonce le chiffre stable plutôt que le plus joli.
+test('the app stays within its memory budget', async () => {
+  // Measuring right when the window opens gives a flattering number (~275 MB)
+  // : rendering hasn't finished settling. This isn't a condition we can poll
+  // for, just a stabilization — we wait two seconds, and report the stable
+  // number rather than the prettiest one.
   await new Promise((resolve) => setTimeout(resolve, 2000));
 
   const metrics = await app.evaluate(({ app: a }) => a.getAppMetrics());
 
   const parProcessus = metrics.map((m) => ({
     type: m.type,
-    // privateBytes quand la plateforme le renseigne ; sinon le working set,
-    // faute de mieux — mais alors le chiffre est bruité, cf. l'en-tête.
+    // privateBytes when the platform provides it; otherwise the working set,
+    // for lack of anything better — but then the number is noisy, see the
+    // header comment above.
     mo: Math.round((m.memory.privateBytes || m.memory.workingSetSize || 0) / 1024),
   }));
   const total = parProcessus.reduce((sum, p) => sum + p.mo, 0);
 
-  // Le chiffre est imprimé même quand le test passe : c'est la donnée qu'on
-  // revendique, elle ne doit pas être visible seulement en cas d'échec.
+  // The number is printed even when the test passes: it's the figure we
+  // claim, it shouldn't be visible only on failure.
   console.log(
-    `empreinte privée : ${total} Mo — ${parProcessus.map((p) => `${p.type} ${p.mo}`).join(', ')}`,
+    `private footprint: ${total} MB — ${parProcessus.map((p) => `${p.type} ${p.mo}`).join(', ')}`,
   );
 
-  expect(total, `empreinte privée de ${total} Mo, budget ${BUDGET_MO} Mo`).toBeLessThan(
+  expect(total, `private footprint of ${total} MB, budget ${BUDGET_MO} MB`).toBeLessThan(
     BUDGET_MO,
   );
 });
 
-test('aucune VRAM n’est dépensée à composer l’interface', async () => {
-  // `disableHardwareAcceleration()` (main/index.ts) : notre interface est du
-  // texte et des diffs, et chaque mégaoctet de VRAM rendu au modèle est du
-  // contexte en plus.
+test('no VRAM is spent compositing the interface', async () => {
+  // `disableHardwareAcceleration()` (main/index.ts): our interface is text
+  // and diffs, and every megabyte of VRAM handed to rendering is one less
+  // megabyte of context for the model.
   //
-  // Mesuré le 2026-08-20 sur Windows (compteurs WDDM, fenêtre VISIBLE — une
-  // fenêtre masquée n'est pas composée et rend un zéro qui ne prouve rien) :
-  // même build, accélération active 31,7 Mo de VRAM dédiée, coupée 0 Mo. Côté
-  // RAM, le processus GPU passe de 120 à 60 Mo.
+  // Measured on 2026-08-20 on Windows (WDDM counters, VISIBLE window — a
+  // hidden window isn't composited and reports a zero that proves nothing):
+  // same build, acceleration on 31.7 MB of dedicated VRAM, off 0 MB. On the
+  // RAM side, the GPU process goes from 120 to 60 MB.
   //
-  // Ce test vérifie la CAUSE, pas l'effet : la VRAM se mesure depuis le
-  // système (voir la spec), pas depuis Electron — mais l'état de
-  // l'accélération, lui, est lisible ici. Si quelqu'un rallume le GPU sans
-  // l'avoir décidé, il le saura par ce test.
+  // This test checks the CAUSE, not the effect: VRAM is measured from the
+  // system (see the spec), not from Electron — but the acceleration state
+  // itself is readable here. If someone turns the GPU back on without
+  // deciding to, this test will catch it.
   const accelerationDisabled = await app.evaluate(({ app: a }) =>
     a.commandLine.hasSwitch('disable-gpu-compositing') ||
     a.getGPUFeatureStatus()['gpu_compositing'] !== 'enabled',

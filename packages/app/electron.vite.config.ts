@@ -11,10 +11,10 @@ export default defineConfig({
   renderer: {
     plugins: [react()],
     resolve: {
-      // Les vues de plugins vivent hors de packages/app et résolvent React
-      // depuis LEUR dossier. Sans dédoublonnage, le bundle pourrait embarquer
-      // deux copies — et deux React, ce sont deux jeux de hooks : tout crash au
-      // premier useState d'une vue de plugin.
+      // Plugin views live outside packages/app and resolve React from
+      // THEIR OWN folder. Without deduplication, the bundle could end up
+      // bundling two copies — and two Reacts means two sets of hooks:
+      // everything crashes at a plugin view's first useState.
       dedupe: ['react', 'react-dom'],
     },
   },

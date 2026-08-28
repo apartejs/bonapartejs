@@ -52,7 +52,7 @@ const settings: ToolingViewDescriptor = {
   order: 10,
 };
 
-/** localStorage de test — le vrai peut lever (mode privé, quota). */
+/** Test localStorage — the real one can throw (private mode, quota). */
 function fakeStorage(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
   return {
@@ -63,8 +63,8 @@ function fakeStorage(initial: Record<string, string> = {}) {
   };
 }
 
-describe('onglets du panneau d’outillage', () => {
-  it('ouvre un onglet et l’active', () => {
+describe('tooling panel tabs', () => {
+  it('opens a tab and activates it', () => {
     const state = openTab(EMPTY_TABS, terminal);
 
     expect(state.tabs).toHaveLength(1);
@@ -72,9 +72,9 @@ describe('onglets du panneau d’outillage', () => {
     expect(state.activeId).toBe(state.tabs[0]?.instanceId);
   });
 
-  it('ouvre PLUSIEURS instances du même type, avec des identités distinctes', () => {
-    // C'est la demande : « tu peux en ouvrir autant que tu veux ». Deux
-    // terminaux sont deux shells, donc deux instances, donc deux ids.
+  it('opens SEVERAL instances of the same type, with distinct identities', () => {
+    // This is the request: "you can open as many as you want." Two
+    // terminals are two shells, hence two instances, hence two ids.
     const state = openTab(openTab(EMPTY_TABS, terminal), terminal);
 
     expect(state.tabs).toHaveLength(2);
@@ -82,9 +82,9 @@ describe('onglets du panneau d’outillage', () => {
     expect(state.activeId).toBe(state.tabs[1]?.instanceId);
   });
 
-  it('ne réutilise JAMAIS un identifiant, même après fermeture', () => {
-    // Un id réutilisé retomberait sur la session que la moitié Node n'a
-    // peut-être pas encore libérée : l'onglet neuf hériterait de l'ancien flux.
+  it('NEVER reuses an identifier, even after closing', () => {
+    // A reused id would land back on the session that the Node half may not
+    // have released yet: the new tab would inherit the old stream.
     const first = openTab(EMPTY_TABS, terminal);
     const gone = closeTab(first, first.tabs[0]?.instanceId as string);
     const second = openTab(gone, terminal);
@@ -92,7 +92,7 @@ describe('onglets du panneau d’outillage', () => {
     expect(second.tabs[0]?.instanceId).not.toBe(first.tabs[0]?.instanceId);
   });
 
-  it('un type à instance unique se contente d’être activé s’il est déjà là', () => {
+  it('a single-instance type just gets activated if it’s already there', () => {
     const opened = openTab(openTab(EMPTY_TABS, settings), terminal);
     const again = openTab(opened, settings);
 
@@ -100,7 +100,7 @@ describe('onglets du panneau d’outillage', () => {
     expect(again.activeId).toBe(opened.tabs[0]?.instanceId);
   });
 
-  it('en fermant l’onglet actif, active son voisin de droite', () => {
+  it('closing the active tab activates its right-hand neighbor', () => {
     const state = openTab(openTab(openTab(EMPTY_TABS, terminal), terminal), terminal);
     const middle = state.tabs[1]?.instanceId as string;
     const closed = closeTab(activateTab(state, middle), middle);
@@ -109,23 +109,23 @@ describe('onglets du panneau d’outillage', () => {
     expect(closed.activeId).toBe(state.tabs[2]?.instanceId);
   });
 
-  it('en fermant le dernier onglet, retombe sur celui de gauche', () => {
+  it('closing the last tab falls back to the one on the left', () => {
     const state = openTab(openTab(EMPTY_TABS, terminal), terminal);
     const last = state.tabs[1]?.instanceId as string;
 
     expect(closeTab(state, last).activeId).toBe(state.tabs[0]?.instanceId);
   });
 
-  it('en fermant un onglet inactif, ne change pas l’onglet actif', () => {
+  it('closing an inactive tab does not change the active tab', () => {
     const state = openTab(openTab(EMPTY_TABS, terminal), terminal);
     const closed = closeTab(state, state.tabs[0]?.instanceId as string);
 
     expect(closed.activeId).toBe(state.activeId);
   });
 
-  it('le dernier onglet fermé laisse le panneau vide — mais garde le compteur', () => {
-    // Vider le panneau ne remet PAS le compteur à zéro : sinon le prochain
-    // onglet reprendrait l'identifiant de celui qu'on vient de fermer.
+  it('closing the last tab leaves the panel empty — but keeps the counter', () => {
+    // Emptying the panel does NOT reset the counter to zero: otherwise the
+    // next tab would reuse the identifier of the one we just closed.
     const state = openTab(EMPTY_TABS, terminal);
     const closed = closeTab(state, state.tabs[0]?.instanceId as string);
 
@@ -134,9 +134,9 @@ describe('onglets du panneau d’outillage', () => {
     expect(closed.seq).toBe(state.seq);
   });
 
-  it('écarte les onglets dont la vue a disparu (plugin désactivé)', () => {
-    // Un plugin qu'on désactive laisse des onglets orphelins en mémoire :
-    // sans élagage, le panneau afficherait un onglet impossible à charger.
+  it('discards tabs whose view has disappeared (plugin deactivated)', () => {
+    // A plugin being deactivated leaves orphaned tabs in memory: without
+    // pruning, the panel would show a tab that's impossible to load.
     const state = openTab(openTab(EMPTY_TABS, terminal), settings);
     const pruned = pruneTabs(state, [settings]);
 
@@ -144,26 +144,26 @@ describe('onglets du panneau d’outillage', () => {
     expect(pruned.activeId).toBe(state.tabs[1]?.instanceId);
   });
 
-  it('l’élagage réactive un survivant quand l’actif a disparu', () => {
+  it('pruning reactivates a survivor when the active one has disappeared', () => {
     const state = openTab(openTab(EMPTY_TABS, settings), terminal);
     const pruned = pruneTabs(state, [settings]);
 
     expect(pruned.activeId).toBe(state.tabs[0]?.instanceId);
   });
 
-  it('l’élagage ne recrée pas d’objet quand rien ne change', () => {
-    // L'élagage tourne à chaque rendu : rendre un nouvel objet relancerait
-    // l'écriture et les effets en boucle.
+  it('pruning does not recreate an object when nothing changes', () => {
+    // Pruning runs on every render: returning a new object would re-trigger
+    // the write and loop the effects.
     const state = openTab(EMPTY_TABS, terminal);
 
     expect(pruneTabs(state, [terminal, settings])).toBe(state);
   });
 });
 
-describe('persistance par conversation', () => {
-  it('range les onglets SOUS la conversation, pas globalement', () => {
-    // Ce que Paul a demandé : « cette vue à droite est liée à une
-    // conversation ». Deux conversations, deux jeux d'onglets.
+describe('per-conversation persistence', () => {
+  it('files tabs UNDER the conversation, not globally', () => {
+    // What Paul asked for: "this view on the right is tied to a
+    // conversation." Two conversations, two sets of tabs.
     const storage = fakeStorage();
     const one = openTab(EMPTY_TABS, terminal);
     writeTabs(storage, 'conv-a', one);
@@ -172,7 +172,7 @@ describe('persistance par conversation', () => {
     expect(readTabs(storage, 'conv-b')).toEqual(EMPTY_TABS);
   });
 
-  it('sans conversation ouverte, ne persiste rien', () => {
+  it('persists nothing when no conversation is open', () => {
     const storage = fakeStorage();
     writeTabs(storage, null, openTab(EMPTY_TABS, terminal));
 
@@ -180,13 +180,13 @@ describe('persistance par conversation', () => {
     expect(readTabs(storage, null)).toEqual(EMPTY_TABS);
   });
 
-  it('un contenu illisible rend un panneau vide au lieu de lever', () => {
+  it('unreadable content yields an empty panel instead of throwing', () => {
     const storage = fakeStorage({ 'bonaparte.tooling.conv-a': '{oops' });
 
     expect(readTabs(storage, 'conv-a')).toEqual(EMPTY_TABS);
   });
 
-  it('un contenu de la bonne forme mais du mauvais type est écarté', () => {
+  it('content of the right shape but wrong type is discarded', () => {
     const storage = fakeStorage({
       'bonaparte.tooling.conv-a': '{"tabs":[{"pluginId":42}],"activeId":null,"seq":0}',
     });
@@ -194,7 +194,7 @@ describe('persistance par conversation', () => {
     expect(readTabs(storage, 'conv-a')).toEqual(EMPTY_TABS);
   });
 
-  it('survit à un stockage qui lève (mode privé, quota)', () => {
+  it('survives a storage that throws (private mode, quota)', () => {
     const hostile = {
       getItem: () => {
         throw new Error('SecurityError');

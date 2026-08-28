@@ -2,39 +2,39 @@ import { useCallback, useRef } from 'react';
 import type { LayoutBounds } from './use-layout.js';
 
 interface ResizeHandleProps {
-  /** Largeur courante du panneau que cette poignée redimensionne. */
+  /** Current width of the panel this handle resizes. */
   width: number;
   bounds: LayoutBounds;
-  /** Bord du panneau où la poignée se pose : `end` = à droite, `start` = à gauche. */
+  /** Edge of the panel the handle sits on: `end` = right, `start` = left. */
   side: 'end' | 'start';
   label: string;
   onResize: (width: number) => void;
 }
 
-/** Pas au clavier : fin par défaut, franc avec Maj. */
+/** Keyboard step: fine by default, coarse with Shift. */
 const STEP = 16;
 const BIG_STEP = 64;
 
 /**
- * Séparateur redimensionnable entre deux zones du shell.
+ * Resizable separator between two zones of the shell.
  *
- * Il est positionné en ABSOLU, à cheval sur la bordure du panneau, et
- * n'occupe donc AUCUNE place dans la mise en page — c'est ainsi que font
- * VS Code, Slack ou Linear. Une gouttière permanente de quelques pixels se
- * voit, décale tout, et se paie sur chaque écran alors qu'elle ne sert qu'au
- * moment du survol.
+ * It is positioned ABSOLUTELY, straddling the panel's border, and therefore
+ * takes up NO room in the layout — this is how VS Code, Slack, and Linear
+ * all do it. A permanent gutter a few pixels wide is visible, shifts
+ * everything, and is paid for on every screen even though it's only useful
+ * at the moment of hover.
  *
- * Il reste large de 8 px pour la SAISIE tout en ne peignant qu'un filet de
- * 1 px au survol : une cible de 1 px se rate, et se rater sur un séparateur
- * donne l'impression que l'interface ne répond pas.
+ * It stays 8 px wide for the HIT AREA while painting only a 1 px hairline on
+ * hover: a 1 px target gets missed, and missing on a separator gives the
+ * impression that the interface isn't responding.
  *
- * Utilisable au clavier, parce qu'une poignée réservée à la souris exclut du
- * monde et rend la disposition irrattrapable dès qu'un panneau est tiré trop
- * loin.
+ * Usable from the keyboard, because a handle reserved for the mouse excludes
+ * part of the world and makes the layout unrecoverable as soon as a panel is
+ * dragged too far.
  *
- * `setPointerCapture` plutôt qu'un écouteur sur `window` : le glissement suit
- * le pointeur même hors de la fenêtre, et s'arrête proprement si le navigateur
- * l'annule.
+ * `setPointerCapture` rather than a listener on `window`: the drag follows
+ * the pointer even outside the window, and stops cleanly if the browser
+ * cancels it.
  */
 export function ResizeHandle({
   width,
@@ -47,7 +47,7 @@ export function ResizeHandle({
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      // Bouton principal seulement : un clic droit ne redimensionne pas.
+      // Primary button only: a right click doesn't resize.
       if (event.button !== 0) return;
       origin.current = { x: event.clientX, width };
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -77,9 +77,9 @@ export function ResizeHandle({
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       const step = event.shiftKey ? BIG_STEP : STEP;
-      // Les flèches suivent l'ÉCRAN, pas le panneau : « droite » élargit ce qui
-      // est à gauche et rétrécit ce qui est à droite. C'est ce que la main
-      // attend en regardant le séparateur bouger.
+      // The arrows follow the SCREEN, not the panel: "right" widens whatever
+      // is on the left and shrinks whatever is on the right. This is what
+      // the hand expects while watching the separator move.
       const towardsEnd = event.key === 'ArrowRight';
       const towardsStart = event.key === 'ArrowLeft';
       if (!towardsEnd && !towardsStart) {

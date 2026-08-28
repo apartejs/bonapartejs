@@ -1,12 +1,12 @@
 /*
- * Styles des projets et conversations : groupes du menu latéral, en-tête de
- * conversation, dialogue de projet.
+ * Styles for projects and conversations: sidebar menu groups, conversation
+ * header, project dialog.
  *
- * Fichier séparé d'app.css parce qu'il couvre un domaine entier, pas une
- * retouche — et parce qu'un fichier de 1700 lignes ne se relit plus.
+ * Kept separate from app.css because it covers an entire domain, not a
+ * touch-up — and because a 1700-line file stops being reviewable.
  */
 
-/* ── Menu latéral : groupes de projet ──────────────────────────────────── */
+/* ── Sidebar menu: project groups ──────────────────────────────────────── */
 
 .conv-sidebar-tools {
   position: relative;
@@ -128,16 +128,16 @@
   color: var(--aparte-text-secondary);
 }
 
-/* ── En-tête de conversation ───────────────────────────────────────────── */
+/* ── Conversation header ───────────────────────────────────────────────── */
 
 /*
- * Barre de la conversation. Elle appartient à la COLONNE de la conversation,
- * pas à la fenêtre : le flanc des conversations monte donc jusqu'en haut, et
- * cette barre ne parle que de ce qu'elle coiffe — projet, titre, actions.
+ * Conversation bar. It belongs to the conversation's COLUMN, not to the
+ * window: the conversations flank therefore rises all the way to the top,
+ * and this bar only speaks of what it caps — project, title, actions.
  *
- * Sa hauteur et sa bordure basse sont celles de la barre du panneau (jeton
- * `--bp-bar`) : les deux se lisent comme une seule ligne qui traverse la
- * fenêtre, alors que chacune appartient à sa colonne.
+ * Its height and bottom border are those of the panel bar (`--bp-bar`
+ * token): the two read as a single line running across the window, even
+ * though each belongs to its own column.
  */
 .conv-header {
   position: relative;
@@ -215,9 +215,10 @@
 }
 
 /*
- * Bascules des flancs : UNE icône, deux états. Le cadre ne change jamais ;
- * seul le pavé du côté concerné se remplit quand le flanc est ouvert. C'est
- * plus lisible que deux dessins différents, et ça permet d'animer le passage.
+ * Flank toggles: ONE icon, two states. The frame never changes; only the
+ * pane on the relevant side fills in when the flank is open. This is more
+ * legible than two different drawings, and it allows the transition to be
+ * animated.
  */
 .flank-toggle {
   flex: 0 0 auto;
@@ -239,7 +240,7 @@
   height: 16px;
 }
 
-/* Le flanc de gauche est le même dessin, retourné : un seul chemin à tenir. */
+/* The left flank is the same drawing, flipped: only one path to maintain. */
 .flank-toggle-start svg {
   transform: scaleX(-1);
 }
@@ -340,8 +341,8 @@
 }
 
 /*
- * `direction: rtl` tronque le chemin par la GAUCHE : sur un chemin absolu,
- * la fin (le dossier) est ce qui identifie, le début est du bruit commun.
+ * `direction: rtl` truncates the path from the LEFT: on an absolute path,
+ * the end (the folder) is what identifies it, the start is common noise.
  */
 .conv-popover-roots code {
   flex: 1;
@@ -409,7 +410,7 @@
   color: var(--aparte-error);
 }
 
-/* ── Modale et dialogue de projet ──────────────────────────────────────── */
+/* ── Modal and project dialog ──────────────────────────────────────────── */
 
 .modal-backdrop {
   position: fixed;
@@ -458,16 +459,16 @@
 }
 
 /*
- * Dans le dialogue, `.field-label` sert de TITRE DE SECTION et non d'étiquette
- * de champ : il lui faut l'air d'un titre au-dessus, sinon « Dossiers sources »
- * se lit comme la légende du champ précédent.
+ * In the dialog, `.field-label` acts as a SECTION TITLE rather than a field
+ * label: it needs to look like a heading above, otherwise "Source folders"
+ * reads as the caption of the previous field.
  */
 .modal-card > .field-label {
   margin-top: 20px;
 }
 
-/* La note explique la liste : elle s'en détache, mais reste rattachée à elle
-   plutôt que de flotter à mi-chemin des boutons. */
+/* The note explains the list: it stands apart from it, but stays attached to
+   it rather than floating halfway to the buttons. */
 .modal-card .setup-note {
   margin: 10px 0 0;
 }

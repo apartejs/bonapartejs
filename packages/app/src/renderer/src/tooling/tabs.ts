@@ -1,16 +1,14 @@
 /**
- * Onglets du panneau d'outillage — état pur, testable sans React.
+ * Tooling panel tabs — pure state, testable without React.
  *
- * Le panneau était FIGÉ : un onglet par vue de plugin, non fermable, et le
- * même jeu pour toute l'application. Deux conséquences que Paul a relevées :
- * on ne pouvait pas ouvrir deux terminaux, et un terminal ouvert dans une
- * conversation réapparaissait dans une autre — donc dans le dossier du projet
- * précédent.
+ * The panel used to be FIXED: one tab per plugin view, non-closable, and the
+ * same set for the whole application. Two consequences Paul flagged: you
+ * couldn't open two terminals, and a terminal opened in one conversation
+ * would reappear in another — hence in the previous project's folder.
  *
- * Ici, les onglets sont OUVERTS par l'utilisateur (bouton `+`), fermables,
- * plusieurs par type quand le manifeste l'autorise, et rangés SOUS la
- * conversation. Le manifeste ne déclare plus des onglets : il déclare ce qu'on
- * PEUT ouvrir.
+ * Here, tabs are OPENED by the user (`+` button), closable, several per type
+ * when the manifest allows it, and filed UNDER the conversation. The
+ * manifest no longer declares tabs: it declares what CAN be opened.
  */
 
 import {
@@ -19,16 +17,16 @@ import {
   type PluginStatusDto,
 } from '@aparte/bonaparte-shared';
 
-/** Une vue ouvrable, telle que le manifeste d'un plugin la déclare. */
+/** An openable view, as a plugin's manifest declares it. */
 export interface ToolingViewDescriptor {
   pluginId: string;
   viewId: string;
   title: string;
   icon?: string;
   order: number;
-  /** Plusieurs instances simultanées autorisées (deux terminaux, deux pages). */
+  /** Several simultaneous instances allowed (two terminals, two pages). */
   multiple: boolean;
-  /** Accélérateur affiché dans le menu — indicatif, la fenêtre le câble. */
+  /** Shortcut shown in the menu — informational, the window wires it up. */
   shortcut?: string;
 }
 
@@ -56,7 +54,7 @@ export function listViews(
     .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title));
 }
 
-/** Un onglet ouvert. `instanceId` est l'identité de la session côté Node. */
+/** An open tab. `instanceId` is the session's identity on the Node side. */
 export interface ToolingTab {
   instanceId: string;
   pluginId: string;
@@ -69,9 +67,9 @@ export interface ToolingTabsState {
   tabs: ToolingTab[];
   activeId: string | null;
   /**
-   * Compteur MONOTONE des instances de cette conversation. Il est persisté :
-   * un identifiant ne doit jamais être réattribué, sinon un onglet neuf
-   * hériterait de la session que la moitié Node n'a pas encore libérée.
+   * MONOTONIC counter of this conversation's instances. It is persisted: an
+   * identifier must never be reassigned, otherwise a new tab would inherit
+   * the session that the Node half hasn't released yet.
    */
   seq: number;
 }
@@ -80,7 +78,7 @@ export const EMPTY_TABS: ToolingTabsState = { tabs: [], activeId: null, seq: 0 }
 
 const STORAGE_PREFIX = 'bonaparte.tooling.';
 
-/** Le sous-ensemble de `localStorage` qu'on utilise — pour pouvoir le feindre. */
+/** The subset of `localStorage` we use — so it can be faked in tests. */
 export interface TabStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -92,8 +90,9 @@ function sameView(tab: ToolingTab, view: ToolingViewDescriptor): boolean {
 }
 
 /**
- * Ouvre un onglet, ou ACTIVE l'existant quand la vue n'admet qu'une instance.
- * Réglages de conversation en double n'aurait aucun sens ; deux terminaux, si.
+ * Opens a tab, or ACTIVATES the existing one when the view only allows one
+ * instance. Duplicate conversation Settings would make no sense; two
+ * terminals do.
  */
 export function openTab(
   state: ToolingTabsState,
@@ -116,8 +115,8 @@ export function openTab(
 }
 
 /**
- * Ferme un onglet. L'actif passe à son voisin de DROITE — c'est ce que font
- * les navigateurs et les éditeurs : on continue vers l'avant.
+ * Closes a tab. The active one moves to its RIGHT neighbor — that's what
+ * browsers and editors do: you keep moving forward.
  */
 export function closeTab(state: ToolingTabsState, instanceId: string): ToolingTabsState {
   const index = state.tabs.findIndex((tab) => tab.instanceId === instanceId);
@@ -141,10 +140,10 @@ export function activateTab(
 }
 
 /**
- * Écarte les onglets dont la vue n'existe plus — plugin désactivé, retiré, ou
- * manifeste devenu invalide. Rend l'état INCHANGÉ quand il n'y a rien à
- * élaguer : cette fonction tourne à chaque rendu, un nouvel objet relancerait
- * l'écriture et les effets en boucle.
+ * Discards tabs whose view no longer exists — plugin deactivated, removed,
+ * or manifest turned invalid. Returns the state UNCHANGED when there's
+ * nothing to prune: this function runs on every render, a new object would
+ * re-trigger the write and loop the effects.
  */
 export function pruneTabs(
   state: ToolingTabsState,
@@ -173,9 +172,9 @@ function isTab(value: unknown): value is ToolingTab {
 }
 
 /**
- * Relit les onglets d'une conversation. Toute anomalie — JSON cassé, forme
- * inattendue, stockage indisponible — rend un panneau VIDE : perdre des
- * onglets est bénin, refuser de démarrer ne l'est pas.
+ * Rereads a conversation's tabs. Any anomaly — broken JSON, unexpected
+ * shape, unavailable storage — returns an EMPTY panel: losing tabs is
+ * harmless, refusing to start is not.
  */
 export function readTabs(
   storage: TabStorage,
@@ -221,6 +220,6 @@ export function writeTabs(
     }
     storage.setItem(STORAGE_PREFIX + conversationId, JSON.stringify(state));
   } catch {
-    /* stockage indisponible : les onglets ne survivront pas, l'app oui */
+    /* storage unavailable: the tabs won't survive, the app will */
   }
 }

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
 interface ModelSelectorProps {
-  /** Modèle épinglé par la conversation ouverte. */
+  /** Model pinned by the open conversation. */
   modelName: string | null;
   busy: boolean;
   onPick: (modelPath: string) => void;
@@ -14,16 +14,17 @@ function sizeLabel(bytes: number): string {
 }
 
 /**
- * Modèle de la conversation, dans la rangée du composeur.
+ * Conversation's model, in the composer's row.
  *
- * Le nom du modèle était affiché là, mais en simple étiquette : pour en changer
- * il fallait créer une conversation. Or le modèle appartient à la conversation
- * — au même titre que la température et le mode de jeu, qui sont déjà ici.
+ * The model's name used to be displayed there, but as a plain label: to
+ * change it, you had to create a new conversation. Yet the model belongs to
+ * the conversation — on the same footing as the temperature and the play
+ * mode, which are already here.
  *
- * Changer de modèle n'est PAS anodin, et le menu le dit : l'état KV sauvegardé
- * dépend du modèle (il entre dans le manifeste), donc le contexte est
- * reconstruit au premier message. C'est le genre d'information qui doit être
- * lisible avant le clic, pas devinée après.
+ * Changing model is NOT trivial, and the menu says so: the saved KV state
+ * depends on the model (it enters the manifest), so the context gets
+ * rebuilt on the first message. This is the kind of information that must
+ * be readable before the click, not guessed after.
  */
 export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
   const { t } = useTranslate();

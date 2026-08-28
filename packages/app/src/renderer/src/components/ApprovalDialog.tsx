@@ -6,7 +6,7 @@ interface ApprovalDialogProps {
   onRespond: (granted: boolean, always?: boolean) => void;
 }
 
-/** Aperçu lisible de ce que l'agent s'apprête à faire. */
+/** Readable preview of what the agent is about to do. */
 function preview(request: ApprovalRequestDto): string {
   if (request.command) return request.command;
   const path = request.args['path'];

@@ -1,32 +1,31 @@
 /**
- * Fabrique `resources/icon.ico` à partir de `resources/icon-512.png`.
+ * Builds `resources/icon.ico` from `resources/icon-512.png`.
  *
  *   node scripts/make-icon.mjs
  *
- * Trois choix, chacun payé d'une erreur.
+ * Three choices, each paid for with a mistake.
  *
- * 1. La source est le PNG, pas le SVG. Le SVG de la mascotte pose la frimousse
- *    en TEXTE (`font-family: Georgia, serif`) : son rendu dépend des polices
- *    installées, l'icône ne serait donc pas la même d'une machine à l'autre.
- *    Le PNG 512 est l'artwork canonique — celui du favicon d'apartejs.dev et
- *    de monaparte.
+ * 1. The source is the PNG, not the SVG. The mascot's SVG sets the face in
+ *    TEXT (`font-family: Georgia, serif`): its rendering depends on the fonts
+ *    installed, so the icon wouldn't look the same from one machine to
+ *    another. The 512 PNG is the canonical artwork — the same one as the
+ *    favicon of apartejs.dev and of monaparte.
  *
- * 2. On ne rasterise pas à la main. La première version de ce .ico avait été
- *    écrite pixel par pixel : les arcs des parenthèses en sortaient en biseaux
- *    et les apostrophes en barre horizontale — une forme qu'on prenait pour le
- *    logo d'un autre framework. Ici, réduction par MOYENNE D'AIRE : chaque
- *    pixel cible est la moyenne exacte du rectangle source qu'il couvre, bords
- *    fractionnaires compris. C'est ce qui garde lisibles les traits fins de la
- *    mascotte en 16 px.
+ * 2. We don't rasterize by hand. The first version of this .ico had been
+ *    written pixel by pixel: the parentheses' arcs came out beveled and the
+ *    apostrophes as a horizontal bar — a shape people mistook for another
+ *    framework's logo. Here, reduction by AREA AVERAGING: each target pixel
+ *    is the exact average of the source rectangle it covers, fractional
+ *    edges included. This is what keeps the mascot's thin strokes legible at
+ *    16 px.
  *
- * 3. Zéro dépendance et zéro navigateur. Node sait déjà tout faire : `zlib`
- *    décompresse et recompresse le PNG, le reste est de l'arithmétique. Passer
- *    par Chromium pour redimensionner une image nous a coûté un téléchargement
- *    de navigateur, puis un processus Electron bloqué — pour une opération de
- *    quarante lignes.
+ * 3. Zero dependencies and zero browser. Node already knows how to do
+ *    everything: `zlib` decompresses and recompresses the PNG, the rest is
+ *    arithmetic. Going through Chromium to resize an image cost us a browser
+ *    download, then a stuck Electron process — for a forty-line operation.
  *
- * Écrit aussi `resources/icon-preview.png` : la planche des petites tailles,
- * agrandies au pixel, pour vérifier de l'œil ce que Windows affichera.
+ * Also writes `resources/icon-preview.png`: the sheet of small sizes,
+ * enlarged pixel by pixel, to check by eye what Windows will display.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -36,28 +35,28 @@ import { crc32, deflateSync, inflateSync } from 'node:zlib';
 const RESOURCES = join(import.meta.dirname, '..', 'resources');
 
 /**
- * Tailles gravées dans le fichier.
+ * Sizes baked into the file.
  *
- * Windows ne redimensionne pas gracieusement : il choisit l'entrée la plus
- * proche. Sans 256, l'icône d'Alt-Tab et des « grandes icônes » est une
- * interpolation floue du 48 ; sans 20/24/40, ce sont les barres des tâches à
- * 125 %, 150 % et 250 % qui le sont. On grave donc toute l'échelle usuelle.
+ * Windows doesn't resize gracefully: it picks the nearest entry. Without
+ * 256, the Alt-Tab and "large icons" icon is a blurry interpolation of the
+ * 48; without 20/24/40, it's the taskbars at 125%, 150%, and 250% that are.
+ * So we bake in the whole usual scale.
  */
 const SIZES = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
 
-/** Au-delà de ce seuil, les entrées sont des PNG — sinon des BMP. */
+/** Above this threshold, entries are PNGs — otherwise BMPs. */
 const PNG_FROM = 64;
 
 /**
- * Rayon des coins, en fraction du côté — celui de l'artwork (112/512).
+ * Corner radius, as a fraction of the side — the artwork's own (112/512).
  *
- * La source est en RVB sans alpha : ses coins sont BLANCS, ce qui donnerait
- * quatre taches claires sur une barre des tâches sombre. On recalcule donc le
- * masque nous-mêmes, ce qui les découpe exactement.
+ * The source is RGB without alpha: its corners are WHITE, which would give
+ * four bright blotches on a dark taskbar. So we recompute the mask
+ * ourselves, which cuts them out exactly.
  */
 const CORNER_RADIUS = 112 / 512;
 
-/** Fond de la marque, posé sous les coins découpés pour éviter tout halo clair. */
+/** Backdrop of the mark, placed under the cut corners to avoid any light halo. */
 const BACKDROP = [23, 20, 28];
 
 // ── PNG ────────────────────────────────────────────────────────────────────
@@ -71,17 +70,17 @@ function chunk(type, payload) {
   return Buffer.concat([head, payload, crc]);
 }
 
-/** PNG 8 bits RGBA, sans filtre — la compression fait le reste. */
+/** 8-bit RGBA PNG, no filter — compression does the rest. */
 function encodePng(width, height, rgba) {
   const header = Buffer.alloc(13);
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
-  header[8] = 8; // profondeur
-  header[9] = 6; // couleur vraie + alpha
+  header[8] = 8; // depth
+  header[9] = 6; // truecolor + alpha
   const stride = width * 4;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y += 1) {
-    raw[y * (stride + 1)] = 0; // filtre « aucun »
+    raw[y * (stride + 1)] = 0; // filter "none"
     rgba.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
   }
   return Buffer.concat([
@@ -93,9 +92,9 @@ function encodePng(width, height, rgba) {
 }
 
 /**
- * Décode un PNG 8 bits, RVB ou RVBA, non entrelacé — ce que produisent les
- * exports de l'artwork. Tout le reste est refusé bruyamment : mieux vaut un
- * message clair qu'une icône silencieusement fausse.
+ * Decodes an 8-bit PNG, RGB or RGBA, non-interlaced — what the artwork's
+ * exports produce. Everything else is loudly rejected: a clear message beats
+ * a silently wrong icon.
  */
 function decodePng(file) {
   let offset = 8;
@@ -109,7 +108,7 @@ function decodePng(file) {
     if (type === 'IDAT') parts.push(payload);
     offset += 12 + length;
   }
-  if (!header) throw new Error('PNG sans IHDR');
+  if (!header) throw new Error('PNG without IHDR');
 
   const width = header.readUInt32BE(0);
   const height = header.readUInt32BE(4);
@@ -118,7 +117,7 @@ function decodePng(file) {
   const interlace = header[12];
   if (depth !== 8 || interlace !== 0 || (colorType !== 2 && colorType !== 6)) {
     throw new Error(
-      `PNG non pris en charge : profondeur ${depth}, type ${colorType}, entrelacement ${interlace}`,
+      `Unsupported PNG: depth ${depth}, type ${colorType}, interlace ${interlace}`,
     );
   }
 
@@ -127,8 +126,8 @@ function decodePng(file) {
   const raw = inflateSync(Buffer.concat(parts));
   const pixels = Buffer.alloc(stride * height);
 
-  // Défiltrage : chaque ligne se lit relativement à sa voisine de gauche et à
-  // celle du dessus (spec PNG, § 9.2). Sans ça, l'image sort en dégradés.
+  // Unfiltering: each line is read relative to its left neighbor and the one
+  // above (PNG spec, § 9.2). Without this, the image comes out gradient-smeared.
   for (let y = 0; y < height; y += 1) {
     const filter = raw[y * (stride + 1)];
     const from = y * (stride + 1) + 1;
@@ -153,7 +152,7 @@ function decodePng(file) {
     }
   }
 
-  // Uniformisation en RVBA : le reste du script n'a plus à s'en soucier.
+  // Normalizing to RGBA: the rest of the script no longer has to worry about it.
   if (channels === 4) return { width, height, rgba: pixels };
   const rgba = Buffer.alloc(width * height * 4);
   for (let i = 0, j = 0; i < pixels.length; i += 3, j += 4) {
@@ -168,17 +167,17 @@ function decodePng(file) {
 // ── Image ──────────────────────────────────────────────────────────────────
 
 /**
- * Découpe les coins arrondis en calculant la COUVERTURE de chaque pixel.
+ * Cuts the rounded corners by computing the COVERAGE of each pixel.
  *
- * Un test « dedans / dehors » donnerait des marches d'escalier. On échantillonne
- * donc 4×4 points par pixel : l'alpha devient la proportion réellement couverte,
- * et le bord est lisse. Les pixels hors forme reçoivent le fond de la marque,
- * pour qu'une réduction ultérieure ne fasse pas remonter de blanc.
+ * An "inside / outside" test would give staircase edges. So we sample 4×4
+ * points per pixel: alpha becomes the proportion actually covered, and the
+ * edge is smooth. Pixels outside the shape receive the mark's backdrop, so
+ * that a later downscale doesn't bring white back up.
  */
 function roundCorners(size, rgba) {
   const radius = size * CORNER_RADIUS;
   const inside = (x, y) => {
-    // Distance au coin le plus proche, dans le repère du congé.
+    // Distance to the nearest corner, in the fillet's coordinate frame.
     const dx = Math.max(radius - x, x - (size - radius), 0);
     const dy = Math.max(radius - y, y - (size - radius), 0);
     return dx * dx + dy * dy <= radius * radius;
@@ -210,11 +209,11 @@ function roundCorners(size, rgba) {
 }
 
 /**
- * Réduction par moyenne d'aire, en couleurs PRÉMULTIPLIÉES.
+ * Downscaling by area averaging, in PREMULTIPLIED colors.
  *
- * Prémultiplier n'est pas une coquetterie : moyenner des couleurs sans tenir
- * compte de leur opacité fait remonter la couleur des pixels transparents dans
- * le bord — un liseré clair tout autour de l'icône.
+ * Premultiplying isn't a fussy nicety: averaging colors without accounting
+ * for their opacity brings the color of transparent pixels up into the edge
+ * — a light fringe all around the icon.
  */
 function resize(source, from, to) {
   const out = Buffer.alloc(to * to * 4);
@@ -256,13 +255,13 @@ function resize(source, from, to) {
 }
 
 /**
- * Renforce le trait pour les toutes petites tailles.
+ * Boosts the stroke for the very small sizes.
  *
- * Réduire une frimousse à 16 px moyenne l'or avec le fond : le trait devient
- * gris-brun et se lit à peine. On rouvre donc l'écart au fond — chaque pixel
- * s'éloigne de la couleur de fond d'un facteur donné, saturation comprise.
- * Ce n'est pas de la triche : c'est ce qu'un graphiste fait à la main en
- * dessinant une variante « petite taille » plus contrastée.
+ * Downscaling a face to 16 px averages the gold with the background: the
+ * stroke turns grayish-brown and barely reads. So we reopen the gap to the
+ * background — each pixel moves away from the background color by a given
+ * factor, saturation included. This isn't cheating: it's what a designer
+ * does by hand when drawing a more contrasted "small size" variant.
  */
 function boostContrast(rgba, factor) {
   const out = Buffer.from(rgba);
@@ -275,18 +274,19 @@ function boostContrast(rgba, factor) {
   return out;
 }
 
-/** En-dessous de cette taille, le trait est renforcé. */
+/** Below this size, the stroke is boosted. */
 const BOOST_BELOW = 32;
 const BOOST_FACTOR = 1.45;
 
 // ── ICO ────────────────────────────────────────────────────────────────────
 
 /**
- * DIB 32 bits pour les petites tailles.
+ * 32-bit DIB for the small sizes.
  *
- * Format ICO : hauteur DOUBLÉE dans l'en-tête (image + masque), lignes de bas
- * en haut, canaux en BGRA. Le masque monochrome reste à zéro — l'alpha suffit
- * depuis Windows XP — mais sa PLACE doit être là, sinon le fichier est rejeté.
+ * ICO format: height DOUBLED in the header (image + mask), bottom-to-top
+ * rows, BGRA channels. The monochrome mask stays at zero — alpha has been
+ * enough since Windows XP — but its PLACE must be there, otherwise the file
+ * is rejected.
  */
 function encodeBmp(size, rgba) {
   const header = Buffer.alloc(40);
@@ -313,7 +313,7 @@ function encodeBmp(size, rgba) {
   return Buffer.concat([header, pixels, Buffer.alloc(maskRow * size)]);
 }
 
-/** Planche de contrôle : les petites tailles, agrandies au pixel, côte à côte. */
+/** Control sheet: the small sizes, enlarged pixel by pixel, side by side. */
 function previewSheet(frames) {
   const zoom = 4;
   const gap = 8;
@@ -335,13 +335,13 @@ function previewSheet(frames) {
   return encodePng(width, height, sheet);
 }
 
-// ── Assemblage ─────────────────────────────────────────────────────────────
+// ── Assembly ───────────────────────────────────────────────────────────────
 
 const source = decodePng(await readFile(join(RESOURCES, 'icon-512.png')));
-if (source.width !== source.height) throw new Error('la source doit être carrée');
+if (source.width !== source.height) throw new Error('the source must be square');
 
-// Les coins sont découpés À LA SOURCE, avant réduction : le blanc disparaît
-// donc avant d'avoir pu se moyenner avec le reste.
+// The corners are cut AT THE SOURCE, before downscaling: the white
+// therefore disappears before it could get averaged with the rest.
 const master = roundCorners(source.width, source.rgba);
 const frames = SIZES.map((size) => {
   const reduced = size === source.width ? master : resize(master, source.width, size);
@@ -363,7 +363,7 @@ header.writeUInt16LE(payloads.length, 4);
 let offset = 6 + 16 * payloads.length;
 const directory = payloads.map(({ size, bytes }) => {
   const entry = Buffer.alloc(16);
-  entry[0] = size === 256 ? 0 : size; // 0 veut dire 256 : un octet ne va pas plus loin
+  entry[0] = size === 256 ? 0 : size; // 0 means 256: a byte doesn't go further
   entry[1] = size === 256 ? 0 : size;
   entry.writeUInt16LE(1, 4);
   entry.writeUInt16LE(32, 6);
@@ -378,5 +378,5 @@ await writeFile(join(RESOURCES, 'icon.ico'), ico);
 await writeFile(join(RESOURCES, 'icon-preview.png'), previewSheet(frames));
 
 console.log(
-  `icon.ico — ${payloads.length} tailles (${SIZES.join(', ')}), ${ico.length} octets`,
+  `icon.ico — ${payloads.length} sizes (${SIZES.join(', ')}), ${ico.length} bytes`,
 );

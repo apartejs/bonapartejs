@@ -11,19 +11,19 @@ import { createHighlighterCore } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 /**
- * Ce que la lib attend du renderer avant le premier rendu.
+ * What the lib expects from the renderer before the first render.
  *
- * Deux fournisseurs Markdown, et ce n'est pas une redondance :
- * — `setupStreamingMarkdownProvider` parse SEULEMENT le texte nouveau et
- *   ajoute des nœuds DOM à chaque chunk. Sur un modèle local qui débite
- *   pendant des minutes, re-parser le message entier à chaque token serait
- *   une catastrophe — c'est le fournisseur qui compte pour nous.
- * — `setupMarkedProvider` rend les messages FINIS et re-rendus (réouverture
- *   d'une conversation, message rejoué). Sans lui, l'historique s'afficherait
- *   en Markdown brut alors que le direct serait propre.
+ * Two Markdown providers, and this isn't redundancy:
+ * — `setupStreamingMarkdownProvider` parses ONLY the new text and appends DOM
+ *   nodes on every chunk. On a local model that streams for minutes,
+ *   re-parsing the entire message on every token would be a disaster — this
+ *   is the provider that matters most to us.
+ * — `setupMarkedProvider` renders FINISHED and re-rendered messages
+ *   (reopening a conversation, a replayed message). Without it, the history
+ *   would display as raw Markdown while live streaming would be clean.
  *
- * Sans aucun des deux, `aparteGlobalConfig.renderMarkdown` rend la chaîne
- * INCHANGÉE : le modèle affiche ses astérisques en clair.
+ * Without either of the two, `aparteGlobalConfig.renderMarkdown` returns the
+ * string UNCHANGED: the model displays its asterisks as plain text.
  */
 export function bootstrapAparte(): void {
   registerDefaultRenderers();
@@ -31,16 +31,16 @@ export function bootstrapAparte(): void {
   setupStreamingMarkdownProvider();
 }
 
-/** Thème shiki correspondant au thème de l'app. */
+/** shiki theme matching the app's theme. */
 function shikiTheme(theme: 'dark' | 'light'): string {
   return theme === 'dark' ? 'github-dark' : 'github-light';
 }
 
 /**
- * Construit une seule fois : les grammaires sont figées, seul le thème varie
- * ensuite. Le moteur de regex JS évite le WASM d'oniguruma (~620 ko), et les
- * grammaires elles-mêmes (~2 Mo) sont importées dynamiquement pour rester
- * hors du morceau chargé au démarrage.
+ * Built only once: the grammars are frozen, only the theme varies afterward.
+ * The JS regex engine avoids oniguruma's WASM (~620 KB), and the grammars
+ * themselves (~2 MB) are imported dynamically to stay out of the chunk
+ * loaded at startup.
  */
 let highlighter: Promise<ShikiHighlighterLike> | null = null;
 
@@ -56,15 +56,14 @@ function ensureHighlighter(): Promise<ShikiHighlighterLike> {
 }
 
 /**
- * Coloration syntaxique — séparée parce qu'elle est ASYNCHRONE.
+ * Syntax highlighting — separated because it is ASYNCHRONOUS.
  *
- * On ne bloque PAS le premier rendu là-dessus : sur un agent local, le
- * premier bloc de code arrive de toute façon des secondes après le
- * démarrage, et un échec doit donner du code non colorisé, jamais un écran
- * blanc.
+ * We do NOT block the first render on this: on a local agent, the first code
+ * block arrives seconds after startup anyway, and a failure must yield
+ * non-highlighted code, never a blank screen.
  *
- * Rappelable : changer de thème ré-enregistre le fournisseur sans
- * reconstruire le highlighter (les deux thèmes y sont déjà).
+ * Callable again: changing theme re-registers the provider without
+ * rebuilding the highlighter (both themes are already in it).
  */
 export async function bootstrapHighlighting(
   theme: 'dark' | 'light',

@@ -23,16 +23,16 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
 
   const parsedNCtx = (): number => Number.parseInt(nCtx, 10) || 8192;
 
-  // Filtre : chaque terme doit apparaître dans le nom OU le chemin, ce qui
-  // permet de chercher « qwen 32 q4 » sans se soucier de l'ordre.
+  // Filter: each term must appear in the name OR the path, which allows
+  // searching "qwen 32 q4" without worrying about order.
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const visible = (models ?? []).filter((model) => {
     const haystack = `${model.name} ${model.path}`.toLowerCase();
     return terms.every((term) => haystack.includes(term));
   });
 
-  // On ne confirme jamais une sélection masquée par le filtre : si elle sort
-  // de la liste visible, c'est la première ligne affichée qui fait foi.
+  // We never confirm a selection hidden by the filter: if it falls out of
+  // the visible list, the first displayed row becomes the authoritative one.
   const effective =
     selected && visible.some((m) => m.path === selected)
       ? selected

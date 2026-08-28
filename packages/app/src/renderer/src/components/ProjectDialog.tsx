@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
 interface ProjectDialogProps {
-  /** null = création ; sinon édition du projet donné. */
+  /** null = creation; otherwise editing the given project. */
   project: ProjectSummaryDto | null;
   busy: boolean;
   onSave: (name: string, roots: string[]) => void;
@@ -12,11 +12,11 @@ interface ProjectDialogProps {
 }
 
 /**
- * Créer ou modifier un projet : un NOM et un ensemble ORDONNÉ de racines.
+ * Creating or editing a project: a NAME and an ORDERED set of roots.
  *
- * L'ordre n'est pas cosmétique — la première racine est celle contre laquelle
- * le modèle résout ses chemins relatifs. Le dialogue le dit, et permet de
- * réordonner, sinon l'utilisateur subirait un défaut qu'il ne comprendrait pas.
+ * The order isn't cosmetic — the first root is the one the model resolves
+ * its relative paths against. The dialog says so, and allows reordering,
+ * otherwise the user would be stuck with a default they wouldn't understand.
  */
 export function ProjectDialog({
   project,
@@ -33,8 +33,8 @@ export function ProjectDialog({
     const picked = await window.bonaparte.pickDirectory();
     if (!picked || roots.includes(picked)) return;
     setRoots([...roots, picked]);
-    // Le nom se déduit du premier dossier tant qu'on n'en a pas saisi un :
-    // nommer un projet est utile, pas obligatoire au premier geste.
+    // The name is derived from the first folder as long as none has been
+    // typed: naming a project is useful, not mandatory on the first action.
     if (!name.trim() && roots.length === 0) {
       setName(picked.split(/[\\/]/).filter(Boolean).pop() ?? '');
     }
@@ -113,8 +113,8 @@ export function ProjectDialog({
             </button>
           </li>
         </ul>
-        {/* Un projet sans racine reste licite : c'est un groupe. On le dit
-            plutôt que de bloquer l'enregistrement. */}
+        {/* A project without a root remains valid: it's a group. We say so
+            rather than blocking the save. */}
         {roots.length === 0 && <p className="setup-note">{t.projectDialog.noRootsNote}</p>}
 
         <div className="modal-actions">

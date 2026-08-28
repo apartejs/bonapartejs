@@ -13,17 +13,17 @@ interface ToolingPanelProps {
 }
 
 /**
- * Panneau d'outillage : sa barre d'onglets, puis la vue active.
+ * Tooling panel: its tab bar, then the active view.
  *
- * Sa barre a exactement la hauteur de celle de la conversation, et sa bordure
- * basse tombe au même pixel : les deux se lisent comme une seule ligne qui
- * traverse la fenêtre, alors que chacune appartient à sa colonne. C'est ce qui
- * permet au flanc des conversations de monter jusqu'en haut.
+ * Its bar has exactly the height of the conversation's, and its bottom
+ * border falls on the same pixel: the two read as a single line running
+ * across the window, even though each belongs to its own column. This is
+ * what lets the conversations flank rise all the way to the top.
  *
- * Seul l'onglet actif est monté. C'est volontaire : une vue de plugin peut
- * porter une surface native (la `WebContentsView` du navigateur) qui n'est pas
- * un élément du DOM et se poserait par-dessus le panneau depuis un onglet
- * caché. Les sessions, elles, vivent côté Node et se rattachent au remontage.
+ * Only the active tab is mounted. This is deliberate: a plugin view can
+ * carry a native surface (the browser's `WebContentsView`) which is not a
+ * DOM element and would sit on top of the panel from a hidden tab. Sessions,
+ * on the other hand, live on the Node side and reattach on remount.
  */
 export function ToolingPanel({
   tooling,
@@ -76,8 +76,8 @@ export function ToolingPanel({
         ) : failed ? (
           <p className="tooling-error">{t.tooling.loadFailed}</p>
         ) : View ? (
-          // La clé porte l'instance : deux terminaux sont deux montages, et
-          // fermer puis rouvrir repart d'une vue neuve.
+          // The key carries the instance: two terminals are two mounts, and
+          // closing then reopening starts fresh with a new view.
           <View
             key={active.instanceId}
             instanceId={active.instanceId}

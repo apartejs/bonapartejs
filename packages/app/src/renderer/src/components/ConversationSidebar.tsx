@@ -23,7 +23,7 @@ interface ConversationSidebarProps {
   onSortChange: (sort: SidebarSortDto) => void;
 }
 
-/** « il y a 3 min », « hier »… — repère grossier, jamais une horloge. */
+/** "3 min ago", "yesterday"… — a rough marker, never a clock. */
 function relativeDate(iso: string, locale: string): string {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return '';
@@ -35,13 +35,13 @@ function relativeDate(iso: string, locale: string): string {
 }
 
 /**
- * Menu latéral : conversations groupées par projet.
+ * Sidebar menu: conversations grouped by project.
  *
- * Le groupement est une VUE, calculée depuis la donnée que la conversation
- * possède (son `projectId`) — jamais une structure de stockage. C'est ce qui
- * permet d'offrir « une seule liste » sans rien déplacer sur disque, et c'est
- * l'erreur qu'on évite en ne shardant pas par chemin : le dossier est
- * modifiable, sharder imposerait de bouger des fichiers.
+ * Grouping is a VIEW, computed from the data the conversation already owns
+ * (its `projectId`) — never a storage structure. This is what makes it
+ * possible to offer a "single list" without moving anything on disk, and
+ * it's the mistake we avoid by not sharding by path: the folder can change,
+ * sharding would force moving files around.
  */
 export function ConversationSidebar({
   conversations,
@@ -80,7 +80,7 @@ export function ConversationSidebar({
     return copy;
   }, [conversations, sort]);
 
-  /** Groupes affichés : un par projet, plus « sans projet » s'il y en a. */
+  /** Groups displayed: one per project, plus "no project" if there are any. */
   const groups = useMemo(() => {
     if (grouping === 'flat') return null;
     const byProject = projects.map((project) => ({
@@ -106,8 +106,8 @@ export function ConversationSidebar({
             {conversation.title || t.conversations.untitled}
           </span>
           <span className="conv-item-meta">
-            {/* En liste à plat, le projet redevient utile sur la ligne ; groupé,
-                il serait répété sous son propre titre. */}
+            {/* In flat-list mode, the project becomes useful again on the
+                row; grouped, it would be repeated under its own heading. */}
             {grouping === 'flat' && (
               <span className={conversation.projectName ? 'conv-project' : 'conv-noproject'}>
                 {conversation.projectName ?? t.conversations.noProject}
@@ -120,9 +120,8 @@ export function ConversationSidebar({
             )}
             <span className="conv-date">{relativeDate(conversation.updatedAt, locale)}</span>
           </span>
-          {/* Le badge n'est affiché que si un état existe VRAIMENT sur disque :
-              c'est notre promesse produit, elle se tient sur pièce ou pas du
-              tout. */}
+          {/* The badge only shows if a state REALLY exists on disk: this is
+              our product promise, it stands on hard evidence or not at all. */}
           {conversation.hasKvState && (
             <span className="conv-kv" title={t.conversations.kvReadyHint}>
               {t.conversations.kvReady}

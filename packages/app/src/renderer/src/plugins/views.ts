@@ -2,28 +2,28 @@ import type { ComponentType } from 'react';
 import type { ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
 
 /**
- * Résolution des vues de plugins.
+ * Resolution of plugin views.
  *
- * Les plugins inclus vivent dans `plugins/<id>/` à la racine du dépôt, avec
- * leur manifeste. Leur point d'entrée renderer est ramassé ici par
- * `import.meta.glob` : Vite en fait des morceaux SÉPARÉS, chargés seulement
- * quand la vue s'affiche. Le manifeste reste la source de vérité (c'est lui
- * qui déclare les onglets) ; ceci ne fait que fournir le composant.
+ * Bundled plugins live in `plugins/<id>/` at the root of the repo, along
+ * with their manifest. Their renderer entry point is picked up here by
+ * `import.meta.glob`: Vite turns them into SEPARATE chunks, loaded only when
+ * the view is displayed. The manifest remains the source of truth (it's the
+ * one that declares the tabs); this only supplies the component.
  *
- * Limite assumée et documentée : un plugin TIERS, hors de l'arbre, n'est pas
- * ramassé par ce glob. Le charger demandera un protocole custom Electron et
- * une import map partageant React — le point d'extension est identifié, il
- * n'est pas ouvert en v1 (cf. plan, risque « double React »).
+ * Accepted and documented limitation: a THIRD-PARTY plugin, outside the
+ * tree, is not picked up by this glob. Loading it will require a custom
+ * Electron protocol and an import map sharing React — the extension point is
+ * identified, it is not opened in v1 (see the plan, "double React" risk).
  */
-// SIX niveaux : ce fichier est dans packages/app/src/renderer/src/plugins/,
-// et `plugins/` est à la RACINE du dépôt. À cinq, on vise `packages/plugins/`,
-// qui n'existe pas — le glob ne ramasse alors rien, en silence, et chaque vue
-// s'affiche « n'a pas pu être chargée ».
+// SIX levels: this file is in packages/app/src/renderer/src/plugins/, and
+// `plugins/` is at the ROOT of the repo. At five, we'd target
+// `packages/plugins/`, which doesn't exist — the glob then picks up nothing,
+// silently, and every view displays "could not be loaded".
 const modules = import.meta.glob('../../../../../../plugins/*/renderer.tsx');
 
 export type ToolingViewComponent = ComponentType<ToolingViewProps>;
 
-/** Charge le composant de vue d'un plugin, ou null s'il n'en fournit pas. */
+/** Loads a plugin's view component, or null if it doesn't provide one. */
 export async function loadPluginView(
   pluginId: string,
 ): Promise<ToolingViewComponent | null> {
@@ -35,7 +35,7 @@ export async function loadPluginView(
   return loaded.default ?? null;
 }
 
-/** Ids des plugins dont une vue est réellement disponible dans ce bundle. */
+/** Ids of the plugins whose view is actually available in this bundle. */
 export function pluginsWithViews(): string[] {
   return Object.keys(modules)
     .map((path) => /\/plugins\/([^/]+)\//.exec(path)?.[1])

@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>bonaparte</title>
-    <!-- Anti-flash : pose le thème avant le premier paint (pattern monaparte).
-         CSP : appliquée côté main process au packaging (les scripts inline de
-         dev — celui-ci et le preamble HMR de React — l'empêchent ici). -->
+    <!-- Anti-flash: sets the theme before the first paint (monaparte pattern).
+         CSP: applied on the main process side at packaging time (dev inline
+         scripts — this one and React's HMR preamble — prevent it here). -->
     <script>
       (function () {
         try {
@@ -19,7 +19,7 @@
           document.documentElement.setAttribute('data-aparte-theme', t);
           document.documentElement.style.colorScheme = t;
         } catch (e) {
-          /* thème par défaut */
+          /* default theme */
         }
       })();
     </script>

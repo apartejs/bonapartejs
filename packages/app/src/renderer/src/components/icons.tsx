@@ -1,10 +1,10 @@
 /**
- * Les quelques glyphes de la chrome, en vectoriel.
+ * The chrome's few glyphs, as vectors.
  *
- * Un `+` écrit en caractère prenait la taille de la police du bouton : dans le
- * flanc, à 12 px, ça donnait un signe minuscule perdu dans sa pastille. Un
- * tracé occupe la boîte qu'on lui donne, à toutes les tailles, et il a la même
- * épaisseur que les autres traits de l'interface.
+ * A `+` written as a character took on the button's font size: in the
+ * flank, at 12 px, that gave a tiny sign lost in its chip. A stroke fills
+ * whatever box it's given, at every size, and it has the same thickness as
+ * the interface's other strokes.
  */
 
 export function PlusGlyph() {
@@ -20,7 +20,7 @@ export function PlusGlyph() {
   );
 }
 
-/** Les trois points d'un menu d'actions. */
+/** The three dots of an actions menu. */
 export function DotsGlyph() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">

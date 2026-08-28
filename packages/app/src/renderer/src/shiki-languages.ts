@@ -1,10 +1,10 @@
 /**
- * Les grammaires embarquées, dans un module À PART et chargé dynamiquement.
+ * Bundled grammars, in a SEPARATE module loaded dynamically.
  *
- * Elles pèsent ~2 Mo. Statiquement importées depuis l'amorçage, elles
- * entraient dans le morceau principal du renderer, analysé au démarrage —
- * alors qu'aucun bloc de code n'est affiché avant plusieurs secondes. Ici,
- * le bundler en fait un morceau séparé, chargé quand la coloration s'installe.
+ * They weigh ~2 MB. Statically imported from the bootstrap, they would land
+ * in the renderer's main chunk, parsed at startup — even though no code
+ * block is displayed for several seconds. Here, the bundler turns them into
+ * a separate chunk, loaded when highlighting installs itself.
  */
 import bash from '@shikijs/langs/bash';
 import c from '@shikijs/langs/c';
@@ -33,22 +33,23 @@ import xml from '@shikijs/langs/xml';
 import yaml from '@shikijs/langs/yaml';
 
 /**
- * Les langages que bonaparte colorise, choisis et non subis.
+ * The languages bonaparte highlights, chosen rather than endured.
  *
- * L'entrée de confort de `@aparte/plugin-shiki` importe le bundle complet de
- * shiki, dont la carte des langages est faite d'imports dynamiques : un
- * bundler en émet UN MORCEAU PAR GRAMMAIRE — 302 fichiers, 11 Mo, dont
- * `emacs-lisp` (780 ko), `wasm` et `wolfram` — pour une app qui en affiche
- * vingt. Aucune option d'exécution ne défait ça (la lib l'a vérifié). D'où
- * l'entrée `/core` : on construit le highlighter, donc on choisit ce qu'on
- * embarque.
+ * `@aparte/plugin-shiki`'s convenience entry point imports shiki's full
+ * bundle, whose language map is made of dynamic imports: a bundler emits ONE
+ * CHUNK PER GRAMMAR from it — 302 files, 11 MB, including `emacs-lisp`
+ * (780 KB), `wasm`, and `wolfram` — for an app that displays twenty of them.
+ * No runtime option undoes this (the lib confirmed it). Hence the `/core`
+ * entry point: we build the highlighter ourselves, so we choose what we
+ * bundle.
  *
- * Contrepartie assumée : un langage absent de cette liste s'affiche en texte
- * brut. C'est le bon compromis pour une app distribuée par npx — mais si un
- * langage manque à l'usage, c'est ICI qu'on l'ajoute.
+ * Accepted trade-off: a language absent from this list displays as plain
+ * text. This is the right compromise for an app distributed via npx — but if
+ * a language turns out to be missing in practice, this is WHERE it gets
+ * added.
  *
- * (La liste réelle chargée est plus large : une grammaire en embarque
- * d'autres — Markdown et HTML tirent leurs langages imbriqués.)
+ * (The actual list loaded is broader: one grammar bundles others — Markdown
+ * and HTML pull in their embedded languages.)
  */
 export const LANGUAGES = [
   bash,

@@ -1,7 +1,7 @@
 /**
- * Contrat des traductions de l'UI. Une locale = un fichier (fr.ts, en.ts),
- * tous typés par cette interface. Les chaînes du harness (doctor, erreurs
- * backend) vivent dans @aparte/bonaparte-core, pas ici.
+ * Contract for the UI translations. One locale = one file (fr.ts, en.ts),
+ * all typed by this interface. The harness's strings (doctor, backend
+ * errors) live in @aparte/bonaparte-core, not here.
  */
 
 export interface AppTranslations {
@@ -62,7 +62,7 @@ export interface AppTranslations {
     repetition: string;
     plume: string;
     impro: string;
-    /** Ce que chaque mode autorise — le nom seul ne le dit pas. */
+    /** What each mode allows — the name alone doesn't say it. */
     descriptions: {
       lecture: string;
       repetition: string;
@@ -73,7 +73,7 @@ export interface AppTranslations {
   chat: {
     placeholder: string;
     errorPrefix: string;
-    /** Titre du bloc de raisonnement repliable. */
+    /** Title of the collapsible reasoning block. */
     thinking: string;
   };
   settings: {
@@ -95,12 +95,12 @@ export interface AppTranslations {
     pluginReloading: string;
     pluginReloadHint: string;
   };
-  /** Choix du modèle, dans le composeur. */
+  /** Model choice, in the composer. */
   models: {
     pick: string;
     scanning: string;
     none: string;
-    /** Ce que change vraiment un changement de modèle. */
+    /** What actually changes when the model changes. */
     switchWarning: string;
   };
   tooling: {
@@ -109,15 +109,15 @@ export interface AppTranslations {
     collapse: string;
     expand: string;
     loadFailed: string;
-    /** Bouton `+` : ouvrir une vue dans le panneau. */
+    /** `+` button: open a view in the panel. */
     open: string;
-    /** Titre du menu d'ouverture. */
+    /** Title of the opening menu. */
     openMenu: string;
-    /** Fermer un onglet. */
+    /** Close a tab. */
     close: string;
-    /** Aucun plugin actif n'offre de vue à ouvrir. */
+    /** No active plugin offers a view to open. */
     nothingToOpen: string;
-    /** Invitation quand le panneau est ouvert mais vide. */
+    /** Prompt shown when the panel is open but empty. */
     emptyHint: string;
   };
   conversations: {
@@ -125,9 +125,9 @@ export interface AppTranslations {
     create: string;
     empty: string;
     untitled: string;
-    /** Aucun dossier rattaché — un usage normal, pas un manque. */
+    /** No folder attached — a normal usage, not a gap. */
     noProject: string;
-    /** Un état KV existe : la reprise sera instantanée. */
+    /** A KV state exists: resuming will be instant. */
     kvReady: string;
     kvReadyHint: string;
     organise: string;
@@ -149,14 +149,14 @@ export interface AppTranslations {
     editProject: string;
     projectPanel: string;
     noRoots: string;
-    /** Racine contre laquelle le modèle résout ses chemins relatifs. */
+    /** Root the model resolves its relative paths against. */
     defaultRoot: string;
     rename: string;
     actions: string;
     moveTo: string;
     detach: string;
   };
-  /** Dialogue de création/édition d'un projet (distinct de l'écran `project`). */
+  /** Project creation/editing dialog (distinct from the `project` screen). */
   projectDialog: {
     createTitle: string;
     editTitle: string;
@@ -175,10 +175,10 @@ export interface AppTranslations {
   };
   temperature: {
     label: string;
-    /** La conversation surcharge le défaut global. */
+    /** The conversation overrides the global default. */
     thisConversation: string;
   };
-  /** Disposition du shell : flancs repliables et redimensionnables. */
+  /** Shell layout: collapsible and resizable flanks. */
   layout: {
     collapseSidebar: string;
     expandSidebar: string;

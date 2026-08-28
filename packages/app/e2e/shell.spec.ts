@@ -1,13 +1,13 @@
 /**
- * E2E du shell — la seule vérification qui lance vraiment l'application.
+ * Shell E2E — the only check that actually launches the application.
  *
- * Elle existe pour une classe de bugs que rien d'autre n'attrape : le rendu.
- * Un test unitaire ne voit pas qu'une bulle affiche « [Unknown segment type] »
- * parce qu'un enregistrement manque au démarrage ; l'app lancée, si.
+ * It exists for a class of bugs nothing else catches: rendering. A unit test
+ * doesn't see that a bubble shows "[Unknown segment type]" because a
+ * registration is missing at startup; the launched app does.
  *
- * Hors de `pnpm test` : elle démarre Electron, donc elle demande un écran et
- * quelques secondes. Elle se lance par `pnpm --filter @aparte/bonaparte-app
- * test:e2e`, après un `pnpm build`.
+ * Outside of `pnpm test`: it starts Electron, so it needs a screen and a few
+ * seconds. It runs via `pnpm --filter @aparte/bonaparte-app test:e2e`, after
+ * a `pnpm build`.
  */
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
@@ -18,22 +18,22 @@ import { join } from 'node:path';
 let app: ElectronApplication;
 
 test.beforeAll(async () => {
-  // Répertoire de données jetable : le test ne doit jamais toucher les
-  // conversations ni la config réelles de l'utilisateur.
+  // Disposable data directory: the test must never touch the user's real
+  // conversations or config.
   const dataDir = await mkdtemp(join(tmpdir(), 'bonaparte-e2e-'));
 
-  // `ELECTRON_RUN_AS_NODE` traîne dans certains environnements de
-  // développement : Electron démarre alors comme un simple Node et refuse le
-  // drapeau de débogage que Playwright lui passe. On part d'un environnement
-  // propre plutôt que de dépendre de celui de la machine.
+  // `ELECTRON_RUN_AS_NODE` lingers in some development environments:
+  // Electron then starts as a plain Node process and refuses the debug flag
+  // Playwright passes it. We start from a clean environment rather than
+  // depending on the machine's own.
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (key === 'ELECTRON_RUN_AS_NODE' || value === undefined) continue;
     env[key] = value;
   }
   env['BONAPARTE_DATA_DIR'] = dataDir;
-  // La fenêtre reste masquée : lancer la suite ne doit pas faire surgir
-  // l'application devant celui qui la lance.
+  // The window stays hidden: running the suite must not make the app pop up
+  // in front of whoever is running it.
   env['BONAPARTE_E2E'] = '1';
 
   app = await electron.launch({
@@ -46,34 +46,34 @@ test.afterAll(async () => {
   await app?.close();
 });
 
-test('le shell se monte, barre de statut comprise', async () => {
+test('the shell mounts, status bar included', async () => {
   const window = await app.firstWindow();
   await window.waitForLoadState('domcontentloaded');
 
-  // Le squelette est là : sans lui, rien d'autre n'a de sens.
+  // The skeleton is there: without it, nothing else makes sense.
   await expect(window.locator('.app-shell')).toBeVisible();
-  // Et la barre de statut, qui doit toujours dire où on en est.
+  // And the status bar, which must always say where things stand.
   await expect(window.locator('.status-strip')).toBeVisible();
 });
 
-test('la lib de chat est montée et aucun segment ne tombe en inconnu', async () => {
+test('the chat lib is mounted and no segment falls back to unknown', async () => {
   const window = await app.firstWindow();
 
-  // Les web components d'aparté sont définis : la lib a bien été chargée par
-  // le renderer. (Que ses renderers de segments soient enregistrés est
-  // vérifié à part, dans aparte-bootstrap.spec.ts — ici on ne peut pas
-  // importer un spécifieur nu dans une page déjà bundlée.)
+  // aparté's web components are defined: the lib was indeed loaded by the
+  // renderer. (Whether its segment renderers are registered is verified
+  // separately, in aparte-bootstrap.spec.ts — here we can't import a bare
+  // specifier into an already-bundled page.)
   const defined = await window.evaluate(() =>
     Boolean(customElements.get('aparte-chat-bubble')),
   );
   expect(defined).toBe(true);
 
-  // Garde-fou du bug « [Unknown segment type: text] » : si un segment rendu
-  // ne trouve pas son renderer, la lib laisse cette classe dans le DOM.
+  // Guard against the "[Unknown segment type: text]" bug: if a rendered
+  // segment can't find its renderer, the lib leaves this class in the DOM.
   expect(await window.locator('.segment-unknown').count()).toBe(0);
 });
 
-test('aucune erreur de console au démarrage', async () => {
+test('no console error at startup', async () => {
   const window = await app.firstWindow();
   const errors: string[] = [];
   window.on('console', (message) => {

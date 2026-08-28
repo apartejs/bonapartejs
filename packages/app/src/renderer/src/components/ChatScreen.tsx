@@ -15,16 +15,16 @@ interface ChatScreenProps {
   initialEvents: ConversationEventDto[];
   onStats: (stats: CompletionStatsDto) => void;
   onStreamingChange: (streaming: boolean) => void;
-  /** Mode de jeu, monté dans le pied du composeur : il décide du prochain tour. */
+  /** Play mode, mounted in the composer's footer: it decides the next turn. */
   mode: PlayModeDto;
   onModeChange: (mode: PlayModeDto) => void;
-  /** Modèle de la conversation — poussé en fin de rangée. */
+  /** Model of the conversation — pushed to the end of the row. */
   modelName: string | null;
-  /** Ouvrir la conversation avec un autre modèle. */
+  /** Open the conversation with a different model. */
   onPickModel: (modelPath: string) => void;
-  /** Une ouverture est en cours : le sélecteur ne doit pas relancer par-dessus. */
+  /** An opening is in progress: the selector must not relaunch on top of it. */
   busy: boolean;
-  /** La température est portée par la conversation : elle se relit au changement. */
+  /** Temperature is carried by the conversation: it's reread on change. */
   conversationId: string | null;
 }
 
@@ -32,24 +32,24 @@ let nextId = 0;
 const freshId = (): string => `msg-${Date.now()}-${nextId++}`;
 
 /**
- * Ce qui est ouvert dans le tour en cours. Un tour se compose de segments
- * successifs — raisonnement, texte, pastilles d'outils — et non d'un seul bloc
- * de texte : c'est ce qui permet de replier la réflexion et de montrer une
- * activité d'outil pendant qu'elle tourne.
+ * What is open in the current turn. A turn is made of successive segments —
+ * reasoning, text, tool chips — rather than a single block of text: this is
+ * what allows collapsing the reasoning and showing a tool's activity while
+ * it's running.
  */
 interface TurnState {
   /**
-   * Bulle assistante du tour. On la garde pour pouvoir DÉCLARER le tour fini :
-   * `updateMessage(id, { status })` est ce qui fait fermer à la lib les
-   * segments encore ouverts — dernier passage du Markdown, coloration de la
-   * dernière ligne de code, horodatage de fin. Sans cet appel, `isStreaming`
-   * reste `undefined`, ce qui n'est pas `false` : la lib considère chaque
-   * segment comme toujours en train d'arriver, pour toujours.
+   * The turn's assistant bubble. We keep it to be able to DECLARE the turn
+   * finished: `updateMessage(id, { status })` is what makes the lib close
+   * segments still open — final Markdown pass, highlighting of the last code
+   * line, end timestamp. Without this call, `isStreaming` stays `undefined`,
+   * which is not `false`: the lib considers every segment to still be
+   * arriving, forever.
    */
   messageId: string;
   thinking: string | null;
-  /** Segment de texte courant ; remis à null après un outil (le texte suivant
-   *  s'écrit alors APRÈS la pastille, dans un nouveau segment). */
+  /** Current text segment; reset to null after a tool (the following text
+   *  is then written AFTER the chip, in a new segment). */
   text: string | null;
   pendingCalls: { name: string; segmentId: string }[];
   seq: number;
@@ -82,9 +82,9 @@ export function ChatScreen({
   const chat = useAparteChat(initialMessages);
   const turn = useRef<TurnState | null>(null);
 
-  // La ref suit `chat` sans le mettre en dépendance de l'effet : le hook
-  // renvoie un objet neuf à chaque rendu, et l'abonnement IPC ne doit se
-  // reconstruire qu'au montage.
+  // The ref tracks `chat` without putting it in the effect's dependencies:
+  // the hook returns a new object on every render, and the IPC subscription
+  // must only be rebuilt on mount.
   const chatRef = useRef(chat);
   chatRef.current = chat;
 
@@ -97,12 +97,12 @@ export function ChatScreen({
         type: 'thinking',
         content: '',
         label: t.chat.thinking,
-        // EXPLICITEMENT ouvert. Depuis 0.10.0, l'absence de `collapsed` veut
-        // dire FERMÉ (c'est ce que font les assistants du marché) — et un
-        // raisonnement replié pendant qu'il arrive, c'est exactement l'écran
-        // vide qu'on voulait éviter : une minute de réflexion sans rien
-        // afficher se lit comme une application plantée. On le referme
-        // nous-mêmes dès que la réponse commence.
+        // EXPLICITLY open. Since 0.10.0, the absence of `collapsed` means
+        // CLOSED (which is what mainstream assistants do) — and reasoning
+        // collapsed while it's arriving is exactly the empty screen we
+        // wanted to avoid: a minute of reasoning with nothing shown reads as
+        // a crashed application. We collapse it ourselves as soon as the
+        // reply starts.
         collapsed: false,
       });
       state.thinking = id;
@@ -111,8 +111,8 @@ export function ChatScreen({
 
     const ensureText = (state: TurnState): string => {
       if (state.text) return state.text;
-      // La réflexion se replie dès que la réponse commence : visible pendant
-      // qu'elle sert, discrète ensuite — mais jamais effacée.
+      // The reasoning collapses as soon as the reply starts: visible while
+      // it's useful, unobtrusive afterward — but never erased.
       if (state.thinking) {
         chatRef.current.updateSegment(state.thinking, { collapsed: true });
         state.thinking = null;
@@ -123,20 +123,19 @@ export function ChatScreen({
       return id;
     };
 
-    /** Fin de tour : rien ne doit rester à tourner dans le vide. */
+    /** End of turn: nothing should be left spinning into the void. */
     const finish = (state: TurnState, status: 'completed' | 'error'): void => {
       if (state.thinking) chatRef.current.updateSegment(state.thinking, { collapsed: true });
-      // Un outil resté « pending » afficherait un spinner éternel : on dit
-      // plutôt qu'il n'a pas abouti.
+      // A tool left "pending" would show an endless spinner: we say instead
+      // that it didn't complete.
       for (const call of state.pendingCalls) {
         chatRef.current.updateSegment(call.segmentId, { status: 'aborted' });
       }
-      // Le tour est CLOS, et il faut le dire à la lib : c'est ce passage qui
-      // referme les segments restés ouverts. Il ne s'agit pas d'un détail
-      // d'état — c'est lui qui déclenche le dernier passage du Markdown et la
-      // coloration de la ligne de code en cours, laissée volontairement brute
-      // pendant le flux. Sans lui, la dernière ligne de chaque bloc de code
-      // reste en gris, définitivement.
+      // The turn is CLOSED, and the lib needs to be told: this call is what
+      // closes the segments left open. This isn't a detail of state — it's
+      // what triggers the final Markdown pass and the highlighting of the
+      // current code line, deliberately left raw during the stream. Without
+      // it, the last line of every code block stays gray, permanently.
       chatRef.current.updateMessage(state.messageId, { status });
       turn.current = null;
       onStreamingChange(false);
@@ -152,8 +151,8 @@ export function ChatScreen({
           break;
 
         case 'thinking':
-          // Le raisonnement a sa place dans le fil : un modèle qui réfléchit
-          // une minute sans rien afficher passe pour une app plantée.
+          // The reasoning belongs in the thread: a model that thinks for a
+          // minute without displaying anything looks like a crashed app.
           chatRef.current.appendToSegment(ensureThinking(state), event.text);
           break;
 
@@ -175,8 +174,8 @@ export function ChatScreen({
         }
 
         case 'tool_result': {
-          // Les résultats reviennent dans l'ordre des appels ; à nom égal, le
-          // plus ancien en attente est le bon.
+          // Results come back in call order; for equal names, the oldest one
+          // pending is the right one.
           const index = state.pendingCalls.findIndex((c) => c.name === event.name);
           const call = index >= 0 ? state.pendingCalls.splice(index, 1)[0] : undefined;
           if (call) {
@@ -208,22 +207,23 @@ export function ChatScreen({
   }, [onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
 
   const handleSent = (detail: { content: string }): void => {
-    // Bulle assistante vide : la lib la rend « en attente » (points animés,
-    // aria-busy, pas de barre d'actions) tant que rien n'y est écrit. Entre
-    // l'envoi et le premier token il peut s'écouler une minute de prefill.
+    // Empty assistant bubble: the lib renders it "awaiting" (animated dots,
+    // aria-busy, no action bar) as long as nothing is written to it. Between
+    // sending and the first token, a minute of prefill can go by.
     const messageId = freshId();
     chat.appendMessage({
       id: messageId,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
-      // PAS de `status: 'streaming'` ici, et c'est mesuré :
-      // `isAwaitingReply()` rend `true` dès que le statut vaut `streaming`,
-      // sans regarder le contenu — la bulle resterait donc « en attente »
-      // (points animés, `aria-busy`) pendant toute la réponse. Sans statut,
-      // l'attente redevient ce qu'elle doit être : vraie tant qu'il n'y a rien,
-      // fausse au premier segment. Et `updateMessage({ status })` en fin de
-      // tour referme les segments quel qu'ait été l'état d'avant.
+      // NO `status: 'streaming'` here, and this is measured: `isAwaitingReply()`
+      // returns `true` as soon as the status is `streaming`, without looking
+      // at the content — the bubble would therefore stay "awaiting" (animated
+      // dots, `aria-busy`) throughout the whole reply. Without a status, the
+      // awaiting state goes back to being what it should be: true as long as
+      // there's nothing, false at the first segment. And `updateMessage({
+      // status })` at the end of the turn closes the segments regardless of
+      // what the prior state was.
     });
     turn.current = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
     onStreamingChange(true);
@@ -239,25 +239,25 @@ export function ChatScreen({
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
         centerWhenEmpty
-        // Pas de pièces jointes : la lib les coupe par défaut, et notre boucle
-        // ne consomme pas encore `detail.files` — mieux vaut ne rien promettre
-        // que jeter les fichiers en silence.
+        // No attachments: the lib strips them by default, and our loop
+        // doesn't consume `detail.files` yet — better to promise nothing
+        // than to silently drop the files.
         //
-        // La barre d'outils du composeur porte ce qui conditionne le PROCHAIN
-        // message : ce que l'agent s'autorise, et qui va répondre.
+        // The composer's toolbar carries what conditions the NEXT message:
+        // what the agent is allowed to do, and who will answer.
         //
-        // Un seul slot depuis 0.7.0, et l'ordre est celui du DOM : les trois
-        // slots positionnels d'avant nommaient une position PHYSIQUE
-        // (« right »), ce qui contredit le sens de lecture en RTL. Le modèle
-        // pousse sa fin de ligne avec `margin-inline-start: auto`, propriété
-        // LOGIQUE — donc juste dans les deux sens.
+        // A single slot since 0.7.0, and the order is the DOM's: the three
+        // positional slots before named a PHYSICAL position ("right"), which
+        // contradicts reading direction in RTL. The model pushes its line
+        // end with `margin-inline-start: auto`, a LOGICAL property — hence
+        // correct in both directions.
         toolbar={
           <>
             <ModeSelector mode={mode} onModeChange={onModeChange} />
             <TemperatureControl conversationId={conversationId} />
-            {/* Le modèle appartient à la conversation, comme le mode et la
-                température : il se choisit donc au même endroit, et non en
-                créant une conversation. */}
+            {/* The model belongs to the conversation, like the mode and the
+                temperature: it is therefore chosen in the same place, not by
+                creating a conversation. */}
             <ModelSelector modelName={modelName} busy={busy} onPick={onPickModel} />
           </>
         }

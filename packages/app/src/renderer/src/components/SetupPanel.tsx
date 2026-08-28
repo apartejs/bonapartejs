@@ -14,10 +14,10 @@ interface SetupPanelProps {
 }
 
 /**
- * Deux intentions pour un seul moteur : « bonaparte lance llama.cpp » ou
- * « j'ai déjà un llama-server qui tourne ». Il n'y a pas de protocole à
- * choisir — bonaparte ne pilote que llama.cpp, seul à persister le contexte.
- * L'URL est simplement vérifiée avant d'être acceptée.
+ * Two intents for a single engine: "bonaparte launches llama.cpp" or "I
+ * already have a llama-server running." There's no protocol to choose —
+ * bonaparte only drives llama.cpp, the only one that persists context. The
+ * URL is simply verified before being accepted.
  */
 type Intent = 'managed' | 'existing';
 
@@ -39,7 +39,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   const [probing, setProbing] = useState(false);
   const [probeFailed, setProbeFailed] = useState(false);
 
-  // Pré-remplit le binaire llama détecté sur la machine (doctor lookup).
+  // Pre-fills the llama binary detected on the machine (doctor lookup).
   useEffect(() => {
     void window.bonaparte.suggestSetup().then((suggestion) => {
       if (suggestion.binPath) {
@@ -60,7 +60,7 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
       setWingetCopied(true);
       setTimeout(() => setWingetCopied(false), 2000);
     } catch {
-      /* presse-papiers indisponible : la commande reste affichée */
+      /* clipboard unavailable: the command stays displayed */
     }
   };
 

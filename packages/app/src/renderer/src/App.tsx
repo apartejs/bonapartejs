@@ -57,9 +57,9 @@ export function App() {
   const [conversations, setConversations] = useState<ConversationSummaryDto[]>([]);
   const [plugins, setPlugins] = useState<PluginStatusDto[]>([]);
   /**
-   * Onglets d'outillage de la conversation ouverte. L'état vit ici parce qu'il
-   * est LU à deux endroits : la bande d'onglets, dans l'en-tête, et leur
-   * contenu, dans le panneau.
+   * Tooling tabs for the open conversation. The state lives here because it
+   * is READ in two places: the tab strip, in the header, and their content,
+   * in the panel.
    */
   const tooling = useToolingTabs({
     conversationId: opened?.conversationId ?? null,
@@ -69,12 +69,12 @@ export function App() {
   const [projectRoot, setProjectRoot] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectSummaryDto[]>([]);
-  /** null = fermé ; { project: null } = création. */
+  /** null = closed; { project: null } = creation. */
   const [projectDialog, setProjectDialog] = useState<{
     project: ProjectSummaryDto | null;
   } | null>(null);
-  // Organisation du menu : pure préférence d'affichage, donc locale — la
-  // remonter au main process ferait redémarrer l'app pour un réglage cosmétique.
+  // Menu organization: pure display preference, hence local — lifting it up
+  // to the main process would restart the app for a cosmetic setting.
   const [grouping, setGrouping] = useState<SidebarGroupingDto>(
     () => (localStorage.getItem('bp.sidebar.grouping') as SidebarGroupingDto) || 'project',
   );
@@ -82,7 +82,7 @@ export function App() {
     () => (localStorage.getItem('bp.sidebar.sort') as SidebarSortDto) || 'updated',
   );
 
-  /** Le menu se relit après chaque événement qui peut le changer. */
+  /** The menu is reread after every event that can change it. */
   const refreshConversations = useCallback(async () => {
     setConversations(await window.bonaparte.listConversations());
     setProjects(await window.bonaparte.listProjects());
@@ -93,7 +93,7 @@ export function App() {
     try {
       localStorage.setItem('bp.sidebar.grouping', next);
     } catch {
-      /* non bloquant */
+      /* non-blocking */
     }
   }, []);
 
@@ -102,13 +102,13 @@ export function App() {
     try {
       localStorage.setItem('bp.sidebar.sort', next);
     } catch {
-      /* non bloquant */
+      /* non-blocking */
     }
   }, []);
 
   /**
-   * Enregistre un projet — création ou édition — puis rafraîchit tout : le
-   * périmètre a pu changer, donc le menu ET l'en-tête.
+   * Saves a project — creation or editing — then refreshes everything: the
+   * scope may have changed, hence the menu AND the header.
    */
   const saveProject = useCallback(
     async (name: string, roots: string[]) => {
@@ -118,8 +118,8 @@ export function App() {
         await window.bonaparte.setProjectRoots(editing.id, roots);
       } else {
         const created = await window.bonaparte.createProject(name, roots);
-        // Un projet créé depuis une conversation sans projet l'adopte : sinon
-        // l'utilisateur créerait un projet qui ne sert à rien dans l'instant.
+        // A project created from a conversation without a project adopts it:
+        // otherwise the user would create a project that's useless right now.
         const current = opened?.conversationId;
         if (current) {
           await window.bonaparte.setConversationProject(current, created.id);
@@ -159,7 +159,7 @@ export function App() {
     [opened, refreshConversations],
   );
 
-  /** Projet de la conversation ouverte, tiré de l'index déjà chargé. */
+  /** Project of the open conversation, drawn from the already-loaded index. */
   const currentProjectSummary =
     projects.find(
       (p) =>
@@ -191,12 +191,12 @@ export function App() {
     [approval],
   );
 
-  // Locale des composants aparté (chaînes internes des web components).
+  // Locale of aparté components (internal strings of the web components).
   useEffect(() => {
-    // 0.13.0 : la configuration n'est plus une classe à statiques mais une
-    // INSTANCE exportée. Même contrat, un objet à la place d'un espace de noms.
+    // 0.13.0: the config is no longer a class with statics but an exported
+    // INSTANCE. Same contract, an object instead of a namespace.
     if (locale === 'fr') aparteGlobalConfig.setLocale(aparteFr);
-    else aparteGlobalConfig.resetLocale(); // retour au défaut (en)
+    else aparteGlobalConfig.resetLocale(); // back to default (en)
   }, [locale]);
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
@@ -219,8 +219,8 @@ export function App() {
           setOpened(reply);
           setLastStats(null);
           setView('chat');
-          // Le périmètre suit la conversation ouverte, via son projet. Le
-          // panneau d'outillage n'a besoin que de la racine par défaut.
+          // The scope follows the open conversation, via its project. The
+          // tooling panel only needs the default root.
           const project = await window.bonaparte.currentProject();
           setProjectRoot(project?.root ?? null);
           await refreshConversations();
@@ -236,10 +236,10 @@ export function App() {
   );
 
   /**
-   * Bascule de conversation : LECTURE SEULE. L'historique vient du log sur
-   * disque ; le cache KV n'accélère que la génération suivante, donc consulter
-   * ses conversations ne doit charger aucun modèle. Le moteur se réveille au
-   * premier message, et pas avant.
+   * Switching conversation: READ ONLY. The history comes from the log on
+   * disk; the KV cache only speeds up the next generation, so browsing one's
+   * conversations must load no model. The engine wakes up on the first
+   * message, and not before.
    */
   const selectConversation = useCallback(
     async (id?: string) => {
@@ -286,8 +286,8 @@ export function App() {
     [fail, selectConversation],
   );
 
-  // Boot : si un moteur est configuré, on le démarre et on ouvre la
-  // conversation ; sinon, panneau de configuration.
+  // Boot: if an engine is configured, we start it and open the conversation;
+  // otherwise, the configuration panel.
   useEffect(() => {
     if (bootAttempted.current) return;
     bootAttempted.current = true;
@@ -298,9 +298,9 @@ export function App() {
         return;
       }
       setConfig(appConfig.backend);
-      // Démarrage à FROID : on enregistre le moteur et on affiche
-      // l'historique, sans rien réveiller. La connexion se fait au premier
-      // message — lancer l'app ne doit charger aucun modèle.
+      // COLD startup: we register the engine and show the history, without
+      // waking anything. The connection happens on the first message —
+      // launching the app must load no model.
       await window.bonaparte.registerBackend(appConfig.backend);
       const history = await window.bonaparte.conversationHistory();
       if ('needsModel' in history) {
@@ -315,9 +315,9 @@ export function App() {
   }, [startWith, refreshConversations]);
 
 
-  /** Nouvelle conversation : elle hérite du dossier courant s'il y en a un —
-   *  discuter sans dossier reste possible en n'en attachant simplement pas.
-   *  Elle non plus ne charge rien : elle est vide, il n'y a rien à générer. */
+  /** New conversation: it inherits the current folder if there is one —
+   *  chatting without a folder remains possible by simply not attaching one.
+   *  It doesn't load anything either: it's empty, there's nothing to generate. */
   const createConversation = useCallback(async () => {
     setBusy(true);
     try {
@@ -340,14 +340,14 @@ export function App() {
     const next = currentTheme() === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-aparte-theme', next);
     document.documentElement.style.colorScheme = next;
-    // shiki fige les couleurs dans le HTML des blocs de code : sans
-    // réinstallation, un thème clair garderait du code sur fond sombre. Les
-    // blocs déjà peints ne se recolorent qu'au prochain rendu.
+    // shiki freezes colors into the HTML of code blocks: without
+    // reinstalling, a light theme would keep code on a dark background.
+    // Blocks already painted only recolor on the next render.
     void bootstrapHighlighting(next).catch(() => undefined);
     try {
       localStorage.setItem('bp.theme', next);
     } catch {
-      /* non bloquant */
+      /* non-blocking */
     }
   }, []);
 
@@ -355,10 +355,10 @@ export function App() {
     <div className="app-shell">
       <div className="app-body">
         {/*
-          Les flancs restent MONTÉS, replié compris — leur largeur tombe à
-          zéro, et c'est tout. C'est la seule façon fiable d'animer un repli :
-          monter puis démonter l'élément ne laisse au navigateur aucun état de
-          départ à interpoler, donc aucune transition à jouer.
+          The flanks stay MOUNTED, even when collapsed — their width drops to
+          zero, and that's it. This is the only reliable way to animate a
+          collapse: mounting then unmounting the element leaves the browser no
+          starting state to interpolate from, hence no transition to play.
         */}
         {view === 'chat' && (
             <>
@@ -408,8 +408,8 @@ export function App() {
             busy={busy}
             error={error}
             onPick={(modelPath, nCtx) => {
-              // Le choix devient aussi le défaut des futures conversations —
-              // l'écran de distribution ne réapparaîtra plus (hub Réglages en J3).
+              // The choice also becomes the default for future conversations —
+              // the distribution screen won't reappear (Settings hub in J3).
               if (config) {
                 void window.bonaparte.setConfig({
                   backend: config,
@@ -420,8 +420,8 @@ export function App() {
             }}
           />
         ) : opened ? (
-          /* `app-main` est un flex ROW (il centre les cartes de configuration) :
-             sans cette colonne, le chat ne prendrait pas toute la place. */
+          /* `app-main` is a flex ROW (it centers the configuration cards):
+             without this column, the chat wouldn't take up all the space. */
           <div className="chat-view">
             <ConversationHeader
               title={conversations.find((c) => c.id === opened.conversationId)?.title ?? ''}

@@ -1,13 +1,13 @@
 import { defineConfig } from '@playwright/test';
 
 /**
- * E2E Electron, délibérément hors du `pnpm test` du dépôt : ces tests lancent
- * l'application, donc ils demandent un écran et du temps. La suite unitaire
- * doit rester exécutable partout, en quelques secondes.
+ * Electron E2E, deliberately outside the repo's `pnpm test`: these tests
+ * launch the application, so they need a screen and time. The unit suite
+ * must stay runnable everywhere, in a few seconds.
  */
 export default defineConfig({
   testDir: './e2e',
-  // Une seule instance d'Electron à la fois : les tests partagent la fenêtre.
+  // Only one Electron instance at a time: the tests share the window.
   workers: 1,
   fullyParallel: false,
   timeout: 60_000,

@@ -1,9 +1,9 @@
 /*
- * Colonne de chat et rangée basse du composeur.
+ * Chat column and the composer's bottom row.
  *
- * `app-main` est un flex ROW — il centre les cartes de configuration. La vue de
- * chat a donc besoin de sa propre colonne, sinon l'en-tête, le chat et la barre
- * du composeur se rangent côte à côte au lieu de s'empiler.
+ * `app-main` is a flex ROW — it centers the configuration cards. The chat
+ * view therefore needs its own column, otherwise the header, the chat, and
+ * the composer bar line up side by side instead of stacking.
  */
 
 .chat-view {
@@ -15,18 +15,18 @@
 }
 
 /*
- * ── Pied du composeur ─────────────────────────────────────────────────────
+ * ── Composer footer ───────────────────────────────────────────────────────
  *
- * Ces éléments sont montés dans le slot `toolbar` d'`<AparteChat>` : la lib
- * dessine la rangée, on ne fournit que le contenu ET son ordre.
+ * These elements are mounted in `<AparteChat>`'s `toolbar` slot: the lib
+ * draws the row, we only supply the content AND its order.
  *
- * L'ordre est celui du DOM. Ce qui doit finir la ligne se pousse avec
- * `margin-inline-start: auto` — propriété LOGIQUE, donc correcte en RTL, là où
- * l'ancien `footerRight` nommait une position physique.
+ * The order is the DOM's. Whatever must end the line pushes itself with
+ * `margin-inline-start: auto` — a LOGICAL property, hence correct in RTL,
+ * where the old `footerRight` named a physical position.
  *
- * (Une barre séparée sous le composeur avait d'abord été bricolée : les slots
- * existaient et étaient documentés, mais en une clause au milieu d'une phrase,
- * sans exemple. Friction consignée.)
+ * (A separate bar under the composer had first been hacked together: the
+ * slots existed and were documented, but in one clause in the middle of a
+ * sentence, with no example. Friction logged.)
  */
 
 .mode-wrap {
@@ -57,8 +57,8 @@
   opacity: 0.7;
 }
 
-/* La pastille reprend la couleur du mode : le coup d'œil suffit à savoir si
-   l'agent a la main libre. */
+/* The dot picks up the mode's color: a glance is enough to know whether the
+   agent has a free hand. */
 .mode-dot {
   width: 7px;
   height: 7px;
@@ -68,8 +68,8 @@
 }
 
 /*
- * Modèle de la conversation. Il était une étiquette morte ; c'est maintenant
- * un bouton, poussé — avec tout ce qui suivrait — à la fin de la rangée.
+ * Conversation's model. It used to be a dead label; it's now a button,
+ * pushed — along with anything that would follow — to the end of the row.
  */
 .model-wrap {
   position: relative;
@@ -113,8 +113,8 @@
   white-space: nowrap;
 }
 
-/* Le menu s'ouvre VERS LE HAUT : le composeur est en bas de la fenêtre, un
-   menu vers le bas sortirait de l'écran. */
+/* The menu opens UPWARD: the composer is at the bottom of the window, a
+   downward menu would run off screen. */
 .model-menu {
   position: absolute;
   bottom: calc(100% + 8px);
@@ -151,7 +151,7 @@
   background: var(--aparte-surface-2);
 }
 
-/* Le modèle courant n'est pas cliquable : il est marqué, pas proposé. */
+/* The current model isn't clickable: it's marked, not offered. */
 .model-item:disabled {
   cursor: default;
   color: var(--aparte-primary);
@@ -227,7 +227,7 @@
   color: var(--aparte-text-secondary);
 }
 
-/* ── Température, dans la rangée du composeur ──────────────────────────── */
+/* ── Temperature, in the composer's row ──────────────────────────────── */
 
 .temp-wrap {
   position: relative;
@@ -255,8 +255,8 @@
   border-color: var(--aparte-border);
 }
 
-/* Réglée POUR cette conversation : elle se distingue d'une valeur héritée,
-   sinon on ne sait pas si on lit un défaut ou un choix. */
+/* Set FOR this conversation: it stands apart from an inherited value,
+   otherwise you can't tell whether you're looking at a default or a choice. */
 .temp-button-set {
   color: var(--aparte-text);
   border-color: var(--aparte-border);

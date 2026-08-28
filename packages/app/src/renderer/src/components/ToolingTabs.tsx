@@ -7,25 +7,25 @@ interface ToolingTabsProps {
   tooling: ToolingTabsApi;
 }
 
-/** Où poser le menu, en coordonnées de fenêtre. */
+/** Where to place the menu, in window coordinates. */
 interface MenuAnchor {
   top: number;
   right: number;
 }
 
 /**
- * Bande d'onglets du panneau d'outillage — dans l'EN-TÊTE, pas dans le panneau.
+ * Tooling panel's tab strip — in the HEADER, not in the panel.
  *
- * C'est le modèle de Codex, et il a une raison : la bande d'onglets et le titre
- * de la conversation vivent alors sur la MÊME ligne, la barre du haut est une
- * seule pièce, et l'ouverture du panneau ne fait pas apparaître une deuxième
- * barre sous la première.
+ * This is the Codex model, and it has a reason: the tab strip and the
+ * conversation title then live on the SAME line, the top bar is a single
+ * piece, and opening the panel doesn't make a second bar appear under the
+ * first.
  *
- * Le menu d'ouverture est en position FIXE, ancré sur son bouton. Ce n'est pas
- * un raffinement : la zone qui porte la bande d'onglets se replie en glissant,
- * donc elle doit couper ce qui dépasse (`overflow: hidden`) — et un menu en
- * position absolue à l'intérieur se faisait couper avec. Le clic ouvrait un
- * menu réellement invisible.
+ * The opening menu is FIXED position, anchored to its button. This isn't a
+ * refinement: the area carrying the tab strip collapses by sliding, so it
+ * must clip whatever overflows (`overflow: hidden`) — and a menu positioned
+ * absolutely inside it was getting clipped along with it. The click was
+ * opening a genuinely invisible menu.
  */
 export function ToolingTabs({ tooling }: ToolingTabsProps) {
   const { t } = useTranslate();
@@ -53,8 +53,8 @@ export function ToolingTabs({ tooling }: ToolingTabsProps) {
     const escape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') setAnchor(null);
     };
-    // Le menu est ancré en coordonnées de fenêtre : s'il y a redimensionnement
-    // ou glissement de séparateur, il doit suivre son bouton ou disparaître.
+    // The menu is anchored in window coordinates: on a resize or a
+    // separator drag, it must either follow its button or disappear.
     const drop = (): void => setAnchor(null);
     document.addEventListener('mousedown', close);
     document.addEventListener('keydown', escape);

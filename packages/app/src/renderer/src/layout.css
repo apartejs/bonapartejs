@@ -1,24 +1,25 @@
 /*
- * Disposition du shell : flancs redimensionnables et repliables.
+ * Shell layout: resizable and collapsible flanks.
  *
- * Les largeurs viennent d'un style inline (l'état vit dans React), donc rien
- * ici ne fixe de dimension — ce fichier ne s'occupe que de la mécanique.
+ * The widths come from an inline style (the state lives in React), so
+ * nothing here sets a fixed dimension — this file only handles the
+ * mechanics.
  */
 
 /*
- * Un flanc est TOUJOURS monté, replié compris : sa largeur tombe à zéro, et la
- * transition fait le reste.
+ * A flank is ALWAYS mounted, even collapsed: its width drops to zero, and the
+ * transition does the rest.
  *
- * C'est la seule façon fiable d'animer un repli. En le montant à l'ouverture
- * et le démontant à la fermeture, le navigateur n'a aucun état de départ à
- * interpoler — l'élément naît à sa largeur finale dans la frame où il est
- * créé — et le repli est instantané dans les deux sens, quelles que soient les
- * acrobaties de `requestAnimationFrame` autour.
+ * This is the only reliable way to animate a collapse. By mounting it on
+ * open and unmounting it on close, the browser has no starting state to
+ * interpolate from — the element is born at its final width in the frame
+ * where it's created — and the collapse is instantaneous in both directions,
+ * regardless of whatever `requestAnimationFrame` acrobatics surround it.
  *
- * `overflow: hidden` garde le contenu à l'intérieur pendant le trajet ; il est
- * posé ici et non sur les enfants, car il n'y a plus de démontage pour
- * l'éviter. Le séparateur, qui chevauche la bordure, est replacé en
- * conséquence (cf. plus bas).
+ * `overflow: hidden` keeps the content inside during the transition; it's
+ * set here rather than on the children, because there's no more unmounting
+ * to avoid it. The separator, which straddles the border, is repositioned
+ * accordingly (see below).
  */
 .side-slot {
   position: relative;
@@ -31,22 +32,22 @@
 }
 
 /*
- * Replié, le flanc ne prend plus rien : ni clic, ni tabulation. Sans ça, on
- * pourrait attraper au clavier des boutons larges de zéro pixel — et
- * redimensionner un flanc qui n'est pas là.
+ * Collapsed, the flank captures nothing anymore: no click, no tab stop.
+ * Without this, you could tab into zero-pixel-wide buttons with the
+ * keyboard — and resize a flank that isn't there.
  */
 .side-slot[data-collapsed='true'] {
   pointer-events: none;
 }
 
-/* Pendant un glissé de séparateur, la largeur suit le doigt : une transition
-   ferait traîner le flanc derrière le curseur. */
+/* During a separator drag, the width follows the finger: a transition would
+   make the flank drag behind the cursor. */
 body.resizing .side-slot {
   transition: none;
 }
 
-/* Les enfants d'un flanc prennent la largeur que le slot leur donne, au lieu
-   de la leur imposer — c'est le slot qui est redimensionné. */
+/* A flank's children take whatever width the slot gives them, instead of
+   imposing their own — it's the slot that gets resized. */
 .side-slot > *:not(.resize-handle) {
   flex: 1;
   width: auto;
@@ -54,19 +55,19 @@ body.resizing .side-slot {
 }
 
 /*
- * Le séparateur est POSÉ SUR la bordure, en absolu : il n'occupe aucune place
- * dans la mise en page. Une gouttière permanente se verrait et décalerait tout
- * alors qu'elle ne sert qu'au survol — VS Code, Slack et Linear font tous
- * ainsi.
+ * The separator is PLACED ON TOP of the border, absolutely: it takes up no
+ * room in the layout. A permanent gutter would be visible and shift
+ * everything, even though it's only useful on hover — VS Code, Slack, and
+ * Linear all do it this way.
  *
- * 8 px de large pour la SAISIE, mais rien de peint au repos.
+ * 8 px wide for the HIT AREA, but nothing painted at rest.
  */
 .resize-handle {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 8px;
-  /* Le slot découpe (il anime son repli) : la poignée reste donc DEDANS. */
+  /* The slot clips (it animates its own collapse): the handle therefore stays INSIDE. */
   z-index: 5;
   cursor: col-resize;
   background: transparent;
@@ -74,9 +75,10 @@ body.resizing .side-slot {
 }
 
 /*
- * Collée à l'intérieur de la bordure, pas centrée dessus : le slot découpe ce
- * qui dépasse depuis qu'il anime son repli, et la moitié extérieure de la
- * poignée se faisait manger. Huit pixels de saisie, tous du bon côté.
+ * Stuck to the inside of the border, not centered on it: the slot clips
+ * whatever overflows since it started animating its own collapse, and the
+ * outer half of the handle was getting eaten. Eight pixels of hit area, all
+ * on the right side.
  */
 .resize-handle-end {
   inset-inline-end: 0;
@@ -87,9 +89,9 @@ body.resizing .side-slot {
 }
 
 /*
- * Au survol, un filet de 1 px centré — pas un bloc de 8 px. La zone sensible
- * est large, la marque est fine : on garde la facilité de visée sans ajouter
- * de bruit visuel.
+ * On hover, a centered 1 px hairline — not an 8 px block. The hit zone is
+ * wide, the mark is thin: we keep the ease of targeting without adding
+ * visual noise.
  */
 .resize-handle::after {
   content: '';
@@ -110,8 +112,8 @@ body.resizing .resize-handle:focus-visible::after {
   opacity: 1;
 }
 
-/* Au clavier, la marque doit être franche : sans contour naturel, un filet
-   discret ne suffirait pas à dire où est le focus. */
+/* On keyboard, the mark must be unambiguous: without a natural outline, a
+   subtle hairline wouldn't be enough to say where focus is. */
 .resize-handle:focus-visible {
   outline: none;
 }
@@ -120,8 +122,8 @@ body.resizing .resize-handle:focus-visible::after {
   width: 2px;
 }
 
-/* Pendant un glissement, le curseur reste celui du redimensionnement partout
-   et rien ne se sélectionne — sinon tirer surligne la moitié de l'écran. */
+/* During a drag, the cursor stays the resize one everywhere and nothing gets
+   selected — otherwise dragging highlights half the screen. */
 body.resizing {
   cursor: col-resize;
   user-select: none;

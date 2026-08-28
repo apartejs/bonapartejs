@@ -5,9 +5,9 @@ import { Harness } from './harness.js';
 const harness = new Harness();
 
 /**
- * Arrêt propre, exécuté une seule fois et ATTENDU par tous les chemins de
- * sortie. Sans cette garantie, Electron quitte pendant que la sauvegarde KV
- * et l'arrêt du serveur sont encore en vol — et le modèle survit à l'app.
+ * Clean shutdown, executed exactly once and AWAITED by every exit path.
+ * Without this guarantee, Electron quits while the KV save and the server
+ * shutdown are still in flight — and the model survives the app.
  */
 let shutdownPromise: Promise<void> | null = null;
 let shutdownDone = false;
@@ -23,12 +23,12 @@ function shutdownOnce(): Promise<void> {
 }
 
 /**
- * Icône de l'application : la mascotte `('.')` d'aparté, la même que le favicon
- * d'apartejs.dev et de monaparte — une seule marque pour toute la famille.
+ * Application icon: aparté's `('.')` mascot, the same one as the favicon of
+ * apartejs.dev and of monaparte — a single mark for the whole family.
  *
- * Empaquetée, elle vivra dans les ressources ; en développement, elle est à la
- * racine du paquet app. L'empaquetage (J5) n'existe pas encore, mais le chemin
- * est déjà là pour ne pas avoir à y repenser.
+ * Packaged, it will live in the resources; in development, it's at the root
+ * of the app package. Packaging (J5) doesn't exist yet, but the path is
+ * already there so we don't have to revisit it.
  */
 function iconPath(): string {
   return app.isPackaged
@@ -44,31 +44,31 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     icon: iconPath(),
-    // Fond posé avant tout paint pour éviter le flash blanc ; le renderer
-    // applique ensuite le thème réel (attribut data-aparte-theme).
+    // Background set before any paint to avoid the white flash; the renderer
+    // then applies the real theme (data-aparte-theme attribute).
     backgroundColor: '#17141c',
     title: 'bonaparte',
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      // ESM preload ⇒ sandbox désactivé (limitation Electron). Le renderer
-      // n'accède à rien d'autre que l'API typée exposée par contextBridge.
+      // ESM preload ⇒ sandbox disabled (Electron limitation). The renderer
+      // has access to nothing but the typed API exposed via contextBridge.
       sandbox: false,
     },
   });
 
   harness.attachWindow(win);
-  // Electron n'a pas de vrai mode headless : ce qu'on peut faire, c'est ne
-  // JAMAIS montrer la fenêtre. Le renderer tourne quand même, le DOM est
-  // vivant, et les tests observent exactement la même chose — sans qu'une
-  // fenêtre surgisse devant l'utilisateur à chaque exécution.
+  // Electron has no real headless mode: what we can do is NEVER show the
+  // window. The renderer still runs, the DOM is alive, and the tests observe
+  // exactly the same thing — without a window popping up in front of the
+  // user on every run.
   if (!process.env['BONAPARTE_E2E']) {
     win.once('ready-to-show', () => win.show());
   }
 
-  // À la fermeture : sauvegarde de l'état KV et arrêt du serveur AVANT de
-  // laisser la fenêtre partir.
+  // On close: save the KV state and stop the server BEFORE letting the
+  // window go.
   win.on('close', (event) => {
     if (shutdownDone) return;
     event.preventDefault();
@@ -83,20 +83,20 @@ function createWindow(): void {
   }
 }
 
-// Un harnais pour modèles LOCAUX ne dépense pas de VRAM à composer des pixels.
-// L'interface est du texte, des listes et des diffs : elle n'a rien à demander
-// au GPU, alors que chaque mégaoctet de VRAM rendu au modèle est du contexte en
-// plus. Doit être appelé AVANT `whenReady`.
+// A harness for LOCAL models doesn't spend VRAM compositing pixels. The
+// interface is text, lists, and diffs: it has nothing to ask of the GPU,
+// whereas every megabyte of VRAM handed to the model is more context. Must
+// be called BEFORE `whenReady`.
 app.disableHardwareAcceleration();
 
-// Windows regroupe et illustre les fenêtres par cet identifiant : sans lui, la
-// barre des tâches affiche l'icône d'Electron, quelle que soit celle de la
-// fenêtre. Doit être posé avant la première fenêtre.
+// Windows groups and illustrates windows by this identifier: without it, the
+// taskbar shows Electron's icon, regardless of the window's own. Must be set
+// before the first window.
 if (process.platform === 'win32') app.setAppUserModelId('dev.apartejs.bonaparte');
 
 app.whenReady().then(async () => {
-  // Pas de barre de menu : l'app porte sa propre navigation. Sur macOS on la
-  // garde, le système y attache les raccourcis d'édition standard.
+  // No menu bar: the app carries its own navigation. On macOS we keep it,
+  // the system attaches the standard editing shortcuts to it.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
 
   harness.registerIpc(ipcMain, app.getVersion());
@@ -112,10 +112,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Ceinture et bretelles : même si la fenêtre a sauté l'étape close (crash
-// renderer, quit forcé), le serveur de modèle ne doit jamais survivre à l'app.
-// On RETARDE la sortie le temps du nettoyage — un `void` ne suffisait pas :
-// Electron quittait avant que le kill ne parte.
+// Belt and suspenders: even if the window skipped the close step (renderer
+// crash, forced quit), the model server must never outlive the app. We DELAY
+// the exit for the duration of the cleanup — a `void` wasn't enough:
+// Electron was quitting before the kill even went out.
 app.on('before-quit', (event) => {
   if (shutdownDone) return;
   event.preventDefault();

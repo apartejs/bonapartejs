@@ -10,9 +10,9 @@ import {
 import { contextBridge, ipcRenderer } from 'electron';
 
 /**
- * Surface exposée au renderer. Jamais d'`ipcRenderer` brut : uniquement des
- * fonctions typées — condition pour que les futurs plugins tiers du renderer
- * ne puissent pas contourner le moteur de permissions.
+ * Surface exposed to the renderer. Never raw `ipcRenderer`: only typed
+ * functions — a condition for future third-party renderer plugins to be
+ * unable to bypass the permission engine.
  */
 const api: BonaparteBridge = {
   suggestSetup: () => ipcRenderer.invoke(IPC.setupSuggest),

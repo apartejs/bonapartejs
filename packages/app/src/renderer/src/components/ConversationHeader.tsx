@@ -13,11 +13,11 @@ interface ConversationHeaderProps {
   onCreateProject: () => void;
   onMoveToProject: (projectId: string | null) => void;
   /**
-   * Bascules des deux flancs. Elles vivent ICI, dans une position fixe de la
-   * chrome, et non dans les panneaux qu'elles masquent : un bouton placé dans
-   * le panneau qu'il ferme disparaît avec lui — c'est ce qui obligeait à
-   * inventer un rail pour le retrouver. Codex, Slack et Linear les gardent
-   * tous dans la barre du haut.
+   * Toggles for both flanks. They live HERE, in a fixed position of the
+   * chrome, rather than in the panels they hide: a button placed inside the
+   * panel it closes disappears along with it — which is what forced us to
+   * invent a rail to find it again. Codex, Slack, and Linear all keep them
+   * in the top bar.
    */
   sidebarCollapsed: boolean;
   panelCollapsed: boolean;
@@ -26,25 +26,25 @@ interface ConversationHeaderProps {
 }
 
 /**
- * Place réservée à la bascule, en pixels : 28 de bouton, 8 de marge, 1 de
- * refend. Les trois comptent — la boîte est en `border-box`, donc un pixel
- * oublié se prend sur le bouton.
+ * Space reserved for the toggle, in pixels: 28 for the button, 8 for the
+ * margin, 1 for the seam. All three count — the box is `border-box`, so a
+ * forgotten pixel comes out of the button.
  *
- * La moitié droite de la barre fait exactement la largeur du panneau, bascule
- * COMPRISE : c'est ce qui aligne son refend sur la bordure du panneau. Sans en
- * tenir compte, il tombait un bouton trop à gauche.
+ * The right half of the bar is exactly the width of the panel, toggle
+ * INCLUDED: this is what aligns its seam with the panel's border. Without
+ * accounting for it, the button landed one pixel too far left.
  */
 
 /**
- * En-tête de la conversation : ce qui la NOMME et ce qu'elle VOIT.
+ * Conversation header: what NAMES it and what it SEES.
  *
- * Le dossier vivait dans la barre du bas, ce qui était indéfendable : il est
- * propre à la conversation, il s'affiche donc là où la conversation est. La
- * barre du bas ne garde que le global (moteur, jauge de contexte).
+ * The folder used to live in the bottom bar, which was indefensible: it's
+ * specific to the conversation, so it displays where the conversation is.
+ * The bottom bar keeps only what's global (engine, context gauge).
  *
- * La pastille de projet ouvre un panneau plutôt qu'un sélecteur de fichiers :
- * un projet porte PLUSIEURS racines, un simple « choisir un dossier » ne
- * saurait pas les représenter.
+ * The project chip opens a panel rather than a file picker: a project
+ * carries SEVERAL roots, a plain "choose a folder" wouldn't know how to
+ * represent them.
  */
 export function ConversationHeader({
   title,
@@ -70,8 +70,8 @@ export function ConversationHeader({
     if (!editing) setDraft(title);
   }, [title, editing]);
 
-  // Un panneau ouvert se referme au clic ailleurs : sans ça, deux panneaux
-  // peuvent rester ouverts et l'utilisateur ne sait plus ce qui a le focus.
+  // An open panel closes on a click elsewhere: without this, two panels can
+  // stay open and the user no longer knows what has focus.
   useEffect(() => {
     if (panel === 'none') return;
     const close = (event: MouseEvent): void => {
@@ -155,8 +155,8 @@ export function ConversationHeader({
           {project ? (
             <>
               <p className="conv-popover-name">{project.name}</p>
-              {/* Les chemins ABSOLUS, parce que c'est le seul affichage qui ne
-                  laisse aucun doute sur ce que le modèle peut atteindre. */}
+              {/* ABSOLUTE paths, because it's the only display that leaves
+                  no doubt about what the model can reach. */}
               <ul className="conv-popover-roots">
                 {project.roots.length === 0 ? (
                   <li className="conv-popover-empty">{t.header.noRoots}</li>
@@ -226,9 +226,9 @@ export function ConversationHeader({
       )}
 
       {/*
-        Panneau fermé, sa bascule termine CETTE barre ; ouvert, elle termine la
-        barre du panneau. Les deux finissent au bord de la fenêtre : le bouton
-        est au même pixel dans les deux cas, avec la même icône.
+        Panel closed, its toggle ends THIS bar; open, it ends the panel's
+        bar. Both end at the edge of the window: the button sits at the same
+        pixel in both cases, with the same icon.
       */}
       {panelCollapsed && (
         <FlankToggle

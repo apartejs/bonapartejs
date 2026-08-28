@@ -13,7 +13,7 @@ interface StatusStripProps {
   engine: BackendConfigDto | undefined;
   streaming: boolean;
   modelName: string | null;
-  /** Taille de contexte de la conversation — dénominateur de la jauge. */
+  /** Conversation's context size — the gauge's denominator. */
   nCtx: number | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
@@ -60,14 +60,14 @@ export function StatusStrip({
       ? Math.round((lastStats.progress.cache / lastStats.progress.total) * 100)
       : null;
 
-  // Jauge de contexte : ce que le dernier prompt occupait sur ce qu'on peut
-  // tenir. Sans les deux chiffres, on n'affiche rien plutôt qu'une estimation.
+  // Context gauge: what the last prompt occupied out of what we can hold.
+  // Without both numbers, we display nothing rather than an estimate.
   const usedTokens = lastStats?.progress?.total ?? null;
   const contextPct =
     usedTokens !== null && nCtx ? Math.min(100, Math.round((usedTokens / nCtx) * 100)) : null;
 
-  // Le seul moteur est llama.cpp, qui sait toujours persister : il suffit
-  // qu'un moteur soit branché pour que le bouton tienne sa promesse.
+  // The only engine is llama.cpp, which always knows how to persist: an
+  // engine just needs to be connected for the button to keep its promise.
   const canPersistKv = engine !== undefined;
 
   return (
@@ -77,11 +77,11 @@ export function StatusStrip({
         <span className={`status-pill status-${backendStatus}`}>
           {t.status[backendStatus]}
         </span>
-        {/* Cette barre ne porte plus que du GLOBAL : état du moteur, modèle
-            chargé, jauge de contexte, mesures. Le dossier est parti dans
-            l'en-tête de la conversation, et le mode de jeu dans le composeur —
-            il décide de ce que l'agent s'autorise au prochain message, il
-            appartient donc au geste d'envoyer. */}
+        {/* This bar now carries only what's GLOBAL: engine state, loaded
+            model, context gauge, measurements. The folder moved into the
+            conversation header, and the play mode into the composer — it
+            decides what the agent is allowed to do on the next message, so
+            it belongs to the act of sending. */}
         {modelName && (
           <span className="status-chip chip-model" title={modelName}>
             {modelName}
