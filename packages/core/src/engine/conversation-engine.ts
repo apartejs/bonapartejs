@@ -32,6 +32,12 @@ export interface SessionContext {
   sampling?: SamplingParams;
   thinking?: boolean;
   projectInstructions?: string;
+  /**
+   * Tokens this conversation may occupy, when it caps itself below the
+   * server's context — a live setting, resolved by the host; absent or 0
+   * means "the server's size". Never above it: the server stays the ceiling.
+   */
+  contextLimit?: number;
 }
 
 export interface ConversationEngineOptions {
@@ -122,6 +128,13 @@ const MAX_TITLE = 60;
  * does not cap generation yet; when it does, this becomes that cap.
  */
 const REPLY_ROOM = 1024;
+
+/** The room a conversation may take: its own cap when it has one, never above the server's. */
+function effectiveLimit(nCtx: number, cap: number | undefined): number {
+  const own = cap !== undefined && cap > 0 ? cap : 0;
+  if (nCtx > 0 && own > 0) return Math.min(nCtx, own);
+  return nCtx > 0 ? nCtx : own;
+}
 
 /** Rough token count of a message: the exact one is the server's, after the fact. */
 function estimateTokens(text: string): number {
@@ -347,11 +360,12 @@ export class ConversationEngine {
     // prefill's system prompt is not counted until its first turn); the
     // server's own refusal, below, is the safety net.
     const nCtx = this.options.supervisor.live?.nCtx ?? 0;
+    const limit = effectiveLimit(nCtx, (await this.options.context?.(conversationId))?.contextLimit);
     const needed = this.contextUsed + estimateTokens(text) + REPLY_ROOM;
-    if (nCtx > 0 && needed > nCtx) {
+    if (limit > 0 && needed > limit) {
       this.emit({
         conversationId,
-        event: { type: 'context_overflow', used: this.contextUsed, nCtx, needed },
+        event: { type: 'context_overflow', used: this.contextUsed, nCtx, limit, needed },
       });
       return undefined;
     }
@@ -378,7 +392,7 @@ export class ConversationEngine {
       if (refusedAsTooLong(error)) {
         this.emit({
           conversationId,
-          event: { type: 'context_overflow', used: this.contextUsed, nCtx, needed },
+          event: { type: 'context_overflow', used: this.contextUsed, nCtx, limit, needed },
         });
       } else {
         this.emit({

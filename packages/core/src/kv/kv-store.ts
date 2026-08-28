@@ -1,9 +1,18 @@
 /**
  * kv-store — THE differentiator: orchestrates save/restore of state per
- * conversation with a STRICT compatibility manifest. Since the slot file
- * format isn't documented upstream, a restore is only allowed if the
- * manifest matches the server's live state exactly; otherwise an
- * announced re-prefill — never a risky restore.
+ * conversation with a compatibility manifest.
+ *
+ * Strict where llama.cpp is blind, tolerant where it checks itself. Read
+ * in the source on 2026-08-28 (`llama-context.cpp` state_seq_load_file,
+ * `llama-kv-cache.cpp` state_read_meta/data): a restore validates the
+ * file's magic and format version, that the saved tokens FIT the slot's
+ * context, the layer count, the K/V cell types and row sizes — and never
+ * the model's identity, never that n_ctx is the same. So the model file is
+ * ours to pin (a sibling fine-tune would load, and answer garbage); n_ctx
+ * only has to hold the saved tokens (a context grown since the save
+ * restores fine); the K/V types are pinned for a clear message before the
+ * server's own; and a build is trusted to refuse a file it cannot read —
+ * on which the answer is an announced re-prefill, never a crash.
  */
 
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -16,7 +25,7 @@ export interface LiveBackendConfig {
   nCtx: number;
   cacheTypeK: string;
   cacheTypeV: string;
-  /** llama.cpp build tag (e.g. b6521) — 'unknown' only matches 'unknown'. */
+  /** llama.cpp build tag (e.g. b6521) — recorded for diagnosis, not a key: the server validates its own file format. */
   buildTag: string;
 }
 
@@ -32,9 +41,13 @@ export type RestoreRefusalReason =
   | 'missing'
   | 'corrupt'
   | 'model'
+  /** The saved tokens do not fit the live context. */
   | 'nCtx'
   | 'cacheType'
-  | 'buildTag';
+  /** Kept for old manifests' sake; no longer produced — the server checks the format itself. */
+  | 'buildTag'
+  /** The server refused the file (unknown format, missing, corrupt): re-prefill. */
+  | 'refused';
 
 export type RestoreVerdict =
   | { ok: true }
@@ -51,7 +64,10 @@ export function canRestore(
   if (manifest.modelFingerprint !== live.modelFingerprint) {
     return { ok: false, reason: 'model' };
   }
-  if (manifest.nCtx !== live.nCtx) {
+  // Not "the same n_ctx": the saved tokens must fit. The server checks the
+  // very same thing (`cell_count > cells.size()`); this is the early,
+  // explained refusal — a state saved under a larger context may well fit.
+  if (live.nCtx > 0 && manifest.promptTokenCount > live.nCtx) {
     return { ok: false, reason: 'nCtx' };
   }
   if (
@@ -59,9 +75,6 @@ export function canRestore(
     manifest.cacheTypeV !== live.cacheTypeV
   ) {
     return { ok: false, reason: 'cacheType' };
-  }
-  if (manifest.buildTag !== live.buildTag) {
-    return { ok: false, reason: 'buildTag' };
   }
   return { ok: true };
 }
@@ -152,7 +165,14 @@ export class KvStore {
       return { restored: false, reason: verdict.reason };
     }
 
-    const result = await slots.restore(idSlot, this.slotFilename(conversationId));
-    return { restored: true, manifest, nRestored: result.nRestored };
+    // The file is the server's to judge: a format it does not know, a file
+    // gone from its directory — it refuses, clears the slot, and the
+    // conversation prefills again. Announced, never fatal.
+    try {
+      const result = await slots.restore(idSlot, this.slotFilename(conversationId));
+      return { restored: true, manifest, nRestored: result.nRestored };
+    } catch {
+      return { restored: false, reason: 'refused' };
+    }
   }
 }

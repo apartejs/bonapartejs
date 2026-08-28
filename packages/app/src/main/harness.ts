@@ -23,6 +23,7 @@ import {
   defaultScanRoots,
   EngineSupervisor,
   HARNESS_SETTINGS,
+  CONTEXT_SETTINGS,
   KV_INVALIDATING_KEYS,
   KvStore,
   kvSlotsDir,
@@ -167,6 +168,7 @@ export class Harness {
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
         sampling: await this.currentSampling(),
         thinking: await this.currentThinking(),
+        ...(await this.currentContextLimit()),
       }),
       approve: this.approve,
       logger: (line) => console.log(line),
@@ -572,6 +574,14 @@ export class Harness {
     return typeof value === 'boolean' ? value : true;
   }
 
+  /** The cap the open conversation puts on its own context, when switched on. */
+  private async currentContextLimit(): Promise<{ contextLimit?: number }> {
+    const resolved = resolveSettings(CONTEXT_SETTINGS, await this.settingLayers(), 'conversation');
+    const enabled = resolved.find((setting) => setting.key === 'contextLimitEnabled')?.value === true;
+    const limit = resolved.find((setting) => setting.key === 'contextLimit')?.value;
+    return enabled && typeof limit === 'number' && limit > 0 ? { contextLimit: limit } : {};
+  }
+
   /** Effective sampling for the open conversation. */
   private async currentSampling(): Promise<SamplingParams> {
     const resolved = resolveSettings(
@@ -938,7 +948,7 @@ export class Harness {
         };
         break;
       case 'context_overflow':
-        body = { type: 'context_overflow', used: event.used, nCtx: event.nCtx, needed: event.needed };
+        body = { type: 'context_overflow', used: event.used, nCtx: event.nCtx, limit: event.limit, needed: event.needed };
         break;
       case 'error':
         body = { type: 'error', message: event.message };

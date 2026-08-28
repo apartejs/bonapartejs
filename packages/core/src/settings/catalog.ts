@@ -106,6 +106,39 @@ export const SAMPLING_SETTINGS: SettingField[] = [
   },
 ];
 
+/**
+ * The room a conversation may take, chosen below the server's context.
+ * Asked by Paul (2026-08-28): choose the maximum space of a conversation,
+ * and switch it on or off. Live — it only decides what the next message is
+ * allowed to need, so it invalidates nothing.
+ */
+export const CONTEXT_SETTINGS: SettingField[] = [
+  {
+    key: 'contextLimitEnabled',
+    label: { en: 'Cap the context', fr: 'Plafonner le contexte' },
+    description: {
+      en: 'Refuse a message once the conversation would exceed the cap below, instead of the server’s whole context.',
+      fr: 'Refuser un message dès que la conversation dépasserait le plafond ci-dessous, plutôt que tout le contexte du serveur.',
+    },
+    type: 'boolean',
+    scopes: ['global', 'conversation'],
+    default: false,
+  },
+  {
+    key: 'contextLimit',
+    label: { en: 'Context cap', fr: 'Plafond de contexte' },
+    description: {
+      en: 'Tokens this conversation may occupy, reply included. Never above the server’s context size.',
+      fr: 'Tokens que cette conversation peut occuper, réponse comprise. Jamais au-dessus de la taille de contexte du serveur.',
+    },
+    type: 'number',
+    scopes: ['global', 'conversation'],
+    default: 4096,
+    min: 512,
+    step: 512,
+  },
+];
+
 export const LAUNCH_SETTINGS: SettingField[] = [
   {
     key: 'nCtx',
@@ -170,7 +203,11 @@ export const LAUNCH_SETTINGS: SettingField[] = [
 ];
 
 /** All of the harness's settings; plugins add theirs on top. */
-export const HARNESS_SETTINGS: SettingField[] = [...SAMPLING_SETTINGS, ...LAUNCH_SETTINGS];
+export const HARNESS_SETTINGS: SettingField[] = [
+  ...SAMPLING_SETTINGS,
+  ...CONTEXT_SETTINGS,
+  ...LAUNCH_SETTINGS,
+];
 
 /** The keys whose change invalidates saved KV states. */
 export const KV_INVALIDATING_KEYS = new Set(['nCtx', 'cacheType']);

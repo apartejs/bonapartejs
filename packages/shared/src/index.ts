@@ -244,7 +244,7 @@ export type AgentEventBodyDto =
    */
   | { type: 'needs_model'; missingModel?: string }
   /** The message cannot fit in the server's context, with room for a reply (D-22). */
-  | { type: 'context_overflow'; used: number; nCtx: number; needed: number };
+  | { type: 'context_overflow'; used: number; nCtx: number; limit: number; needed: number };
 
 /**
  * Every event names its conversation: a reply keeps streaming while the

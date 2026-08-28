@@ -30,18 +30,38 @@ function manifest(overrides: Partial<KvManifest> = {}): KvManifest {
   };
 }
 
-describe('canRestore (strict policy)', () => {
+describe('canRestore — strict where llama.cpp is blind, tolerant where it checks itself', () => {
+  // Read in llama.cpp on 2026-08-28 (llama-context.cpp state_seq_load_file,
+  // llama-kv-cache.cpp state_read_*): a restore checks the file format
+  // version, that the saved tokens FIT the slot's context, the layer count
+  // and the K/V cell types — never the model's identity, never that n_ctx
+  // is the same. So the model stays ours to pin; n_ctx only has to hold the
+  // saved tokens; and a build is trusted to refuse a format it does not know.
   it('accepts a manifest identical to the live config', () => {
     expect(canRestore(manifest(), LIVE)).toEqual({ ok: true });
   });
 
   it.each([
     ['model', { modelFingerprint: 'fp-autre' }],
-    ['nCtx', { nCtx: 16384 }],
     ['cacheType', { cacheTypeK: 'f16', cacheTypeV: 'f16' }],
-    ['buildTag', { buildTag: 'b9999' }],
   ] as const)('refuses on %s mismatch', (reason, override) => {
     expect(canRestore(manifest(override), LIVE)).toEqual({ ok: false, reason });
+  });
+
+  it('accepts a state saved under a smaller context, as long as its tokens fit the live one', () => {
+    expect(canRestore(manifest({ nCtx: 16384, promptTokenCount: 12000 }), LIVE)).toEqual({ ok: true });
+    expect(canRestore(manifest({ nCtx: 65536, promptTokenCount: 12000 }), LIVE)).toEqual({ ok: true });
+  });
+
+  it('refuses a state whose tokens do not fit the live context', () => {
+    expect(canRestore(manifest({ nCtx: 65536, promptTokenCount: 40000 }), LIVE)).toEqual({
+      ok: false,
+      reason: 'nCtx',
+    });
+  });
+
+  it('does not refuse on the build tag alone: the server validates the file format itself', () => {
+    expect(canRestore(manifest({ buildTag: 'b9999' }), LIVE)).toEqual({ ok: true });
   });
 });
 
@@ -120,7 +140,7 @@ describe('KvStore (against the fake llama-server)', () => {
     expect(promptMs).toBe(20); // only 2 tokens — the state was indeed restored
   });
 
-  it('refuses the restore on nCtx mismatch WITHOUT touching the server', async () => {
+  it('refuses the restore when the saved tokens do not fit, WITHOUT touching the server', async () => {
     const { slots, client, store, server } = await setup();
     const prompt = 'x'.repeat(400);
     await prefill(client, prompt);
@@ -129,10 +149,20 @@ describe('KvStore (against the fake llama-server)', () => {
 
     const outcome = await store.restoreState(slots, 0, 'conv-1', {
       ...LIVE,
-      nCtx: 16384,
+      nCtx: 64,
     });
     expect(outcome).toEqual({ restored: false, reason: 'nCtx' });
     expect(server.getSlotTokens(0)).toHaveLength(0); // no restore performed
+  });
+
+  it('reports a restore the server refuses, without throwing — the caller re-prefills', async () => {
+    // A manifest that matches, but no slot file behind it (another build,
+    // a cleaned directory): the server answers 400 and the conversation
+    // must simply prefill again, announced — not crash on open.
+    const { slots, store, dir } = await setup();
+    await writeFile(join(dir, 'conv-1.manifest.json'), JSON.stringify(manifest()), 'utf8');
+    const outcome = await store.restoreState(slots, 0, 'conv-1', LIVE);
+    expect(outcome).toEqual({ restored: false, reason: 'refused' });
   });
 
   it('cleanly reports a missing manifest', async () => {

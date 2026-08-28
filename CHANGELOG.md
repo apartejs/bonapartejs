@@ -15,6 +15,20 @@ published.
 
 ### Added
 
+- **A conversation may cap its own context.** Two settings, global and per
+  conversation — "Cap the context" (off by default) and "Context cap" — so
+  a conversation refuses a message once it would exceed the cap, instead of
+  the server's whole context. Live: it decides what the next message may
+  need, and invalidates nothing. The refusal names the limit that applied.
+- **A saved state survives a larger context and a newer build.** Read in
+  llama.cpp's source: a restore validates the file format, that the saved
+  tokens fit, the layer count and the K/V cell types — never the model's
+  identity, never that n_ctx is the same. The manifest now pins what the
+  server cannot check (the model file, the cache types) and lets it judge
+  the rest: a state saved under a smaller context restores into a larger
+  one, a build change no longer forces a re-prefill, and a file the server
+  refuses is reported as such — the conversation prefills again, announced.
+
 - **Foundations.** pnpm + Nx workspace with enforced module boundaries; a fake
   llama-server fixture (streamed `/completion`, slot save/restore/erase, prefix
   cache) so the whole KV path is testable without a GPU.

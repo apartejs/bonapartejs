@@ -181,6 +181,7 @@ export {
   KV_INVALIDATING_KEYS,
   LAUNCH_SETTINGS,
   SAMPLING_SETTINGS,
+  CONTEXT_SETTINGS,
 } from './settings/catalog.js';
 
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────

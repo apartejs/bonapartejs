@@ -401,6 +401,41 @@ describe('ConversationEngine — the context is finite (D-22)', () => {
     expect(overflow(events)?.type).toBe('context_overflow');
     expect(events.some((e) => e.event.type === 'error')).toBe(false);
   });
+
+  it('a conversation may cap its own context below the server: the cap is what refuses', async () => {
+    // Asked by Paul on 2026-08-28: choose the room a conversation may take,
+    // and switch it on or off. The cap is a setting resolved by the host;
+    // the server's size stays the ceiling.
+    const { engine, events, turns } = await makeRig({
+      nCtx: 4096,
+      engine: { context: async () => ({ contextLimit: 64 }) },
+    });
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'word '.repeat(400));
+
+    const event = overflow(events);
+    expect(event?.type).toBe('context_overflow');
+    if (event?.type !== 'context_overflow') return;
+    expect(event.limit).toBe(64);
+    expect(event.nCtx).toBe(4096);
+    expect(turns()).toBe(0);
+  });
+
+  it('a cap above the server context changes nothing: the server stays the ceiling', async () => {
+    const { engine, events } = await makeRig({
+      nCtx: 64,
+      engine: { context: async () => ({ contextLimit: 100000 }) },
+    });
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'word '.repeat(400));
+
+    const event = overflow(events);
+    expect(event?.type).toBe('context_overflow');
+    if (event?.type !== 'context_overflow') return;
+    expect(event.limit).toBe(64);
+  });
 });
 
 describe('readableEvents — a turn reads back the way it was seen', () => {

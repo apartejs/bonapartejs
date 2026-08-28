@@ -12,10 +12,13 @@ in `docs/superpowers/` (git-ignored — **never** remove that line from
 ## apartéJS friction journal — MANDATORY
 
 bonaparte is also the proving ground of the apartéJS library (`@aparte/*`).
-**Every friction met with the library is recorded immediately**, the moment it
-happens — never at the end of a session — in
-`docs/superpowers/aparte-frictions.md` (private). Paul uses it to ship fixes
-and improvements to the library.
+**Every friction met with the library is filed immediately**, the moment it
+happens — never at the end of a session — as an issue on
+https://github.com/apartejs/aparte/issues (in English: the repository is
+public). Paul uses them to ship fixes and improvements to the library. The
+private journal `docs/superpowers/aparte-frictions.md` keeps the history
+of what was filed and the "Ça, c'était bien" section; it no longer receives
+new frictions.
 
 Counts as friction: a missing or awkward API, surprising behaviour, an
 undocumented trap, documentation so absent you had to read the source, a

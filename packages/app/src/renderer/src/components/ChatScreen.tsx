@@ -286,10 +286,10 @@ export function ChatScreen({
             type: 'error',
             // A remote engine declares no context size: no numbers to cite.
             content:
-              event.nCtx > 0
+              event.limit > 0
                 ? t.chat.contextOverflow
                     .replace('{used}', String(event.used))
-                    .replace('{nCtx}', String(event.nCtx))
+                    .replace('{limit}', String(event.limit))
                 : t.chat.contextOverflowUnknown,
           });
           finish(state, 'error');

@@ -69,7 +69,15 @@ export type AgentEvent =
    * context (D-22): nothing was sent, or the server refused the prompt.
    * Emitted by the conversation engine, never by the loop itself.
    */
-  | { type: 'context_overflow'; used: number; nCtx: number; needed: number }
+  | {
+      type: 'context_overflow';
+      used: number;
+      /** What the server can hold — 0 when unknown (remote). */
+      nCtx: number;
+      /** What this conversation may occupy: the server's size, or its own cap below it. */
+      limit: number;
+      needed: number;
+    }
   | { type: 'error'; message: string }
   // ── transcript mutations: the caller persists them to replay identically.
   //    The UI ignores them.
