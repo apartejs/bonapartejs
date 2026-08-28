@@ -161,6 +161,9 @@ export function ChatScreen({
     };
 
     const unsubscribe = window.bonaparte.onAgentEvent((event: AgentEventDto) => {
+      // A reply keeps streaming while another conversation is on screen:
+      // its events are not ours to paint.
+      if (event.conversationId !== conversationId) return;
       const state = turn.current;
       if (!state) return;
 
@@ -235,7 +238,47 @@ export function ChatScreen({
     });
 
     return unsubscribe;
-  }, [onNeedsModel, onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
+  }, [conversationId, onNeedsModel, onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
+
+  // Coming back to a conversation whose reply is still streaming: the
+  // history on disk stops at the user's message, and the turn in flight is
+  // painted from what the engine has so far — then the stream goes on.
+  useEffect(() => {
+    if (!conversationId) return;
+    let cancelled = false;
+    void window.bonaparte.inFlight().then((partial) => {
+      if (cancelled || !partial || partial.conversationId !== conversationId || turn.current) return;
+      const messageId = freshId();
+      chatRef.current.appendMessage({
+        id: messageId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+      });
+      const state: TurnState = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
+      if (partial.thinking) {
+        const id = `seg-think-${state.seq++}`;
+        chatRef.current.addSegment({
+          id,
+          type: 'thinking',
+          content: partial.thinking,
+          label: t.chat.thinking,
+          collapsed: Boolean(partial.text),
+        });
+        if (!partial.text) state.thinking = id;
+      }
+      if (partial.text) {
+        const id = `seg-text-${state.seq++}`;
+        chatRef.current.addSegment({ id, type: 'text', content: partial.text });
+        state.text = id;
+      }
+      turn.current = state;
+      onStreamingChange(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, onStreamingChange, t.chat.thinking]);
 
   const handleSent = (detail: { content: string }): void => {
     // Empty assistant bubble: the lib renders it "awaiting" (animated dots,

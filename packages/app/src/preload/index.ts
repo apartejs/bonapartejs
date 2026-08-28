@@ -6,6 +6,7 @@ import {
   type BackendConfigDto,
   type BackendStatusDto,
   type BonaparteBridge,
+  type InFlightDto,
 } from '@aparte/bonaparte-shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -63,6 +64,7 @@ const api: BonaparteBridge = {
   sendMessage: (text: string): Promise<void> =>
     ipcRenderer.invoke(IPC.agentSend, text),
   saveKv: (): Promise<boolean> => ipcRenderer.invoke(IPC.kvSave),
+  inFlight: (): Promise<InFlightDto | null> => ipcRenderer.invoke(IPC.agentInFlight),
 
   onAgentEvent: (listener: (event: AgentEventDto) => void): (() => void) => {
     const wrapped = (_e: unknown, payload: AgentEventDto): void =>

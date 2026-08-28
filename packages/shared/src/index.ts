@@ -31,6 +31,7 @@ export const IPC = {
   conversationCreate: 'conversation.create',
   conversationRename: 'conversation.rename',
   agentSend: 'agent.send',
+  agentInFlight: 'agent.inFlight',
   kvSave: 'kv.save',
   setupSuggest: 'setup.suggest',
   dialogPickFile: 'dialog.pickFile',
@@ -222,7 +223,8 @@ export interface CompletionStatsDto {
 }
 
 /** Agent stream event, serialized over the IPC. */
-export type AgentEventDto =
+/** What a turn produces, without the conversation it belongs to. */
+export type AgentEventBodyDto =
   | { type: 'token'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
@@ -234,7 +236,21 @@ export type AgentEventDto =
    * instead of printing an error. `missingModel` names the pinned file when
    * it has vanished from disk.
    */
-  | { type: 'needs_model'; conversationId: string; missingModel?: string };
+  | { type: 'needs_model'; missingModel?: string };
+
+/**
+ * Every event names its conversation: a reply keeps streaming while the
+ * user reads another conversation, and the screen showing that other one
+ * must ignore it — not paint it into the wrong thread.
+ */
+export type AgentEventDto = { conversationId: string } & AgentEventBodyDto;
+
+/** The turn in flight, as far as it got — for a screen that comes back mid-stream. */
+export interface InFlightDto {
+  conversationId: string;
+  text: string;
+  thinking: string;
+}
 
 export interface ConversationEventDto {
   type: 'user' | 'assistant';
@@ -349,6 +365,8 @@ export interface BonaparteBridge {
   openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto>;
   sendMessage(text: string): Promise<void>;
   saveKv(): Promise<boolean>;
+  /** The turn streaming right now, if any — to catch up on when a screen mounts. */
+  inFlight(): Promise<InFlightDto | null>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;
   onBackendStatus(listener: (status: BackendStatusDto) => void): () => void;
 

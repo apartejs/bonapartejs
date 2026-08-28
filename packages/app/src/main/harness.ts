@@ -14,7 +14,7 @@ import { randomBytes } from 'node:crypto';
 import {
   bonaparteDataDir,
   builtinTools,
-  ChatSession,
+  ConversationEngine,
   ConversationStore,
   createSystemDoctorEnv,
   defaultScanRoots,
@@ -38,16 +38,18 @@ import {
   type SamplingParams,
   type SettingField,
   type SettingLayers,
+  type Opened,
+  type TaggedEvent,
   harnessT,
 } from '@aparte/bonaparte-core';
 import {
   IPC,
+  type AgentEventBodyDto,
   type AgentEventDto,
   type AppConfigDto,
   type ApprovalResponseDto,
   type BackendConfigDto,
   type BackendStatusDto,
-  type ConversationEventDto,
   type ConversationSummaryDto,
   type ConversationOpenReplyDto,
   type EndpointProbeDto,
@@ -73,10 +75,6 @@ const LAUNCH_KEYS = new Set(['nCtx', 'cacheType', 'nGpuLayers']);
 /** Only external destinations allowed from the renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
-function stripThink(raw: string): string {
-  return raw.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
-}
-
 function modelDisplayName(modelPath: string): string {
   return basename(modelPath).replace(/\.gguf$/i, '');
 }
@@ -101,10 +99,7 @@ export class Harness {
   private readonly supervisor = new EngineSupervisor({
     slotsDir: kvSlotsDir(),
     pidFile: join(bonaparteDataDir(), 'managed-server.pid'),
-    beforeUnload: async () => {
-      await this.saveKv();
-      this.session = null;
-    },
+    beforeUnload: () => this.conversations.saveState().then(() => undefined),
   });
   private readonly unsubscribeEngineStatus = this.supervisor.onStatusChange((status) =>
     this.emit(IPC.evBackendStatus, status),
@@ -137,7 +132,37 @@ export class Harness {
       request: { tool: string; command?: string };
     }
   >();
-  private session: ChatSession | null = null;
+  /**
+   * The open conversation lives in core: the slot, the session, the turn in
+   * flight. The harness only resolves what a session needs from the app's
+   * config — the project's roots, the reply language, sampling, reasoning —
+   * and turns core's events into IPC messages. Built on first use: it reads
+   * fields declared further down the class.
+   */
+  private conversationsEngine: ConversationEngine | null = null;
+  private get conversations(): ConversationEngine {
+    if (this.conversationsEngine) return this.conversationsEngine;
+    const engine = new ConversationEngine({
+      store: this.store,
+      kv: this.kv,
+      registry: this.registry,
+      permissions: this.permissions,
+      supervisor: this.supervisor,
+      defaultModel: async () => (await this.loadConfig()).defaultModel?.path,
+      rootsOf: (id) => this.rootsOf(id),
+      context: async () => ({
+        // The thread is in English; only the reply language follows the user.
+        replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
+        sampling: await this.currentSampling(),
+        thinking: await this.currentThinking(),
+      }),
+      approve: this.approve,
+      logger: (line) => console.log(line),
+    });
+    engine.onEvent((event) => this.forwardAgentEvent(event));
+    this.conversationsEngine = engine;
+    return engine;
+  }
 
   private readonly kv = new KvStore(kvSlotsDir());
   private readonly store = new ConversationStore(
@@ -329,7 +354,7 @@ export class Harness {
     // The tool inventory may have changed: ongoing conversations will learn
     // about it via a delta on their next opening.
     this.registerBuiltinTools();
-    this.session = null;
+    void this.conversations.close();
     return this.listPlugins();
   }
 
@@ -414,9 +439,9 @@ export class Harness {
       const id = this.currentConversationId;
       if (!id) return;
       await this.store.setSetting(id, key, value);
-      // The session carries the sampling params: it will be reopened on the
-      // next message with the new values.
-      this.session = null;
+      // The session carries the sampling params: it is reopened on the next
+      // message with the new values — once the turn in flight, if any, ends.
+      void this.conversations.close();
       return;
     }
     const config = await this.loadConfig();
@@ -429,10 +454,11 @@ export class Harness {
       // state saved first) and the next message brings it up with the new
       // ones. Saved states whose context size differs are refused by the
       // manifest and announced as a re-prefill.
-      await this.saveKv();
+      await this.conversations.close();
       await this.supervisor.configure(await this.engineConfig(config.backend));
+      return;
     }
-    this.session = null;
+    void this.conversations.close();
   }
 
   /**
@@ -498,24 +524,6 @@ export class Harness {
       // -1 = "random": don't send it rather than sending a fixed seed.
       ...(seed !== undefined && seed >= 0 ? { seed } : {}),
     };
-  }
-
-  /**
-   * Title drawn from the first message, and from it alone: renaming later
-   * would overwrite a title the user may have chosen themselves.
-   */
-  private async titleFromFirstMessage(text: string): Promise<void> {
-    const id = this.currentConversationId;
-    if (!id) return;
-    try {
-      const events = await this.store.loadEvents(id);
-      if (events.some((event) => event.type === 'user')) return;
-      const line = text.trim().replace(/\s+/g, ' ');
-      if (!line) return;
-      await this.store.setTitle(id, line.length > 60 ? `${line.slice(0, 57)}…` : line);
-    } catch {
-      /* a title is a convenience: never something that should fail a send */
-    }
   }
 
   /**
@@ -604,7 +612,7 @@ export class Harness {
   private async refreshRoots(): Promise<void> {
     if (!this.currentConversationId) return;
     this.roots = await this.rootsOf(this.currentConversationId);
-    this.session = null;
+    void this.conversations.close();
     this.registerBuiltinTools();
   }
 
@@ -638,7 +646,7 @@ export class Harness {
     }
 
     this.roots = await this.rootsOf(id);
-    this.session = null;
+    void this.conversations.close();
     this.registerBuiltinTools();
 
     const config = await this.loadConfig();
@@ -735,8 +743,9 @@ export class Harness {
    * request) nor launch a llama-server. `startEngine` activates it.
    */
   async registerEngine(config: BackendConfigDto): Promise<void> {
+    // The session, if any, is bound to the server going down: saved first.
+    await this.conversations.close();
     await this.supervisor.configure(await this.engineConfig(config));
-    this.session = null;
   }
 
   /** Remote: immediate connection. Managed: the server starts with the first conversation that names a model. */
@@ -747,103 +756,27 @@ export class Harness {
   }
 
   async openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto> {
-    const engine = this.supervisor.engine;
-    if (!engine) throw new Error('Engine not configured.');
     id ??= await this.ensureConversationId();
-
-    // Switch: the state of the conversation we're leaving must be saved
-    // BEFORE opening another one, otherwise its cache is lost and resuming
-    // will cost a full re-prefill — exactly what we claim to avoid.
-    if (this.session && this.currentConversationId && this.currentConversationId !== id) {
-      await this.session.save().catch(() => false);
-      this.session = null;
-    }
+    // "Current" first: the built-in tools and the roots follow it, and the
+    // session opened next reads them.
     if (await this.store.exists(id)) await this.setCurrentConversation(id);
+    const outcome = await this.conversations.open(id, modelPath);
+    if ('needsModel' in outcome) return outcome;
+    await this.setCurrentConversation(id);
+    return this.openedDto(outcome);
+  }
 
-    // Resolves the model: pinned meta > parameter > Settings default. The
-    // context size is the engine's, not the conversation's (D-17).
-    const defaults = (await this.loadConfig()).defaultModel;
-    let convModel: string | undefined;
-    const meta = (await this.store.exists(id)) ? await this.store.meta(id) : undefined;
-    convModel = meta?.modelPath ?? modelPath ?? defaults?.path;
-
-    if (engine.mode === 'managed') {
-      if (!convModel) return { needsModel: true, conversationId: id };
-      // A model whose file has vanished is announced BEFORE any launch: the
-      // engine would only fail later, with an error about a file the user
-      // deleted weeks ago. Nothing is pinned here either — the pick that
-      // follows is the one that gets recorded.
-      if (!existsSync(convModel)) {
-        return { needsModel: true, conversationId: id, missingModel: convModel };
-      }
-      if (meta && !meta.modelPath) await this.store.setModel(id, convModel);
-      await this.supervisor.ensureLoaded(convModel);
-    } else {
-      if (meta && !meta.modelPath && convModel) {
-        await this.store.setModel(id, convModel);
-      }
-      // Remote: the model is whatever the server has — informational only.
-      if (!convModel) convModel = this.supervisor.loaded?.modelPath ?? 'remote';
-    }
-
-    const backend = this.supervisor.backend;
-    const live = this.supervisor.live;
-    if (!backend || !live) throw new Error('Backend not started.');
-
-    if (!(await this.store.exists(id))) {
-      await this.store.create(id, { modelPath: convModel });
-    }
-
-    const { session, restore } = await ChatSession.open(
-      {
-        backend,
-        kv: this.kv,
-        store: this.store,
-        registry: this.registry,
-        permissions: this.permissions,
-        ...(this.roots.length > 0 ? { roots: this.roots } : {}),
-        approve: this.approve,
-        // The thread is in English; only the reply language follows the user.
-        replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
-        sampling: await this.currentSampling(),
-        thinking: await this.currentThinking(),
-        live,
-      },
-      id,
-    );
-    this.session = session;
-
-    const events = await this.store.loadEvents(id);
+  private openedDto(opened: Opened): ConversationOpenReplyDto {
     return {
-      conversationId: id,
-      modelPath: convModel,
-      modelName: modelDisplayName(convModel),
+      conversationId: opened.conversationId,
+      modelPath: opened.modelPath,
+      modelName: modelDisplayName(opened.modelPath),
       // Denominator of the context gauge: what the server holds.
-      ...(live.nCtx > 0 ? { nCtx: live.nCtx } : {}),
-      // Tool calls and their results stay out of the UI: they live in the
-      // transcript, not in the conversation being read.
-      events: events
-        .flatMap((event): ConversationEventDto[] => {
-          if (event.type === 'user') {
-            return [{ type: 'user', text: event.text, at: event.at }];
-          }
-          // A corrupted log line is skipped, it doesn't take the opening of
-          // the conversation down with it.
-          if (event.type === 'assistant' && event.entry) {
-            return [
-              {
-                type: 'assistant',
-                text: stripThink(event.entry.text),
-                at: event.at,
-              },
-            ];
-          }
-          return [];
-        })
-        .filter((event) => event.text.trim() !== ''),
-      restore: restore.restored
-        ? { restored: true, nRestored: restore.nRestored }
-        : { restored: false, reason: restore.reason },
+      ...(opened.nCtx !== undefined ? { nCtx: opened.nCtx } : {}),
+      events: opened.events,
+      restore: opened.restore.restored
+        ? { restored: true, nRestored: opened.restore.nRestored }
+        : { restored: false, reason: opened.restore.reason },
     };
   }
 
@@ -853,19 +786,11 @@ export class Harness {
    * only happens on the first message.
    */
   async conversationHistory(select?: string): Promise<ConversationOpenReplyDto> {
-    // Switching conversation is a READ operation: the history comes from the
-    // log on disk, never from the KV cache — the latter only speeds up the
-    // next generation. Browsing one's conversations must therefore load no
-    // model and wake no engine.
-    if (select && select !== this.currentConversationId) {
-      // The state of the one we're leaving is saved if a session was
-      // running: otherwise its cache would be lost and coming back to it
-      // would cost a re-prefill.
-      if (this.session) {
-        await this.session.save().catch(() => false);
-        this.session = null;
-      }
-      if (await this.store.exists(select)) await this.setCurrentConversation(select);
+    // Switching conversation is a READ: the history comes from the log on
+    // disk, never from the slot. A reply streaming elsewhere keeps streaming
+    // — it is persisted by the engine and shown again on return.
+    if (select && select !== this.currentConversationId && (await this.store.exists(select))) {
+      await this.setCurrentConversation(select);
     }
 
     const id = this.currentConversationId;
@@ -876,137 +801,77 @@ export class Harness {
         restore: { restored: false, reason: 'missing' },
       };
     }
-    const meta = await this.store.meta(id);
-    const events = await this.store.loadEvents(id);
+    const history = await this.conversations.history(id);
     return {
       conversationId: id,
-      ...(meta.modelPath
+      ...(history.modelPath
         ? {
-            modelPath: meta.modelPath,
-            modelName: modelDisplayName(meta.modelPath),
-            // Announced at open: a vanished file is a fact about this
-            // machine, not about the message the user has yet to type.
-            ...(this.supervisor.engine?.mode === 'managed' && !existsSync(meta.modelPath)
-              ? { missingModel: meta.modelPath }
-              : {}),
+            modelPath: history.modelPath,
+            modelName: modelDisplayName(history.modelPath),
+            ...(history.missingModel ? { missingModel: history.missingModel } : {}),
           }
         : {}),
-      events: events
-        .flatMap((event): ConversationEventDto[] => {
-          if (event.type === 'user') {
-            return [{ type: 'user', text: event.text, at: event.at }];
-          }
-          // A corrupted log line is skipped, it doesn't take the opening of
-          // the conversation down with it.
-          if (event.type === 'assistant' && event.entry) {
-            return [
-              { type: 'assistant', text: stripThink(event.entry.text), at: event.at },
-            ];
-          }
-          return [];
-        })
-        .filter((event) => event.text.trim() !== ''),
+      events: history.events,
       restore: { restored: false, reason: 'not-connected' },
     };
   }
 
   async send(text: string): Promise<void> {
-    // Lazy connection: it's the first message that wakes the engine.
-    if (!this.session && this.supervisor.engine) {
-      const reply = await this.openConversation();
-      if ('needsModel' in reply) {
-        // Not an error: a choice to make. The renderer opens the picker and
-        // keeps the message for after the pick.
-        this.emit(IPC.evAgent, {
-          type: 'needs_model',
-          conversationId: reply.conversationId,
-          ...(reply.missingModel ? { missingModel: reply.missingModel } : {}),
-        } satisfies AgentEventDto);
-        return;
-      }
-    }
-    if (!this.session) {
+    const id = await this.ensureConversationId();
+    const outcome = await this.conversations.send(id, text);
+    if (outcome) {
+      // Not an error: a choice to make. The renderer opens the picker and
+      // keeps the message for after the pick.
       this.emit(IPC.evAgent, {
-        type: 'error',
-        message: 'No conversation open.',
+        conversationId: outcome.conversationId,
+        type: 'needs_model',
+        ...(outcome.missingModel ? { missingModel: outcome.missingModel } : {}),
       } satisfies AgentEventDto);
-      return;
     }
-    // The first message gives the conversation its title: a menu where
-    // everything is called "New conversation" is useless.
-    await this.titleFromFirstMessage(text);
+  }
 
-    try {
-      for await (const event of this.session.send(text)) {
-        switch (event.type) {
-          case 'token':
-            this.emit(IPC.evAgent, {
-              type: 'token',
-              text: event.text,
-            } satisfies AgentEventDto);
-            break;
-          case 'thinking':
-            this.emit(IPC.evAgent, {
-              type: 'thinking',
-              text: event.text,
-            } satisfies AgentEventDto);
-            break;
-          case 'tool_call':
-            this.emit(IPC.evAgent, {
-              type: 'tool_call',
-              name: event.name,
-              args: event.args,
-            } satisfies AgentEventDto);
-            break;
-          case 'tool_result':
-            this.emit(IPC.evAgent, {
-              type: 'tool_result',
-              name: event.name,
-              ok: event.ok,
-              content: event.content,
-            } satisfies AgentEventDto);
-            break;
-          case 'turn_end':
-            this.emit(IPC.evAgent, {
-              type: 'done',
-              stats: {
-                promptMs: event.promptMs,
-                promptUncachedTokens: 0,
-                predictedTokens: 0,
-                predictedMs: 0,
-              },
-            } satisfies AgentEventDto);
-            break;
-          case 'error':
-            this.emit(IPC.evAgent, {
-              type: 'error',
-              message: event.message,
-            } satisfies AgentEventDto);
-            break;
-          default:
-            break; // log mutations: persisted by the session
-        }
-      }
-    } catch (error) {
-      this.emit(IPC.evAgent, {
-        type: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      } satisfies AgentEventDto);
+  /** Core's turn events become IPC messages, each naming its conversation. */
+  private forwardAgentEvent({ conversationId, event }: TaggedEvent): void {
+    let body: AgentEventBodyDto | null = null;
+    switch (event.type) {
+      case 'token':
+        body = { type: 'token', text: event.text };
+        break;
+      case 'thinking':
+        body = { type: 'thinking', text: event.text };
+        break;
+      case 'tool_call':
+        body = { type: 'tool_call', name: event.name, args: event.args };
+        break;
+      case 'tool_result':
+        body = { type: 'tool_result', name: event.name, ok: event.ok, content: event.content };
+        break;
+      case 'turn_end':
+        body = {
+          type: 'done',
+          stats: {
+            promptMs: event.promptMs,
+            promptUncachedTokens: 0,
+            predictedTokens: 0,
+            predictedMs: 0,
+          },
+        };
+        break;
+      case 'error':
+        body = { type: 'error', message: event.message };
+        break;
+      default:
+        break; // log mutations: persisted by the session
     }
+    if (body) this.emit(IPC.evAgent, { conversationId, ...body } satisfies AgentEventDto);
   }
 
   async saveKv(): Promise<boolean> {
-    if (!this.session) return false;
-    try {
-      return await this.session.save();
-    } catch (error) {
-      console.error('[kv] save failed:', error);
-      return false;
-    }
+    return this.conversations.saveState();
   }
 
   async shutdown(): Promise<void> {
-    await this.saveKv();
+    await this.conversations.close();
     // Plugins first: they hold dev servers, a shell, a native view. All of
     // that must go down with the app, not outlive it.
     await this.pluginHost.deactivateAll().catch(() => undefined);
@@ -1109,6 +974,7 @@ export class Harness {
     );
     ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
     ipcMain.handle(IPC.kvSave, () => this.saveKv());
+    ipcMain.handle(IPC.agentInFlight, () => this.conversations.inFlight());
     ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
     ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
     ipcMain.handle(IPC.endpointProbe, (_e, url: string) => this.probeEndpointUrl(url));

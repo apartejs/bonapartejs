@@ -93,8 +93,14 @@ published.
   another is read, completes and is persisted; opening another conversation
   waits for the turn in flight and saves the first one's state; cancelling
   keeps what arrived; an explicit model choice replaces the pin (the old
-  path silently kept the pinned model). Tested against the fake server; the
-  harness is wired to it next.
+  path silently kept the pinned model). The Electron harness is wired to it:
+  every turn event names its conversation, the screen ignores the others,
+  and a screen coming back mid-stream catches up on what the engine has so
+  far. Covered by an Electron E2E against the fake server: a reply keeps
+  streaming while another conversation is read, and is all there on return.
+  A remote engine is joined on the first message, like a managed one is
+  launched — it used to fail with "Backend not started" until the setup
+  panel had been submitted once.
 
 ### Changed
 
