@@ -569,6 +569,13 @@ export class Harness {
     this.session = null;
   }
 
+  /** Whether the open conversation lets the model reason (default: yes). */
+  private async currentThinking(): Promise<boolean> {
+    const resolved = resolveSettings(SAMPLING_SETTINGS, await this.settingLayers(), 'conversation');
+    const value = resolved.find((setting) => setting.key === 'thinking')?.value;
+    return typeof value === 'boolean' ? value : true;
+  }
+
   /** Effective sampling for the open conversation. */
   private async currentSampling(): Promise<SamplingParams> {
     const resolved = resolveSettings(
@@ -1001,6 +1008,7 @@ export class Harness {
         // The thread is in English; only the reply language follows the user.
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
         sampling: await this.currentSampling(),
+        thinking: await this.currentThinking(),
         live: this.live,
       },
       id,

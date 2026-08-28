@@ -113,8 +113,11 @@ export class TranscriptRenderer {
         log.appendUser(renderToolResults(entry.results));
         break;
       case 'assistant':
-        // Replay (reopening): the turn is reconstructed exactly as emitted.
-        log.beginAssistantTurn({ thinking: Boolean(entry.thinking) });
+        // Replay (reopening): the turn is reconstructed exactly as emitted —
+        // the generation suffix included. The recorded choice wins; for
+        // older logs (no record, all generated with reasoning off) the
+        // presence of thinking content is the only clue, as before.
+        log.beginAssistantTurn({ thinking: entry.reasoning ?? Boolean(entry.thinking) });
         log.completeAssistantTurn(rawOf(entry));
         break;
     }

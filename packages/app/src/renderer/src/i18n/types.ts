@@ -178,6 +178,12 @@ export interface AppTranslations {
     save: string;
     cancel: string;
   };
+  thinking: {
+    label: string;
+    on: string;
+    off: string;
+    hint: string;
+  };
   temperature: {
     label: string;
     /** The conversation overrides the global default. */

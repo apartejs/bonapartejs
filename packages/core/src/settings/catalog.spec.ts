@@ -25,6 +25,17 @@ describe('settings catalog', () => {
     }
   });
 
+  it('offers a reasoning switch, live and per conversation', () => {
+    // Whether the model thinks before answering only changes the generation
+    // suffix of the next turn — never the frozen prefix — so it is a
+    // sampling-family setting: adjustable per conversation, no KV cost.
+    const thinking = HARNESS_SETTINGS.find((field) => field.key === 'thinking');
+    expect(thinking?.type).toBe('boolean');
+    expect(thinking?.scopes).toEqual(['global', 'conversation']);
+    expect(thinking?.default).toBe(true);
+    expect(KV_INVALIDATING_KEYS.has('thinking')).toBe(false);
+  });
+
   it('keeps its keys unique', () => {
     const keys = HARNESS_SETTINGS.map((field) => field.key);
     expect(new Set(keys).size).toBe(keys.length);

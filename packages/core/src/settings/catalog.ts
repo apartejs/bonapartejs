@@ -20,6 +20,19 @@ import type { SettingField } from './resolve.js';
 
 export const SAMPLING_SETTINGS: SettingField[] = [
   {
+    // Decided by the generation suffix of the next turn only: the frozen
+    // prefix never changes, so this is a live, per-conversation choice.
+    key: 'thinking',
+    label: { en: 'Reasoning', fr: 'Réflexion' },
+    description: {
+      en: 'Lets the model think before answering. Slower and longer, often better on hard tasks; costs nothing in the cache.',
+      fr: 'Laisse le modèle réfléchir avant de répondre. Plus lent et plus long, souvent meilleur sur les tâches difficiles ; ne coûte rien au cache.',
+    },
+    type: 'boolean',
+    scopes: ['global', 'conversation'],
+    default: true,
+  },
+  {
     key: 'temperature',
     label: { en: 'Temperature', fr: 'Température' },
     description: {

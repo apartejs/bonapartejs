@@ -167,6 +167,12 @@ export const FR: AppTranslations = {
     save: 'Enregistrer',
     cancel: 'Annuler',
   },
+  thinking: {
+    label: 'Réflexion',
+    on: 'activée',
+    off: 'désactivée',
+    hint: 'Le modèle réfléchit avant de répondre. Plus lent, souvent meilleur sur les tâches difficiles ; ne coûte rien au cache.',
+  },
   temperature: {
     label: 'Température',
     thisConversation: 'propre à cette conversation',

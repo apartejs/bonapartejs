@@ -45,6 +45,8 @@ export interface AgentLoopOptions {
   idSlot?: number;
   /** Conversation sampling (temperature & co). */
   sampling?: SamplingParams;
+  /** Whether the model may reason before answering. Default: on. */
+  thinking?: boolean;
 }
 
 export type AgentEvent =
@@ -94,6 +96,7 @@ export class AgentLoop {
         signal,
         ...(this.options.idSlot !== undefined ? { idSlot: this.options.idSlot } : {}),
         ...(this.options.sampling ? { sampling: this.options.sampling } : {}),
+        ...(this.options.thinking !== undefined ? { thinking: this.options.thinking } : {}),
       })) {
         switch (event.type) {
           case 'text':
@@ -119,6 +122,9 @@ export class AgentLoop {
         role: 'assistant',
         text,
         ...(thinking ? { thinking } : {}),
+        // Recorded so that a replay renders the same generation suffix as
+        // the live turn, whether or not the model actually reasoned.
+        reasoning: this.options.thinking ?? true,
         ...(calls.length > 0 ? { calls } : {}),
         ...(raw !== undefined ? { raw } : {}),
       };

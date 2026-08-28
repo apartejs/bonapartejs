@@ -63,6 +63,14 @@ published.
   directory.
 - Plugin manifests carry their labels (name, description, tab title) in both
   locales; the UI picks the current one and falls back to English.
+- **Reasoning switch** in the composer's row: whether the model thinks
+  before answering, per conversation (also in the settings hub). It only
+  changes the generation suffix of the next turn, so it costs nothing in
+  the KV cache. Reasoning is on by default — it had been silently forced
+  off for every turn.
+- The composer's model menu has a search field and a head that stays
+  visible while the list scrolls; the project chip of a conversation offers
+  the existing projects before creating one.
 
 ### Changed
 
@@ -84,6 +92,14 @@ published.
 - Switching conversation from the sidebar left the previous thread on
   screen: the chat screen is now remounted per conversation. Covered by an
   Electron E2E.
+- A replayed assistant turn derived its generation suffix from whether the
+  model had produced reasoning, not from the choice made when the turn was
+  generated: with reasoning on and a model that answered without thinking,
+  the replay inserted an empty think block the live turn never had, and the
+  KV prefix broke there. The choice is now recorded with the turn.
+- Highlighted code inside the chat (tool inputs and outputs) sat on
+  GitHub's palette, inlined by shiki; its surface follows the aparté theme
+  tokens now.
 - The last user-visible strings that bypassed the translations follow the
   locale now: the settings catalog, the doctor's details, the native file
   pickers' filter names, the model pickers' size units, the CLI's help. A

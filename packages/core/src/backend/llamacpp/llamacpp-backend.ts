@@ -120,7 +120,11 @@ abstract class BaseBackend implements Backend {
    */
   async *runTurn(request: TurnRequest): AsyncIterable<ProviderEvent> {
     const renderer = this.renderer(request.conversationId);
-    const turn = renderer.next(request.transcript, request.system, request.tools);
+    // Reasoning is the model's by default; the empty think block is only
+    // forced when the conversation turned it off.
+    const turn = renderer.next(request.transcript, request.system, request.tools, {
+      thinking: request.thinking ?? true,
+    });
     const constraint = buildGrammarConstraint(
       request.tools.map((t) => ({ ...t, effect: 'read' as const })),
     );

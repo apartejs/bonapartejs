@@ -42,6 +42,8 @@ export interface ChatSessionOptions {
   idSlot?: number;
   /** Conversation sampling, adjustable without invalidating the cache. */
   sampling?: SamplingParams;
+  /** Whether the model may reason before answering. Default: on. */
+  thinking?: boolean;
 }
 
 export type OpenResult = {
@@ -92,6 +94,7 @@ export class ChatSession {
       },
       ...(options.approve ? { approve: options.approve } : {}),
       ...(options.sampling ? { sampling: options.sampling } : {}),
+      ...(options.thinking !== undefined ? { thinking: options.thinking } : {}),
       ...(options.maxTurns !== undefined ? { maxTurns: options.maxTurns } : {}),
       ...(options.idSlot !== undefined ? { idSlot: options.idSlot } : {}),
     });

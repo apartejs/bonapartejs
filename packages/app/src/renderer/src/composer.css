@@ -305,6 +305,35 @@
   border-color: var(--aparte-border);
 }
 
+/* Reasoning switch: same family as the temperature button, pressed = on. */
+.think-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-family: var(--bp-sans);
+  font-size: 11.5px;
+  color: var(--aparte-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.think-button:hover {
+  color: var(--aparte-text);
+  background: var(--aparte-surface-2);
+  border-color: var(--aparte-border);
+}
+
+.think-button-on {
+  color: var(--aparte-text);
+  border-color: var(--aparte-border);
+}
+
+.think-glyph {
+  opacity: 0.65;
+}
 .temp-glyph {
   opacity: 0.65;
 }

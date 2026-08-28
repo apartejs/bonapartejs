@@ -10,6 +10,7 @@ import { useTranslate } from '../i18n/LocaleProvider.js';
 import { ModeSelector } from './ModeSelector.js';
 import { ModelSelector } from './ModelSelector.js';
 import { TemperatureControl } from './TemperatureControl.js';
+import { ThinkingToggle } from './ThinkingToggle.js';
 
 interface ChatScreenProps {
   initialEvents: ConversationEventDto[];
@@ -254,6 +255,7 @@ export function ChatScreen({
         toolbar={
           <>
             <ModeSelector mode={mode} onModeChange={onModeChange} />
+            <ThinkingToggle conversationId={conversationId} />
             <TemperatureControl conversationId={conversationId} />
             {/* The model belongs to the conversation, like the mode and the
                 temperature: it is therefore chosen in the same place, not by

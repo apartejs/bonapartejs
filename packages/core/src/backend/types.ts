@@ -120,6 +120,14 @@ export type TranscriptEntry =
       role: 'assistant';
       text: string;
       thinking?: string;
+      /**
+       * Whether the model was ALLOWED to reason for this turn — the choice
+       * that shaped the generation suffix (bare header, or an empty think
+       * block). Replay must render the same suffix, whatever the model then
+       * chose to do, or the prefix breaks. Absent on older logs, which were
+       * all generated with reasoning off.
+       */
+      reasoning?: boolean;
       calls?: ToolCall[];
       /**
        * VERBATIM provider output for this turn. Indispensable for
@@ -161,6 +169,12 @@ export interface TurnRequest {
    * it invalidates no KV state.
    */
   sampling?: SamplingParams;
+  /**
+   * Whether the model may reason before answering (Qwen3 `<think>`).
+   * Decided by the generation suffix of THIS turn only — the frozen history
+   * is untouched, so toggling it costs nothing in the cache. Default: on.
+   */
+  thinking?: boolean;
 }
 
 /** Minimal shape of a tool expected by a backend (cf. tools/types.ts). */

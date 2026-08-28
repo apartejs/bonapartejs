@@ -55,6 +55,26 @@ describe('TranscriptRenderer — append-only', () => {
     expect(afterReplay.startsWith(lastLive)).toBe(true);
   });
 
+  it('replay keeps the reasoning suffix of the live turn even when the model did not think', () => {
+    // Reasoning ON renders a bare assistant header; the model may still
+    // answer without a <think> block. On replay, deriving the suffix from
+    // the presence of thinking content would insert an empty think block
+    // the live turn never had — and the prefix would break right there.
+    const live = new TranscriptRenderer();
+    const transcript: TranscriptEntry[] = [{ role: 'user', text: 'Q1' }];
+    const first = live.next(transcript, SYSTEM, TOOLS, { thinking: true });
+    first.commit('R1');
+    transcript.push({ role: 'assistant', text: 'R1', raw: 'R1', reasoning: true });
+    transcript.push({ role: 'user', text: 'Q2' });
+    const lastLive = live.next(transcript, SYSTEM, TOOLS, { thinking: true }).prompt;
+
+    const replayed = new TranscriptRenderer();
+    replayed.restore(live.systemPrompt as string);
+    const afterReplay = replayed.next(transcript, SYSTEM, TOOLS, { thinking: true }).prompt;
+
+    expect(afterReplay).toBe(lastLive);
+  });
+
   it('renders tool results as a user turn', () => {
     const renderer = new TranscriptRenderer();
     const transcript: TranscriptEntry[] = [
