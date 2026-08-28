@@ -228,7 +228,13 @@ export type AgentEventDto =
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
   | { type: 'done'; stats: CompletionStatsDto }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  /**
+   * The conversation has no usable model: the renderer offers the picker
+   * instead of printing an error. `missingModel` names the pinned file when
+   * it has vanished from disk.
+   */
+  | { type: 'needs_model'; conversationId: string; missingModel?: string };
 
 export interface ConversationEventDto {
   type: 'user' | 'assistant';
@@ -249,12 +255,19 @@ export interface ConversationOpenResultDto {
   modelName?: string;
   /** Context size of the conversation — denominator of the gauge. */
   nCtx?: number;
+  /**
+   * Pinned model whose file is no longer on disk (managed mode). Announced
+   * at open, so the user learns it before typing, not after a failed launch.
+   */
+  missingModel?: string;
 }
 
 /** Opening requires a model choice (new conversation in managed mode). */
 export interface NeedsModelDto {
   needsModel: true;
   conversationId: string;
+  /** Model pinned to the conversation (or default) whose file is gone. */
+  missingModel?: string;
 }
 
 export type ConversationOpenReplyDto = ConversationOpenResultDto | NeedsModelDto;

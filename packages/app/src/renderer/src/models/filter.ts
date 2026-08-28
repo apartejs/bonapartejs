@@ -16,3 +16,8 @@ export function filterModels(models: ModelInfoDto[], query: string): ModelInfoDt
     return terms.every((term) => haystack.includes(term));
   });
 }
+
+/** File name of a model path, whichever separator the OS wrote it with. */
+export function modelFileName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
+}

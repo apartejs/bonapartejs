@@ -966,25 +966,27 @@ export class Harness {
     // Resolves model + nCtx: pinned meta > parameters > Settings default.
     const defaults = (await this.loadConfig()).defaultModel;
     let convModel: string | undefined;
-    let convNCtx: number | undefined;
-    if (await this.store.exists(id)) {
-      const meta = await this.store.meta(id);
-      convModel = meta.modelPath ?? modelPath ?? defaults?.path;
-      convNCtx = meta.nCtx ?? nCtx ?? defaults?.nCtx;
-      if (!meta.modelPath && convModel) {
-        await this.store.setModel(id, convModel, convNCtx);
-      }
-    } else {
-      convModel = modelPath ?? defaults?.path;
-      convNCtx = nCtx ?? defaults?.nCtx;
-    }
+    const meta = (await this.store.exists(id)) ? await this.store.meta(id) : undefined;
+    convModel = meta?.modelPath ?? modelPath ?? defaults?.path;
+    const convNCtx = meta?.nCtx ?? nCtx ?? defaults?.nCtx;
 
     if (this.engine.mode === 'managed') {
       if (!convModel) return { needsModel: true, conversationId: id };
+      // A model whose file has vanished is announced BEFORE any launch: the
+      // engine would only fail later, with an error about a file the user
+      // deleted weeks ago. Nothing is pinned here either — the pick that
+      // follows is the one that gets recorded.
+      if (!existsSync(convModel)) {
+        return { needsModel: true, conversationId: id, missingModel: convModel };
+      }
+      if (meta && !meta.modelPath) await this.store.setModel(id, convModel, convNCtx);
       await this.ensureManagedBackend(convModel, convNCtx ?? 8192);
-    } else if (!convModel) {
+    } else {
+      if (meta && !meta.modelPath && convModel) {
+        await this.store.setModel(id, convModel, convNCtx);
+      }
       // Remote: the model is whatever the server has — informational only.
-      convModel = this.loadedModelPath ?? 'remote';
+      if (!convModel) convModel = this.loadedModelPath ?? 'remote';
     }
 
     if (!this.backend || !this.live) throw new Error('Backend not started.');
@@ -1082,7 +1084,15 @@ export class Harness {
     return {
       conversationId: id,
       ...(meta.modelPath
-        ? { modelPath: meta.modelPath, modelName: modelDisplayName(meta.modelPath) }
+        ? {
+            modelPath: meta.modelPath,
+            modelName: modelDisplayName(meta.modelPath),
+            // Announced at open: a vanished file is a fact about this
+            // machine, not about the message the user has yet to type.
+            ...(this.engine?.mode === 'managed' && !existsSync(meta.modelPath)
+              ? { missingModel: meta.modelPath }
+              : {}),
+          }
         : {}),
       events: events
         .flatMap((event): ConversationEventDto[] => {
@@ -1108,9 +1118,12 @@ export class Harness {
     if (!this.session && this.engine) {
       const reply = await this.openConversation();
       if ('needsModel' in reply) {
+        // Not an error: a choice to make. The renderer opens the picker and
+        // keeps the message for after the pick.
         this.emit(IPC.evAgent, {
-          type: 'error',
-          message: 'No model chosen for this conversation.',
+          type: 'needs_model',
+          conversationId: reply.conversationId,
+          ...(reply.missingModel ? { missingModel: reply.missingModel } : {}),
         } satisfies AgentEventDto);
         return;
       }

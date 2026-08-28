@@ -48,6 +48,10 @@ export interface AppTranslations {
     nCtx: string;
     manual: string;
     confirm: string;
+    /** `{name}` is the file name of the model that vanished. */
+    missingModel: string;
+    /** Appended when a message waits for the pick. */
+    resendAfterPick: string;
   };
   approval: {
     eyebrow: string;
@@ -71,6 +75,9 @@ export interface AppTranslations {
     };
   };
   chat: {
+    /** Banner at open; `{name}` is the file name of the vanished model. */
+    missingModel: string;
+    chooseModel: string;
     placeholder: string;
     errorPrefix: string;
     /** Title of the collapsible reasoning block. */

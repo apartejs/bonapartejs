@@ -50,6 +50,10 @@ export function App() {
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [config, setConfig] = useState<BackendConfigDto | undefined>(undefined);
   const pendingConv = useRef<string | undefined>(undefined);
+  /** Pinned model whose file vanished, named by the picker's notice. */
+  const [missingModel, setMissingModel] = useState<string | null>(null);
+  /** Message typed before the model pick; sent once the conversation reopens. */
+  const [pendingText, setPendingText] = useState<string | null>(null);
   const bootAttempted = useRef(false);
   const [mode, setModeState] = useState<PlayModeDto>('repetition');
   const [approval, setApproval] = useState<ApprovalRequestDto | null>(null);
@@ -205,6 +209,19 @@ export function App() {
     setView(fallbackView);
   }, []);
 
+  /** The engine asked for a model at send time: the picker takes over and
+   *  the message waits for it. */
+  const needsModel = useCallback(
+    (event: { conversationId: string; missingModel?: string; text: string }) => {
+      pendingConv.current = event.conversationId;
+      setMissingModel(event.missingModel ?? null);
+      setPendingText(event.text);
+      setView('pickModel');
+    },
+    [],
+  );
+  const clearPendingText = useCallback(() => setPendingText(null), []);
+
   const tryOpen = useCallback(
     async (id?: string, modelPath?: string, nCtx?: number) => {
       setBusy(true);
@@ -213,9 +230,11 @@ export function App() {
         const reply = await window.bonaparte.openConversation(id, modelPath, nCtx);
         if ('needsModel' in reply) {
           pendingConv.current = reply.conversationId;
+          setMissingModel(reply.missingModel ?? null);
           setView('pickModel');
         } else {
           setOpened(reply);
+          setMissingModel(null);
           setLastStats(null);
           setView('chat');
           // The scope follows the open conversation, via its project. The
@@ -404,6 +423,8 @@ export function App() {
           <ModelPicker
             busy={busy}
             error={error}
+            missingModel={missingModel}
+            pendingMessage={pendingText !== null}
             onPick={(modelPath, nCtx) => {
               // The choice also becomes the default for future conversations —
               // the distribution screen won't reappear (Settings hub in J3).
@@ -452,6 +473,15 @@ export function App() {
               conversationId={opened.conversationId}
               busy={busy}
               onPickModel={(modelPath) => void tryOpen(opened.conversationId, modelPath)}
+              missingModel={opened.missingModel ?? null}
+              onChooseModel={() => {
+                pendingConv.current = opened.conversationId;
+                setMissingModel(opened.missingModel ?? null);
+                setView('pickModel');
+              }}
+              onNeedsModel={needsModel}
+              autoSend={pendingText}
+              onAutoSent={clearPendingText}
             />
           </div>
           ) : null}

@@ -1483,3 +1483,24 @@ pre.shiki {
   background-color: var(--aparte-code-bg) !important;
   color: var(--aparte-text) !important;
 }
+
+/* A pinned model that vanished: aparté's alert, at the top of the thread
+   and in the picker's card. In the thread the button sits next to the
+   message and wraps under it when the column is narrow. */
+.chat-wrap > .missing-model {
+  /* The thread takes the column's height; the banner takes its own. */
+  flex: 0 0 auto;
+  margin: var(--aparte-space-6) 0 0;
+}
+.missing-model .aparte-alert__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-2) var(--aparte-space-4);
+}
+.missing-model .aparte-alert__message {
+  flex: 1 1 24ch;
+}
+.picker-missing {
+  margin-block: var(--aparte-space-4);
+}

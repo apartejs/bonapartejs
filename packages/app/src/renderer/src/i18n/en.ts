@@ -49,6 +49,9 @@ export const EN: AppTranslations = {
     nCtx: 'Context size',
     manual: 'Browse…',
     confirm: 'Cast this role',
+    missingModel:
+      'The model “{name}” of this conversation is no longer on this machine. Pick another one: the context will be rebuilt.',
+    resendAfterPick: 'Your message will be sent as soon as the model is ready.',
   },
   approval: {
     eyebrow: 'approval needed',
@@ -71,6 +74,8 @@ export const EN: AppTranslations = {
     },
   },
   chat: {
+    missingModel: 'The model “{name}” is no longer on this machine.',
+    chooseModel: 'Choose a model',
     placeholder: 'Write to bonaparte…',
     errorPrefix: 'Error',
     thinking: 'Reasoning',

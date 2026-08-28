@@ -50,6 +50,9 @@ export const FR: AppTranslations = {
     nCtx: 'Taille de contexte',
     manual: 'Parcourir…',
     confirm: 'Distribuer ce rôle',
+    missingModel:
+      'Le modèle « {name} » de cette conversation n’est plus sur cette machine. Choisissez-en un autre : le contexte sera reconstruit.',
+    resendAfterPick: 'Votre message partira dès que le modèle sera prêt.',
   },
   approval: {
     eyebrow: 'demande d’accord',
@@ -72,6 +75,8 @@ export const FR: AppTranslations = {
     },
   },
   chat: {
+    missingModel: 'Le modèle « {name} » n’est plus sur cette machine.',
+    chooseModel: 'Choisir un modèle',
     placeholder: 'Écrivez à bonaparte…',
     errorPrefix: 'Erreur',
     thinking: 'Réflexion',

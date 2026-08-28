@@ -7,6 +7,7 @@ import type {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { modelFileName } from '../models/filter.js';
 import { ModeSelector } from './ModeSelector.js';
 import { ModelSelector } from './ModelSelector.js';
 import { TemperatureControl } from './TemperatureControl.js';
@@ -27,6 +28,16 @@ interface ChatScreenProps {
   busy: boolean;
   /** Temperature is carried by the conversation: it's reread on change. */
   conversationId: string | null;
+  /** The pinned model vanished from disk: a banner says so and offers the
+   *  picker before anything is typed. */
+  missingModel: string | null;
+  onChooseModel: () => void;
+  /** The engine refused to run without a model: the picker comes next, and
+   *  the message that triggered it is handed over to be sent after the pick. */
+  onNeedsModel: (event: { conversationId: string; missingModel?: string; text: string }) => void;
+  /** A message held over the model pick: sent as soon as the screen mounts. */
+  autoSend: string | null;
+  onAutoSent: () => void;
 }
 
 let nextId = 0;
@@ -66,6 +77,11 @@ export function ChatScreen({
   onPickModel,
   busy,
   conversationId,
+  missingModel,
+  onChooseModel,
+  onNeedsModel,
+  autoSend,
+  onAutoSent,
 }: ChatScreenProps) {
   const { t } = useTranslate();
 
@@ -82,6 +98,8 @@ export function ChatScreen({
 
   const chat = useAparteChat(initialMessages);
   const turn = useRef<TurnState | null>(null);
+  /** Last message sent: handed back with a `needs_model`, to be sent after the pick. */
+  const lastSent = useRef('');
 
   // The ref tracks `chat` without putting it in the effect's dependencies:
   // the hook returns a new object on every render, and the IPC subscription
@@ -201,16 +219,29 @@ export function ChatScreen({
           });
           finish(state, 'error');
           break;
+
+        case 'needs_model':
+          // Nothing to close: the turn never started. The empty bubble goes
+          // with the screen, and the message comes back with the pick.
+          turn.current = null;
+          onStreamingChange(false);
+          onNeedsModel({
+            conversationId: event.conversationId,
+            text: lastSent.current,
+            ...(event.missingModel ? { missingModel: event.missingModel } : {}),
+          });
+          break;
       }
     });
 
     return unsubscribe;
-  }, [onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
+  }, [onNeedsModel, onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
 
   const handleSent = (detail: { content: string }): void => {
     // Empty assistant bubble: the lib renders it "awaiting" (animated dots,
     // aria-busy, no action bar) as long as nothing is written to it. Between
     // sending and the first token, a minute of prefill can go by.
+    lastSent.current = detail.content;
     const messageId = freshId();
     chat.appendMessage({
       id: messageId,
@@ -231,8 +262,38 @@ export function ChatScreen({
     void window.bonaparte.sendMessage(detail.content);
   };
 
+  // A message typed before the model pick: the lib only appends what its
+  // composer sends, so the user bubble is written here, then the turn runs
+  // exactly as if it had just been sent. Once — the guard covers a double
+  // mount in development.
+  const autoSent = useRef(false);
+  useEffect(() => {
+    if (!autoSend || autoSent.current) return;
+    autoSent.current = true;
+    chat.appendMessage({ id: freshId(), role: 'user', content: autoSend, timestamp: Date.now() });
+    handleSent({ content: autoSend });
+    onAutoSent();
+  });
+
   return (
     <div className="chat-wrap">
+      {missingModel && (
+        <div className="aparte-alert aparte-alert--warning missing-model" role="status">
+          <div className="aparte-alert__body">
+            <p className="aparte-alert__message">
+              {t.chat.missingModel.replace('{name}', modelFileName(missingModel))}
+            </p>
+            <button
+              type="button"
+              className="aparte-btn aparte-btn--warning aparte-btn--soft aparte-btn--sm"
+              onClick={onChooseModel}
+              disabled={busy}
+            >
+              {t.chat.chooseModel}
+            </button>
+          </div>
+        </div>
+      )}
       <AparteChat
         ref={chat.ref}
         messages={chat.messages}

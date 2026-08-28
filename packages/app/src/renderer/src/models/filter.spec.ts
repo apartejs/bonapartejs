@@ -1,6 +1,6 @@
 import type { ModelInfoDto } from '@aparte/bonaparte-shared';
 import { describe, expect, it } from 'vitest';
-import { filterModels } from './filter.js';
+import { filterModels, modelFileName } from './filter.js';
 
 const model = (name: string, path: string): ModelInfoDto => ({
   name,
@@ -35,5 +35,16 @@ describe('filterModels', () => {
 
   it('returns nothing when a term matches no model', () => {
     expect(filterModels(models, 'qwen mistral')).toEqual([]);
+  });
+});
+
+describe('modelFileName', () => {
+  it('keeps the file name of a Windows path, whichever separator', () => {
+    expect(modelFileName('C:\\models\\Qwen3-1.7B-Q4_K_M.gguf')).toBe('Qwen3-1.7B-Q4_K_M.gguf');
+    expect(modelFileName('C:/nowhere/gone.gguf')).toBe('gone.gguf');
+  });
+
+  it('returns a bare name unchanged', () => {
+    expect(modelFileName('gone.gguf')).toBe('gone.gguf');
   });
 });

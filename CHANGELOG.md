@@ -114,6 +114,13 @@ published.
   authoritative count in the final event's `timings.cache_n`, while the
   client read the progress from the final event only. The fake server now
   mirrors the real shape, and the client reads both places.
+- A conversation pinned to a model whose file had been deleted failed at
+  send time, after a doomed engine launch, with "No model chosen for this
+  conversation." The vanished file is now announced when the conversation
+  opens (a banner in the thread, with a button to the picker), and a message
+  sent anyway leads to the picker, which names the file; the message is
+  sent once the new model is ready. The check happens before any launch.
+  Covered by an Electron E2E.
 
 ### Known limitations
 
@@ -121,7 +128,7 @@ published.
   tool round-trip, and a restored state serving as the prefix of a branch
   are covered by a real-model smoke test (five cases, green on Qwen3-1.7B on
   2026-08-28) that is not part of CI.
-- The CLI cannot launch the app yet; nothing is published on npm.
+- Nothing is published on npm yet.
 - Third-party plugins outside the repository are not loadable.
 - `n_ctx` is still pinned per conversation; retention of saved states, prefix
   seeds, compaction and the VRAM budget are not implemented.

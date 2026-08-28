@@ -1,11 +1,16 @@
 import type { ModelInfoDto } from '@aparte/bonaparte-shared';
 import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { modelFileName } from '../models/filter.js';
 
 interface ModelPickerProps {
   busy: boolean;
   error: string | null;
   onPick: (modelPath: string, nCtx: number) => void;
+  /** Pinned model whose file vanished: named in a notice above the list. */
+  missingModel?: string | null;
+  /** A message waits for this pick: the notice says it will be sent. */
+  pendingMessage?: boolean;
 }
 
 function formatSize(bytes: number, units: { gib: string; mib: string }): string {
@@ -14,7 +19,13 @@ function formatSize(bytes: number, units: { gib: string; mib: string }): string 
   return `${Math.max(1, Math.round(bytes / 1024 ** 2))} ${units.mib}`;
 }
 
-export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
+export function ModelPicker({
+  busy,
+  error,
+  onPick,
+  missingModel,
+  pendingMessage,
+}: ModelPickerProps) {
   const { t } = useTranslate();
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -56,6 +67,17 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
         <p className="bp-eyebrow">{t.picker.eyebrow}</p>
         <h1>{t.picker.title}</h1>
         <p className="setup-intro">{t.picker.intro}</p>
+
+        {missingModel && (
+          <div className="aparte-alert aparte-alert--warning picker-missing" role="status">
+            <div className="aparte-alert__body">
+              <p className="aparte-alert__message">
+                {t.picker.missingModel.replace('{name}', modelFileName(missingModel))}
+                {pendingMessage ? ` ${t.picker.resendAfterPick}` : ''}
+              </p>
+            </div>
+          </div>
+        )}
 
         {models !== null && models.length > 0 && (
           <label className="field picker-search">
