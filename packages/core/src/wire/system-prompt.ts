@@ -81,19 +81,36 @@ function renderPerimeter(roots: string[]): string {
   );
 }
 
+/**
+ * The system prompt, laid out from the most stable block to the most volatile.
+ *
+ * The KV prefix is saved and, eventually, shared by layers, so the order is
+ * not cosmetic — it is baked into every state written to disk:
+ *
+ *   L0  identity and the tool-call convention   (changes with a bonaparte release)
+ *   L1  the tool inventory and its amendment clause (changes when a plugin or an MCP server moves)
+ *   L2  the decor of THIS conversation: perimeter, reply language, project instructions
+ *
+ * Put a volatile block before a stable one and the stable prefix can no
+ * longer be shared between conversations. Changing this order later would
+ * invalidate every state saved with the previous one.
+ */
 export function buildSystemPrompt(options: SystemPromptOptions): string {
   const blocks = [
+    // L0
     'You are bonaparte, a local-first coding agent working on a real project. ' +
       'Be precise and concise. Verify with tools instead of assuming.',
-    renderPerimeter(options.roots ?? []),
-    'Available tools:\n' + renderToolInventory(options.tools),
     'To call a tool, emit exactly:\n' +
       '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
       'One call per block; emit several blocks for several calls. ' +
       'Results are returned to you on the next turn.',
-    // Sans cette clause, un delta appendé plus tard contredirait ce prompt.
+    // L1
+    'Available tools:\n' + renderToolInventory(options.tools),
+    // Without this clause, a delta appended later would contradict the prompt.
     'This inventory may be amended later: a service message will announce any ' +
       'tool added or removed, and takes precedence over the list above.',
+    // L2
+    renderPerimeter(options.roots ?? []),
   ];
 
   if (options.replyLanguage) {

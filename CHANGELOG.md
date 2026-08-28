@@ -59,6 +59,12 @@ published.
 
 ### Changed
 
+- The system prompt is laid out from the most stable block to the most
+  volatile: identity and tool-call convention, then the tool inventory, then
+  the perimeter, reply language and project instructions of the conversation.
+  The order is baked into every saved KV state; the previous one put the
+  per-conversation perimeter before the shared inventory. Conversations
+  created before keep their frozen prompt and their saved state.
 - The OpenAI-compatible backend and endpoint detection were removed
   (2026-08-19): bonaparte drives llama.cpp only, because no OpenAI façade
   exposes the state it persists.

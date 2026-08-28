@@ -118,10 +118,11 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   J3 plugin-first shell ✅ (reversible plugin host, tabbed tooling panel,
   schema-driven settings hub, status strip with context gauge, 4 built-in
   plugins, Playwright E2E) · Consolidation (2026-08-19): the screens are done,
-  the engine is not — prompt block order, `n_ctx` owned by the engine, retention
-  module, GGUF sizes, prefix seeds, compaction-as-rebase, overflow guard,
-  `gpuAcceleration` setting, per-plugin activation, index and branching are all
-  still to do (see the plan) · J4 MCP · J5 npx distribution.
+  the engine is not — `n_ctx` owned by the engine, retention module, GGUF
+  sizes, prefix seeds, compaction-as-rebase, overflow guard, `gpuAcceleration`
+  setting, per-plugin activation, index and branching are all still to do (see
+  the plan); the prompt block order (stable → volatile) is done since
+  2026-08-28 · J4 MCP · J5 npx distribution.
 - **Real-model smoke results.** None recorded yet. Record here: date, model,
   llama.cpp build, and the outcome of each case (real tool call · lazy grammar
   not forcing a call · KV prefix kept after a tool round-trip · save/restore

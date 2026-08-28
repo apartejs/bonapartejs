@@ -138,6 +138,36 @@ describe('buildSystemPrompt', () => {
   it('reste déterministe pour des entrées identiques', () => {
     expect(buildSystemPrompt(base)).toBe(buildSystemPrompt(base));
   });
+
+  it('orders the blocks from the most stable to the most volatile', () => {
+    // The prefix is saved and shared by layers: what changes with a bonaparte
+    // release (identity, call convention) comes first, then the tool inventory
+    // (which moves when a plugin or an MCP server does), then the decor of
+    // THIS conversation — perimeter, reply language, project instructions.
+    // This order is baked into every saved KV state: the volatile part must
+    // never precede the stable one, or the inventory prefix cannot be shared
+    // between conversations.
+    const prompt = buildSystemPrompt({
+      ...base,
+      replyLanguage: 'French',
+      projectInstructions: 'Always use pnpm.',
+    });
+    const at = (needle: string): number => {
+      const index = prompt.indexOf(needle);
+      expect(index, `"${needle}" is missing from the prompt`).toBeGreaterThanOrEqual(0);
+      return index;
+    };
+    const positions = [
+      at('You are bonaparte'),
+      at('<tool_call>'),
+      at('Available tools:'),
+      at('may be amended later'),
+      at('D:\\projets\\app'),
+      at('French'),
+      at('Always use pnpm.'),
+    ];
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  });
 });
 
 describe('renderInventoryDelta', () => {
