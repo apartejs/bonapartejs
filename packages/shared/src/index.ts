@@ -188,6 +188,8 @@ export type SettingScopeDto = 'global' | 'conversation';
 /** Approval request pushed to the renderer during the loop. */
 export interface ApprovalRequestDto {
   id: string;
+  /** The conversation whose turn is waiting: the question is asked there, and there only. */
+  conversationId: string;
   tool: string;
   args: Record<string, unknown>;
   command?: string;

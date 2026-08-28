@@ -47,6 +47,7 @@ import {
   type AgentEventBodyDto,
   type AgentEventDto,
   type AppConfigDto,
+  type ApprovalRequestDto,
   type ApprovalResponseDto,
   type BackendConfigDto,
   type BackendStatusDto,
@@ -685,7 +686,10 @@ export class Harness {
           ...(request.command !== undefined ? { command: request.command } : {}),
         },
       });
-      this.emit(IPC.evApproval, request);
+      this.emit(IPC.evApproval, {
+        ...request,
+        conversationId: this.conversations.active ?? '',
+      } satisfies ApprovalRequestDto);
     });
 
   async respondToApproval(response: ApprovalResponseDto): Promise<void> {
@@ -871,6 +875,10 @@ export class Harness {
   }
 
   async shutdown(): Promise<void> {
+    // A tool call waiting for consent would hold the turn, and the turn the
+    // shutdown: nobody is left to answer, so the answer is no.
+    for (const pending of this.pendingApprovals.values()) pending.resolve(false);
+    this.pendingApprovals.clear();
     await this.conversations.close();
     // Plugins first: they hold dev servers, a shell, a native view. All of
     // that must go down with the app, not outlive it.

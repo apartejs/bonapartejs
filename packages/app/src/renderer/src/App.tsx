@@ -2,6 +2,7 @@ import { aparteGlobalConfig } from '@aparte/core';
 import { fr as aparteFr } from '@aparte/locale-fr';
 import type {
   ApprovalRequestDto,
+  ApprovalResponseDto,
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
@@ -14,7 +15,6 @@ import type {
   SidebarSortDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
@@ -181,18 +181,10 @@ export function App() {
     void window.bonaparte.setMode(next);
   }, []);
 
-  const respondToApproval = useCallback(
-    (granted: boolean, always?: boolean) => {
-      if (!approval) return;
-      void window.bonaparte.respondToApproval({
-        id: approval.id,
-        granted,
-        ...(always ? { always } : {}),
-      });
-      setApproval(null);
-    },
-    [approval],
-  );
+  const answerApproval = useCallback((response: ApprovalResponseDto) => {
+    void window.bonaparte.respondToApproval(response);
+    setApproval(null);
+  }, []);
 
   // Locale of aparté components (internal strings of the web components).
   useEffect(() => {
@@ -482,6 +474,8 @@ export function App() {
               onNeedsModel={needsModel}
               autoSend={pendingText}
               onAutoSent={clearPendingText}
+              approval={approval}
+              onApprovalResponse={answerApproval}
             />
           </div>
           ) : null}
@@ -528,9 +522,6 @@ export function App() {
           {...(projectDialog.project ? { onDelete: () => void deleteProject() } : {})}
           onCancel={() => setProjectDialog(null)}
         />
-      )}
-      {approval && (
-        <ApprovalDialog request={approval} onRespond={respondToApproval} />
       )}
       <StatusStrip
         backendStatus={backendStatus}

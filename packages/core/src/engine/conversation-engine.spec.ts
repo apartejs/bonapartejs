@@ -324,3 +324,26 @@ describe('ConversationEngine — the model of a conversation', () => {
     expect(engine.active).toBe('conv-a');
   });
 });
+
+describe('ConversationEngine — closing during a turn', () => {
+  it('close() cuts the turn in flight instead of waiting for it', async () => {
+    // Quitting the app with a reply still streaming — or a tool call waiting
+    // for consent — must not hang on the turn: it is cut, what arrived is
+    // committed, the state is saved.
+    const { engine, events } = await makeRig({
+      replies: ['one two three four five six seven eight nine ten eleven twelve'],
+      paceMs: 100,
+    });
+    await engine.open('conv-a', MODEL);
+    const turn = engine.send('conv-a', 'go');
+    await until(() => assistantText(events, 'conv-a').length > 0);
+
+    const started = Date.now();
+    await engine.close();
+
+    expect(Date.now() - started).toBeLessThan(600);
+    expect(engine.inFlight()).toBeNull();
+    expect(engine.active).toBeNull();
+    await turn;
+  });
+});

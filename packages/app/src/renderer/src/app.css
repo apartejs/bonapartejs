@@ -542,35 +542,6 @@ button.primary {
   font-size: 20px;
 }
 
-.approval-tool {
-  font-family: var(--bp-mono);
-  font-size: 13px;
-  color: var(--aparte-primary);
-  margin: 0 0 8px;
-}
-
-.approval-preview {
-  font-family: var(--bp-mono);
-  font-size: 12.5px;
-  line-height: 1.5;
-  margin: 0 0 20px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--aparte-surface-2);
-  border: 1px solid var(--aparte-border);
-  max-height: 240px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.approval-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
-
 @keyframes fade-in {
   from {
     opacity: 0;

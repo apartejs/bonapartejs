@@ -1,11 +1,15 @@
+import { requestUserInput } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import type {
   AgentEventDto,
+  ApprovalRequestDto,
+  ApprovalResponseDto,
   CompletionStatsDto,
   PlayModeDto,
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef } from 'react';
+import { answerToResponse, approvalMessage, approvalOptions } from '../approval.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { modelFileName } from '../models/filter.js';
 import { ModeSelector } from './ModeSelector.js';
@@ -38,6 +42,9 @@ interface ChatScreenProps {
   /** A message held over the model pick: sent as soon as the screen mounts. */
   autoSend: string | null;
   onAutoSent: () => void;
+  /** A tool call waiting for consent — asked on the library's panel, in this conversation only. */
+  approval: ApprovalRequestDto | null;
+  onApprovalResponse: (response: ApprovalResponseDto) => void;
 }
 
 let nextId = 0;
@@ -82,6 +89,8 @@ export function ChatScreen({
   onNeedsModel,
   autoSend,
   onAutoSent,
+  approval,
+  onApprovalResponse,
 }: ChatScreenProps) {
   const { t } = useTranslate();
 
@@ -317,6 +326,39 @@ export function ChatScreen({
     handleSent({ content: autoSend });
     onAutoSent();
   });
+
+  // The library presents questions through an <aparte-elicitation> INSIDE the
+  // chat — without one, requestUserInput() rejects at once (it says so in the
+  // console). The React wrapper has no slot for it, so it is placed by hand
+  // once the chat is in the DOM, and removed with the screen.
+  useEffect(() => {
+    // The React wrapper is a framework host: a [data-aparte-chat] container,
+    // not an <aparte-chat> element.
+    const host = document.querySelector('aparte-chat, [data-aparte-chat]');
+    if (!host || host.querySelector('aparte-elicitation')) return;
+    const presenter = document.createElement('aparte-elicitation');
+    host.append(presenter);
+    return () => presenter.remove();
+  }, []);
+
+  // Consent for a tool call, on apartéJS's approval panel: inline in the
+  // composer, where the answer is typed, with OUR three options (the
+  // library fixes none — only the requester knows what it can honour).
+  // Leaving the screen aborts the panel; the request stays pending in the
+  // app and is asked again when this conversation comes back.
+  useEffect(() => {
+    if (!approval || approval.conversationId !== conversationId) return;
+    const controller = new AbortController();
+    void requestUserInput({
+      message: approvalMessage(t.approval, approval),
+      kind: 'approval',
+      options: approvalOptions(t.approval),
+      signal: controller.signal,
+    })
+      .then((result) => onApprovalResponse(answerToResponse(approval.id, result)))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [approval, conversationId, onApprovalResponse, t.approval]);
 
   return (
     <div className="chat-wrap">

@@ -307,8 +307,14 @@ export class ConversationEngine {
     }
   }
 
-  /** Saves and lets go of the slot; the engine keeps running for the next open. */
+  /**
+   * Cuts the turn in flight, saves, and lets go of the slot; the engine keeps
+   * running for the next open. Cutting, not waiting: a host shutting down —
+   * or a settings change — must not hang on a reply, nor on a tool call
+   * waiting for consent nobody will give.
+   */
   async close(): Promise<void> {
+    this.turn?.controller.abort();
     await this.settle();
     await this.release();
   }

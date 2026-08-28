@@ -56,7 +56,6 @@ export const EN: AppTranslations = {
     resendAfterPick: 'Your message will be sent as soon as the model is ready.',
   },
   approval: {
-    eyebrow: 'approval needed',
     title: 'bonaparte wants to act on your machine',
     allow: 'Allow',
     always: 'Always allow',

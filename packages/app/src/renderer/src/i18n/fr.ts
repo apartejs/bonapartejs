@@ -57,7 +57,6 @@ export const FR: AppTranslations = {
     resendAfterPick: 'Votre message partira dès que le modèle sera prêt.',
   },
   approval: {
-    eyebrow: 'demande d’accord',
     title: 'bonaparte veut agir sur votre machine',
     allow: 'Autoriser',
     always: 'Toujours autoriser',

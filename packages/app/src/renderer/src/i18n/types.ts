@@ -57,7 +57,6 @@ export interface AppTranslations {
     resendAfterPick: string;
   };
   approval: {
-    eyebrow: string;
     title: string;
     allow: string;
     always: string;

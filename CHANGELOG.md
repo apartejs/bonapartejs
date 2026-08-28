@@ -110,6 +110,14 @@ published.
   The order is baked into every saved KV state; the previous one put the
   per-conversation perimeter before the shared inventory. Conversations
   created before keep their frozen prompt and their saved state.
+- **A tool call asks for consent on apartéJS's approval panel**, inline in
+  the composer where the answer is typed — the same panel the library uses
+  for its own approvals — instead of a modal of bonaparte's own. The three
+  options (allow, always allow, refuse) are bonaparte's, because only the
+  harness knows it can remember a grant; the question is asked in the
+  conversation whose turn is waiting, and only there. Covered by an
+  Electron E2E against the fake server (a tool call, a refusal, the next
+  turn).
 - The OpenAI-compatible backend and endpoint detection were removed
   (2026-08-19): bonaparte drives llama.cpp only, because no OpenAI façade
   exposes the state it persists.
@@ -164,6 +172,10 @@ published.
 - The managed server's pid trace outlived a clean shutdown (Electron quits
   before the child's exit event fires): it is erased when the server is
   stopped.
+- Quitting with a reply still streaming — or a tool call waiting for a
+  consent nobody would give — hung the shutdown on the turn: the turn is
+  cut, what arrived is committed, the state is saved, pending approvals are
+  answered with a refusal.
 - The context gauge reported zero cached prompt tokens on every real turn:
   llama-server puts `prompt_progress` in intermediate stream events and the
   authoritative count in the final event's `timings.cache_n`, while the
