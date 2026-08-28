@@ -24,7 +24,7 @@ afterEach(async () => {
 async function complete(
   server: FakeLlamaServer,
   body: Record<string, unknown>,
-): Promise<{ content: string; final: Record<string, any> }> {
+): Promise<{ content: string; final: Record<string, any>; events: Record<string, any>[] }> {
   const res = await fetch(`${server.url}/completion`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -42,6 +42,7 @@ async function complete(
   return {
     content: events.map((e) => e.content ?? '').join(''),
     final,
+    events,
   };
 }
 
@@ -101,19 +102,35 @@ describe('fake llama-server', () => {
     expect(final['timings']['prompt_ms']).toBe(20);
   });
 
-  it('reports prompt_progress when return_progress is requested', async () => {
+  it('reports prompt_progress in intermediate events when return_progress is requested', async () => {
+    // Shape of the real server (2026-08-28): the progress rides intermediate
+    // events, the final one carries none — a client reading it only there
+    // sees nothing, which is exactly the bug this fixture used to hide.
     const server = await start();
     const prefix = 'x'.repeat(40);
     await complete(server, { prompt: prefix, id_slot: 0 });
-    const { final } = await complete(server, {
+    const { final, events } = await complete(server, {
       prompt: prefix + 'y'.repeat(8),
       id_slot: 0,
       return_progress: true,
     });
-    const progress = final['prompt_progress'];
-    expect(progress['total']).toBe(12);
-    expect(progress['cache']).toBe(10);
-    expect(progress['processed']).toBe(12);
+    const progress = events.filter((e) => e['prompt_progress']).map((e) => e['prompt_progress']);
+    expect(progress.length).toBeGreaterThanOrEqual(2);
+    expect(progress[0]).toMatchObject({ total: 12, cache: 10, processed: 10 });
+    expect(progress.at(-1)).toMatchObject({ total: 12, cache: 10, processed: 12 });
+    expect(final['prompt_progress']).toBeUndefined();
+  });
+
+  it('the final event carries the authoritative cache counts in timings', async () => {
+    const server = await start({ responder: () => '' });
+    const prefix = 'x'.repeat(40);
+    await complete(server, { prompt: prefix, id_slot: 0 });
+    const { final } = await complete(server, { prompt: prefix + 'y'.repeat(8), id_slot: 0 });
+    expect(final['timings']['cache_n']).toBe(10);
+    expect(final['timings']['prompt_n']).toBe(2);
+    expect(final['tokens_evaluated']).toBe(12);
+    // KV size after generation: the prompt plus what was generated (nothing here).
+    expect(final['tokens_cached']).toBe(12);
   });
 
   it('saves the slot cache to a named file (n_saved, n_written)', async () => {

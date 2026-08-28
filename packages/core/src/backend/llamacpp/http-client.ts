@@ -131,33 +131,46 @@ export class LlamaCppHttpClient {
       );
     }
 
+    // `prompt_progress` travels in INTERMEDIATE events (with `return_progress`),
+    // never in the final one — verified on a real server on 2026-08-28. The
+    // final event carries the counts that make the figure authoritative:
+    // `timings.cache_n` (prompt tokens served from the cache) and
+    // `timings.prompt_n` (prompt tokens actually processed). Read from the
+    // final event only, the progress was always missing, and every real turn
+    // reported zero cached tokens.
+    let lastProgress: Record<string, unknown> | undefined;
     for await (const event of sseEvents(res.body)) {
       const content = event['content'];
       if (typeof content === 'string' && content.length > 0) {
         yield { type: 'token', text: content };
       }
+      const progress = event['prompt_progress'];
+      if (progress && typeof progress === 'object') {
+        lastProgress = progress as Record<string, unknown>;
+      }
       if (event['stop'] === true) {
         const timings = (event['timings'] ?? {}) as Record<string, unknown>;
-        const progress = event['prompt_progress'] as
-          | Record<string, unknown>
-          | undefined;
+        const promptMs = Number(timings['prompt_ms'] ?? 0);
+        const uncached = Number(timings['prompt_n'] ?? 0);
+        const cacheN = timings['cache_n'];
+        const cached =
+          cacheN !== undefined ? Number(cacheN) : Number(lastProgress?.['cache'] ?? 0);
+        const total = lastProgress
+          ? Number(lastProgress['total'] ?? cached + uncached)
+          : cached + uncached;
         yield {
           type: 'done',
           stats: {
-            promptMs: Number(timings['prompt_ms'] ?? 0),
-            promptUncachedTokens: Number(timings['prompt_n'] ?? 0),
+            promptMs,
+            promptUncachedTokens: uncached,
             predictedTokens: Number(timings['predicted_n'] ?? 0),
             predictedMs: Number(timings['predicted_ms'] ?? 0),
-            ...(progress
-              ? {
-                  progress: {
-                    total: Number(progress['total'] ?? 0),
-                    cache: Number(progress['cache'] ?? 0),
-                    processed: Number(progress['processed'] ?? 0),
-                    timeMs: Number(progress['time_ms'] ?? 0),
-                  },
-                }
-              : {}),
+            progress: {
+              total,
+              cache: cached,
+              processed: lastProgress ? Number(lastProgress['processed'] ?? total) : total,
+              timeMs: lastProgress ? Number(lastProgress['time_ms'] ?? promptMs) : promptMs,
+            },
           },
         };
         return;

@@ -110,32 +110,49 @@ export async function startFakeLlamaServer(
       'cache-control': 'no-cache',
     });
 
+    // Shape verified against a real llama-server on 2026-08-28: with
+    // `return_progress`, `prompt_progress` arrives in INTERMEDIATE events
+    // (one at the start of prompt processing, one at its end), never in the
+    // final one. The final event carries the authoritative counts in
+    // `timings` (`cache_n`, `prompt_n`) plus `tokens_cached` — the KV size
+    // after generation — and `tokens_evaluated`. A fake that put the
+    // progress on the final event hid a client that read it only there.
+    if (returnProgress) {
+      for (const processed of [cached, tokens.length]) {
+        const progress = {
+          total: tokens.length,
+          cache: cached,
+          processed,
+          time_ms: processed === tokens.length ? promptMs : 0,
+        };
+        res.write(
+          `data: ${JSON.stringify({ content: '', stop: false, prompt_progress: progress })}\n\n`,
+        );
+      }
+    }
+
     // One content chunk per "word" for a real multi-event stream.
     const pieces = text.split(/(?<= )/);
     for (const piece of pieces) {
       res.write(`data: ${JSON.stringify({ content: piece, stop: false })}\n\n`);
     }
 
+    const predicted = fakeTokenize(text).length;
     const final: Record<string, unknown> = {
       content: '',
       stop: true,
       id_slot: idSlot,
-      tokens_predicted: fakeTokenize(text).length,
+      tokens_predicted: predicted,
+      tokens_evaluated: tokens.length,
+      tokens_cached: tokens.length + predicted,
       timings: {
+        cache_n: cached,
         prompt_n: uncached,
         prompt_ms: promptMs,
-        predicted_n: fakeTokenize(text).length,
-        predicted_ms: fakeTokenize(text).length * msPerToken,
+        predicted_n: predicted,
+        predicted_ms: predicted * msPerToken,
       },
     };
-    if (returnProgress) {
-      final['prompt_progress'] = {
-        total: tokens.length,
-        cache: cached,
-        processed: tokens.length,
-        time_ms: promptMs,
-      };
-    }
     res.write(`data: ${JSON.stringify(final)}\n\n`);
     res.end();
   }

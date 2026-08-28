@@ -79,6 +79,14 @@ published.
   checked against a friction journal and contract tests on the rules the chat
   loop depends on.
 
+### Fixed
+
+- The context gauge reported zero cached prompt tokens on every real turn:
+  llama-server puts `prompt_progress` in intermediate stream events and the
+  authoritative count in the final event's `timings.cache_n`, while the
+  client read the progress from the final event only. The fake server now
+  mirrors the real shape, and the client reads both places.
+
 ### Known limitations
 
 - The agentic path beyond the first tool call, and the KV prefix surviving a

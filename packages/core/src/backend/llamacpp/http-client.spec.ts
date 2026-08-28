@@ -95,6 +95,23 @@ describe('LlamaCppHttpClient', () => {
     });
   });
 
+  it('complete() reports the cached prompt tokens even without return_progress', async () => {
+    // The real server never puts `prompt_progress` on its final event; the
+    // count that makes the context gauge honest is `timings.cache_n`. Read
+    // only from the final event, the progress was always missing — and the
+    // gauge showed zero cached tokens on every real turn (seen on
+    // 2026-08-28: 821 tokens served from the cache, reported as 0).
+    const { client } = await startServer({ responder: () => '' });
+    const prefix = 'x'.repeat(40);
+    await collect(client.complete({ prompt: prefix, idSlot: 0 }));
+    const { stats } = await collect(
+      client.complete({ prompt: prefix + 'y'.repeat(8), idSlot: 0 }),
+    );
+    expect(stats.progress?.cache).toBe(10);
+    expect(stats.progress?.total).toBe(12);
+    expect(stats.promptUncachedTokens).toBe(2);
+  });
+
   it('saveSlot/restoreSlot complete the full cycle across a restart', async () => {
     const disk = new Map();
     const { server, client } = await startServer({
