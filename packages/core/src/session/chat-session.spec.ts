@@ -273,7 +273,9 @@ describe('ChatSession — context persistence', () => {
     expect(secondEnd.promptMs).toBeLessThan(firstEnd.promptMs / 5);
   });
 
-  it('refuses the restore if the live config has changed', async () => {
+  it('refuses the restore when the model changed, and accepts a context grown since the save', async () => {
+    // D-73: the model is ours to pin — llama.cpp never checks it; n_ctx only
+    // has to hold the saved tokens, so a larger context restores fine.
     const disk = new Map<string, FakeSlotSnapshot>();
     const base = await mkdtemp(join(tmpdir(), 'bp-session-mismatch-'));
     dirs.push(base);
@@ -287,10 +289,19 @@ describe('ChatSession — context persistence', () => {
     const rigB = await makeRig({
       disk,
       baseDir: base,
-      live: { ...LIVE, nCtx: 4096 },
+      live: { ...LIVE, modelFingerprint: 'fp-another-model' },
     });
-    const { restore } = await ChatSession.open(rigB.options, 'conv-1');
-    expect(restore).toEqual({ restored: false, reason: 'nCtx' });
+    const { restore: refused } = await ChatSession.open(rigB.options, 'conv-1');
+    expect(refused).toEqual({ restored: false, reason: 'model' });
+    await rigB.server.close();
+
+    const rigC = await makeRig({
+      disk,
+      baseDir: base,
+      live: { ...LIVE, nCtx: LIVE.nCtx * 2 },
+    });
+    const { restore: accepted } = await ChatSession.open(rigC.options, 'conv-1');
+    expect(accepted).toMatchObject({ restored: true });
   });
 
   it('save() returns false when the backend has no persistence', async () => {
