@@ -89,6 +89,11 @@ When a library release fixes an entry, mark it resolved (never delete it).
   https://apartejs.dev/reference/classes/ (not linked from the components
   index). Write our own control only when the kit has nothing, and log that
   as a friction.
+- **The palette is React's, not the kit's.** react.dev's tokens (blue-50 /
+  blue-30 accent, their gray scale), declared on the `--aparte-*` masters in
+  `packages/app/src/renderer/src/theme.css` for light and dark; the kit
+  derives inks and scales from them. Never hard-code a colour: read a token
+  (`theme.spec.ts` E2E pins the palette in the DOM).
 - **Professional UI finish from the first draft** — an unfinished screen is
   not shown. For layout changes, a validated mock-up comes before code.
 - **What the fake server cannot prove is replayed for real** — grammars, slots,

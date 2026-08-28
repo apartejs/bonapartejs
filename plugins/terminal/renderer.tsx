@@ -46,8 +46,8 @@ function readTheme(): { background: string; foreground: string } {
   const token = (name: string, fallback: string): string =>
     styles.getPropertyValue(name).trim() || fallback;
   return {
-    background: token('--aparte-bg', '#17141c'),
-    foreground: token('--aparte-text', '#e8e4ee'),
+    background: token('--aparte-bg', '#16181d'),
+    foreground: token('--aparte-text', '#f6f7f9'),
   };
 }
 

@@ -1,0 +1,68 @@
+/**
+ * bonaparte's palette — React's, not apartéJS's brass.
+ *
+ * One product per framework, each in its framework's colour: bonaparte is
+ * the React one. The values are react.dev's own tokens (`colors.js` of
+ * reactjs/react.dev): the accent is their `brand` / `link` — blue-50 in
+ * light, blue-30 in dark, the logo cyan (#61dafb) being unreadable on white —
+ * and the greys are their gray scale.
+ *
+ * The kit's recipe: declare the masters, it derives the rest — the ink of a
+ * solid button from its fill, the text tone of every intent from
+ * `--aparte-ink-l`, the scales from their units. Light on `:root`, dark on
+ * `[data-aparte-theme="dark"]`, the attribute the app sets on <html>. This
+ * sheet loads right after the kit's, so equal specificity resolves by order.
+ *
+ * Two tokens beyond the documented eight-line rebrand: the user bubble and
+ * the inverse text are literals in the kit, not derived — left alone they
+ * keep the plum of the original palette on a blue page.
+ */
+
+:root {
+  /* Accent — react.dev `brand` (blue-50), hover one step darker (blue-60). */
+  --aparte-primary: #087ea4;
+  --aparte-primary-hover: #045975;
+  /* Secondary intent: react.dev purple-50; neutral: gray-50. */
+  --aparte-secondary: #575fb7;
+  --aparte-neutral: #5e687e;
+
+  /* Page and surfaces: gray-5 page, white surface, gray-10 / gray-15 below. */
+  --aparte-bg: #f6f7f9;
+  --aparte-surface-1: #ffffff;
+  --aparte-surface-2: #ebecf0;
+  --aparte-surface-3: #d0d3dc;
+
+  /* Text: gray-90, muted gray-50 (their `tertiary`). */
+  --aparte-text: #23272f;
+  --aparte-text-muted: #5e687e;
+  --aparte-text-inverse: #ffffff;
+
+  /* Borders: gray-10 (their `border`). */
+  --aparte-border: #ebecf0;
+
+  /* The user bubble: their `highlight` (blue-10). */
+  --aparte-message-content-bg-user: #e6f7ff;
+}
+
+[data-aparte-theme="dark"] {
+  /* Accent — react.dev `brand-dark` (blue-30), hover blue-20. */
+  --aparte-primary: #58c4dc;
+  --aparte-primary-hover: #abe2ed;
+  --aparte-secondary: #8891ec;
+  --aparte-neutral: #99a1b3;
+
+  /* gray-95 page, gray-90 surface (their dark `wash`), gray-80 / gray-70 below. */
+  --aparte-bg: #16181d;
+  --aparte-surface-1: #23272f;
+  --aparte-surface-2: #343a46;
+  --aparte-surface-3: #404756;
+
+  --aparte-text: #f6f7f9;
+  --aparte-text-muted: #99a1b3;
+  --aparte-text-inverse: #16181d;
+
+  --aparte-border: #343a46;
+
+  /* Their dark `highlight` is a 10% blue wash; this is that wash on gray-90, flattened. */
+  --aparte-message-content-bg-user: #2a3a44;
+}

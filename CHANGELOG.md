@@ -143,6 +143,13 @@ published.
 
 ### Changed
 
+- **bonaparte wears React's colours.** The default palette is no longer
+  apartéJS's brass: the accent is react.dev's own blue (blue-50 in light,
+  blue-30 in dark) and the greys are their gray scale, declared on the kit's
+  `--aparte-*` masters in `theme.css` for both themes — the kit derives
+  the inks. One product per framework, each in its framework's colour. The
+  window's pre-paint background and the terminal's fallbacks follow.
+
 - The system prompt is laid out from the most stable block to the most
   volatile: identity and tool-call convention, then the tool inventory, then
   the perimeter, reply language and project instructions of the conversation.

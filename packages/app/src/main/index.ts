@@ -52,7 +52,7 @@ function createWindow(): void {
     icon: iconPath(),
     // Background set before any paint to avoid the white flash; the renderer
     // then applies the real theme (data-aparte-theme attribute).
-    backgroundColor: '#17141c',
+    backgroundColor: '#16181d',
     title: 'bonaparte',
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.mjs'),
