@@ -1,23 +1,30 @@
 # AGENTS.md — bonaparte
 
-bonaparte est un coding agent desktop **local-first** (Electron + React + apartéJS,
-llama.cpp managé). Différenciateur : persistance du KV cache par conversation via
-les slots de llama-server. Spec complète et privée : `docs/superpowers/specs/`
-(git-ignoré — ne jamais le retirer du .gitignore, le repo est public).
+Guidance for coding agents and contributors. `CLAUDE.md` imports this file
+(`@AGENTS.md`); keep the two in sync by editing only this one.
 
-## Journal de friction apartéJS — OBLIGATOIRE
+bonaparte is a **local-first coding agent** for the desktop (Electron + React +
+apartéJS, managed llama.cpp). Its differentiator: **per-conversation KV cache
+persistence** through llama-server's slots. The full design notes are private,
+in `docs/superpowers/` (git-ignored — **never** remove that line from
+`.gitignore`; the repository is public).
 
-bonaparte est aussi le banc d'essai de la lib apartéJS (`@aparte/*`). **Chaque
-friction rencontrée avec la lib doit être consignée immédiatement** dans
-`docs/superpowers/aparte-frictions.md` (privé), au moment où elle survient —
-pas en fin de session. Paul s'en sert pour sortir correctifs et améliorations
-de la lib.
+## apartéJS friction journal — MANDATORY
 
-Compte comme friction : API manquante ou maladroite, comportement surprenant,
-piège non documenté, doc absente qui force à lire le source, contournement
-nécessaire, message d'erreur inutile, incohérence entre paquets.
+bonaparte is also the proving ground of the apartéJS library (`@aparte/*`).
+**Every friction met with the library is recorded immediately**, the moment it
+happens — never at the end of a session — in
+`docs/superpowers/aparte-frictions.md` (private). Paul uses it to ship fixes
+and improvements to the library.
 
-Format d'une entrée :
+Counts as friction: a missing or awkward API, surprising behaviour, an
+undocumented trap, documentation so absent you had to read the source, a
+workaround you needed, a useless error message, an inconsistency between
+packages. Notable good surprises go in the "Ça, c'était bien" section — so
+nobody breaks what works.
+
+The journal is private and written in French. One entry per friction, in this
+shape:
 
 ```md
 ## AAAA-MM-JJ — titre court
@@ -29,109 +36,136 @@ Format d'une entrée :
 - **Statut** : ouverte | résolue en x.y.z
 ```
 
-Quand une nouvelle version de la lib corrige une entrée, la marquer résolue
-(ne pas la supprimer). Les bonnes surprises notables peuvent aussi être notées
-(section « Ça, c'était bien ») — utile pour ne pas casser ce qui marche.
+When a library release fixes an entry, mark it resolved (never delete it).
 
-## Invariants (ne jamais violer)
+## Invariants — never violate
 
-- **Prompt append-only** : l'historique gelé d'un `PromptLog` n'est JAMAIS
-  re-rendu ; tout passe par begin/complete. C'est ce qui protège le cache KV.
-- **`/completion` uniquement** — jamais `/v1/chat/completions` (re-templating
-  Qwen3 non byte-stable, issue QwenLM/Qwen3#1826).
-- **Restore strict** : un état KV ne se restaure que si le manifest matche
-  exactement ; au moindre doute, re-prefill annoncé.
-- **`packages/core` n'importe jamais `electron`** (frontière enforcée par lint).
-- Le renderer ne parle jamais directement au llama-server ; pas d'`AparteClient`
-  côté renderer (double boucle) — API impérative d'`<AparteChat>` pilotée par IPC.
-  Conséquence à ne pas oublier : c'est donc à NOUS d'appeler
-  `registerDefaultRenderers()` au démarrage du renderer (la lib ne le fait que
-  dans le constructeur d'`AparteClient`), sinon tout segment s'affiche
-  « [Unknown segment type] » — couvert par `aparte-bootstrap.spec.ts`.
-- **Un plugin ne défait jamais ses enregistrements à la main** : tout passe par
-  son contexte, que l'hôte démonte d'un bloc. Une activation qui échoue ne
-  laisse rien derrière elle, et rien de ce qu'un plugin lance ne survit à son
-  démontage (serveur de dev, shell, vue native).
+- **Append-only prompt.** The frozen history of a `PromptLog` is NEVER
+  re-rendered; everything goes through begin/complete. A change of tools or
+  project is a delta appended to the log. Precisely: append-only *between two
+  rebases* — a rebase (compaction) is an explicit event, never a side effect.
+  This is what protects the KV cache.
+- **`/completion` only** — never `/v1/chat/completions` (Qwen3's chat template
+  is not byte-stable across turns, issue QwenLM/Qwen3#1826).
+- **Strict restore.** A KV state is restored only when its manifest matches
+  exactly (model fingerprint, `n_ctx`, cache types, llama.cpp build); on any
+  doubt, re-prefill — announced.
+- **`packages/core` never imports `electron`** (boundary enforced by lint).
+- The renderer never talks to llama-server; there is no `AparteClient` in the
+  renderer (it would run a second tool loop) — `<AparteChat>`'s imperative API
+  is driven over IPC. Consequence: **we** call `registerDefaultRenderers()` at
+  renderer startup (the library only does it in `AparteClient`'s constructor),
+  otherwise every segment renders as "[Unknown segment type]" — covered by
+  `aparte-bootstrap.spec.ts`.
+- **A plugin never undoes its registrations by hand.** Everything goes through
+  its context, which the host tears down as one. A failed activation leaves
+  nothing behind, and nothing a plugin starts survives its teardown (dev
+  server, shell, native view).
+- **Nothing expensive without announcing it first** — the product rule. A
+  model reload, a re-prefill, an eviction, a restart: the user sees the cost
+  before paying it.
 
-## Méthode de travail
+## How we work
 
-- **TDD systématique** : test rouge d'abord, implémentation minimale ensuite.
-  Le faux llama-server (`core/src/testing/fake-llama-server.ts`) sert de fixture
-  à tout ce qui touche au backend — jamais besoin de GPU en CI.
-- **i18n fr/en dès la première chaîne** (un fichier par langue : `types.ts` +
-  `fr.ts` + `en.ts` ; les specs vérifient la parité des clés). **L'i18n
-  concerne l'INTERFACE. Tout ce qui part vers le modèle est en ANGLAIS** —
-  prompt système, descriptions d'outils, résultats, messages d'erreur d'outil,
-  refus de permission : c'est un protocole, et les modèles sont entraînés en
-  anglais pour l'instruction et le tool-calling. La langue de réponse est une
-  consigne explicite du prompt (`replyLanguage`), pilotée par la locale.
-- **Finition UI niveau pro dès le premier jet** — un écran pas fini n'est pas montré.
-- **Commits locaux libres ; AUCUN push sans validation de Paul dans l'app.**
+- **Test first, always.** Red test, then the minimal implementation. The fake
+  llama-server (`core/src/testing/fake-llama-server.ts`) is the fixture for
+  everything that touches the backend — no GPU in CI, ever.
+- **Localise from the first string.** One file per language (`types.ts` +
+  `fr.ts` + `en.ts`; specs check key parity). **Localisation is for the UI.
+  Everything sent to the model is English** — system prompt, tool
+  descriptions, results, tool error messages, permission refusals: it is a
+  protocol, and models are trained on English instructions and tool-calling.
+  The reply language is an explicit prompt instruction (`replyLanguage`),
+  driven by the locale.
+- **English is the language of everything visible in the repository** —
+  code, comments, commit messages, docs, plugin manifests. French is allowed
+  only in the private notes (`docs/superpowers/`, `.claude/`).
+- **Professional UI finish from the first draft** — an unfinished screen is
+  not shown. For layout changes, a validated mock-up comes before code.
+- **What the fake server cannot prove is replayed for real** — grammars, slots,
+  the KV prefix under agentic load. Record the result below when you do.
+- **Local commits are free; NO push without Paul's validation in the app.**
 
-## Commandes
+## Commands
 
 ```sh
-pnpm dev          # app Electron (electron-vite)
-pnpm test         # toute la suite (Nx, cache)
-pnpm build        # build de tous les paquets et plugins
-pnpm lint         # eslint + boundaries
+pnpm dev          # Electron app (electron-vite)
+pnpm test         # whole unit suite (Nx, cached)
+pnpm build        # every package and plugin
+pnpm lint         # eslint + module boundaries
 pnpm typecheck
-pnpm --filter @aparte/bonaparte-app test:e2e   # E2E Electron (après pnpm build)
-node packages/cli/dist/cli.js doctor   # diagnostic machine
+pnpm --filter @aparte/bonaparte-app test:e2e   # Electron E2E (after pnpm build)
+node packages/cli/dist/cli.js doctor            # machine diagnostic
+# real-model smoke, outside CI (packages/core):
+#   BONAPARTE_SMOKE_MODEL=<path.gguf> npx vitest run src/smoke
 ```
 
-## Repères
+## Landmarks
 
-- Plan v1 approuvé : `docs/superpowers/specs/2026-08-18-bonaparte-v1-design.md`
-- La machine de Paul a le **CLI unifié `llama`** (WindowsApps) : serveur =
-  `llama serve`, mêmes flags que llama-server (`detectServeCommandPrefix()`).
-- Jalons : J1 fondations+KV ✅ (validé en réel par Paul le 2026-08-18) ·
-  J2 boucle agentique/outils/permissions/projet ✅ en CI — **premier contact
-  réel le 2026-08-19** : le prefill passe (1295 tokens, 138 tok/s) et le modèle
-  déclenche bien un appel d'outil, mais la grammaire refusait le tag ouvrant
-  (corrigé, voir la grammaire ci-dessous). **Le reste du chemin agentique —
-  exécution d'outil, résultat réinjecté, second tour — n'a toujours pas été vu
-  de bout en bout** (smoke prêt : `BONAPARTE_SMOKE_MODEL=...` puis
-  `npx vitest run src/smoke` dans packages/core) · J3 shell plugin-first ✅ (hôte de plugins réversible,
-  panneau droit multi-vues, hub Réglages schema-driven, barre de statut avec
-  jauge de contexte, 4 plugins inclus, E2E Playwright) · J4 MCP · J5 npx.
-- **node-pty charge sous Electron 43 SANS recompilation** (vérifié le
-  2026-08-20 : `pty.spawn(cmd.exe)` répond avec ses séquences ConPTY). Il faut
-  seulement l'autoriser dans `pnpm.onlyBuiltDependencies` — pnpm bloque les
-  scripts de build par défaut, et sans ça le module s'installe sans binaire.
-  Le toolchain de la machine de Paul (VS Build Tools 2022+2026, Python 3.14)
-  suffit. Le plugin terminal est donc un VRAI terminal : xterm.js côté vue,
-  PTY côté Node, octets bruts entre les deux — surtout ne pas re-filtrer l'ANSI,
-  c'est l'émulateur qui l'interprète.
-- **Le SDK de plugin POUSSE, avec contre-pression** (`ctx.emit()` +
-  `ctx.onDrain()`), modèle repris de VS Code. `emit` rend `false` quand la vue
-  est en retard : le producteur doit alors s'arrêter — convention des flux Node
-  (`write` puis `drain`). Seuils dans `FLOW_CONTROL` (host.ts), identiques aux
-  siens : pause à 100 000 non acquittés, reprise sous 5 000, acquittement par
-  paquets de 5 000. **La vue acquitte dans le callback de `term.write`**, donc
-  quand xterm a AFFICHÉ, pas quand l'IPC a livré — sinon on relancerait le
-  producteur trop tôt. Sans ça on perdait de la sortie en élaguant un tampon.
-- **Reste à faire, et c'est la leçon que VS Code a payée** : leurs moitiés Node
-  natives tournent dans un PROCESS dédié. Chez nous node-pty vit dans le main
-  process, donc un segfault emporte l'application.
-- **Plugins tiers hors de l'arbre : pas encore chargeables.** Les vues des
-  plugins inclus sont ramassées par `import.meta.glob` (donc buildées avec
-  l'app, chargées paresseusement) ; un plugin externe demandera le protocole
-  custom Electron + une import map partageant React. Point d'extension
-  identifié, volontairement pas ouvert en v1 (risque « double React »).
-- Grammaire des tool-calls : `grammar_lazy` + `grammar_triggers` +
-  `preserved_tokens` sur `/completion` — **non documentés** dans le README de
-  llama.cpp, vérifiés dans `tools/server/server-schema.cpp`. Sans la
-  paresse, le modèle serait forcé d'appeler un outil à chaque tour.
-  **Le déclencheur DONNE son texte à la grammaire** : `llama_grammar_accept_impl`
-  (`src/llama-grammar.cpp`) appelle `llama_grammar_accept_token(grammar, token,
-  piece)` quand un token déclencheur tombe, et rejoue les tokens chevauchants
-  pour un motif. La racine doit donc consommer `<tool_call>` elle-même, sinon
-  le serveur lève « Unexpected empty grammar stack after accepting piece:
-  <tool_call> » au premier appel — rencontré en réel le 2026-08-19 (le tag est
-  un token spécial unique, id 248058, sur le modèle de Paul). La racine admet
-  aussi **plusieurs blocs** : à un seul, la grammaire serait satisfaite après le
-  premier appel et les appels parallèles seraient inémettables.
-- La boucle N'utilise PAS `runStreamAgent` (@aparte/engine) : cet engine
-  possède la liste de messages, incompatible avec le prompt append-only.
-  Boucle maison dans `core/src/agent/loop.ts` (friction consignée).
+- Design notes (private): v1 plan `docs/superpowers/specs/2026-08-18-bonaparte-v1-design.md`,
+  consolidation `2026-08-19-bonaparte-consolidation.md` (amends the plan: single
+  engine, layered prefix, one slot, retention budget), projects/conversations
+  design `2026-08-20-projets-conversations-design.md`. The action plan to v1 is
+  in `.claude/audit/03-plan-v1.md` (private).
+- Paul's machine has the **unified `llama` CLI** (WindowsApps): server =
+  `llama serve`, same flags as llama-server (`detectServeCommandPrefix()`).
+- **Milestones.** J1 foundations + KV ✅ (validated for real by Paul on
+  2026-08-18) · J2 agentic loop / tools / permissions / project ✅ in CI —
+  **first real contact 2026-08-19**: prefill OK (1 295 tokens, 138 tok/s), the
+  model triggers a tool call, the grammar refused the opening tag (fixed, see
+  the grammar note below). **The rest of the agentic path — tool execution,
+  result re-injected, second turn — has still not been seen end to end.** ·
+  J3 plugin-first shell ✅ (reversible plugin host, tabbed tooling panel,
+  schema-driven settings hub, status strip with context gauge, 4 built-in
+  plugins, Playwright E2E) · Consolidation (2026-08-19): the screens are done,
+  the engine is not — prompt block order, `n_ctx` owned by the engine, retention
+  module, GGUF sizes, prefix seeds, compaction-as-rebase, overflow guard,
+  `gpuAcceleration` setting, per-plugin activation, index and branching are all
+  still to do (see the plan) · J4 MCP · J5 npx distribution.
+- **Real-model smoke results.** None recorded yet. Record here: date, model,
+  llama.cpp build, and the outcome of each case (real tool call · lazy grammar
+  not forcing a call · KV prefix kept after a tool round-trip · save/restore
+  with tool turns · restored state used as the prefix of a longer, different
+  prompt).
+- **node-pty loads under Electron 43 WITHOUT a rebuild** (verified 2026-08-20:
+  `pty.spawn(cmd.exe)` answers with its ConPTY sequences). It only needs to be
+  allowed in `pnpm.onlyBuiltDependencies` — pnpm blocks build scripts by
+  default, and without it the module installs with no binary. Paul's toolchain
+  (VS Build Tools 2022+2026, Python 3.14) is enough. The terminal plugin is
+  therefore a REAL terminal: xterm.js in the view, PTY in Node, raw bytes in
+  between — never re-filter the ANSI, the emulator interprets it.
+- **The plugin SDK PUSHES, with back-pressure** (`ctx.emit()` + `ctx.onDrain()`),
+  the model taken from VS Code. `emit` returns `false` when the view is behind:
+  the producer must stop — Node streams' `write` then `drain` convention.
+  Thresholds in `FLOW_CONTROL` (host.ts), identical to theirs: pause at
+  100 000 unacknowledged, resume under 5 000, acknowledge in packets of 5 000,
+  **per instance**. **The view acknowledges in `term.write`'s callback** — when
+  xterm has DISPLAYED, not when the IPC delivered — otherwise the producer
+  restarts too early. Without this we lost output while pruning a buffer.
+- **Still to do, and it is the lesson VS Code paid for**: their native Node
+  halves run in a DEDICATED process. Ours (node-pty) live in the main process,
+  so a segfault takes the application — and the loaded model — down. Planned:
+  `utilityProcess`.
+- **Third-party plugins outside the tree are not loadable yet.** Built-in
+  views are collected by `import.meta.glob` (built with the app, loaded
+  lazily); an external plugin will need Electron's custom protocol plus an
+  import map sharing React. Extension point identified, deliberately not
+  opened in v1 (double-React risk).
+- **Tool-call grammar**: `grammar_lazy` + `grammar_triggers` + `preserved_tokens`
+  on `/completion` — **undocumented** in llama.cpp's README, verified in
+  `tools/server/server-schema.cpp`. Without laziness the model would be forced
+  to call a tool every turn. **The trigger HANDS its text to the grammar**:
+  `llama_grammar_accept_impl` (`src/llama-grammar.cpp`) calls
+  `llama_grammar_accept_token(grammar, token, piece)` when a trigger token
+  fires, and replays overlapping tokens for a pattern. The root must therefore
+  consume `<tool_call>` itself, or the server throws "Unexpected empty grammar
+  stack after accepting piece: <tool_call>" on the first call — met for real
+  on 2026-08-19 (the tag is a single special token, id 248058, on Paul's
+  model). The root also admits **several blocks**: with one, the grammar would
+  be satisfied after the first call and parallel calls could not be emitted.
+- The loop does NOT use `runStreamAgent` (`@aparte/engine`): that engine owns
+  the message list, incompatible with the append-only prompt. Own loop in
+  `core/src/agent/loop.ts` (friction recorded; the library added
+  `onHistoryAppend` in 0.4.0 — decision: keep the own loop through v1, and
+  pin every library rule the loop depends on with a contract test, as done for
+  `isSegmentSettled` and `collapsed` after the 0.13 bump).

@@ -18,6 +18,12 @@ Thumbs.db
 # Notes privées — ne JAMAIS retirer (repo public)
 docs/superpowers/
 
+# Retours d'audit et notes de travail des agents — privé, jamais poussé
+.claude/
+
 # Artefacts Playwright
 packages/app/test-results/
 packages/app/playwright-report/
+
+# Paquets locaux (spike npx : pnpm pack)
+*.tgz
