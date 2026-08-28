@@ -144,8 +144,12 @@ published.
 ### Changed
 
 - **Tailwind CSS 4 and shadcn/ui dress bonaparte's own controls** — the
-  settings hub and the shared settings form first, the rest of the shell
-  screen by screen. The primitives (button, input, select, switch, menu,
+  settings hub and the shared settings form, then the shell: the sidebar
+  (its organise menu is a real menu — radio items, keyboard, Escape), the
+  conversation header (the project panel is a popover that closes on Escape,
+  the actions a menu), the status strip (badges, the context gauge on a
+  progress bar), the project dialog (a dialog: overlay, focus trap, Escape).
+  The rest of the screens follow. The primitives (button, input, select, switch, menu,
   popover, tabs, dialog, tooltip…) live in `@aparte/bonaparte-plugin-sdk/ui`:
   one component library for the app and every plugin view, materialised
   from shadcn's registry as source, the way shadcn intends. The palette is

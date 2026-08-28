@@ -1,5 +1,20 @@
 import type { ProjectSummaryDto } from '@aparte/bonaparte-shared';
-import { useEffect, useRef, useState } from 'react';
+import {
+  Badge,
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+  Input,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@aparte/bonaparte-plugin-sdk/ui';
+import { Ellipsis, Folder } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { FlankToggle } from './FlankToggle.js';
 
@@ -25,15 +40,7 @@ interface ConversationHeaderProps {
   onTogglePanel: () => void;
 }
 
-/**
- * Space reserved for the toggle, in pixels: 28 for the button, 8 for the
- * margin, 1 for the seam. All three count — the box is `border-box`, so a
- * forgotten pixel comes out of the button.
- *
- * The right half of the bar is exactly the width of the panel, toggle
- * INCLUDED: this is what aligns its seam with the panel's border. Without
- * accounting for it, the button landed one pixel too far left.
- */
+const POPOVER_LABEL = 'mx-2 mb-1.5 text-[10.5px] font-medium tracking-[0.08em] text-muted-foreground uppercase';
 
 /**
  * Conversation header: what NAMES it and what it SEES.
@@ -45,6 +52,10 @@ interface ConversationHeaderProps {
  * The project chip opens a panel rather than a file picker: a project
  * carries SEVERAL roots, a plain "choose a folder" wouldn't know how to
  * represent them.
+ *
+ * Its height and bottom border are those of the panel bar (`--bp-bar`
+ * token): the two read as a single line running across the window, even
+ * though each belongs to its own column.
  */
 export function ConversationHeader({
   title,
@@ -64,22 +75,10 @@ export function ConversationHeader({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const [panel, setPanel] = useState<'none' | 'project' | 'move'>('none');
-  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!editing) setDraft(title);
   }, [title, editing]);
-
-  // An open panel closes on a click elsewhere: without this, two panels can
-  // stay open and the user no longer knows what has focus.
-  useEffect(() => {
-    if (panel === 'none') return;
-    const close = (event: MouseEvent): void => {
-      if (!wrapRef.current?.contains(event.target as Node)) setPanel('none');
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [panel]);
 
   const commit = (): void => {
     const next = draft.trim();
@@ -89,7 +88,7 @@ export function ConversationHeader({
   };
 
   return (
-    <header className="conv-header" ref={wrapRef}>
+    <header className="conv-header relative flex h-(--bp-bar) shrink-0 items-center gap-2 border-b bg-card px-2">
       <FlankToggle
         side="start"
         collapsed={sidebarCollapsed}
@@ -98,22 +97,117 @@ export function ConversationHeader({
         onToggle={onToggleSidebar}
       />
 
-      <button
-        type="button"
-        className={`conv-chip ${project ? 'conv-chip-project' : 'conv-chip-dim'} aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--pill aparte-btn--sm`}
-        onClick={() => setPanel(panel === 'project' ? 'none' : 'project')}
-        title={project ? project.name : t.header.noProjectHint}
-        aria-expanded={panel === 'project'}
-      >
-        <span className="conv-chip-icon aparte-btn__icon" aria-hidden="true">
-          ▤
-        </span>
-        {project ? project.name : t.header.noProject}
-      </button>
+      {/* One panel open at a time: opening one closes the other. */}
+      <Popover open={panel === 'project'} onOpenChange={(open) => setPanel(open ? 'project' : 'none')}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(
+              'conv-chip h-7 max-w-[260px] rounded-full bg-muted px-2.5 text-xs font-normal',
+              project ? 'conv-chip-project' : 'conv-chip-dim text-muted-foreground italic',
+            )}
+            title={project ? project.name : t.header.noProjectHint}
+          >
+            <Folder className="size-3.5 opacity-70" aria-hidden="true" />
+            <span className="truncate">{project ? project.name : t.header.noProject}</span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={6}
+          className="conv-popover w-[min(430px,calc(100vw-24px))] p-3.5"
+          aria-label={t.header.projectPanel}
+        >
+          {project ? (
+            <>
+              <p className="conv-popover-name mb-2 font-serif text-sm">{project.name}</p>
+              {/* ABSOLUTE paths, because it's the only display that leaves
+                  no doubt about what the model can reach. */}
+              <ul className="conv-popover-roots mb-2.5 flex flex-col gap-1">
+                {project.roots.length === 0 ? (
+                  <li className="conv-popover-empty text-xs text-muted-foreground">{t.header.noRoots}</li>
+                ) : (
+                  project.roots.map((root, index) => (
+                    <li key={root} title={root} className="flex min-w-0 items-baseline gap-2">
+                      {/* `direction: rtl` truncates the path from the LEFT: on an
+                          absolute path, the end (the folder) is what identifies
+                          it, the start is common noise. */}
+                      <code className="min-w-0 flex-1 truncate text-start font-mono text-[11px] text-muted-foreground [direction:rtl]">
+                        {root}
+                      </code>
+                      {index === 0 && project.roots.length > 1 && (
+                        <Badge
+                          variant="secondary"
+                          className="conv-popover-default text-[9.5px] font-normal tracking-wide uppercase"
+                        >
+                          {t.header.defaultRoot}
+                        </Badge>
+                      )}
+                    </li>
+                  ))
+                )}
+              </ul>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="conv-popover-action w-full"
+                onClick={onEditProject}
+              >
+                {t.header.editProject}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="conv-popover-empty mb-2.5 text-xs leading-normal text-muted-foreground">
+                {t.header.noProjectExplain}
+              </p>
+              {/* An existing project is offered before creating one: a
+                  conversation started without a project usually belongs to
+                  one that already exists. */}
+              {projects.length > 0 && (
+                <>
+                  <p className={POPOVER_LABEL}>{t.header.moveTo}</p>
+                  <div className="mb-2 flex flex-col">
+                    {projects.map((candidate) => (
+                      <Button
+                        key={candidate.id}
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="conv-popover-item justify-start font-normal"
+                        disabled={busy}
+                        onClick={() => {
+                          onMoveToProject(candidate.id);
+                          setPanel('none');
+                        }}
+                      >
+                        {candidate.name}
+                      </Button>
+                    ))}
+                  </div>
+                </>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="conv-popover-action w-full"
+                onClick={onCreateProject}
+                disabled={busy}
+              >
+                {t.header.createProject}
+              </Button>
+            </>
+          )}
+        </PopoverContent>
+      </Popover>
 
       {editing ? (
-        <input
-          className="conv-title-input aparte-field aparte-field--sm"
+        <Input
+          className="conv-title-input h-7 min-w-0 flex-1 font-serif text-[15px]"
           value={draft}
           autoFocus
           onChange={(e) => setDraft(e.target.value)}
@@ -128,135 +222,56 @@ export function ConversationHeader({
           aria-label={t.header.rename}
         />
       ) : (
-        <button
+        <Button
           type="button"
-          className="conv-title aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
+          variant="ghost"
+          size="sm"
+          className="conv-title h-7 min-w-0 flex-1 cursor-text justify-start border border-transparent px-1.5 font-serif text-[15px] font-normal hover:border-border hover:bg-transparent"
           onClick={() => setEditing(true)}
           title={t.header.rename}
         >
-          {title || t.conversations.untitled}
-        </button>
+          <span className="truncate">{title || t.conversations.untitled}</span>
+        </Button>
       )}
 
-      <span className="conv-header-spacer" />
+      <span className="conv-header-spacer w-1 flex-none" />
 
-      <button
-        type="button"
-        className="conv-header-more aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-        onClick={() => setPanel(panel === 'move' ? 'none' : 'move')}
-        aria-expanded={panel === 'move'}
-        aria-label={t.header.actions}
-        title={t.header.actions}
-      >
-        ···
-      </button>
-
-      {panel === 'project' && (
-        <div
-          className="conv-popover aparte-popover"
-          role="dialog"
-          aria-label={t.header.projectPanel}
-        >
-          {project ? (
-            <>
-              <p className="conv-popover-name">{project.name}</p>
-              {/* ABSOLUTE paths, because it's the only display that leaves
-                  no doubt about what the model can reach. */}
-              <ul className="conv-popover-roots">
-                {project.roots.length === 0 ? (
-                  <li className="conv-popover-empty">{t.header.noRoots}</li>
-                ) : (
-                  project.roots.map((root, index) => (
-                    <li key={root} title={root}>
-                      <code>{root}</code>
-                      {index === 0 && project.roots.length > 1 && (
-                        <em className="conv-popover-default aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
-                          {t.header.defaultRoot}
-                        </em>
-                      )}
-                    </li>
-                  ))
-                )}
-              </ul>
-              <button
-                type="button"
-                className="conv-popover-action aparte-btn aparte-btn--secondary aparte-btn--soft aparte-btn--block aparte-btn--sm"
-                onClick={onEditProject}
-              >
-                {t.header.editProject}
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="conv-popover-empty">{t.header.noProjectExplain}</p>
-              {/* An existing project is offered before creating one: a
-                  conversation started without a project usually belongs to
-                  one that already exists. */}
-              {projects.length > 0 && (
-                <>
-                  <p className="conv-popover-label aparte-menu__label">{t.header.moveTo}</p>
-                  {projects.map((candidate) => (
-                    <button
-                      key={candidate.id}
-                      type="button"
-                      className="conv-popover-item aparte-menu__item"
-                      disabled={busy}
-                      onClick={() => {
-                        onMoveToProject(candidate.id);
-                        setPanel('none');
-                      }}
-                    >
-                      {candidate.name}
-                    </button>
-                  ))}
-                </>
-              )}
-              <button
-                type="button"
-                className="conv-popover-action aparte-btn aparte-btn--secondary aparte-btn--soft aparte-btn--block aparte-btn--sm"
-                onClick={onCreateProject}
-                disabled={busy}
-              >
-                {t.header.createProject}
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {panel === 'move' && (
-        <div className="conv-popover conv-popover-right aparte-popover aparte-menu" role="menu">
-          <p className="conv-popover-label aparte-menu__label">{t.header.moveTo}</p>
+      <DropdownMenu open={panel === 'move'} onOpenChange={(open) => setPanel(open ? 'move' : 'none')}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="conv-header-more size-7 text-muted-foreground"
+            aria-label={t.header.actions}
+            title={t.header.actions}
+          >
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="conv-popover-right min-w-56">
+          <DropdownMenuLabel className={POPOVER_LABEL.replace('mx-2 mb-1.5 ', '')}>{t.header.moveTo}</DropdownMenuLabel>
           {projects.map((candidate) => (
-            <button
+            <DropdownMenuItem
               key={candidate.id}
-              type="button"
-              role="menuitem"
-              className="conv-popover-item aparte-menu__item"
+              className="conv-popover-item"
               disabled={candidate.id === project?.id}
-              onClick={() => {
-                onMoveToProject(candidate.id);
-                setPanel('none');
-              }}
+              onSelect={() => onMoveToProject(candidate.id)}
             >
               {candidate.name}
-            </button>
+            </DropdownMenuItem>
           ))}
           {project && (
-            <button
-              type="button"
-              role="menuitem"
-              className="conv-popover-item conv-popover-danger aparte-menu__item"
-              onClick={() => {
-                onMoveToProject(null);
-                setPanel('none');
-              }}
+            <DropdownMenuItem
+              variant="destructive"
+              className="conv-popover-item conv-popover-danger"
+              onSelect={() => onMoveToProject(null)}
             >
               {t.header.detach}
-            </button>
+            </DropdownMenuItem>
           )}
-        </div>
-      )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/*
         Panel closed, its toggle ends THIS bar; open, it ends the panel's

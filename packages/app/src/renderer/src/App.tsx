@@ -374,7 +374,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <div className="app-body">
+      <div className="app-body flex min-h-0 flex-1">
         {/*
           The flanks stay MOUNTED, even when collapsed — their width drops to
           zero, and that's it. This is the only reliable way to animate a

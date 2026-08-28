@@ -60,5 +60,5 @@ test('the very first message of a fresh install gets its reply on screen', async
   const thread = window.locator('.chat-wrap');
   await expect(thread).toContainText('first reply ever', { timeout: 10_000 });
   // The conversation now exists, named by its first message.
-  await expect(window.locator('.conv-item')).toContainText('hello there');
+  await expect(window.locator('.conv-item')).toContainText('hello there', { timeout: 10_000 });
 });

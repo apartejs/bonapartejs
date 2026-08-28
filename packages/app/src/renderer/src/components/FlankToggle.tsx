@@ -1,3 +1,5 @@
+import { Button, cn } from '@aparte/bonaparte-plugin-sdk/ui';
+
 interface FlankToggleProps {
   /** Which flank: the glyph is the same, flipped. */
   side: 'start' | 'end';
@@ -29,15 +31,22 @@ export function FlankToggle({
   onToggle,
 }: FlankToggleProps) {
   return (
-    <button
+    <Button
       type="button"
-      className={`flank-toggle flank-toggle-${side}`}
+      variant="ghost"
+      size="icon"
+      className={cn(
+        'flank-toggle size-7 shrink-0 self-center rounded-lg text-muted-foreground hover:text-foreground',
+        !collapsed && 'bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary',
+        // The left flank is the same drawing, flipped: only one path to maintain.
+        side === 'start' && '[&_svg]:-scale-x-100',
+      )}
       onClick={onToggle}
       aria-pressed={!collapsed}
       aria-label={label}
       title={`${label} (${shortcut})`}
     >
-      <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true" focusable="false">
         <rect
           x="1.6"
           y="2.6"
@@ -59,8 +68,14 @@ export function FlankToggle({
           stroke="currentColor"
           strokeWidth="1.25"
         />
-        <path className="flank-fill" d="M10.4 2.6h1.6a2.4 2.4 0 0 1 2.4 2.4v6a2.4 2.4 0 0 1-2.4 2.4h-1.6z" />
+        <path
+          className={cn(
+            'flank-fill fill-current transition-opacity duration-(--bp-base) ease-(--bp-ease)',
+            collapsed ? 'opacity-0' : 'opacity-85',
+          )}
+          d="M10.4 2.6h1.6a2.4 2.4 0 0 1 2.4 2.4v6a2.4 2.4 0 0 1-2.4 2.4h-1.6z"
+        />
       </svg>
-    </button>
+    </Button>
   );
 }

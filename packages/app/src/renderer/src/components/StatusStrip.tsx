@@ -5,6 +5,7 @@ import type {
   ResourceSampleDto,
   RestoreDto,
 } from '@aparte/bonaparte-shared';
+import { Badge, Button, Progress, cn } from '@aparte/bonaparte-plugin-sdk/ui';
 import { Mascotte } from '../mascotte/Mascotte.js';
 import type { MascotteState } from '../mascotte/mascotte-states.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
@@ -51,31 +52,31 @@ function formatMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
 }
 
-/** aparté badge intent + fill for the engine status pill. */
-function statusPillClass(status: BackendStatusDto): string {
+const OK = 'text-emerald-700 dark:text-emerald-300';
+
+/** The engine pill: an outline, coloured by what the engine is doing. */
+function pillClass(status: BackendStatusDto): string {
   switch (status) {
     case 'ready':
-      return 'aparte-badge--success aparte-badge--soft';
+      return `border-emerald-600/40 ${OK}`;
     case 'starting':
     case 'restarting':
-      return 'aparte-badge--info aparte-badge--soft';
+      return 'border-primary/40 text-primary';
     case 'crashed':
-      return 'aparte-badge--danger aparte-badge--soft';
+      return 'border-destructive/40 text-destructive';
     default:
-      return 'aparte-badge--neutral aparte-badge--outline';
+      return 'text-muted-foreground';
   }
 }
 
-/** aparté badge classes shared by every `.status-chip` variant. */
+/** A chip of the strip: a soft badge whose ink says whether the news is good. */
 function chipClass(kind: 'ok' | 'dim' | 'err'): string {
-  switch (kind) {
-    case 'ok':
-      return 'aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm';
-    case 'err':
-      return 'aparte-badge aparte-badge--danger aparte-badge--soft aparte-badge--sm';
-    default:
-      return 'aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm';
-  }
+  return cn(
+    'status-chip text-xs font-normal',
+    kind === 'ok' && `chip-ok ${OK}`,
+    kind === 'dim' && 'chip-dim text-muted-foreground',
+    kind === 'err' && 'chip-err text-destructive',
+  );
 }
 
 export function StatusStrip({
@@ -112,52 +113,59 @@ export function StatusStrip({
   const canPersistKv = engine !== undefined;
 
   return (
-    <footer className="status-strip">
-      <div className="status-left">
+    <footer className="status-strip flex flex-wrap items-center justify-between gap-3 border-t bg-card px-3.5 py-2 text-[12.5px]">
+      <div className="status-left flex flex-wrap items-center gap-2.5">
         <Mascotte state={mascotteFor(backendStatus, streaming)} />
-        <span
-          className={`status-pill status-${backendStatus} aparte-badge aparte-badge--sm ${statusPillClass(backendStatus)}`}
+        <Badge
+          variant="outline"
+          className={cn(
+            'status-pill font-mono text-[11px] font-normal tracking-[0.06em]',
+            `status-${backendStatus}`,
+            pillClass(backendStatus),
+          )}
         >
           {t.status[backendStatus]}
-        </span>
+        </Badge>
         {/* This bar now carries only what's GLOBAL: engine state, loaded
             model, context gauge, measurements. The folder moved into the
             conversation header, and the play mode into the composer — it
             decides what the agent is allowed to do on the next message, so
             it belongs to the act of sending. */}
         {modelName && (
-          <span
-            className="status-chip chip-model aparte-badge aparte-badge--neutral aparte-badge--outline aparte-badge--sm"
+          <Badge
+            variant="outline"
+            className="status-chip chip-model block max-w-[220px] truncate font-mono font-normal text-(--aparte-secondary)"
             title={modelName}
           >
             {modelName}
-          </span>
+          </Badge>
         )}
         {contextPct !== null && (
           <span
-            className="context-gauge"
+            className="context-gauge inline-flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground"
             title={`${usedTokens} / ${nCtx} tokens`}
             aria-label={`${contextPct}%`}
           >
-            <span className="context-gauge-track">
-              <span
-                className={`context-gauge-fill${contextPct >= 85 ? ' context-gauge-hot' : ''}`}
-                style={{ width: `${contextPct}%` }}
-              />
-            </span>
+            {/* The context filling up is useful information BEFORE saturation. */}
+            <Progress
+              value={contextPct}
+              className={cn(
+                'context-gauge-track h-[5px] w-14 bg-input',
+                contextPct >= 85 && 'context-gauge-hot [&>[data-slot=progress-indicator]]:bg-destructive',
+              )}
+            />
             <span className="context-gauge-text">{contextPct}%</span>
           </span>
         )}
 
         {restore && restore.restored === false && restore.reason === 'not-connected' ? (
-          <span className={`status-chip chip-dim ${chipClass('dim')}`}>
+          <Badge variant="secondary" className={chipClass('dim')}>
             {t.status.notConnected}
-          </span>
+          </Badge>
         ) : restore ? (
-          <span
-            className={`status-chip ${restore.restored ? 'chip-ok' : 'chip-dim'} ${chipClass(
-              restore.restored ? 'ok' : 'dim',
-            )}`}
+          <Badge
+            variant="secondary"
+            className={chipClass(restore.restored ? 'ok' : 'dim')}
             title={
               restore.restored
                 ? undefined
@@ -167,71 +175,65 @@ export function StatusStrip({
             {restore.restored
               ? `${t.status.restored} · ${restore.nRestored} tokens`
               : `${t.status.notRestored} · ${t.status.reasons[restore.reason] ?? restore.reason}`}
-          </span>
+          </Badge>
         ) : null}
         {lastStats && lastStats.promptMs > 0 && (
-          <span className={`status-chip chip-dim ${chipClass('dim')}`}>
+          <Badge variant="secondary" className={chipClass('dim')}>
             {t.status.prefill} {formatMs(lastStats.promptMs)}
             {cachePct !== null && ` · ${t.status.cacheShare} ${cachePct}%`}
-          </span>
+          </Badge>
         )}
       </div>
 
       {resources && (
-        <span className="res-group" role="group" aria-label={t.resources.heading}>
+        <span className="res-group ms-auto inline-flex items-center gap-1.5" role="group" aria-label={t.resources.heading}>
           {resources.cpu !== null && (
-            <span
-              className="res-chip"
+            <Badge
+              variant="secondary"
+              className="res-chip font-mono text-[11px] font-normal whitespace-nowrap text-muted-foreground tabular-nums"
               title={t.resources.cpuHint
                 .replace('{app}', resources.app?.cpu === null || resources.app?.cpu === undefined ? '—' : `${resources.app.cpu} %`)
                 .replace('{server}', resources.server?.cpu === null || resources.server?.cpu === undefined ? '—' : `${resources.server.cpu} %`)}
             >
               CPU {Math.round(resources.cpu)} %
-            </span>
+            </Badge>
           )}
-          <span
-            className="res-chip"
+          <Badge
+            variant="secondary"
+            className="res-chip font-mono text-[11px] font-normal whitespace-nowrap text-muted-foreground tabular-nums"
             title={t.resources.ramHint
               .replace('{app}', gib(resources.app?.workingSetBytes, t.units.gib))
               .replace('{server}', gib(resources.server?.workingSetBytes, t.units.gib))}
           >
             RAM {gib(resources.memory.usedBytes, t.units.gib)} / {gib(resources.memory.totalBytes, t.units.gib)}
-          </span>
+          </Badge>
           {resources.gpu && (
-            <span className="res-chip" title={t.resources.gpuHint}>
+            <Badge
+              variant="secondary"
+              className="res-chip font-mono text-[11px] font-normal whitespace-nowrap text-muted-foreground tabular-nums"
+              title={t.resources.gpuHint}
+            >
               GPU {gib(resources.gpu.dedicatedBytes, t.units.gib)}
               {resources.gpu.sharedBytes > 0 ? ` + ${gib(resources.gpu.sharedBytes, t.units.gib)}` : ''}
               {resources.gpu.utilization !== null ? ` · ${Math.round(resources.gpu.utilization)} %` : ''}
-            </span>
+            </Badge>
           )}
         </span>
       )}
-      <div className="status-right">
+      <div className="status-right flex items-center gap-2.5">
         {saveState !== 'idle' && (
-          <span
-            className={`status-chip ${saveState === 'saved' ? 'chip-ok' : 'chip-err'} ${chipClass(
-              saveState === 'saved' ? 'ok' : 'err',
-            )}`}
-          >
+          <Badge variant="secondary" className={chipClass(saveState === 'saved' ? 'ok' : 'err')}>
             {saveState === 'saved' ? t.status.saved : t.status.saveFailed}
-          </span>
+          </Badge>
         )}
         {canPersistKv && (
-          <button
-            type="button"
-            className="aparte-btn aparte-btn--neutral aparte-btn--soft aparte-btn--sm"
-            onClick={onSave}
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={onSave}>
             {t.status.save}
-          </button>
+          </Button>
         )}
-        <button
-          type="button"
-          className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
-          onClick={onOpenSettings}
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onOpenSettings}>
           {t.settings.heading}
-        </button>
+        </Button>
       </div>
     </footer>
   );

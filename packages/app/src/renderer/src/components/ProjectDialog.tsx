@@ -1,4 +1,16 @@
 import type { ProjectSummaryDto } from '@aparte/bonaparte-shared';
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Label,
+} from '@aparte/bonaparte-plugin-sdk/ui';
+import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
@@ -52,112 +64,137 @@ export function ProjectDialog({
   const canSave = !busy && name.trim() !== '';
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onCancel}>
-      <section
-        className="modal-card"
-        role="dialog"
-        aria-label={project ? t.projectDialog.editTitle : t.projectDialog.createTitle}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <h2>{project ? t.projectDialog.editTitle : t.projectDialog.createTitle}</h2>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <DialogContent className="modal-card max-h-[calc(100vh-96px)] overflow-y-auto sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-[19px] font-medium">
+            {project ? t.projectDialog.editTitle : t.projectDialog.createTitle}
+          </DialogTitle>
+        </DialogHeader>
 
-        <label className="field">
-          <span className="field-label aparte-field-label">{t.projectDialog.name}</span>
-          <input
-            className="aparte-field"
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="project-name">{t.projectDialog.name}</Label>
+          <Input
+            id="project-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t.projectDialog.namePlaceholder}
             autoFocus
           />
-        </label>
-
-        <p className="field-label">{t.projectDialog.roots}</p>
-        <ul className="root-list">
-          {roots.map((root, index) => (
-            <li key={root}>
-              <code title={root}>{root}</code>
-              {index === 0 && roots.length > 1 && (
-                <em className="root-default aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
-                  {t.projectDialog.defaultRoot}
-                </em>
-              )}
-              <span className="root-actions">
-                <button
-                  type="button"
-                  className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-                  onClick={() => move(index, -1)}
-                  disabled={index === 0}
-                  title={t.projectDialog.moveUp}
-                  aria-label={t.projectDialog.moveUp}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-                  onClick={() => move(index, 1)}
-                  disabled={index === roots.length - 1}
-                  title={t.projectDialog.moveDown}
-                  aria-label={t.projectDialog.moveDown}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="root-remove aparte-btn aparte-btn--danger aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-                  onClick={() => setRoots(roots.filter((r) => r !== root))}
-                  title={t.projectDialog.removeRoot}
-                  aria-label={t.projectDialog.removeRoot}
-                >
-                  ✕
-                </button>
-              </span>
-            </li>
-          ))}
-          <li className="root-add">
-            <button
-              type="button"
-              className="aparte-btn aparte-btn--neutral aparte-btn--outline aparte-btn--block"
-              onClick={() => void addRoot()}
-            >
-              + {t.projectDialog.addRoot}
-            </button>
-          </li>
-        </ul>
-        {/* A project without a root remains valid: it's a group. We say so
-            rather than blocking the save. */}
-        {roots.length === 0 && <p className="setup-note">{t.projectDialog.noRootsNote}</p>}
-
-        <div className="modal-actions">
-          {project && onDelete && (
-            <button
-              type="button"
-              className="danger aparte-btn aparte-btn--danger aparte-btn--outline"
-              onClick={onDelete}
-              disabled={busy}
-            >
-              {t.projectDialog.delete}
-            </button>
-          )}
-          <span className="modal-spacer" />
-          <button
-            type="button"
-            className="aparte-btn aparte-btn--neutral aparte-btn--ghost"
-            onClick={onCancel}
-          >
-            {t.projectDialog.cancel}
-          </button>
-          <button
-            type="button"
-            className="primary aparte-btn aparte-btn--primary aparte-btn--solid"
-            disabled={!canSave}
-            onClick={() => onSave(name.trim(), roots)}
-          >
-            {t.projectDialog.save}
-          </button>
         </div>
-      </section>
-    </div>
+
+        <div className="flex flex-col gap-2">
+          {/* A section title rather than a field label: "Source folders"
+              must read as a heading above the list, not as the caption of
+              the previous field. */}
+          <p className="text-sm font-medium">{t.projectDialog.roots}</p>
+          <ul className="root-list flex flex-col gap-1.5">
+            {roots.map((root, index) => (
+              <li
+                key={root}
+                className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted py-1.5 ps-2.5 pe-2"
+              >
+                <code
+                  className="min-w-0 flex-1 truncate text-start font-mono text-[11.5px] [direction:rtl]"
+                  title={root}
+                >
+                  {root}
+                </code>
+                {index === 0 && roots.length > 1 && (
+                  <Badge
+                    variant="outline"
+                    className="root-default text-[9.5px] font-normal tracking-wide uppercase"
+                  >
+                    {t.projectDialog.defaultRoot}
+                  </Badge>
+                )}
+                <span className="root-actions flex flex-none gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-muted-foreground"
+                    onClick={() => move(index, -1)}
+                    disabled={index === 0}
+                    title={t.projectDialog.moveUp}
+                    aria-label={t.projectDialog.moveUp}
+                  >
+                    <ArrowUp className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-muted-foreground"
+                    onClick={() => move(index, 1)}
+                    disabled={index === roots.length - 1}
+                    title={t.projectDialog.moveDown}
+                    aria-label={t.projectDialog.moveDown}
+                  >
+                    <ArrowDown className="size-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="root-remove size-6 text-muted-foreground hover:text-destructive"
+                    onClick={() => setRoots(roots.filter((r) => r !== root))}
+                    title={t.projectDialog.removeRoot}
+                    aria-label={t.projectDialog.removeRoot}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </span>
+              </li>
+            ))}
+            <li className="root-add">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-dashed text-muted-foreground"
+                onClick={() => void addRoot()}
+              >
+                <Plus />
+                {t.projectDialog.addRoot}
+              </Button>
+            </li>
+          </ul>
+          {/* A project without a root remains valid: it's a group. We say so
+              rather than blocking the save. */}
+          {roots.length === 0 && (
+            <p className="text-xs leading-normal text-muted-foreground">{t.projectDialog.noRootsNote}</p>
+          )}
+        </div>
+
+        <DialogFooter className="mt-2 sm:justify-between">
+          <div>
+            {project && onDelete && (
+              <Button
+                type="button"
+                variant="outline"
+                className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={onDelete}
+                disabled={busy}
+              >
+                {t.projectDialog.delete}
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              {t.projectDialog.cancel}
+            </Button>
+            <Button type="button" disabled={!canSave} onClick={() => onSave(name.trim(), roots)}>
+              {t.projectDialog.save}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -3,24 +3,22 @@
  * explicit — a `* { transition: all }` would also animate the layout, which
  * produces interfaces that drag.
  */
-button,
-a,
-input,
-select,
-textarea,
-summary,
-.conv-chip,
-.conv-title,
-.tooling-tab,
-.flank-toggle,
-.tooling-menu-item,
-.conv-popover-item {
-  transition:
-    background-color var(--bp-fast) var(--bp-ease),
-    border-color var(--bp-fast) var(--bp-ease),
-    color var(--bp-fast) var(--bp-ease),
-    box-shadow var(--bp-fast) var(--bp-ease),
-    opacity var(--bp-fast) var(--bp-ease);
+@layer base {
+  button:not([data-slot]),
+  a,
+  input:not([data-slot]),
+  select,
+  textarea:not([data-slot]),
+  summary,
+  .tooling-tab,
+  .tooling-menu-item {
+    transition:
+      background-color var(--bp-fast) var(--bp-ease),
+      border-color var(--bp-fast) var(--bp-ease),
+      color var(--bp-fast) var(--bp-ease),
+      box-shadow var(--bp-fast) var(--bp-ease),
+      opacity var(--bp-fast) var(--bp-ease);
+  }
 }
 
 /*
@@ -527,15 +525,6 @@ body,
   }
 }
 
-.chip-model {
-  font-family: var(--bp-mono);
-  color: var(--aparte-secondary);
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .setup-error {
   color: var(--aparte-error);
   font-size: 13px;
@@ -547,73 +536,6 @@ body,
 }
 
 /* ── Status bar ────────────────────────────────────────────────────── */
-
-.status-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 14px;
-  border-top: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-1);
-  font-size: 12.5px;
-  flex-wrap: wrap;
-}
-
-.status-left,
-.status-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.status-right button {
-  padding: 5px 11px;
-  font-size: 12px;
-}
-
-.status-pill {
-  font-family: var(--bp-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--aparte-border);
-  color: var(--aparte-text-muted);
-}
-
-.status-ready {
-  color: var(--aparte-success);
-  border-color: currentColor;
-}
-
-.status-crashed {
-  color: var(--aparte-error);
-  border-color: currentColor;
-}
-
-.status-starting,
-.status-restarting {
-  color: var(--aparte-primary);
-  border-color: currentColor;
-}
-
-.status-chip {
-  font-size: 12px;
-}
-
-.chip-ok {
-  color: var(--aparte-success);
-}
-
-.chip-dim {
-  color: var(--aparte-text-muted);
-}
-
-.chip-err {
-  color: var(--aparte-error);
-}
 
 /* ── Mascot ────────────────────────────────────────────────────────── */
 
@@ -680,156 +602,6 @@ body,
 }
 
 /* ── Conversations menu ─────────────────────────────────────────────────── */
-
-.app-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-.conv-sidebar {
-  /* The width comes from the slot, which is resizable. */
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-inline-end: 1px solid var(--aparte-border);
-  background: var(--aparte-surface-1);
-}
-
-.conv-sidebar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 10px 6px 14px;
-}
-
-.conv-sidebar-title {
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--aparte-text-muted);
-}
-
-.conv-new {
-  margin: 0 10px 10px;
-  justify-content: flex-start;
-  gap: 6px;
-}
-
-.conv-empty {
-  margin: 0;
-  padding: 4px 14px 14px;
-  font-size: 12.5px;
-  color: var(--aparte-text-muted);
-}
-
-.conv-list {
-  list-style: none;
-  margin: 0;
-  padding: 0 8px 12px;
-  overflow-y: auto;
-  min-height: 0;
-}
-
-/*
- * A row: the title on its line, the rest muted underneath. No frame — the
- * chosen row is told by the kit's mark (a tint and a bar on the start
- * edge), the hovered one by a surface.
- */
-.conv-item {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 7px 10px 7px 12px;
-  margin-bottom: 1px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  text-align: start;
-  cursor: pointer;
-  color: inherit;
-}
-
-.conv-item:hover:not(:disabled) {
-  background: var(--aparte-surface-2);
-}
-
-.conv-item-active,
-.conv-item-active:disabled {
-  opacity: 1;
-  color: inherit;
-  cursor: default;
-}
-
-.conv-item:disabled:not(.conv-item-active) {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.conv-item-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.conv-item-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conv-item-meta {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--aparte-text-muted);
-}
-
-.conv-item-meta > * + *::before {
-  content: '·';
-  margin: 0 5px;
-  opacity: 0.6;
-}
-
-.conv-project,
-.conv-noproject {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conv-noproject {
-  font-style: italic;
-}
-
-.conv-date {
-  margin-inline-start: auto;
-  padding-inline-start: 8px;
-  flex: none;
-  white-space: nowrap;
-}
-
-/* The differentiator, stated soberly — and only when it's true. */
-.conv-kv {
-  flex: none;
-  font-family: var(--bp-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-  line-height: 15px;
-  padding: 0 5px;
-}
 
 /* ── Tooling panel (right side) ─────────────────────────────────────────── */
 
@@ -1065,34 +837,6 @@ body,
 }
 
 /* ── Context gauge ──────────────────────────────────────────────────────── */
-
-.context-gauge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--bp-mono);
-  font-size: 11px;
-  color: var(--aparte-text-muted);
-}
-
-.context-gauge-track {
-  width: 56px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--aparte-surface-3);
-  overflow: hidden;
-}
-
-.context-gauge-fill {
-  display: block;
-  height: 100%;
-  background: var(--aparte-primary);
-}
-
-/* The context filling up is useful information BEFORE saturation. */
-.context-gauge-hot {
-  background: var(--aparte-error);
-}
 
 /* ── Settings hub ───────────────────────────────────────────────────────── */
 
@@ -1390,22 +1134,4 @@ pre.shiki {
 }
 
 /* ── Machine resources, in the status strip ────────────────────────────── */
-
-.res-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-inline-start: auto;
-}
-
-.res-chip {
-  font-family: var(--bp-mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  padding: 2px 8px;
-  border-radius: 999px;
-  color: var(--aparte-text-muted);
-  background: var(--aparte-surface-2);
-}
 
