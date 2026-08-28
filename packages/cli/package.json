@@ -2,11 +2,38 @@
   "name": "@aparte/bonaparte",
   "version": "0.1.0",
   "description": "bonaparte — local-first coding agent. CLI: doctor & app launcher.",
+  "license": "MIT",
+  "author": "Paul Richez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apartejs/bonapartejs.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/apartejs/bonapartejs#readme",
+  "bugs": {
+    "url": "https://github.com/apartejs/bonapartejs/issues"
+  },
+  "keywords": [
+    "llama.cpp",
+    "local-llm",
+    "coding-agent",
+    "kv-cache",
+    "electron",
+    "aparte"
+  ],
   "type": "module",
   "bin": {
     "bonaparte": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -21,6 +48,8 @@
     "vitest": "catalog:"
   },
   "nx": {
-    "tags": ["scope:cli"]
+    "tags": [
+      "scope:cli"
+    ]
   }
 }

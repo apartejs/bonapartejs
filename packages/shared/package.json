@@ -2,6 +2,25 @@
   "name": "@aparte/bonaparte-shared",
   "version": "0.1.0",
   "description": "bonaparte — shared types and schemas (IPC contract, manifests)",
+  "license": "MIT",
+  "author": "Paul Richez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apartejs/bonapartejs.git",
+    "directory": "packages/shared"
+  },
+  "homepage": "https://github.com/apartejs/bonapartejs#readme",
+  "bugs": {
+    "url": "https://github.com/apartejs/bonapartejs/issues"
+  },
+  "keywords": [
+    "llama.cpp",
+    "local-llm",
+    "coding-agent",
+    "kv-cache",
+    "electron",
+    "aparte"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -9,7 +28,13 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -24,6 +49,8 @@
     "vitest": "catalog:"
   },
   "nx": {
-    "tags": ["scope:shared"]
+    "tags": [
+      "scope:shared"
+    ]
   }
 }

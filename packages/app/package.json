@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "bonaparte — Electron app (main + preload + React renderer)",
   "private": true,
+  "license": "MIT",
+  "author": "Paul Richez",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
@@ -10,14 +12,14 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {
     "@aparte/bonaparte-core": "workspace:*",
     "@aparte/bonaparte-plugin-sdk": "workspace:*",
     "@aparte/bonaparte-shared": "workspace:*",
     "@aparte/core": "0.13.0",
-    "@aparte/engine": "0.13.0",
     "@aparte/locale-fr": "0.13.0",
     "@aparte/plugin-marked": "0.13.0",
     "@aparte/plugin-shiki": "0.13.0",

@@ -11,7 +11,7 @@ describe('detectServeCommandPrefix', () => {
   });
 
   it.each([
-    'C:\\Users\\paul\\AppData\\Local\\Microsoft\\WindowsApps\\llama.exe',
+    'C:\\Users\\alice\\AppData\\Local\\Microsoft\\WindowsApps\\llama.exe',
     '/usr/local/bin/llama',
     'llama',
     'LLAMA.EXE',

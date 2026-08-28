@@ -98,7 +98,7 @@ describe('runDoctor', () => {
       fakeEnv({
         lookupOnPath: async (binary) =>
           binary === 'llama'
-            ? 'C:\\Users\\paul\\AppData\\Local\\Microsoft\\WindowsApps\\llama.exe'
+            ? 'C:\\Users\\alice\\AppData\\Local\\Microsoft\\WindowsApps\\llama.exe'
             : null,
       }),
       'fr',

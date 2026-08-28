@@ -2,6 +2,7 @@
   "name": "@aparte/bonaparte-plugin-conversation-settings",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "echo \"vue rendue par le bundle de l'app (import.meta.glob)\"",
@@ -15,5 +16,9 @@
     "@types/react": "^19.2.0",
     "react": "^19.2.8"
   },
-  "nx": { "tags": ["scope:plugin"] }
+  "nx": {
+    "tags": [
+      "scope:plugin"
+    ]
+  }
 }

@@ -2,6 +2,25 @@
   "name": "@aparte/bonaparte-core",
   "version": "0.1.0",
   "description": "bonaparte — the harness: llama.cpp backend, per-conversation KV persistence, agent loop, tools, permissions, plugin host. Pure Node, no Electron.",
+  "license": "MIT",
+  "author": "Paul Richez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apartejs/bonapartejs.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/apartejs/bonapartejs#readme",
+  "bugs": {
+    "url": "https://github.com/apartejs/bonapartejs/issues"
+  },
+  "keywords": [
+    "llama.cpp",
+    "local-llm",
+    "coding-agent",
+    "kv-cache",
+    "electron",
+    "aparte"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -12,6 +31,10 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -19,8 +42,7 @@
   },
   "dependencies": {
     "@aparte/bonaparte-shared": "workspace:*",
-    "@aparte/core": "0.13.0",
-    "zod": "catalog:"
+    "@aparte/core": "0.13.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",

@@ -2,6 +2,25 @@
   "name": "@aparte/bonaparte-plugin-sdk",
   "version": "0.1.0",
   "description": "bonaparte — authoring surface for plugins (contexts, view props, helpers)",
+  "license": "MIT",
+  "author": "Paul Richez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apartejs/bonapartejs.git",
+    "directory": "packages/plugin-sdk"
+  },
+  "homepage": "https://github.com/apartejs/bonapartejs#readme",
+  "bugs": {
+    "url": "https://github.com/apartejs/bonapartejs/issues"
+  },
+  "keywords": [
+    "llama.cpp",
+    "local-llm",
+    "coding-agent",
+    "kv-cache",
+    "electron",
+    "aparte"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -12,6 +31,10 @@
   "files": [
     "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
@@ -28,12 +51,12 @@
     "@types/react": "^19.2.0",
     "react": "^19.2.8"
   },
+  "peerDependencies": {
+    "react": "^18 || ^19"
+  },
   "nx": {
     "tags": [
       "scope:plugin-sdk"
     ]
-  },
-  "peerDependencies": {
-    "react": "^18 || ^19"
   }
 }

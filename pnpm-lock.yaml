@@ -56,9 +56,6 @@ importers:
       '@aparte/core':
         specifier: 0.13.0
         version: 0.13.0
-      '@aparte/engine':
-        specifier: 0.13.0
-        version: 0.13.0(@aparte/core@0.13.0)
       '@aparte/locale-fr':
         specifier: 0.13.0
         version: 0.13.0(@aparte/core@0.13.0)
@@ -156,9 +153,6 @@ importers:
       '@aparte/core':
         specifier: 0.13.0
         version: 0.13.0
-      zod:
-        specifier: 'catalog:'
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -310,15 +304,6 @@ packages:
   '@aparte/core@0.13.0':
     resolution: {integrity: sha512-xialZwyzmepbwXMW792rWsSmEU+XeDZ/R7sgWHN+n/lcs7ROOM/PV0KZdZnPJUDf8CiceG6InOsMu4lCAwLZCw==}
     engines: {node: '>=18'}
-
-  '@aparte/engine@0.13.0':
-    resolution: {integrity: sha512-p/m4Ts2a6Ohwf5zwqBwKP0ga08n5ZwVzQL426FR/hauXZVIx7U475POXqi3tHMsofUKfCZ6LuEjES/YHL8AXhw==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      '@aparte/core': '>=0.13.0 <1.0.0'
-    peerDependenciesMeta:
-      '@aparte/core':
-        optional: true
 
   '@aparte/locale-fr@0.13.0':
     resolution: {integrity: sha512-hRszgR6OE7mM0yiaCyiUtwryaVee1E6/z4EI+W7iclxfRE2LvpDSKLK9M+SbIFTf/nL+UWKwDKvrdjVwK5eoPQ==}
@@ -3430,10 +3415,6 @@ packages:
 snapshots:
 
   '@aparte/core@0.13.0': {}
-
-  '@aparte/engine@0.13.0(@aparte/core@0.13.0)':
-    optionalDependencies:
-      '@aparte/core': 0.13.0
 
   '@aparte/locale-fr@0.13.0(@aparte/core@0.13.0)':
     dependencies:

@@ -2,6 +2,7 @@
   "name": "@aparte/bonaparte-plugin-project-launcher",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "tsup",
@@ -18,5 +19,9 @@
     "tsup": "catalog:",
     "typescript": "catalog:"
   },
-  "nx": { "tags": ["scope:plugin"] }
+  "nx": {
+    "tags": [
+      "scope:plugin"
+    ]
+  }
 }
