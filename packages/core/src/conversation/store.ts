@@ -97,7 +97,9 @@ export class ConversationStore {
     const now = new Date().toISOString();
     const meta: ConversationMeta = {
       id,
-      title: options.title ?? 'Nouvelle conversation',
+      // Empty = not named yet: the interface shows a localised placeholder,
+      // the first message (or the user) gives the real title.
+      title: options.title ?? '',
       createdAt: now,
       updatedAt: now,
       ...(options.modelPath ? { modelPath: options.modelPath } : {}),

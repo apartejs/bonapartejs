@@ -115,6 +115,7 @@ export const FR: AppTranslations = {
     expand: 'Déplier le panneau',
     loadFailed: 'Cette vue n’a pas pu être chargée.',
   },
+  units: { gib: 'Gio', mib: 'Mio' },
   conversations: {
     heading: 'Conversations',
     create: 'Nouvelle conversation',

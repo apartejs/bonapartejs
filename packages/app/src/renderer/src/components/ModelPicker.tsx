@@ -8,10 +8,10 @@ interface ModelPickerProps {
   onPick: (modelPath: string, nCtx: number) => void;
 }
 
-function formatSize(bytes: number): string {
+function formatSize(bytes: number, units: { gib: string; mib: string }): string {
   const gib = bytes / 1024 ** 3;
-  if (gib >= 1) return `${gib.toFixed(1)} Gio`;
-  return `${Math.max(1, Math.round(bytes / 1024 ** 2))} Mio`;
+  if (gib >= 1) return `${gib.toFixed(1)} ${units.gib}`;
+  return `${Math.max(1, Math.round(bytes / 1024 ** 2))} ${units.mib}`;
 }
 
 export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
@@ -98,7 +98,7 @@ export function ModelPicker({ busy, error, onPick }: ModelPickerProps) {
                   />
                   <span className="model-name">{model.name}</span>
                   <span className="model-meta">
-                    {formatSize(model.sizeBytes)}
+                    {formatSize(model.sizeBytes, t.units)}
                     <span className={`model-source source-${model.source}`}>
                       {model.source}
                     </span>

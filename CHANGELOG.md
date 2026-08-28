@@ -81,6 +81,11 @@ published.
 
 ### Fixed
 
+- The last user-visible strings that bypassed the translations follow the
+  locale now: the settings catalog, the doctor's details, the native file
+  pickers' filter names, the model pickers' size units, the CLI's help. A
+  new conversation is stored untitled and named by the interface in its own
+  language, until its first message names it.
 - The context gauge reported zero cached prompt tokens on every real turn:
   llama-server puts `prompt_progress` in intermediate stream events and the
   authoritative count in the final event's `timings.cache_n`, while the

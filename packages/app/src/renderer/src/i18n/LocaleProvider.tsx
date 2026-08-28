@@ -3,6 +3,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -45,6 +46,19 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     void window.bonaparte?.getConfig().then((config) =>
       window.bonaparte.setConfig({ ...config, locale: next }),
     );
+  }, []);
+
+  // The main process must know the language from the start — it names the
+  // native dialogs' filters and picks the model's reply language — not only
+  // after the user switches. The stored config catches up with the locale
+  // the renderer detected, once, on mount.
+  useEffect(() => {
+    void window.bonaparte?.getConfig().then((config) => {
+      if (config.locale !== locale) {
+        void window.bonaparte.setConfig({ ...config, locale });
+      }
+    });
+    // Mount only: switches go through setLocale, which writes the config itself.
   }, []);
 
   const value = useMemo(

@@ -50,6 +50,20 @@ describe('runDoctor', () => {
     expect(check(report, 'node').detail).toContain('v18.19.0');
   });
 
+  it('says the required Node version in the requested locale', async () => {
+    // The detail is shown to the user: it follows the locale like the labels.
+    const en = await runDoctor(fakeEnv({ nodeVersion: 'v18.19.0' }), 'en');
+    expect(check(en, 'node').detail).toMatch(/Node ≥ 20 required/);
+    const fr = await runDoctor(fakeEnv({ nodeVersion: 'v18.19.0' }), 'fr');
+    expect(check(fr, 'node').detail).toMatch(/Node ≥ 20 requis/);
+  });
+
+  it('writes the free space unit in the requested locale', async () => {
+    const lowDisk = fakeEnv({ freeDiskBytes: async () => 1.5 * 1024 ** 3 });
+    expect(check(await runDoctor(lowDisk, 'en'), 'slot-save-path').detail).toContain('1.5 GiB');
+    expect(check(await runDoctor(lowDisk, 'fr'), 'slot-save-path').detail).toContain('1.5 Gio');
+  });
+
   it("fails if llama-server is neither configured nor on the PATH", async () => {
     const report = await runDoctor(
       fakeEnv({ lookupOnPath: async () => null }),

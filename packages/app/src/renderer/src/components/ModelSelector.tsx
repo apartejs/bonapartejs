@@ -9,8 +9,8 @@ interface ModelSelectorProps {
   onPick: (modelPath: string) => void;
 }
 
-function sizeLabel(bytes: number): string {
-  return `${(bytes / 1024 ** 3).toFixed(1)} Go`;
+function sizeLabel(bytes: number, unit: string): string {
+  return `${(bytes / 1024 ** 3).toFixed(1)} ${unit}`;
 }
 
 /**
@@ -95,7 +95,9 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
                     title={model.path}
                   >
                     <span className="model-item-name">{model.name}</span>
-                    <span className="model-item-size">{sizeLabel(model.sizeBytes)}</span>
+                    <span className="model-item-size">
+                      {sizeLabel(model.sizeBytes, t.units.gib)}
+                    </span>
                   </button>
                 );
               })}

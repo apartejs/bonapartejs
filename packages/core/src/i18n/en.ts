@@ -15,6 +15,8 @@ export const EN: HarnessTranslations = {
     lowDisk: 'Low disk space',
     cpuOnly: 'No GPU detected — running CPU-only',
     versionUnknown: 'version undetectable, slots compatibility not guaranteed',
+    nodeRequired: 'Node ≥ {min} required',
+    gib: 'GiB',
   },
   backend: {
     starting: 'Starting the model server…',
@@ -30,6 +32,11 @@ export const EN: HarnessTranslations = {
     restoreRefusedMismatch:
       'Restore refused: the model configuration changed since this state was saved.',
     reprefillNeeded: 'The context must be fully recomputed (re-prefill).',
+  },
+  dialogs: {
+    ggufModel: 'GGUF model',
+    executable: 'Executable',
+    allFiles: 'All files',
   },
   errors: {
     llamaServerNotFound:

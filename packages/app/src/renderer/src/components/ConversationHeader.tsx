@@ -134,7 +134,7 @@ export function ConversationHeader({
           onClick={() => setEditing(true)}
           title={t.header.rename}
         >
-          {title}
+          {title || t.conversations.untitled}
         </button>
       )}
 

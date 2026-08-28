@@ -62,7 +62,11 @@ function nodeMajor(version: string): number {
   return Number.isNaN(major) ? 0 : major;
 }
 
-async function checkNode(env: DoctorEnv, label: string): Promise<DoctorCheck> {
+async function checkNode(
+  env: DoctorEnv,
+  label: string,
+  requiredMessage: string,
+): Promise<DoctorCheck> {
   const ok = nodeMajor(env.nodeVersion) >= MIN_NODE_MAJOR;
   return {
     id: 'node',
@@ -71,7 +75,7 @@ async function checkNode(env: DoctorEnv, label: string): Promise<DoctorCheck> {
     blocking: !ok,
     detail: ok
       ? env.nodeVersion
-      : `${env.nodeVersion} (Node ≥ ${MIN_NODE_MAJOR} requis)`,
+      : `${env.nodeVersion} (${requiredMessage.replace('{min}', String(MIN_NODE_MAJOR))})`,
   };
 }
 
@@ -138,6 +142,7 @@ async function checkSlotSavePath(
   label: string,
   notWritableMessage: string,
   lowDiskMessage: string,
+  gibUnit: string,
 ): Promise<DoctorCheck> {
   const base = { id: 'slot-save-path' as const, label };
 
@@ -158,7 +163,7 @@ async function checkSlotSavePath(
       ...base,
       status: 'warn',
       blocking: false,
-      detail: `${lowDiskMessage} (${gib} Gio)`,
+      detail: `${lowDiskMessage} (${gib} ${gibUnit})`,
     };
   }
 
@@ -190,7 +195,7 @@ export async function runDoctor(
   const t = harnessT(locale);
 
   const checks = [
-    await checkNode(env, t.doctor.checkNode),
+    await checkNode(env, t.doctor.checkNode, t.doctor.nodeRequired),
     await checkLlamaServer(env, t.doctor.checkLlamaServer, {
       notFound: t.errors.llamaServerNotFound,
       tooOld: t.errors.llamaTooOld,
@@ -201,6 +206,7 @@ export async function runDoctor(
       t.doctor.checkSlotSavePath,
       t.errors.slotSavePathNotWritable,
       t.doctor.lowDisk,
+      t.doctor.gib,
     ),
     await checkGpu(env, t.doctor.checkGpu, t.doctor.cpuOnly),
   ];

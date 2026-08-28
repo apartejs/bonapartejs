@@ -21,6 +21,16 @@ afterEach(async () => {
 });
 
 describe('ConversationStore', () => {
+  it('creates a conversation untitled — the interface names it in its own language', async () => {
+    // A default title stored in one language would show up wrong in the
+    // other. An empty title means "not named yet"; the first message or the
+    // user gives the real one, and the UI shows a localised placeholder
+    // until then.
+    const store = await makeStore();
+    await store.create('fresh');
+    expect((await store.meta('fresh')).title).toBe('');
+  });
+
   it('attaches the conversation to a project, not to the application', async () => {
     // The conversation references a PROJECT; it's the project that carries
     // the roots. Two conversations on two different projects must

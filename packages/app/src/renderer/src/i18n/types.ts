@@ -120,6 +120,11 @@ export interface AppTranslations {
     /** Prompt shown when the panel is open but empty. */
     emptyHint: string;
   };
+  /** Binary size units shown next to model files. */
+  units: {
+    gib: string;
+    mib: string;
+  };
   conversations: {
     heading: string;
     create: string;

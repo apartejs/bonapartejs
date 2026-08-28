@@ -42,6 +42,7 @@ import {
   type SamplingParams,
   type SettingField,
   type SettingLayers,
+  harnessT,
 } from '@aparte/bonaparte-core';
 import {
   IPC,
@@ -63,6 +64,7 @@ import {
   type ResolvedSettingDto,
   type SettingScopeDto,
   type SetupSuggestionDto,
+  type BonaparteLocale,
 } from '@aparte/bonaparte-shared';
 import { app, dialog, shell } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
@@ -1210,20 +1212,31 @@ export class Harness {
     return probeEndpoint(url);
   }
 
+  /**
+   * The user's language, as the renderer detected or chose it. French is
+   * the fallback the reply language already assumed before the renderer
+   * started pushing its locale at startup.
+   */
+  private async locale(): Promise<BonaparteLocale> {
+    return (await this.loadConfig()).locale ?? 'fr';
+  }
+
   async pickFile(kind: PickFileKind): Promise<string | null> {
     if (!this.window) return null;
+    // The OS dialog shows these names: localised like the rest of the UI.
+    const t = harnessT(await this.locale()).dialogs;
     const filters =
       kind === 'gguf'
         ? [
-            { name: 'Modèle GGUF', extensions: ['gguf'] },
-            { name: 'Tous les fichiers', extensions: ['*'] },
+            { name: t.ggufModel, extensions: ['gguf'] },
+            { name: t.allFiles, extensions: ['*'] },
           ]
         : process.platform === 'win32'
           ? [
-              { name: 'Exécutable', extensions: ['exe'] },
-              { name: 'Tous les fichiers', extensions: ['*'] },
+              { name: t.executable, extensions: ['exe'] },
+              { name: t.allFiles, extensions: ['*'] },
             ]
-          : [{ name: 'Tous les fichiers', extensions: ['*'] }];
+          : [{ name: t.allFiles, extensions: ['*'] }];
     const result = await dialog.showOpenDialog(this.window, {
       properties: ['openFile'],
       filters,

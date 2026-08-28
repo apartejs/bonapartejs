@@ -114,6 +114,7 @@ export const EN: AppTranslations = {
     expand: 'Expand the panel',
     loadFailed: 'This view could not be loaded.',
   },
+  units: { gib: 'GiB', mib: 'MiB' },
   conversations: {
     heading: 'Conversations',
     create: 'New conversation',

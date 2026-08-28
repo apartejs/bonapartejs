@@ -216,7 +216,7 @@ export class PluginHost {
         found.push({
           id: manifest.id,
           dir,
-          error: `identifiant déjà pris par ${claimed.dir}`,
+          error: `identifier already taken by ${claimed.dir}`,
           active: false,
         });
         continue;
@@ -234,13 +234,13 @@ export class PluginHost {
     try {
       json = JSON.parse(raw);
     } catch {
-      return { error: 'manifeste illisible (JSON invalide)' };
+      return { error: 'unreadable manifest (invalid JSON)' };
     }
     const result = pluginManifestSchema.safeParse(json);
     if (!result.success) {
       const first = result.error.issues[0];
       return {
-        error: first ? `${first.path.join('.') || 'manifeste'} : ${first.message}` : 'manifeste invalide',
+        error: first ? `${first.path.join('.') || 'manifest'}: ${first.message}` : 'invalid manifest',
       };
     }
     return { manifest: result.data };

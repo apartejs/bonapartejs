@@ -15,6 +15,8 @@ export const FR: HarnessTranslations = {
     lowDisk: 'Espace disque faible',
     cpuOnly: 'Aucun GPU détecté — exécution CPU uniquement',
     versionUnknown: 'version indéterminable, compatibilité slots non garantie',
+    nodeRequired: 'Node ≥ {min} requis',
+    gib: 'Gio',
   },
   backend: {
     starting: 'Démarrage du serveur de modèle…',
@@ -31,6 +33,11 @@ export const FR: HarnessTranslations = {
       'Restauration refusée : la configuration du modèle a changé depuis la sauvegarde.',
     reprefillNeeded:
       'Le contexte doit être recalculé entièrement (re-prefill).',
+  },
+  dialogs: {
+    ggufModel: 'Modèle GGUF',
+    executable: 'Exécutable',
+    allFiles: 'Tous les fichiers',
   },
   errors: {
     llamaServerNotFound:

@@ -19,6 +19,10 @@ export interface HarnessTranslations {
     lowDisk: string;
     cpuOnly: string;
     versionUnknown: string;
+    /** `{min}` is replaced by the minimum major version. */
+    nodeRequired: string;
+    /** Unit of the free space figure (gibibytes). */
+    gib: string;
   };
   backend: {
     starting: string;
@@ -33,6 +37,12 @@ export interface HarnessTranslations {
     restored: string;
     restoreRefusedMismatch: string;
     reprefillNeeded: string;
+  };
+  /** Native file-picker filter names (shown by the OS dialog). */
+  dialogs: {
+    ggufModel: string;
+    executable: string;
+    allFiles: string;
   };
   errors: {
     llamaServerNotFound: string;

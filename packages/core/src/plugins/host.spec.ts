@@ -77,7 +77,7 @@ describe('PluginHost — discovery', () => {
     const found = await host.discover(root);
     const rejected = found.filter((p) => p.error);
     expect(rejected).toHaveLength(1);
-    expect(rejected[0]?.error).toMatch(/identifiant/i);
+    expect(rejected[0]?.error).toMatch(/identifier/i);
   });
 });
 
