@@ -178,6 +178,28 @@ export function ConversationHeader({
           ) : (
             <>
               <p className="conv-popover-empty">{t.header.noProjectExplain}</p>
+              {/* An existing project is offered before creating one: a
+                  conversation started without a project usually belongs to
+                  one that already exists. */}
+              {projects.length > 0 && (
+                <>
+                  <p className="conv-popover-label">{t.header.moveTo}</p>
+                  {projects.map((candidate) => (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      className="conv-popover-item"
+                      disabled={busy}
+                      onClick={() => {
+                        onMoveToProject(candidate.id);
+                        setPanel('none');
+                      }}
+                    >
+                      {candidate.name}
+                    </button>
+                  ))}
+                </>
+              )}
               <button
                 type="button"
                 className="conv-popover-action"

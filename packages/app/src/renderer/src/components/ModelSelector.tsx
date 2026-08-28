@@ -1,6 +1,7 @@
 import type { ModelInfoDto } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { filterModels } from '../models/filter.js';
 
 interface ModelSelectorProps {
   /** Model pinned by the open conversation. */
@@ -30,6 +31,7 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
   const { t } = useTranslate();
   const [open, setOpen] = useState(false);
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
+  const [query, setQuery] = useState('');
   const wrapRef = useRef<HTMLSpanElement>(null);
 
   const load = useCallback(async () => {
@@ -38,6 +40,9 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
 
   useEffect(() => {
     if (!open) return;
+    // A fresh search every time the menu opens: a leftover filter would
+    // hide models without saying why.
+    setQuery('');
     if (models === null) void load();
     const close = (event: MouseEvent): void => {
       if (!wrapRef.current?.contains(event.target as Node)) setOpen(false);
@@ -71,14 +76,38 @@ export function ModelSelector({ modelName, busy, onPick }: ModelSelectorProps) {
 
       {open && (
         <div className="model-menu popover" role="menu" aria-label={t.models.pick}>
-          <p className="conv-menu-label">{t.models.pick}</p>
+          {/* The head stays put while the list scrolls: with dozens of GGUF
+              files on a machine, the search is the way in, and the label
+              says what this menu is even halfway down the list. */}
+          <div className="model-menu-head">
+            <p className="conv-menu-label">{t.models.pick}</p>
+            {models !== null && models.length > 0 && (
+              <span className="model-search">
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t.picker.searchPlaceholder}
+                  spellCheck={false}
+                  autoFocus
+                  aria-label={t.picker.searchPlaceholder}
+                />
+                {query && (
+                  <button type="button" onClick={() => setQuery('')} aria-label="✕">
+                    ✕
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
           {models === null ? (
             <p className="model-hint">{t.models.scanning}</p>
           ) : models.length === 0 ? (
             <p className="model-hint">{t.models.none}</p>
+          ) : filterModels(models, query).length === 0 ? (
+            <p className="model-hint">{t.picker.noMatch}</p>
           ) : (
             <>
-              {models.map((model) => {
+              {filterModels(models, query).map((model) => {
                 const current = modelName !== null && model.name === modelName;
                 return (
                   <button
