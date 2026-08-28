@@ -110,6 +110,33 @@ async function drain(events: AsyncIterable<AgentEvent>): Promise<AgentEvent[]> {
   return all;
 }
 
+describe('ChatSession — one turn at a time', () => {
+  it('runs overlapping sends one after the other, in order', async () => {
+    // Since aparté 0.14.0 the composer stays editable while a reply streams:
+    // a second message can arrive before the first turn ends. Two turns on
+    // one slot at once would interleave prompts, events and the log; the
+    // session queues the second behind the first.
+    const rig = await makeRig({ replies: ['first reply', 'second reply'], msPerToken: 20 });
+    const { session } = await ChatSession.open(rig.options, 'conv-queue');
+
+    const [first, second] = await Promise.all([
+      drain(session.send('one')),
+      drain(session.send('two')),
+    ]);
+
+    const text = (events: AgentEvent[]): string =>
+      events
+        .filter((e): e is Extract<AgentEvent, { type: 'token' }> => e.type === 'token')
+        .map((e) => e.text)
+        .join('');
+    expect(text(first)).toBe('first reply');
+    expect(text(second)).toBe('second reply');
+
+    const log = await rig.options.store.loadEvents('conv-queue');
+    expect(log.map((event) => event.type)).toEqual(['user', 'assistant', 'user', 'assistant']);
+  });
+});
+
 describe('ChatSession — opening', () => {
   it('creates the conversation and freezes the system prompt with the inventory', async () => {
     const rig = await makeRig({ tools: [def('read_file')] });

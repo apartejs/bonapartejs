@@ -194,12 +194,34 @@ export class ChatSession {
     });
   }
 
+  /** Turns run one at a time: a send waits for the one in flight to finish. */
+  private queue: Promise<void> = Promise.resolve();
+
   /**
    * Sends a message and runs the agentic loop. Every transcript mutation
    * announced by the loop is persisted in the same order: replaying
    * reconstructs an identical transcript.
+   *
+   * Sends are serialised. The composer lets the next message be typed and
+   * sent while a reply streams (aparté 0.14.0); two turns at once on one
+   * slot would interleave the prompts, the events and the log — the second
+   * simply queues behind the first.
    */
   async *send(text: string, signal?: AbortSignal): AsyncIterable<AgentEvent> {
+    const previous = this.queue;
+    let release: () => void = () => undefined;
+    this.queue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      await previous;
+      yield* this.runTurn(text, signal);
+    } finally {
+      release();
+    }
+  }
+
+  private async *runTurn(text: string, signal?: AbortSignal): AsyncIterable<AgentEvent> {
     const { store, backend } = this.options;
     const now = (): string => new Date().toISOString();
 
