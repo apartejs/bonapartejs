@@ -75,6 +75,10 @@ export const EN: AppTranslations = {
     },
   },
   chat: {
+    contextOverflow:
+      'The context is full ({used} tokens of {nCtx}): this message, with room for a reply, does not fit. Nothing was sent. Start a new conversation — compaction comes later.',
+    contextOverflowUnknown:
+      'The server refuses this message: its context is full, the message does not fit. Nothing was sent. Start a new conversation — compaction comes later.',
     missingModel: 'The model “{name}” is no longer on this machine.',
     chooseModel: 'Choose a model',
     placeholder: 'Write to bonaparte…',

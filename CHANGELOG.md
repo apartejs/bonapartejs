@@ -110,6 +110,15 @@ published.
   The order is baked into every saved KV state; the previous one put the
   per-conversation perimeter before the shared inventory. Conversations
   created before keep their frozen prompt and their saved state.
+- **The context is finite, and said so.** A message that cannot fit in the
+  server's context — with room for a reply — is refused before anything is
+  persisted or sent, and announced in the thread with the numbers; a prompt
+  the server itself refuses as too long is announced the same way, never as
+  a raw HTTP error. The managed server is launched with context shift OFF
+  (a test guards it): the head of the prompt is never dropped behind our
+  back, because every saved KV state depends on it. The context gauge now
+  reads what the slot really holds after a turn — prompt and reply — and,
+  at open, what a restored state brought back.
 - **A tool call asks for consent on apartéJS's approval panel**, inline in
   the composer where the answer is typed — the same panel the library uses
   for its own approvals — instead of a modal of bonaparte's own. The three
@@ -176,6 +185,9 @@ published.
   consent nobody would give — hung the shutdown on the turn: the turn is
   cut, what arrived is committed, the state is saved, pending approvals are
   answered with a refusal.
+- The context gauge was blind since the loop refactor: the harness
+  forwarded a turn's end without its counts. It carries the prompt size, the
+  cached part, the reply size and the slot's total again.
 - The context gauge reported zero cached prompt tokens on every real turn:
   llama-server puts `prompt_progress` in intermediate stream events and the
   authoritative count in the final event's `timings.cache_n`, while the

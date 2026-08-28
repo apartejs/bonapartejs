@@ -529,6 +529,7 @@ export function App() {
         streaming={streaming}
         modelName={view === 'chat' ? (opened?.modelName ?? null) : null}
         nCtx={view === 'chat' ? (opened?.nCtx ?? null) : null}
+        contextAtOpen={view === 'chat' ? (opened?.contextTokens ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
         lastStats={lastStats}
         saveState={saveState}

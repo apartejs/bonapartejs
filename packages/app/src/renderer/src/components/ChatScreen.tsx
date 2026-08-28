@@ -232,6 +232,24 @@ export function ChatScreen({
           finish(state, 'error');
           break;
 
+        case 'context_overflow':
+          // Nothing was sent: the message, with room for a reply, does not
+          // fit in what the server holds. Said in the thread, where the
+          // user reads; compaction (P2.5) will offer a way out.
+          chatRef.current.addSegment({
+            id: `seg-error-${state.seq++}`,
+            type: 'error',
+            // A remote engine declares no context size: no numbers to cite.
+            content:
+              event.nCtx > 0
+                ? t.chat.contextOverflow
+                    .replace('{used}', String(event.used))
+                    .replace('{nCtx}', String(event.nCtx))
+                : t.chat.contextOverflowUnknown,
+          });
+          finish(state, 'error');
+          break;
+
         case 'needs_model':
           // Nothing to close: the turn never started. The empty bubble goes
           // with the screen, and the message comes back with the pick.
@@ -247,7 +265,16 @@ export function ChatScreen({
     });
 
     return unsubscribe;
-  }, [conversationId, onNeedsModel, onStats, onStreamingChange, t.chat.errorPrefix, t.chat.thinking]);
+  }, [
+    conversationId,
+    onNeedsModel,
+    onStats,
+    onStreamingChange,
+    t.chat.contextOverflow,
+    t.chat.contextOverflowUnknown,
+    t.chat.errorPrefix,
+    t.chat.thinking,
+  ]);
 
   // Coming back to a conversation whose reply is still streaming: the
   // history on disk stops at the user's message, and the turn in flight is

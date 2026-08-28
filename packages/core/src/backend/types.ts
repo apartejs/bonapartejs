@@ -62,6 +62,12 @@ export interface CompletionStats {
   predictedTokens: number;
   predictedMs: number;
   progress?: PromptProgress;
+  /**
+   * Tokens the slot holds after the turn — prompt AND reply
+   * (llama-server's `tokens_cached`). What the context gauge should show,
+   * and what the next message adds to.
+   */
+  contextTokens?: number;
 }
 
 export type CompletionEvent =

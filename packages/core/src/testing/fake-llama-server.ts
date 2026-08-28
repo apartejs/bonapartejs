@@ -25,6 +25,11 @@ export interface FakeLlamaServerOptions {
    * navigate, cancel — and see what a client saw so far.
    */
   paceMs?: number;
+  /**
+   * Context size the server enforces: a prompt longer than this is refused
+   * with the 400 the real server sends when context shift is off.
+   */
+  nCtx?: number;
   /** Text generated for a given prompt (default: 'ok'). */
   responder?: (prompt: string) => string;
   /** Number of slots (default 1). */
@@ -76,6 +81,7 @@ export async function startFakeLlamaServer(
 ): Promise<FakeLlamaServer> {
   const msPerToken = options.msPerToken ?? 1;
   const paceMs = options.paceMs ?? 0;
+  const nCtx = options.nCtx;
   const responder = options.responder ?? (() => 'ok');
   const totalSlots = options.totalSlots ?? 1;
   const modelPath = options.modelPath ?? 'C:\\fake\\model.gguf';
@@ -103,6 +109,18 @@ export async function startFakeLlamaServer(
     const returnProgress = body['return_progress'] === true;
 
     const tokens = fakeTokenize(prompt);
+    if (nCtx !== undefined && tokens.length > nCtx) {
+      // Wording and shape of llama-server's refusal (tools/server).
+      json(res, 400, {
+        error: {
+          code: 400,
+          message:
+            'the request exceeds the available context size. try increasing the context size or enable context shift',
+          type: 'invalid_request_error',
+        },
+      });
+      return;
+    }
     const cached = cachePrompt
       ? commonPrefixLength(slotTokens(idSlot), tokens)
       : 0;

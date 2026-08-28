@@ -37,6 +37,9 @@ export function buildLlamaServerArgs(config: LlamaCppLaunchConfig): string[] {
     '-fa', 'on',
     '--cache-type-k', cacheType,
     '--cache-type-v', cacheType,
+    // Overflow is OUR event (D-22): a silent shift would drop the head of
+    // the prompt — and with it the prefix every saved KV state depends on.
+    '--no-context-shift',
   ];
 
   if (config.nCtx !== undefined) args.push('-c', String(config.nCtx));

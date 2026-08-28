@@ -15,6 +15,8 @@ interface StatusStripProps {
   modelName: string | null;
   /** Conversation's context size — the gauge's denominator. */
   nCtx: number | null;
+  /** Tokens in the slot when the conversation opened (a restored state), until the first turn. */
+  contextAtOpen: number | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
   saveState: 'idle' | 'saved' | 'failed';
@@ -74,6 +76,7 @@ export function StatusStrip({
   streaming,
   modelName,
   nCtx,
+  contextAtOpen,
   restore,
   lastStats,
   saveState,
@@ -89,7 +92,9 @@ export function StatusStrip({
 
   // Context gauge: what the last prompt occupied out of what we can hold.
   // Without both numbers, we display nothing rather than an estimate.
-  const usedTokens = lastStats?.progress?.total ?? null;
+  // What the slot holds — prompt and replies — after the last turn; before
+  // any turn, what the restored state brought in.
+  const usedTokens = lastStats?.contextTokens ?? lastStats?.progress?.total ?? contextAtOpen;
   const contextPct =
     usedTokens !== null && nCtx ? Math.min(100, Math.round((usedTokens / nCtx) * 100)) : null;
 

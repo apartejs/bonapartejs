@@ -58,6 +58,8 @@ interface Rig {
   server: FakeLlamaServer;
   events: TaggedEvent[];
   disk: Map<string, FakeSlotSnapshot>;
+  /** How many completions the server has served. */
+  turns: () => number;
 }
 
 async function makeRig(
@@ -66,6 +68,10 @@ async function makeRig(
     msPerToken?: number;
     /** Real delay between streamed chunks — for acting mid-stream. */
     paceMs?: number;
+    /** Context size the engine is configured with (default 4096). */
+    nCtx?: number;
+    /** Context size the FAKE SERVER enforces: a longer prompt is refused with a 400. */
+    serverNCtx?: number;
     modelExists?: boolean;
     engine?: Partial<ConversationEngineOptions>;
   } = {},
@@ -76,6 +82,7 @@ async function makeRig(
   const server = await startFakeLlamaServer({
     msPerToken: options.msPerToken ?? 2,
     ...(options.paceMs !== undefined ? { paceMs: options.paceMs } : {}),
+    ...(options.serverNCtx !== undefined ? { nCtx: options.serverNCtx } : {}),
     responder: () => replies[Math.min(turn++, replies.length - 1)] ?? '',
     files: disk,
   });
@@ -97,7 +104,7 @@ async function makeRig(
     healthTimeoutMs: 300,
     logger: () => undefined,
   });
-  await supervisor.configure({ mode: 'managed', binPath: 'llama', nCtx: 4096 });
+  await supervisor.configure({ mode: 'managed', binPath: 'llama', nCtx: options.nCtx ?? 4096 });
 
   const store = new ConversationStore(join(dir, 'conversations'));
   const kv = new KvStore(join(dir, 'kv-slots'));
@@ -114,7 +121,7 @@ async function makeRig(
   engines.push(engine);
   const events: TaggedEvent[] = [];
   engine.onEvent((event) => events.push(event));
-  return { engine, store, kv, server, events, disk };
+  return { engine, store, kv, server, events, disk, turns: () => turn };
 }
 
 const assistantText = (events: TaggedEvent[], id: string): string =>
@@ -345,5 +352,53 @@ describe('ConversationEngine — closing during a turn', () => {
     expect(engine.inFlight()).toBeNull();
     expect(engine.active).toBeNull();
     await turn;
+  });
+});
+
+describe('ConversationEngine — the context is finite (D-22)', () => {
+  const overflow = (events: TaggedEvent[]) =>
+    events.find((e) => e.event.type === 'context_overflow')?.event;
+
+  it('turn_end reports the context in use after the turn — prompt and reply together', async () => {
+    const { engine, events } = await makeRig({ replies: ['a reply of several words here'] });
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'hello');
+
+    const end = events.find((e) => e.event.type === 'turn_end')?.event;
+    expect(end?.type).toBe('turn_end');
+    if (end?.type !== 'turn_end') return;
+    expect(end.promptTokens).toBeGreaterThan(0);
+    expect(end.contextTokens).toBeGreaterThan(end.promptTokens);
+  });
+
+  it('refuses a message that cannot fit, before sending anything to the server', async () => {
+    // Proactive guard: what the slot holds + the message + room for a reply
+    // must fit in the server's context. Nothing is persisted, nothing sent.
+    const { engine, store, events, turns } = await makeRig({ nCtx: 64 });
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'word '.repeat(400));
+
+    const event = overflow(events);
+    expect(event?.type).toBe('context_overflow');
+    if (event?.type !== 'context_overflow') return;
+    expect(event.nCtx).toBe(64);
+    expect(event.needed).toBeGreaterThan(64);
+    expect(turns()).toBe(0);
+    expect((await store.loadEvents('conv-a')).filter((e) => e.type === 'user')).toHaveLength(0);
+    expect(events.some((e) => e.event.type === 'error')).toBe(false);
+  });
+
+  it('a server that refuses the prompt as too long is reported as an overflow, not as an error', async () => {
+    // Reactive guard: the estimate was optimistic, the server says no
+    // (context shift is never left to it). Same event, same meaning.
+    const { engine, events } = await makeRig({ serverNCtx: 30 });
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'hello');
+
+    expect(overflow(events)?.type).toBe('context_overflow');
+    expect(events.some((e) => e.event.type === 'error')).toBe(false);
   });
 });

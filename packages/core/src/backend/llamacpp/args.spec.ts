@@ -73,4 +73,13 @@ describe('buildLlamaServerArgs', () => {
     expect(args).not.toContain('-ngl');
     expect(args).not.toContain('--load-mode');
   });
+
+  it('never leaves context shift to the server (D-22)', () => {
+    // A silent shift would drop the head of the prompt behind our back —
+    // and with it the prefix every saved KV state depends on. Overflow is
+    // an explicit event on our side, never a truncation on the server's.
+    const args = buildLlamaServerArgs({ modelPath: 'm.gguf', port: 1 });
+    expect(args).toContain('--no-context-shift');
+    expect(args).not.toContain('--context-shift');
+  });
 });

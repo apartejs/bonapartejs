@@ -777,6 +777,7 @@ export class Harness {
       modelName: modelDisplayName(opened.modelPath),
       // Denominator of the context gauge: what the server holds.
       ...(opened.nCtx !== undefined ? { nCtx: opened.nCtx } : {}),
+      contextTokens: opened.contextTokens,
       events: opened.events,
       restore: opened.restore.restored
         ? { restored: true, nRestored: opened.restore.nRestored }
@@ -855,11 +856,21 @@ export class Harness {
           type: 'done',
           stats: {
             promptMs: event.promptMs,
-            promptUncachedTokens: 0,
-            predictedTokens: 0,
+            promptUncachedTokens: Math.max(0, event.promptTokens - event.cachedTokens),
+            predictedTokens: event.predictedTokens,
             predictedMs: 0,
+            progress: {
+              total: event.promptTokens,
+              cache: event.cachedTokens,
+              processed: event.promptTokens,
+              timeMs: event.promptMs,
+            },
+            contextTokens: event.contextTokens,
           },
         };
+        break;
+      case 'context_overflow':
+        body = { type: 'context_overflow', used: event.used, nCtx: event.nCtx, needed: event.needed };
         break;
       case 'error':
         body = { type: 'error', message: event.message };

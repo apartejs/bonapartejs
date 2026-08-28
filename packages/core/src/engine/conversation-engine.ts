@@ -17,6 +17,7 @@
 
 import { existsSync } from 'node:fs';
 import type { AgentEvent, ApprovalResolver } from '../agent/loop.js';
+import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
 import type { SamplingParams } from '../backend/types.js';
 import type { ConversationEvent, ConversationStore } from '../conversation/store.js';
 import type { KvStore } from '../kv/kv-store.js';
@@ -69,6 +70,8 @@ export interface Opened {
   modelPath: string;
   /** What the server holds — denominator of the context gauge. Absent when unknown (remote). */
   nCtx?: number;
+  /** Tokens already in the slot after the restore — the gauge's numerator at open. */
+  contextTokens: number;
   restore: OpenResult['restore'];
   events: ReadableEvent[];
 }
@@ -102,6 +105,24 @@ interface Turn extends InFlight {
 
 const MAX_TITLE = 60;
 
+/**
+ * Room kept for the reply when deciding whether a message fits. The loop
+ * does not cap generation yet; when it does, this becomes that cap.
+ */
+const REPLY_ROOM = 1024;
+
+/** Rough token count of a message: the exact one is the server's, after the fact. */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 3) + 8;
+}
+
+/** llama-server's refusal of a prompt longer than its context (context shift off). */
+function refusedAsTooLong(error: unknown): boolean {
+  return (
+    error instanceof LlamaCppHttpError && error.status === 400 && /context size/i.test(error.message)
+  );
+}
+
 export function stripThink(raw: string): string {
   return raw.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
 }
@@ -123,6 +144,8 @@ export class ConversationEngine {
   private session: ChatSession | null = null;
   private activeId: string | null = null;
   private turn: Turn | null = null;
+  /** Tokens the slot holds for the active conversation — prompt and replies so far. */
+  private contextUsed = 0;
   private readonly listeners = new Set<(event: TaggedEvent) => void>();
   private readonly modelExists: (modelPath: string) => boolean;
 
@@ -238,11 +261,15 @@ export class ConversationEngine {
     );
     this.session = session;
     this.activeId = conversationId;
+    // A restored state says how full the slot is; a fresh prefill says
+    // nothing until its first turn ends.
+    this.contextUsed = restore.restored ? restore.nRestored : 0;
 
     return {
       conversationId,
       modelPath: model,
       ...(live.nCtx > 0 ? { nCtx: live.nCtx } : {}),
+      contextTokens: this.contextUsed,
       restore,
       events: readableEvents(await store.loadEvents(conversationId)),
     };
@@ -263,6 +290,21 @@ export class ConversationEngine {
     const session = this.session;
     if (!session) throw new Error('No conversation open.');
 
+    // The context is finite, and the server never shifts it for us (D-22):
+    // a message that cannot fit — with room for a reply — is refused HERE,
+    // before anything is persisted or sent. The estimate is rough (a fresh
+    // prefill's system prompt is not counted until its first turn); the
+    // server's own refusal, below, is the safety net.
+    const nCtx = this.options.supervisor.live?.nCtx ?? 0;
+    const needed = this.contextUsed + estimateTokens(text) + REPLY_ROOM;
+    if (nCtx > 0 && needed > nCtx) {
+      this.emit({
+        conversationId,
+        event: { type: 'context_overflow', used: this.contextUsed, nCtx, needed },
+      });
+      return undefined;
+    }
+
     await this.titleFromFirstMessage(conversationId, text);
 
     const controller = new AbortController();
@@ -276,13 +318,23 @@ export class ConversationEngine {
       for await (const event of session.send(text, controller.signal)) {
         if (event.type === 'token') turn.text += event.text;
         else if (event.type === 'thinking') turn.thinking += event.text;
+        else if (event.type === 'turn_end' && event.contextTokens > 0) {
+          this.contextUsed = event.contextTokens;
+        }
         this.emit({ conversationId, event });
       }
     } catch (error) {
-      this.emit({
-        conversationId,
-        event: { type: 'error', message: error instanceof Error ? error.message : String(error) },
-      });
+      if (refusedAsTooLong(error)) {
+        this.emit({
+          conversationId,
+          event: { type: 'context_overflow', used: this.contextUsed, nCtx, needed },
+        });
+      } else {
+        this.emit({
+          conversationId,
+          event: { type: 'error', message: error instanceof Error ? error.message : String(error) },
+        });
+      }
     } finally {
       if (this.turn === turn) this.turn = null;
       finish();

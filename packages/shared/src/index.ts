@@ -222,6 +222,8 @@ export interface CompletionStatsDto {
   predictedTokens: number;
   predictedMs: number;
   progress?: PromptProgressDto;
+  /** Tokens the slot holds after the turn — prompt and reply — the gauge's numerator. */
+  contextTokens?: number;
 }
 
 /** Agent stream event, serialized over the IPC. */
@@ -238,7 +240,9 @@ export type AgentEventBodyDto =
    * instead of printing an error. `missingModel` names the pinned file when
    * it has vanished from disk.
    */
-  | { type: 'needs_model'; missingModel?: string };
+  | { type: 'needs_model'; missingModel?: string }
+  /** The message cannot fit in the server's context, with room for a reply (D-22). */
+  | { type: 'context_overflow'; used: number; nCtx: number; needed: number };
 
 /**
  * Every event names its conversation: a reply keeps streaming while the
@@ -273,6 +277,8 @@ export interface ConversationOpenResultDto {
   modelName?: string;
   /** Context size of the conversation — denominator of the gauge. */
   nCtx?: number;
+  /** Tokens already in the slot at open (a restored state) — the gauge's numerator until the first turn. */
+  contextTokens?: number;
   /**
    * Pinned model whose file is no longer on disk (managed mode). Announced
    * at open, so the user learns it before typing, not after a failed launch.

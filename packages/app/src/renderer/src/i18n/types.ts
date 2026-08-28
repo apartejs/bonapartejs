@@ -77,6 +77,10 @@ export interface AppTranslations {
     };
   };
   chat: {
+    /** `{used}` tokens in the slot, `{nCtx}` the server's context size. */
+    contextOverflow: string;
+    /** Same, when the engine declares no context size (remote). */
+    contextOverflowUnknown: string;
     /** Banner at open; `{name}` is the file name of the vanished model. */
     missingModel: string;
     chooseModel: string;

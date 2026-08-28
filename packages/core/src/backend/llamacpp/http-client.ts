@@ -165,6 +165,7 @@ export class LlamaCppHttpClient {
             promptUncachedTokens: uncached,
             predictedTokens: Number(timings['predicted_n'] ?? 0),
             predictedMs: Number(timings['predicted_ms'] ?? 0),
+            contextTokens: Number(event['tokens_cached'] ?? 0),
             progress: {
               total,
               cache: cached,

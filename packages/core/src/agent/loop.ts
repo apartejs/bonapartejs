@@ -54,7 +54,22 @@ export type AgentEvent =
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
-  | { type: 'turn_end'; promptMs: number; cachedTokens: number }
+  | {
+      type: 'turn_end';
+      promptMs: number;
+      cachedTokens: number;
+      /** Prompt tokens of the last completion of the turn. */
+      promptTokens: number;
+      predictedTokens: number;
+      /** What the slot holds after the turn — prompt and reply. */
+      contextTokens: number;
+    }
+  /**
+   * The message cannot fit — with room for a reply — in the server's
+   * context (D-22): nothing was sent, or the server refused the prompt.
+   * Emitted by the conversation engine, never by the loop itself.
+   */
+  | { type: 'context_overflow'; used: number; nCtx: number; needed: number }
   | { type: 'error'; message: string }
   // ── transcript mutations: the caller persists them to replay identically.
   //    The UI ignores them.
@@ -86,6 +101,9 @@ export class AgentLoop {
       const calls: ToolCall[] = [];
       let promptMs = 0;
       let cachedTokens = 0;
+      let promptTokens = 0;
+      let predictedTokens = 0;
+      let contextTokens = 0;
       let raw: string | undefined;
 
       try {
@@ -114,6 +132,9 @@ export class AgentLoop {
             case 'done':
               promptMs = event.stats.promptMs;
               cachedTokens = event.stats.progress?.cache ?? 0;
+              promptTokens = event.stats.progress?.total ?? 0;
+              predictedTokens = event.stats.predictedTokens;
+              contextTokens = event.stats.contextTokens ?? 0;
               raw = event.raw;
               break;
           }
@@ -141,7 +162,14 @@ export class AgentLoop {
       // Nothing to dispatch — or a cancelled turn, whose calls (if any were
       // parsed before the cut) must not run.
       if (calls.length === 0 || signal.aborted) {
-        yield { type: 'turn_end', promptMs, cachedTokens };
+        yield {
+          type: 'turn_end',
+          promptMs,
+          cachedTokens,
+          promptTokens,
+          predictedTokens,
+          contextTokens,
+        };
         return;
       }
 
@@ -163,7 +191,14 @@ export class AgentLoop {
       yield { type: 'results_committed', entry: resultsEntry };
 
       if (signal.aborted) {
-        yield { type: 'turn_end', promptMs, cachedTokens };
+        yield {
+          type: 'turn_end',
+          promptMs,
+          cachedTokens,
+          promptTokens,
+          predictedTokens,
+          contextTokens,
+        };
         return;
       }
     }
