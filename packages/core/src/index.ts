@@ -204,6 +204,7 @@ export type {
   Opened,
   OpenOutcome,
   ReadableEvent,
+  ReadableSegment,
   SessionContext,
   TaggedEvent,
 } from './engine/conversation-engine.js';

@@ -213,6 +213,10 @@ published.
   consent nobody would give — hung the shutdown on the turn: the turn is
   cut, what arrived is committed, the state is saved, pending approvals are
   answered with a refusal.
+- A conversation reads back the way it was seen: the tool calls of
+  earlier turns, their outcome and the reasoning were dropped when a
+  conversation reopened — the reader kept the text alone, by design. An
+  assistant turn now comes back with its segments, settled.
 - At startup the tooling did not know the conversation's project until
   the first navigation: the launcher said "open a folder" for a
   conversation that had one.

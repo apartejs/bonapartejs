@@ -51,11 +51,23 @@ export interface ConversationEngineOptions {
   logger?: (line: string) => void;
 }
 
-/** A log event the UI can show: tool calls and results stay in the transcript. */
+/** One piece of an assistant turn, as it was seen live: reasoning, text, a tool call with its outcome. */
+export type ReadableSegment =
+  | { kind: 'thinking'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'tool'; name: string; args: Record<string, unknown>; ok?: boolean; content?: string };
+
+/**
+ * A log event the UI can show. An assistant event is a whole TURN — every
+ * round of the loop until the next user message — with its segments in
+ * order, so that a conversation reads back the way it was seen: reasoning,
+ * tool calls and their outcome, text. `text` is the visible text alone.
+ */
 export interface ReadableEvent {
   type: 'user' | 'assistant';
   text: string;
   at: string;
+  segments?: ReadableSegment[];
 }
 
 export interface NeedsModel {
@@ -128,16 +140,55 @@ export function stripThink(raw: string): string {
 }
 
 export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
-  return events
-    .flatMap((event): ReadableEvent[] => {
-      if (event.type === 'user') return [{ type: 'user', text: event.text, at: event.at }];
-      // A corrupted log line is skipped: it does not take the conversation down.
-      if (event.type === 'assistant' && event.entry) {
-        return [{ type: 'assistant', text: stripThink(event.entry.text), at: event.at }];
+  const out: ReadableEvent[] = [];
+  let turn: { at: string; segments: ReadableSegment[] } | null = null;
+
+  const flush = (): void => {
+    if (turn && turn.segments.length > 0) {
+      const text = turn.segments
+        .filter((segment): segment is Extract<ReadableSegment, { kind: 'text' }> => segment.kind === 'text')
+        .map((segment) => segment.text)
+        .join('\n\n');
+      out.push({ type: 'assistant', text, at: turn.at, segments: turn.segments });
+    }
+    turn = null;
+  };
+
+  for (const event of events) {
+    if (event.type === 'user') {
+      flush();
+      if (event.text.trim() !== '') out.push({ type: 'user', text: event.text, at: event.at });
+      continue;
+    }
+    // A corrupted log line is skipped: it does not take the conversation down.
+    if (event.type === 'assistant' && event.entry) {
+      turn ??= { at: event.at, segments: [] };
+      const thinking = event.entry.thinking?.trim();
+      if (thinking) turn.segments.push({ kind: 'thinking', text: thinking });
+      const text = stripThink(event.entry.text).trim();
+      if (text) turn.segments.push({ kind: 'text', text });
+      for (const call of event.entry.calls ?? []) {
+        turn.segments.push({ kind: 'tool', name: call.name, args: call.arguments });
       }
-      return [];
-    })
-    .filter((event) => event.text.trim() !== '');
+      continue;
+    }
+    if (event.type === 'tool_results' && event.entry && turn) {
+      // Results come back in call order; for equal names, the oldest one
+      // still without an outcome is the right one.
+      for (const result of event.entry.results) {
+        const pending = turn.segments.find(
+          (segment): segment is Extract<ReadableSegment, { kind: 'tool' }> =>
+            segment.kind === 'tool' && segment.name === result.name && segment.ok === undefined,
+        );
+        if (pending) {
+          pending.ok = result.ok;
+          pending.content = result.content;
+        }
+      }
+    }
+  }
+  flush();
+  return out;
 }
 
 export class ConversationEngine {

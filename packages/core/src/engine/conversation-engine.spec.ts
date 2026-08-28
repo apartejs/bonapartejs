@@ -402,3 +402,66 @@ describe('ConversationEngine — the context is finite (D-22)', () => {
     expect(events.some((e) => e.event.type === 'error')).toBe(false);
   });
 });
+
+describe('readableEvents — a turn reads back the way it was seen', () => {
+  it('keeps the tool calls, their results and the reasoning of a turn, in order, as one assistant event', async () => {
+    // Reported by Paul on 2026-08-28: after a reload the tool calls of the
+    // earlier turns had vanished from the conversation — the reader kept
+    // the text only. What was seen live must read back the same.
+    const { readableEvents } = await import('./conversation-engine.js');
+    const events = readableEvents([
+      { type: 'user', text: 'read the config', at: 't1' },
+      {
+        type: 'assistant',
+        entry: {
+          role: 'assistant',
+          text: '',
+          thinking: 'I should read it first.',
+          reasoning: true,
+          calls: [{ name: 'read_file', arguments: { path: 'config.json' } }],
+        },
+        at: 't2',
+      },
+      {
+        type: 'tool_results',
+        entry: { role: 'tool_results', results: [{ name: 'read_file', ok: true, content: '{"a":1}' }] },
+        at: 't3',
+      },
+      { type: 'assistant', entry: { role: 'assistant', text: 'The config sets a to 1.', reasoning: true }, at: 't4' },
+      { type: 'service', text: 'inventory changed', at: 't5' },
+    ]);
+
+    expect(events.map((e) => e.type)).toEqual(['user', 'assistant']);
+    const turn = events[1]!;
+    expect(turn.text).toBe('The config sets a to 1.');
+    expect(turn.at).toBe('t2');
+    expect(turn.segments).toEqual([
+      { kind: 'thinking', text: 'I should read it first.' },
+      { kind: 'tool', name: 'read_file', args: { path: 'config.json' }, ok: true, content: '{"a":1}' },
+      { kind: 'text', text: 'The config sets a to 1.' },
+    ]);
+  });
+
+  it('a turn cut before any text still shows what it did', async () => {
+    const { readableEvents } = await import('./conversation-engine.js');
+    const events = readableEvents([
+      { type: 'user', text: 'go', at: 't1' },
+      {
+        type: 'assistant',
+        entry: { role: 'assistant', text: '', calls: [{ name: 'run_shell', arguments: { command: 'ls' } }] },
+        at: 't2',
+      },
+      {
+        type: 'tool_results',
+        entry: { role: 'tool_results', results: [{ name: 'run_shell', ok: false, content: 'The user declined this action: run_shell.' }] },
+        at: 't3',
+      },
+    ]);
+
+    expect(events).toHaveLength(2);
+    expect(events[1]?.segments).toEqual([
+      { kind: 'tool', name: 'run_shell', args: { command: 'ls' }, ok: false, content: 'The user declined this action: run_shell.' },
+    ]);
+    expect(events[1]?.text).toBe('');
+  });
+});

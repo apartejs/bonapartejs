@@ -1,4 +1,4 @@
-import { requestUserInput } from '@aparte/core';
+import { requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import type {
   AgentEventDto,
@@ -106,15 +106,45 @@ export function ChatScreen({
 }: ChatScreenProps) {
   const { t } = useTranslate();
 
-  const initialMessages = useMemo(
+  // A conversation reads back the way it was seen: an assistant turn comes
+  // with its segments — reasoning collapsed, tool calls with their outcome,
+  // text — every one of them SETTLED (`isStreaming: false`), or the library
+  // would hold them as still arriving, spinners included.
+  const initialMessages = useMemo<AparteMessage[]>(
     () =>
-      initialEvents.map((event) => ({
-        id: freshId(),
-        role: event.type === 'user' ? ('user' as const) : ('assistant' as const),
-        content: event.text,
-        timestamp: Date.parse(event.at) || Date.now(),
-      })),
-    [initialEvents],
+      initialEvents.map((event) => {
+        const id = freshId();
+        const timestamp = Date.parse(event.at) || Date.now();
+        if (event.type === 'user' || !event.segments) {
+          return { id, role: event.type, content: event.text, timestamp };
+        }
+        const segments = event.segments.map((segment, index): AparteSegment => {
+          const segmentId = `${id}-s${index}`;
+          if (segment.kind === 'thinking') {
+            return {
+              id: segmentId,
+              type: 'thinking',
+              content: segment.text,
+              label: t.chat.thinking,
+              collapsed: true,
+              isStreaming: false,
+            };
+          }
+          if (segment.kind === 'tool') {
+            return {
+              id: segmentId,
+              type: 'tool_call',
+              status: segment.ok ? 'resolved' : 'aborted',
+              toolCall: { id: segmentId, name: segment.name, input: segment.args },
+              ...(segment.content !== undefined ? { result: segment.content } : {}),
+              isStreaming: false,
+            };
+          }
+          return { id: segmentId, type: 'text', content: segment.text, isStreaming: false };
+        });
+        return { id, role: 'assistant', content: '', timestamp, status: 'completed', segments };
+      }),
+    [initialEvents, t.chat.thinking],
   );
 
   const chat = useAparteChat(initialMessages);

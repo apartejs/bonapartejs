@@ -260,10 +260,18 @@ export interface InFlightDto {
   thinking: string;
 }
 
+/** One piece of an assistant turn, as it was seen live. */
+export type ConversationSegmentDto =
+  | { kind: 'thinking'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'tool'; name: string; args: Record<string, unknown>; ok?: boolean; content?: string };
+
 export interface ConversationEventDto {
   type: 'user' | 'assistant';
   text: string;
   at: string;
+  /** An assistant turn, segment by segment — reasoning, tool calls with their outcome, text. */
+  segments?: ConversationSegmentDto[];
 }
 
 export type RestoreDto =
