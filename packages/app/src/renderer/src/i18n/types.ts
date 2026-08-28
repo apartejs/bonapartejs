@@ -158,6 +158,7 @@ export interface AppTranslations {
   conversations: {
     heading: string;
     create: string;
+    newInProject: string;
     empty: string;
     untitled: string;
     /** No folder attached — a normal usage, not a gap. */

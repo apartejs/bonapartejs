@@ -359,6 +359,23 @@ export function App() {
     }
   }, [refreshConversations, selectConversation]);
 
+  /** New conversation attached to a specific project (the "+" of a project group). */
+  const createInProject = useCallback(
+    async (projectId: string) => {
+      setBusy(true);
+      try {
+        const project = projects.find((p) => p.id === projectId);
+        const id = await window.bonaparte.createConversation(project?.roots[0]);
+        await window.bonaparte.setConversationProject(id, projectId);
+        await refreshConversations();
+        await selectConversation(id);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [projects, refreshConversations, selectConversation],
+  );
+
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');
@@ -404,6 +421,7 @@ export function App() {
                   sort={sort}
                   onSelect={(id) => void selectConversation(id)}
                   onCreate={() => void createConversation()}
+                  onCreateInProject={(id) => void createInProject(id)}
                   onCreateProject={() => setProjectDialog({ project: null })}
                   onEditProject={(id) => {
                     const found = projects.find((p) => p.id === id);

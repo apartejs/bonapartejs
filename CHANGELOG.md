@@ -15,6 +15,11 @@ published.
 
 ### Added
 
+- **A "+" on each project** in the sidebar creates a new conversation right
+  in that project, not the current one.
+- **The RAM chip shows bonaparte's own footprint** (the app plus the model
+  server) before the machine's used/total, which the app does not control.
+
 - **Prefix seeds: a new conversation starts from a prefix already
   computed.** Every conversation of a (model, tools, project) begins with
   the same system block, and a restored state serves as the prefix of a

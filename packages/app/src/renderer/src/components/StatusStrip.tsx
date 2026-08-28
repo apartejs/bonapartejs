@@ -213,7 +213,13 @@ export function StatusStrip({
               .replace('{app}', gib(resources.app?.workingSetBytes, t.units.gib))
               .replace('{server}', gib(resources.server?.workingSetBytes, t.units.gib))}
           >
-            RAM {gib(resources.memory.usedBytes, t.units.gib)} / {gib(resources.memory.totalBytes, t.units.gib)}
+            {/* bonaparte's own footprint first — the app plus the model server —
+                then the machine's used/total, which the app does not control. */}
+            RAM {gib(
+              (resources.app?.workingSetBytes ?? 0) + (resources.server?.workingSetBytes ?? 0),
+              t.units.gib,
+            )}{' '}
+            · {gib(resources.memory.usedBytes, t.units.gib)} / {gib(resources.memory.totalBytes, t.units.gib)}
           </Badge>
           {resources.gpu && (
             <Badge

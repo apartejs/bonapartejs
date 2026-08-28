@@ -31,6 +31,7 @@ interface ConversationSidebarProps {
   sort: SidebarSortDto;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  onCreateInProject: (projectId: string) => void;
   onCreateProject: () => void;
   onEditProject: (projectId: string) => void;
   onGroupingChange: (grouping: SidebarGroupingDto) => void;
@@ -69,6 +70,7 @@ export function ConversationSidebar({
   sort,
   onSelect,
   onCreate,
+  onCreateInProject,
   onCreateProject,
   onEditProject,
   onGroupingChange,
@@ -240,6 +242,19 @@ export function ConversationSidebar({
                   <span className="truncate">{project.name}</span>
                 </Button>
                 <span className={GROUP_COUNT}>{items.length}</span>
+                {/* A new conversation right in this project, not the current one. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="conv-group-new size-5 text-muted-foreground"
+                  onClick={() => onCreateInProject(project.id)}
+                  disabled={busy}
+                  title={t.conversations.newInProject}
+                  aria-label={t.conversations.newInProject}
+                >
+                  <Plus />
+                </Button>
               </div>
               {items.length === 0 ? (
                 <p className="conv-group-empty mx-3 mb-1.5 text-[11.5px] text-muted-foreground italic">

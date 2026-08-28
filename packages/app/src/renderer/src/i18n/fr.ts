@@ -142,6 +142,7 @@ export const FR: AppTranslations = {
   conversations: {
     heading: 'Conversations',
     create: 'Nouvelle conversation',
+    newInProject: 'Nouvelle conversation dans ce projet',
     empty: 'Aucune conversation pour l’instant.',
     untitled: 'Nouvelle conversation',
     noProject: 'sans projet',
