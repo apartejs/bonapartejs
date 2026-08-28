@@ -445,6 +445,7 @@ export class PluginHost {
       ...(plugin.error ? { error: plugin.error } : {}),
       views: plugin.active ? (plugin.manifest?.contributes.toolingViews ?? []) : [],
       toolNames: this.activations.get(plugin.id)?.toolNames ?? [],
+      configSchemas: plugin.active ? (plugin.manifest?.contributes.configSchemas ?? []) : [],
     }));
   }
 

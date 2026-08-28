@@ -1641,3 +1641,16 @@ pre.shiki {
   color: var(--aparte-text-muted);
   background: var(--aparte-surface-2);
 }
+
+/* A plugin's settings, under its name, in the Plugins section of the hub. */
+.plugin-settings {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--aparte-border);
+}
+
+.plugin-settings-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}

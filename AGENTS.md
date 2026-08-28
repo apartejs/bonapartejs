@@ -125,7 +125,7 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   the grammar note below). **The rest of the agentic path — tool execution,
   result re-injected, second turn — has still not been seen end to end.** ·
   J3 plugin-first shell ✅ (reversible plugin host, tabbed tooling panel,
-  schema-driven settings hub, status strip with context gauge, 4 built-in
+  schema-driven settings hub, status strip with context gauge, 5 built-in
   plugins, Playwright E2E) · Consolidation (2026-08-19): the screens are done,
   the engine is not — retention module, GGUF sizes, prefix seeds,
   compaction-as-rebase, `gpuAcceleration` setting, per-plugin activation,

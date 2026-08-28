@@ -64,7 +64,10 @@ export function SettingsHub({
   // Sampling keys are the ones also adjustable per conversation.
   const samplingKeys = new Set(['temperature', 'topP', 'topK', 'minP', 'seed']);
   const sampling = settings.filter((setting) => samplingKeys.has(setting.key));
-  const launch = settings.filter((setting) => !samplingKeys.has(setting.key));
+  const launch = settings.filter(
+    (setting) => !samplingKeys.has(setting.key) && !setting.key.startsWith('plugin:'),
+  );
+  const pluginSettings = (id: string) => settings.filter((setting) => setting.key.startsWith(`plugin:${id}:`));
 
   const sections: { id: Section; label: string }[] = [
     { id: 'general', label: t.settings.general },
@@ -179,6 +182,20 @@ export function SettingsHub({
                 </button>
                 <span className="setting-help">{t.settings.pluginReloadHint}</span>
               </div>
+              {plugins
+                .filter((plugin) => plugin.active && pluginSettings(plugin.id).length > 0)
+                .map((plugin) => (
+                  <section key={plugin.id} className="plugin-settings">
+                    <h3 className="plugin-settings-title">{localize(plugin.name, locale)}</h3>
+                    <SettingsForm
+                      settings={pluginSettings(plugin.id)}
+                      scope="global"
+                      labels={labels}
+                      locale={locale}
+                      onChange={(key, value) => void change(key, value)}
+                    />
+                  </section>
+                ))}
               <ul className="plugin-list">
               {plugins.length === 0 && <li className="setting-help">{t.settings.noPlugins}</li>}
               {plugins.map((plugin) => (

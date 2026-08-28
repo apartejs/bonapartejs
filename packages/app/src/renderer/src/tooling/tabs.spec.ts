@@ -22,6 +22,7 @@ describe('listViews', () => {
     active: true,
     views: [{ id: 'page', title: { en: 'Browser', fr: 'Navigateur' }, multiple: true, order: 40 }],
     toolNames: [],
+    configSchemas: [],
   };
 
   it('localises the titles of the views the active plugins declare', () => {

@@ -135,4 +135,6 @@ export interface PluginStatusDto {
   error?: string;
   views: ToolingViewContribution[];
   toolNames: string[];
+  /** The plugin's global settings, as declared — shown in the hub under its name. */
+  configSchemas: PluginConfigField[];
 }

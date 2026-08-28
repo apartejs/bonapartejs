@@ -84,6 +84,7 @@ test('the built-in plugins are discovered from the built entry', async () => {
     'conversation-settings',
     'project-launcher',
     'terminal',
+    'web-search',
   ]);
 });
 

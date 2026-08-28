@@ -120,8 +120,15 @@ export class Harness {
   private roots: string[] = [];
   private currentConversationId: string | null = null;
   private readonly registry = new ToolRegistry();
+  /**
+   * Plugin settings, by plugin then by key — what `ctx.getConfig()` reads,
+   * LIVE. They live in the global settings under `plugin:<id>:<key>` and
+   * are mirrored here whenever those change.
+   */
+  private readonly pluginConfig: Record<string, Record<string, unknown>> = {};
   private readonly pluginHost = new PluginHost({
     registry: this.registry,
+    config: this.pluginConfig,
     logger: (message) => console.log(message),
     // `core` doesn't know about Electron: this is where a plugin event
     // becomes an IPC message to the window.
@@ -240,6 +247,7 @@ export class Harness {
     await this.purgeLegacyConversations();
     await this.loadPlugins();
     const config = await this.loadConfig();
+    this.syncPluginConfig(config.settings);
     // We reopen the last conversation, and it is THAT conversation that says
     // whether there is a project. Nothing is loaded into VRAM here: only meta.
     if (config.currentConversationId && (await this.store.exists(config.currentConversationId))) {
@@ -431,11 +439,34 @@ export class Harness {
 
   /** Harness fields plus those contributed by active plugins. */
   private settingFields(): SettingField[] {
+    // A plugin's settings sit next to the harness's, namespaced by plugin:
+    // one catalog, one resolver, one form.
     const fromPlugins = this.pluginHost
       .status()
       .filter((plugin) => plugin.active)
-      .flatMap(() => [] as SettingField[]);
+      .flatMap((plugin) =>
+        plugin.configSchemas.map(
+          (field): SettingField => ({
+            key: `plugin:${plugin.id}:${field.key}`,
+            label: field.label,
+            type: field.type,
+            scopes: field.scopes,
+            ...(field.options ? { options: field.options } : {}),
+            ...(field.description ? { description: field.description } : {}),
+          }),
+        ),
+      );
     return [...HARNESS_SETTINGS, ...fromPlugins];
+  }
+
+  /** Mirrors the `plugin:<id>:<key>` entries of the global settings into what the host serves plugins. */
+  private syncPluginConfig(settings: Record<string, unknown> | undefined): void {
+    for (const id of Object.keys(this.pluginConfig)) delete this.pluginConfig[id];
+    for (const [key, value] of Object.entries(settings ?? {})) {
+      const match = /^plugin:([^:]+):(.+)$/.exec(key);
+      if (!match) continue;
+      (this.pluginConfig[match[1]!] ??= {})[match[2]!] = value;
+    }
   }
 
   private async settingLayers(): Promise<SettingLayers> {
@@ -484,6 +515,7 @@ export class Harness {
     if (value === undefined) delete settings[key];
     else settings[key] = value;
     await this.saveConfig({ ...config, settings });
+    this.syncPluginConfig(settings);
     if (LAUNCH_KEYS.has(key) && config.backend) {
       // The server no longer matches its parameters: it goes down now (its
       // state saved first) and the next message brings it up with the new

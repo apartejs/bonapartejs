@@ -77,6 +77,17 @@ published.
   orphan be killed at the next start, the live configuration every KV
   manifest is checked against. Tested against the fake server with a fake
   spawn; the Electron harness only wires it.
+- **Web search and page reading for the model** (`web-search` plugin):
+  `web_search` returns the top results of a query, `web_fetch` the readable
+  text of a page. **Embedded by default**: a hidden Electron window — we are
+  Chromium already — queries a public engine's server-rendered page and
+  reads it; no key, no account, nothing leaves the machine but the query.
+  Online providers (Brave Search, Tavily, Serper, a SearXNG instance) are in
+  the plugin's settings, inactive until chosen. Both tools are read-only
+  for the play modes.
+- **Plugin settings reach the settings hub** — a plugin's declared settings
+  show under its name in the Plugins section, and its Node half reads them
+  live. They were declared, stored and never shown.
 - **Stop.** The composer's button is Stop while a reply streams, and it
   now cuts the generation: what arrived stays, the turn ends, the next
   message goes through. The feature audit found the library's Stop wired
