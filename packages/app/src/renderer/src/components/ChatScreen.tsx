@@ -446,7 +446,7 @@ export function ChatScreen({
   }, [approval, conversationId, onApprovalResponse, t.approval]);
 
   return (
-    <div className="chat-wrap">
+    <div className="chat-wrap mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col px-4">
       {missingModel && (
         <Alert
           role="status"

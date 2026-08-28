@@ -158,7 +158,12 @@ published.
   button); and the tooling panel — its tab strip, its "open a view" menu
   (a real menu in a portal, so the collapsing bar no longer clips it), its
   home — with the three plugin views (launcher, browser, terminal) on the
-  same primitives: one library for the app and its plugins, as intended. The primitives (button, input, select, switch, menu,
+  same primitives: one library for the app and its plugins, as intended.
+  At the end of it, `app.css` is gone — 1 656 lines of hand-rolled rules
+  replaced by utilities on the elements; what remains is the palette
+  (`theme.css`), Tailwind's entry with the element-level defaults in its
+  `base` layer (`index.css`), the flank mechanics (`layout.css`) and
+  xterm's height chain (`terminal.css`). The primitives (button, input, select, switch, menu,
   popover, tabs, dialog, tooltip…) live in `@aparte/bonaparte-plugin-sdk/ui`:
   one component library for the app and every plugin view, materialised
   from shadcn's registry as source, the way shadcn intends. The palette is

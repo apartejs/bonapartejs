@@ -91,7 +91,13 @@ When a library release fixes an entry, mark it resolved (never delete it).
   (`.aparte-btn`…) on our elements, no new hand-rolled CSS. Element-level
   defaults live in the `base` layer and skip `[data-slot]` controls.
   Semantic hook classes (`.conv-item`, `.setting-row`…) stay on elements,
-  unstyled: the E2E and a host's rules read them.
+  unstyled: the E2E and a host's rules read them. The app's stylesheets are
+  four and small: `theme.css` (the palette, ours and the kit's), `index.css`
+  (Tailwind's entry: sources, the dark variant, the theme mapping, the
+  `base` layer with the element defaults and the shell's scrollbars),
+  `layout.css` (the resizable flanks) and `terminal.css` (xterm's height
+  chain). There is no `app.css` to add a rule to — a new look is a
+  utility on the element, or a primitive.
 - **The palette is React's, not the kit's.** react.dev's tokens (blue-50 /
   blue-30 accent, their gray scale), declared on the `--aparte-*` masters in
   `packages/app/src/renderer/src/theme.css` for light and dark; the kit

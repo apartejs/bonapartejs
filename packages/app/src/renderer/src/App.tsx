@@ -373,7 +373,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell flex h-full flex-col">
       <div className="app-body flex min-h-0 flex-1">
         {/*
           The flanks stay MOUNTED, even when collapsed — their width drops to
@@ -416,7 +416,7 @@ export function App() {
               </div>
             </>
           )}
-        <main className="app-main">
+        <main className="app-main flex min-h-0 flex-1">
         {view === 'setup' || view === 'boot' ? (
           <SetupPanel
             {...(config ? { initial: config } : {})}
