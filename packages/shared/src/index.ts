@@ -346,11 +346,7 @@ export interface BonaparteBridge {
   getSettings(scope: SettingScopeDto): Promise<ResolvedSettingDto[]>;
   /** Sets an override; `undefined` removes it and restores inheritance. */
   setSetting(scope: SettingScopeDto, key: string, value: unknown): Promise<void>;
-  openConversation(
-    id?: string,
-    modelPath?: string,
-    nCtx?: number,
-  ): Promise<ConversationOpenReplyDto>;
+  openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto>;
   sendMessage(text: string): Promise<void>;
   saveKv(): Promise<boolean>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;

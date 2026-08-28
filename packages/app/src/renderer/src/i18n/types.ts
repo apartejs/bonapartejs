@@ -45,7 +45,6 @@ export interface AppTranslations {
     empty: string;
     searchPlaceholder: string;
     noMatch: string;
-    nCtx: string;
     manual: string;
     confirm: string;
     /** `{name}` is the file name of the model that vanished. */

@@ -223,11 +223,11 @@ export function App() {
   const clearPendingText = useCallback(() => setPendingText(null), []);
 
   const tryOpen = useCallback(
-    async (id?: string, modelPath?: string, nCtx?: number) => {
+    async (id?: string, modelPath?: string) => {
       setBusy(true);
       setError(null);
       try {
-        const reply = await window.bonaparte.openConversation(id, modelPath, nCtx);
+        const reply = await window.bonaparte.openConversation(id, modelPath);
         if ('needsModel' in reply) {
           pendingConv.current = reply.conversationId;
           setMissingModel(reply.missingModel ?? null);
@@ -425,16 +425,16 @@ export function App() {
             error={error}
             missingModel={missingModel}
             pendingMessage={pendingText !== null}
-            onPick={(modelPath, nCtx) => {
+            onPick={(modelPath) => {
               // The choice also becomes the default for future conversations —
               // the distribution screen won't reappear (Settings hub in J3).
               if (config) {
                 void window.bonaparte.setConfig({
                   backend: config,
-                  defaultModel: { path: modelPath, nCtx },
+                  defaultModel: { path: modelPath },
                 });
               }
-              void tryOpen(pendingConv.current, modelPath, nCtx);
+              void tryOpen(pendingConv.current, modelPath);
             }}
           />
         ) : opened ? (

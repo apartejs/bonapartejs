@@ -303,10 +303,6 @@ button.primary {
   border-color: var(--aparte-primary);
 }
 
-.field-narrow input {
-  width: 140px;
-}
-
 .probe-result {
   margin: 0 0 16px;
   padding: 12px 14px;

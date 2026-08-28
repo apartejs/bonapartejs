@@ -27,6 +27,8 @@ import { LlamaCppHttpClient } from './http-client.js';
 import { TranscriptRenderer } from './turn-renderer.js';
 
 export interface ProcessHandle {
+  /** OS pid when the spawner knows it: recorded so an orphan can be killed at the next start. */
+  pid?: number;
   onExit(cb: (code: number | null) => void): void;
   kill(): void;
 }

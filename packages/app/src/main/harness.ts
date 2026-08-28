@@ -1,15 +1,14 @@
 /**
- * Bridge between @aparte/bonaparte-core and Electron: owns the ENGINE (managed
- * or remote llama.cpp config), the active chat session, and the app config.
- * The model is not a parameter of the engine: each conversation pins its own,
- * and the managed server is (re)started with the model of the active
- * conversation. All business logic lives in core — here, only wiring.
+ * Bridge between @aparte/bonaparte-core and Electron: the active chat
+ * session, the app config, the window and its dialogs. The engine's life
+ * cycle belongs to core's `EngineSupervisor`; the model is not a parameter of
+ * the engine — each conversation pins its own, and the managed server is
+ * (re)started with the model of the active conversation. All business logic
+ * lives in core — here, only wiring.
  */
 
-import { execFile, spawn, spawnSync } from 'node:child_process';
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import {
@@ -17,11 +16,9 @@ import {
   builtinTools,
   ChatSession,
   ConversationStore,
-  createLlamaCppBackend,
   createSystemDoctorEnv,
   defaultScanRoots,
-  detectServeCommandPrefix,
-  fingerprintModelFile,
+  EngineSupervisor,
   HARNESS_SETTINGS,
   KV_INVALIDATING_KEYS,
   KvStore,
@@ -34,11 +31,10 @@ import {
   SAMPLING_SETTINGS,
   scanModels,
   ToolRegistry,
-  type Backend,
-  type LiveBackendConfig,
+  type EngineConfig,
+  type KvCacheType,
   type PlayMode,
   type PluginNodeModule,
-  type ProcessHandle,
   type SamplingParams,
   type SettingField,
   type SettingLayers,
@@ -71,66 +67,11 @@ import type { BrowserWindow, IpcMain } from 'electron';
 import { existsSync } from 'node:fs';
 import { resolvePluginsDir } from './plugins-dir.js';
 
+/** Global settings that are launch parameters of the engine (D-17). */
+const LAUNCH_KEYS = new Set(['nCtx', 'cacheType', 'nGpuLayers']);
+
 /** Only external destinations allowed from the renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
-
-const MANAGED_PORT = 8763;
-
-// The system prompt is now built by ChatSession from the tool inventory,
-// then frozen into the conversation (J2).
-
-const execFileAsync = promisify(execFile);
-
-function realSpawn(binPath: string, args: string[]): ProcessHandle {
-  const child = spawn(binPath, args, {
-    stdio: ['ignore', 'ignore', 'pipe'],
-    windowsHide: true,
-    // POSIX: the server becomes the leader of its own process group, so we
-    // can bring down the whole tree at once (see kill).
-    ...(process.platform === 'win32' ? {} : { detached: true }),
-  });
-  child.stderr?.on('data', (chunk: Buffer) => {
-    console.log(`[llama-server] ${chunk.toString('utf8').trimEnd()}`);
-  });
-  void rememberSpawnedPid(child.pid);
-  return {
-    onExit: (cb) =>
-      child.on('exit', (code) => {
-        void forgetSpawnedPid();
-        cb(code);
-      }),
-    kill: () => {
-      // Windows: the unified `llama serve` CLI is a launcher that spawns the
-      // real server as a child — child.kill() would only kill the launcher
-      // and leave the model loaded in VRAM. taskkill /T brings down the whole
-      // tree.
-      //
-      // Deliberately SYNCHRONOUS: on shutdown, an asynchronous taskkill
-      // doesn't have time to start before Electron quits, and the server
-      // survives the app (observed in practice: an orphaned 24 GB
-      // llama-server). Blocking for ~50 ms at shutdown is the price of
-      // certainty.
-      if (process.platform === 'win32' && child.pid) {
-        try {
-          spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
-            windowsHide: true,
-            timeout: 5_000,
-          });
-        } catch {
-          child.kill(); // last resort
-        }
-      } else {
-        // POSIX: kill the process group, not just the launcher.
-        try {
-          if (child.pid) process.kill(-child.pid, 'SIGTERM');
-          else child.kill();
-        } catch {
-          child.kill();
-        }
-      }
-    },
-  };
-}
 
 function stripThink(raw: string): string {
   return raw.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
@@ -138,98 +79,6 @@ function stripThink(raw: string): string {
 
 function modelDisplayName(modelPath: string): string {
   return basename(modelPath).replace(/\.gguf$/i, '');
-}
-
-/** Build tag of the binary (e.g. b10217-ddd4ec142) — 'unknown' as a last resort. */
-async function readBuildTag(binPath: string): Promise<string> {
-  try {
-    const { stdout, stderr } = await execFileAsync(binPath, ['--version'], {
-      timeout: 5_000,
-      windowsHide: true,
-    });
-    const line = `${stdout}\n${stderr}`
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .find((l) => l.length > 0);
-    return line ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
-/**
- * Trace of the currently running managed server, to clean it up on the next
- * startup if the app died without a clean shutdown (crash, kill -9, hot
- * reload in development). Otherwise a model of several GB stays in memory
- * with nothing left attaching it to anything.
- */
-const PID_FILE = join(bonaparteDataDir(), 'managed-server.pid');
-
-async function rememberSpawnedPid(pid: number | undefined): Promise<void> {
-  if (!pid) return;
-  try {
-    await mkdir(dirname(PID_FILE), { recursive: true });
-    await writeFile(PID_FILE, String(pid), 'utf8');
-  } catch {
-    /* the trace is a convenience, never a prerequisite */
-  }
-}
-
-async function forgetSpawnedPid(): Promise<void> {
-  try {
-    await rm(PID_FILE, { force: true });
-  } catch {
-    /* same */
-  }
-}
-
-/** Does the process still exist AND is it actually a llama? (guard against PID recycling) */
-function isOrphanLlama(pid: number): boolean {
-  if (process.platform !== 'win32') {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  const listed = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], {
-    windowsHide: true,
-    encoding: 'utf8',
-    timeout: 5_000,
-  });
-  return /llama/i.test(listed.stdout ?? '');
-}
-
-/** Kills a managed server left orphaned after the app ended abruptly. */
-async function killOrphanedServer(): Promise<void> {
-  let recorded: string;
-  try {
-    recorded = await readFile(PID_FILE, 'utf8');
-  } catch {
-    return;
-  }
-  const pid = Number.parseInt(recorded.trim(), 10);
-  await forgetSpawnedPid();
-  if (!Number.isInteger(pid) || pid <= 0 || !isOrphanLlama(pid)) return;
-
-  console.log(`[llama-server] orphan detected (pid ${pid}) — stopping`);
-  if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
-      windowsHide: true,
-      timeout: 5_000,
-    });
-  } else {
-    try {
-      process.kill(-pid, 'SIGTERM');
-    } catch {
-      try {
-        process.kill(pid, 'SIGTERM');
-      } catch {
-        /* already gone */
-      }
-    }
-  }
 }
 
 /**
@@ -244,7 +93,22 @@ function newConversationId(): string {
 
 export class Harness {
   private window: BrowserWindow | null = null;
-  private engine: BackendConfigDto | null = null;
+  /**
+   * The engine — managed server or remote endpoint — lives in core. A model
+   * switch saves the open conversation's state while its server is still
+   * alive, and the session goes with the server it was bound to.
+   */
+  private readonly supervisor = new EngineSupervisor({
+    slotsDir: kvSlotsDir(),
+    pidFile: join(bonaparteDataDir(), 'managed-server.pid'),
+    beforeUnload: async () => {
+      await this.saveKv();
+      this.session = null;
+    },
+  });
+  private readonly unsubscribeEngineStatus = this.supervisor.onStatusChange((status) =>
+    this.emit(IPC.evBackendStatus, status),
+  );
   /**
    * Scope of the OPEN conversation — not of the application.
    *
@@ -273,12 +137,7 @@ export class Harness {
       request: { tool: string; command?: string };
     }
   >();
-  private backend: Backend | null = null;
-  private live: LiveBackendConfig | null = null;
-  /** Model currently loaded by the managed server. */
-  private loadedModelPath: string | null = null;
   private session: ChatSession | null = null;
-  private unsubscribeStatus: (() => void) | null = null;
 
   private readonly kv = new KvStore(kvSlotsDir());
   private readonly store = new ConversationStore(
@@ -317,7 +176,7 @@ export class Harness {
   /** Restores project and mode from config at startup. */
   async restoreSession(): Promise<void> {
     // First of all: a server left behind by a session that died abruptly.
-    await killOrphanedServer();
+    await this.supervisor.killOrphan();
     await this.purgeLegacyConversations();
     await this.loadPlugins();
     const config = await this.loadConfig();
@@ -425,7 +284,6 @@ export class Harness {
     await this.store.create(id, {
       ...(projectRoot ? { projectRoot } : {}),
       ...(defaults?.path ? { modelPath: defaults.path } : {}),
-      ...(defaults?.nCtx !== undefined ? { nCtx: defaults.nCtx } : {}),
     });
     return id;
   }
@@ -566,7 +424,51 @@ export class Harness {
     if (value === undefined) delete settings[key];
     else settings[key] = value;
     await this.saveConfig({ ...config, settings });
+    if (LAUNCH_KEYS.has(key) && config.backend) {
+      // The server no longer matches its parameters: it goes down now (its
+      // state saved first) and the next message brings it up with the new
+      // ones. Saved states whose context size differs are refused by the
+      // manifest and announced as a re-prefill.
+      await this.saveKv();
+      await this.supervisor.configure(await this.engineConfig(config.backend));
+    }
     this.session = null;
+  }
+
+  /**
+   * Launch parameters come from the GLOBAL settings (D-17): the context
+   * size, the cache quantization and the GPU layers belong to the engine,
+   * never to a conversation — two conversations on one model share one
+   * server.
+   */
+  private async launchSettings(): Promise<{
+    nCtx: number;
+    cacheType: KvCacheType;
+    nGpuLayers?: number;
+  }> {
+    const resolved = resolveSettings(HARNESS_SETTINGS, await this.settingLayers(), 'global');
+    const value = (key: string): unknown => resolved.find((setting) => setting.key === key)?.value;
+    const nCtx = value('nCtx');
+    const cacheType = value('cacheType');
+    const nGpuLayers = value('nGpuLayers');
+    return {
+      nCtx: typeof nCtx === 'number' && nCtx > 0 ? nCtx : 8192,
+      cacheType: cacheType === 'q8_0' || cacheType === 'q4_0' ? cacheType : 'f16',
+      ...(typeof nGpuLayers === 'number' ? { nGpuLayers } : {}),
+    };
+  }
+
+  private async engineConfig(config: BackendConfigDto): Promise<EngineConfig> {
+    if (config.mode === 'remote') return { mode: 'remote', url: config.url };
+    const launch = await this.launchSettings();
+    const nGpuLayers = config.nGpuLayers ?? launch.nGpuLayers;
+    return {
+      mode: 'managed',
+      binPath: config.binPath,
+      nCtx: launch.nCtx,
+      cacheType: launch.cacheType,
+      ...(nGpuLayers !== undefined ? { nGpuLayers } : {}),
+    };
   }
 
   /** Whether the open conversation lets the model reason (default: yes). */
@@ -824,134 +726,29 @@ export class Harness {
   }
 
   status(): BackendStatusDto {
-    return this.backend?.status() ?? 'stopped';
+    return this.supervisor.status();
   }
 
-  /**
-   * Configures the engine. Remote: immediate connection. Managed: the server
-   * will start on the first openConversation (it needs a model).
-   */
   /**
    * Registers the engine WITHOUT connecting to it: on startup, bonaparte must
    * neither ping an endpoint (some servers load the model on the slightest
-   * request) nor launch a llama-server. Use `connect()` to activate it.
+   * request) nor launch a llama-server. `startEngine` activates it.
    */
   async registerEngine(config: BackendConfigDto): Promise<void> {
-    await this.teardownBackend();
-    this.engine = config;
-  }
-
-  async startEngine(config: BackendConfigDto): Promise<BackendStatusDto> {
-    await this.teardownBackend();
-    this.engine = config;
-
-    if (config.mode === 'remote') {
-      const backend = createLlamaCppBackend({ mode: 'remote', url: config.url });
-      this.watchStatus(backend);
-      await backend.start();
-      const props = await backend.props();
-      this.backend = backend;
-      this.loadedModelPath = props.modelPath || 'remote';
-      this.live = {
-        modelFingerprint: `remote:${props.modelPath}`,
-        nCtx: 0,
-        cacheTypeK: 'f16',
-        cacheTypeV: 'f16',
-        buildTag: 'unknown',
-      };
-    }
-
-    return this.status();
-  }
-
-  private watchStatus(backend: Backend): void {
-    this.unsubscribeStatus?.();
-    this.unsubscribeStatus = backend.onStatusChange((status) =>
-      this.emit(IPC.evBackendStatus, status),
-    );
-  }
-
-  private async teardownBackend(): Promise<void> {
-    this.unsubscribeStatus?.();
-    this.unsubscribeStatus = null;
-    if (this.backend) {
-      await this.backend.stop().catch(() => undefined);
-    }
-    this.backend = null;
-    this.live = null;
-    this.loadedModelPath = null;
-    this.loadedNCtx = null;
+    await this.supervisor.configure(await this.engineConfig(config));
     this.session = null;
   }
 
-  /** Model + nCtx currently served by the managed server. */
-  private loadedNCtx: number | null = null;
-
-  /** Guarantees a managed server loaded with THIS model and THIS nCtx. */
-  private async ensureManagedBackend(modelPath: string, nCtx: number): Promise<void> {
-    if (!this.engine || this.engine.mode !== 'managed') {
-      throw new Error('Managed engine not configured.');
-    }
-    if (
-      this.backend &&
-      this.loadedModelPath === modelPath &&
-      this.loadedNCtx === nCtx &&
-      this.backend.status() === 'ready'
-    ) {
-      return;
-    }
-
-    // Model switch: we save the current session's state beforehand.
-    await this.saveKv();
-    if (this.backend) {
-      this.unsubscribeStatus?.();
-      await this.backend.stop().catch(() => undefined);
-      this.backend = null;
-    }
-
-    const cacheType = 'f16';
-    const backend = createLlamaCppBackend({
-      mode: 'managed',
-      binPath: this.engine.binPath,
-      spawnFn: realSpawn,
-      // Unified `llama` CLI → serve subcommand; legacy binary → nothing.
-      commandPrefix: detectServeCommandPrefix(this.engine.binPath),
-      launch: {
-        modelPath,
-        port: MANAGED_PORT,
-        nCtx,
-        cacheTypeK: cacheType,
-        cacheTypeV: cacheType,
-        slotSavePath: kvSlotsDir(),
-        parallelSlots: 1,
-        ...(this.engine.nGpuLayers !== undefined
-          ? { nGpuLayers: this.engine.nGpuLayers }
-          : {}),
-      },
-    });
-    this.watchStatus(backend);
-
-    await mkdir(kvSlotsDir(), { recursive: true });
-    await backend.start();
-
-    this.backend = backend;
-    this.loadedModelPath = modelPath;
-    this.loadedNCtx = nCtx;
-    this.live = {
-      modelFingerprint: await fingerprintModelFile(modelPath),
-      nCtx,
-      cacheTypeK: cacheType,
-      cacheTypeV: cacheType,
-      buildTag: await readBuildTag(this.engine.binPath),
-    };
+  /** Remote: immediate connection. Managed: the server starts with the first conversation that names a model. */
+  async startEngine(config: BackendConfigDto): Promise<BackendStatusDto> {
+    await this.registerEngine(config);
+    if (config.mode === 'remote') await this.supervisor.connect();
+    return this.status();
   }
 
-  async openConversation(
-    id?: string,
-    modelPath?: string,
-    nCtx?: number,
-  ): Promise<ConversationOpenReplyDto> {
-    if (!this.engine) throw new Error('Engine not configured.');
+  async openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto> {
+    const engine = this.supervisor.engine;
+    if (!engine) throw new Error('Engine not configured.');
     id ??= await this.ensureConversationId();
 
     // Switch: the state of the conversation we're leaving must be saved
@@ -963,14 +760,14 @@ export class Harness {
     }
     if (await this.store.exists(id)) await this.setCurrentConversation(id);
 
-    // Resolves model + nCtx: pinned meta > parameters > Settings default.
+    // Resolves the model: pinned meta > parameter > Settings default. The
+    // context size is the engine's, not the conversation's (D-17).
     const defaults = (await this.loadConfig()).defaultModel;
     let convModel: string | undefined;
     const meta = (await this.store.exists(id)) ? await this.store.meta(id) : undefined;
     convModel = meta?.modelPath ?? modelPath ?? defaults?.path;
-    const convNCtx = meta?.nCtx ?? nCtx ?? defaults?.nCtx;
 
-    if (this.engine.mode === 'managed') {
+    if (engine.mode === 'managed') {
       if (!convModel) return { needsModel: true, conversationId: id };
       // A model whose file has vanished is announced BEFORE any launch: the
       // engine would only fail later, with an error about a file the user
@@ -979,28 +776,27 @@ export class Harness {
       if (!existsSync(convModel)) {
         return { needsModel: true, conversationId: id, missingModel: convModel };
       }
-      if (meta && !meta.modelPath) await this.store.setModel(id, convModel, convNCtx);
-      await this.ensureManagedBackend(convModel, convNCtx ?? 8192);
+      if (meta && !meta.modelPath) await this.store.setModel(id, convModel);
+      await this.supervisor.ensureLoaded(convModel);
     } else {
       if (meta && !meta.modelPath && convModel) {
-        await this.store.setModel(id, convModel, convNCtx);
+        await this.store.setModel(id, convModel);
       }
       // Remote: the model is whatever the server has — informational only.
-      if (!convModel) convModel = this.loadedModelPath ?? 'remote';
+      if (!convModel) convModel = this.supervisor.loaded?.modelPath ?? 'remote';
     }
 
-    if (!this.backend || !this.live) throw new Error('Backend not started.');
+    const backend = this.supervisor.backend;
+    const live = this.supervisor.live;
+    if (!backend || !live) throw new Error('Backend not started.');
 
     if (!(await this.store.exists(id))) {
-      await this.store.create(id, {
-        modelPath: convModel,
-        ...(convNCtx !== undefined ? { nCtx: convNCtx } : {}),
-      });
+      await this.store.create(id, { modelPath: convModel });
     }
 
     const { session, restore } = await ChatSession.open(
       {
-        backend: this.backend,
+        backend,
         kv: this.kv,
         store: this.store,
         registry: this.registry,
@@ -1011,7 +807,7 @@ export class Harness {
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
         sampling: await this.currentSampling(),
         thinking: await this.currentThinking(),
-        live: this.live,
+        live,
       },
       id,
     );
@@ -1022,7 +818,8 @@ export class Harness {
       conversationId: id,
       modelPath: convModel,
       modelName: modelDisplayName(convModel),
-      ...(convNCtx !== undefined ? { nCtx: convNCtx } : {}),
+      // Denominator of the context gauge: what the server holds.
+      ...(live.nCtx > 0 ? { nCtx: live.nCtx } : {}),
       // Tool calls and their results stay out of the UI: they live in the
       // transcript, not in the conversation being read.
       events: events
@@ -1089,7 +886,7 @@ export class Harness {
             modelName: modelDisplayName(meta.modelPath),
             // Announced at open: a vanished file is a fact about this
             // machine, not about the message the user has yet to type.
-            ...(this.engine?.mode === 'managed' && !existsSync(meta.modelPath)
+            ...(this.supervisor.engine?.mode === 'managed' && !existsSync(meta.modelPath)
               ? { missingModel: meta.modelPath }
               : {}),
           }
@@ -1115,7 +912,7 @@ export class Harness {
 
   async send(text: string): Promise<void> {
     // Lazy connection: it's the first message that wakes the engine.
-    if (!this.session && this.engine) {
+    if (!this.session && this.supervisor.engine) {
       const reply = await this.openConversation();
       if ('needsModel' in reply) {
         // Not an error: a choice to make. The renderer opens the picker and
@@ -1213,7 +1010,8 @@ export class Harness {
     // Plugins first: they hold dev servers, a shell, a native view. All of
     // that must go down with the app, not outlive it.
     await this.pluginHost.deactivateAll().catch(() => undefined);
-    await this.backend?.stop().catch(() => undefined);
+    this.unsubscribeEngineStatus();
+    await this.supervisor.stop();
   }
 
   async suggestSetup(): Promise<SetupSuggestionDto> {
@@ -1307,8 +1105,7 @@ export class Harness {
     );
     ipcMain.handle(
       IPC.conversationOpen,
-      (_e, id?: string, modelPath?: string, nCtx?: number) =>
-        this.openConversation(id, modelPath, nCtx),
+      (_e, id?: string, modelPath?: string) => this.openConversation(id, modelPath),
     );
     ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
     ipcMain.handle(IPC.kvSave, () => this.saveKv());

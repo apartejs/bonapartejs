@@ -6,7 +6,7 @@ import { modelFileName } from '../models/filter.js';
 interface ModelPickerProps {
   busy: boolean;
   error: string | null;
-  onPick: (modelPath: string, nCtx: number) => void;
+  onPick: (modelPath: string) => void;
   /** Pinned model whose file vanished: named in a notice above the list. */
   missingModel?: string | null;
   /** A message waits for this pick: the notice says it will be sent. */
@@ -29,10 +29,7 @@ export function ModelPicker({
   const { t } = useTranslate();
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [nCtx, setNCtx] = useState('8192');
   const [query, setQuery] = useState('');
-
-  const parsedNCtx = (): number => Number.parseInt(nCtx, 10) || 8192;
 
   // Filter: each term must appear in the name OR the path, which allows
   // searching "qwen 32 q4" without worrying about order.
@@ -58,7 +55,7 @@ export function ModelPicker({
 
   const browse = async (): Promise<void> => {
     const picked = await window.bonaparte.pickFile('gguf');
-    if (picked) onPick(picked, parsedNCtx());
+    if (picked) onPick(picked);
   };
 
   return (
@@ -131,16 +128,6 @@ export function ModelPicker({
           </ul>
         )}
 
-        <label className="field field-narrow">
-          <span className="field-label">{t.picker.nCtx}</span>
-          <input
-            value={nCtx}
-            onChange={(e) => setNCtx(e.target.value)}
-            inputMode="numeric"
-            spellCheck={false}
-          />
-        </label>
-
         {error && (
           <p className="setup-error">
             {t.setup.failed} — {error}
@@ -155,7 +142,7 @@ export function ModelPicker({
             type="button"
             className="primary"
             disabled={busy || !effective}
-            onClick={() => effective && onPick(effective, parsedNCtx())}
+            onClick={() => effective && onPick(effective)}
           >
             {busy ? t.setup.starting : t.picker.confirm}
           </button>

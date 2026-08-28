@@ -182,3 +182,16 @@ export {
   LAUNCH_SETTINGS,
   SAMPLING_SETTINGS,
 } from './settings/catalog.js';
+
+// ── Engine life cycle (Phase 1) ───────────────────────────────────────────
+export { EngineSupervisor } from './engine/supervisor.js';
+export type {
+  EngineConfig,
+  EngineSupervisorOptions,
+  KvCacheType,
+  LoadedModel,
+} from './engine/supervisor.js';
+export { createServerSpawner } from './engine/spawn.js';
+export { defaultProcessProbe } from './engine/process-probe.js';
+export type { ProcessProbe } from './engine/process-probe.js';
+export { readBuildTag } from './engine/build-tag.js';
