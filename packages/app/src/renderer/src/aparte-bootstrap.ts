@@ -31,14 +31,9 @@ export function bootstrapAparte(): void {
   setupStreamingMarkdownProvider();
 }
 
-/** shiki theme matching the app's theme. */
-function shikiTheme(theme: 'dark' | 'light'): string {
-  return theme === 'dark' ? 'github-dark' : 'github-light';
-}
-
 /**
- * Built only once: the grammars are frozen, only the theme varies afterward.
- * The JS regex engine avoids oniguruma's WASM (~620 KB), and the grammars
+ * Built only once: the grammars are frozen and both themes are in it. The
+ * JS regex engine avoids oniguruma's WASM (~620 KB), and the grammars
  * themselves (~2 MB) are imported dynamically to stay out of the chunk
  * loaded at startup.
  */
@@ -62,13 +57,13 @@ function ensureHighlighter(): Promise<ShikiHighlighterLike> {
  * block arrives seconds after startup anyway, and a failure must yield
  * non-highlighted code, never a blank screen.
  *
- * Callable again: changing theme re-registers the provider without
- * rebuilding the highlighter (both themes are already in it).
+ * Installed once: since apartéJS 0.14.0 the provider takes a light/dark
+ * pair and the rendered block follows core's `[data-aparte-theme]` switch
+ * by itself — no re-registration on a theme change, no block left on the
+ * wrong background.
  */
-export async function bootstrapHighlighting(
-  theme: 'dark' | 'light',
-): Promise<void> {
+export async function bootstrapHighlighting(): Promise<void> {
   setupShikiProviderFromHighlighter(await ensureHighlighter(), {
-    theme: shikiTheme(theme),
+    theme: { light: 'github-light', dark: 'github-dark' },
   });
 }

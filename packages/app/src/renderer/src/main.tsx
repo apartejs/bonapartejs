@@ -18,11 +18,7 @@ bootstrapAparte();
 // first render for it — the first code block arrives seconds later. A
 // failure must not prevent the app from starting: we would then render
 // non-highlighted code, not a blank screen.
-void bootstrapHighlighting(
-  document.documentElement.getAttribute('data-aparte-theme') === 'dark'
-    ? 'dark'
-    : 'light',
-).catch((error: unknown) => {
+void bootstrapHighlighting().catch((error: unknown) => {
   console.warn('syntax highlighting unavailable', error);
 });
 

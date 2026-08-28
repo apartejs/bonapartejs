@@ -49,13 +49,13 @@ describe('aparté bootstrap', () => {
 
   it('installs syntax highlighting, asynchronously', async () => {
     // Building the highlighter is an `await`, kept OFF the first-render path.
-    await bootstrapHighlighting('dark');
+    await bootstrapHighlighting();
 
     expect(aparteGlobalConfig.hasHighlightProvider()).toBe(true);
   });
 
   it('highlights the languages we chose to bundle', async () => {
-    await bootstrapHighlighting('dark');
+    await bootstrapHighlighting();
 
     for (const lang of ['typescript', 'python', 'rust', 'bash', 'json']) {
       const html = await aparteGlobalConfig.highlightCode('const a = 1;', lang);
@@ -67,24 +67,24 @@ describe('aparté bootstrap', () => {
     // ACCEPTED trade-off of the controlled bundle: our grammars are frozen.
     // What isn't bundled must not break the display — a model that replies
     // in Brainfuck stays readable.
-    await bootstrapHighlighting('dark');
+    await bootstrapHighlighting();
 
     await expect(
       aparteGlobalConfig.highlightCode('++++[>++++<-]', 'brainfuck'),
     ).resolves.toBeTypeOf('string');
   });
 
-  it('follows the app’s theme without rebuilding the highlighter', async () => {
-    // The HTML produced by shiki freezes the colors: without re-registering,
-    // a light theme would keep code on a dark background.
-    await bootstrapHighlighting('light');
-    const light = await aparteGlobalConfig.highlightCode('const a = 1;', 'typescript');
+  it('carries both themes in one render, so a theme switch needs no re-registration', async () => {
+    // Since apartéJS 0.14.0 the provider takes a light/dark pair: the HTML
+    // carries both palettes and follows core's `[data-aparte-theme]` switch
+    // by itself. Before, the colours were frozen at render time and a theme
+    // change had to re-register the provider — blocks already painted kept
+    // the old background until their next render.
+    await bootstrapHighlighting();
+    const html = await aparteGlobalConfig.highlightCode('const a = 1;', 'typescript');
 
-    await bootstrapHighlighting('dark');
-    const dark = await aparteGlobalConfig.highlightCode('const a = 1;', 'typescript');
-
-    expect(light).toContain('github-light');
-    expect(dark).toContain('github-dark');
+    expect(html).toContain('github-light');
+    expect(html).toContain('github-dark');
   });
 });
 

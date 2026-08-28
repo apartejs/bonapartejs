@@ -14,7 +14,6 @@ import type {
   SidebarSortDto,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { bootstrapHighlighting } from './aparte-bootstrap.js';
 import { ApprovalDialog } from './components/ApprovalDialog.js';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
@@ -340,10 +339,8 @@ export function App() {
     const next = currentTheme() === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-aparte-theme', next);
     document.documentElement.style.colorScheme = next;
-    // shiki freezes colors into the HTML of code blocks: without
-    // reinstalling, a light theme would keep code on a dark background.
-    // Blocks already painted only recolor on the next render.
-    void bootstrapHighlighting(next).catch(() => undefined);
+    // Code blocks follow the switch by themselves: the highlighting provider
+    // carries both themes (apartéJS 0.14.0).
     try {
       localStorage.setItem('bp.theme', next);
     } catch {

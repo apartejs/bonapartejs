@@ -83,9 +83,10 @@ published.
 - The OpenAI-compatible backend and endpoint detection were removed
   (2026-08-19): bonaparte drives llama.cpp only, because no OpenAI façade
   exposes the state it persists.
-- apartéJS 0.2 → 0.13: the library is consumed in lockstep; each bump is
+- apartéJS 0.2 → 0.14: the library is consumed in lockstep; each bump is
   checked against a friction journal and contract tests on the rules the chat
-  loop depends on.
+  loop depends on. With 0.14.0 the highlighting provider takes a light/dark
+  pair, so code blocks follow the theme switch without re-registration.
 
 ### Fixed
 
