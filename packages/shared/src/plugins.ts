@@ -92,6 +92,12 @@ export const configFieldSchema = z.object({
    * appear in a conversation's settings, and vice versa.
    */
   scopes: z.array(z.enum(['global', 'conversation'])).min(1),
+  /**
+   * The value in force when the user has set nothing — the one the hub
+   * shows as inherited. Without it a select shows an empty choice while the
+   * plugin's Node half quietly applies its own fallback.
+   */
+  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
 });
 
 export const pluginManifestSchema = z.object({

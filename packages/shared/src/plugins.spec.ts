@@ -52,3 +52,26 @@ describe('localize', () => {
     expect(localize('Terminal', 'fr')).toBe('Terminal');
   });
 });
+
+describe('plugin settings', () => {
+  it('keeps the default a field declares, so the hub shows the effective value', () => {
+    const manifest = pluginManifestSchema.parse({
+      id: 'demo',
+      name: 'Demo',
+      version: '0.1.0',
+      contributes: {
+        configSchemas: [
+          {
+            key: 'provider',
+            label: 'Provider',
+            type: 'select',
+            options: [{ value: 'embedded', label: 'Embedded' }],
+            scopes: ['global'],
+            default: 'embedded',
+          },
+        ],
+      },
+    });
+    expect(manifest.contributes.configSchemas[0]?.default).toBe('embedded');
+  });
+});

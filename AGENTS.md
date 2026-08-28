@@ -80,20 +80,25 @@ When a library release fixes an entry, mark it resolved (never delete it).
 - **English is the language of everything visible in the repository** —
   code, comments, commit messages, docs, plugin manifests. French is allowed
   only in the private notes (`docs/superpowers/`, `.claude/`).
-- **The aparté UI kit before any hand-rolled control.** `@aparte/core/styles.css`
-  (already imported) ships ordinary classes for ordinary elements —
-  `.aparte-btn` (intent × fill), `.aparte-field`, `.aparte-switch`,
-  `.aparte-checkbox`, `.aparte-alert`, `.aparte-badge`, `.aparte-menu`,
-  `.aparte-tabs`, `.aparte-card`, `.aparte-kbd`… — themed by the
-  `--aparte-*` tokens, light and dark for free. Reference:
-  https://apartejs.dev/reference/classes/ (not linked from the components
-  index). Write our own control only when the kit has nothing, and log that
-  as a friction.
+- **shadcn/ui on Tailwind for our own controls; aparté for the chat.** The
+  chat, the composer, the elicitation panel and the segment renderers come
+  from `@aparte/*` — bonaparte exists to prove that library, they are never
+  rewritten. Everything else we draw (sidebar, hub, panel, plugin views)
+  uses the primitives in `@aparte/bonaparte-plugin-sdk/ui` (shadcn/ui,
+  style new-york-v4, Radix, materialised as source — add one from the
+  public registry `https://ui.shadcn.com/r/styles/new-york-v4/<name>.json`,
+  imports rewritten to relative) and Tailwind utilities; no kit classes
+  (`.aparte-btn`…) on our elements, no new hand-rolled CSS. Element-level
+  defaults live in the `base` layer and skip `[data-slot]` controls.
+  Semantic hook classes (`.conv-item`, `.setting-row`…) stay on elements,
+  unstyled: the E2E and a host's rules read them.
 - **The palette is React's, not the kit's.** react.dev's tokens (blue-50 /
   blue-30 accent, their gray scale), declared on the `--aparte-*` masters in
   `packages/app/src/renderer/src/theme.css` for light and dark; the kit
-  derives inks and scales from them. Never hard-code a colour: read a token
-  (`theme.spec.ts` E2E pins the palette in the DOM).
+  derives inks and scales from them. The same palette is declared as shadcn's
+  semantic variables (`--background`, `--primary`, `--muted`…) and Tailwind
+  reads them (`bg-primary`, `text-muted-foreground`). Never hard-code a
+  colour: read a token (`theme.spec.ts` E2E pins the palette in the DOM).
 - **Professional UI finish from the first draft** — an unfinished screen is
   not shown. For layout changes, a validated mock-up comes before code.
 - **What the fake server cannot prove is replayed for real** — grammars, slots,

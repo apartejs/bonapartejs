@@ -1,5 +1,6 @@
 import type { ResolvedSettingDto } from '@aparte/bonaparte-shared';
-import { SettingsForm, type ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
+import type { ToolingViewProps } from '@aparte/bonaparte-plugin-sdk';
+import { SettingsForm } from '@aparte/bonaparte-plugin-sdk/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 /** Plugin labels — it does not depend on the app's i18n. */
@@ -52,8 +53,8 @@ export default function ConversationSettingsView({
   );
 
   return (
-    <div className="plugin-view">
-      <h3 className="plugin-view-title">{labels.title}</h3>
+    <div className="plugin-view flex flex-col gap-2.5">
+      <h3 className="plugin-view-title font-serif text-sm font-normal text-muted-foreground">{labels.title}</h3>
       <SettingsForm
         settings={settings}
         scope="conversation"

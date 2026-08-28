@@ -4,7 +4,18 @@ import {
   type PluginStatusDto,
   type ResolvedSettingDto,
 } from '@aparte/bonaparte-shared';
-import { SettingsForm } from '@aparte/bonaparte-plugin-sdk';
+import {
+  Badge,
+  Button,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  SettingsForm,
+  cn,
+} from '@aparte/bonaparte-plugin-sdk/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
@@ -67,7 +78,8 @@ export function SettingsHub({
   const launch = settings.filter(
     (setting) => !samplingKeys.has(setting.key) && !setting.key.startsWith('plugin:'),
   );
-  const pluginSettings = (id: string) => settings.filter((setting) => setting.key.startsWith(`plugin:${id}:`));
+  const pluginSettings = (id: string) =>
+    settings.filter((setting) => setting.key.startsWith(`plugin:${id}:`));
 
   const sections: { id: Section; label: string }[] = [
     { id: 'general', label: t.settings.general },
@@ -77,65 +89,74 @@ export function SettingsHub({
   ];
 
   return (
-    <div className="settings-hub">
-      <header className="settings-hub-head">
-        <h2 className="settings-hub-title">{t.settings.heading}</h2>
-        <button
-          type="button"
-          className="aparte-btn aparte-btn--neutral aparte-btn--ghost"
-          onClick={onClose}
-        >
+    <div className="settings-hub fixed inset-0 z-40 flex flex-col bg-background">
+      <header className="settings-hub-head flex items-center justify-between border-b px-[18px] py-3.5">
+        <h2 className="settings-hub-title font-serif text-[19px] font-normal">{t.settings.heading}</h2>
+        <Button type="button" variant="ghost" onClick={onClose}>
           {t.settings.close}
-        </button>
+        </Button>
       </header>
 
-      <div className="settings-hub-body">
-        <nav className="settings-nav" aria-label={t.settings.heading}>
+      <div className="settings-hub-body flex min-h-0 flex-1">
+        <nav
+          className="settings-nav flex w-[200px] shrink-0 flex-col gap-0.5 border-e px-2 py-3"
+          aria-label={t.settings.heading}
+        >
           {sections.map((entry) => (
-            <button
+            <Button
               key={entry.id}
               type="button"
-              className={`settings-nav-item${section === entry.id ? ' settings-nav-active' : ''}`}
+              variant="ghost"
+              className={cn(
+                'settings-nav-item justify-start font-normal',
+                section === entry.id && 'settings-nav-active bg-secondary ring-1 ring-primary',
+              )}
+              aria-current={section === entry.id ? 'page' : undefined}
               onClick={() => setSection(entry.id)}
             >
               {entry.label}
-            </button>
+            </Button>
           ))}
         </nav>
 
-        <div className="settings-panel">
+        <div className="settings-panel min-w-0 flex-1 overflow-y-auto px-[22px] py-[18px]">
           {section === 'general' && (
-            <div className="settings-form">
-              <div className="setting-row">
-                <span className="setting-label">{t.settings.language}</span>
-                <select
-                  className="aparte-field aparte-field--sm"
-                  value={locale}
-                  onChange={(event) => setLocale(event.target.value as 'fr' | 'en')}
-                >
-                  <option value="fr">Français</option>
-                  <option value="en">English</option>
-                </select>
+            <div className="settings-form flex max-w-[560px] flex-col gap-5">
+              <div className="setting-row flex flex-col gap-1.5">
+                <Label htmlFor="setting-language">{t.settings.language}</Label>
+                <Select value={locale} onValueChange={(value) => setLocale(value as 'fr' | 'en')}>
+                  <SelectTrigger id="setting-language" size="sm" className="w-60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fr">Français</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="setting-row">
-                <span className="setting-label">{t.actions.toggleTheme}</span>
-                <button
+              <div className="setting-row flex flex-col gap-1.5">
+                <span className="setting-label text-sm font-medium">{t.actions.toggleTheme}</span>
+                <Button
                   type="button"
-                  className="aparte-btn aparte-btn--neutral aparte-btn--soft"
+                  variant="secondary"
+                  size="sm"
+                  className="self-start"
                   onClick={onToggleTheme}
                 >
                   {t.actions.toggleTheme}
-                </button>
+                </Button>
               </div>
-              <div className="setting-row">
-                <span className="setting-label">{t.settings.launch}</span>
-                <button
+              <div className="setting-row flex flex-col gap-1.5">
+                <span className="setting-label text-sm font-medium">{t.settings.launch}</span>
+                <Button
                   type="button"
-                  className="aparte-btn aparte-btn--neutral aparte-btn--soft"
+                  variant="secondary"
+                  size="sm"
+                  className="self-start"
                   onClick={onChangeEngine}
                 >
                   {engine ? engineLabel(engine) : t.status.notConnected}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -165,10 +186,11 @@ export function SettingsHub({
               {/* Hot reload rather than restart: a plugin's Node half is
                   loaded once at startup, and restarting the app reloads the
                   model into VRAM. The host is reversible for this reason. */}
-              <div className="plugin-actions">
-                <button
+              <div className="plugin-actions flex flex-wrap items-center gap-3">
+                <Button
                   type="button"
-                  className="aparte-btn aparte-btn--secondary aparte-btn--soft aparte-btn--sm"
+                  variant="secondary"
+                  size="sm"
                   disabled={reloading}
                   onClick={() => {
                     setReloading(true);
@@ -179,14 +201,18 @@ export function SettingsHub({
                   }}
                 >
                   {reloading ? t.settings.pluginReloading : t.settings.pluginReload}
-                </button>
-                <span className="setting-help">{t.settings.pluginReloadHint}</span>
+                </Button>
+                <span className="setting-help text-[11.5px] text-muted-foreground">
+                  {t.settings.pluginReloadHint}
+                </span>
               </div>
               {plugins
                 .filter((plugin) => plugin.active && pluginSettings(plugin.id).length > 0)
                 .map((plugin) => (
-                  <section key={plugin.id} className="plugin-settings">
-                    <h3 className="plugin-settings-title">{localize(plugin.name, locale)}</h3>
+                  <section key={plugin.id} className="plugin-settings mt-[18px] border-t pt-3.5">
+                    <h3 className="plugin-settings-title mb-2.5 text-[13px] font-semibold">
+                      {localize(plugin.name, locale)}
+                    </h3>
                     <SettingsForm
                       settings={pluginSettings(plugin.id)}
                       scope="global"
@@ -196,30 +222,46 @@ export function SettingsHub({
                     />
                   </section>
                 ))}
-              <ul className="plugin-list">
-              {plugins.length === 0 && <li className="setting-help">{t.settings.noPlugins}</li>}
-              {plugins.map((plugin) => (
-                <li key={plugin.id} className="plugin-row">
-                  <span className="plugin-name">{localize(plugin.name, locale)}</span>
-                  <span className="plugin-version">{plugin.version}</span>
-                  <span
-                    className={
-                      plugin.error
-                        ? 'plugin-state-failed aparte-badge aparte-badge--danger aparte-badge--soft aparte-badge--sm'
-                        : 'plugin-state-active aparte-badge aparte-badge--success aparte-badge--soft aparte-badge--sm'
-                    }
-                  >
-                    {plugin.error ? t.settings.pluginFailed : t.settings.pluginActive}
-                  </span>
-                  {plugin.description && (
-                    <p className="setting-help">{localize(plugin.description, locale)}</p>
-                  )}
-                  {/* A broken plugin shows itself along with its error:
-                      making it disappear would leave the user without an
-                      explanation. */}
-                  {plugin.error && <p className="setting-warning">{plugin.error}</p>}
-                </li>
-              ))}
+              <ul className="plugin-list mt-[18px] flex max-w-[560px] flex-col gap-3">
+                {plugins.length === 0 && (
+                  <li className="setting-help text-[11.5px] text-muted-foreground">
+                    {t.settings.noPlugins}
+                  </li>
+                )}
+                {plugins.map((plugin) => (
+                  <li key={plugin.id} className="plugin-row flex flex-col gap-1 border-b pb-3">
+                    <div className="flex items-baseline gap-2">
+                      <span className="plugin-name text-[13.5px]">{localize(plugin.name, locale)}</span>
+                      <span className="plugin-version ms-auto font-mono text-[11px] text-muted-foreground">
+                        {plugin.version}
+                      </span>
+                      <Badge
+                        variant={plugin.error ? 'destructive' : 'secondary'}
+                        className={cn(
+                          'font-mono text-[11px] font-normal',
+                          plugin.error
+                            ? 'plugin-state-failed'
+                            : 'plugin-state-active text-emerald-700 dark:text-emerald-300',
+                        )}
+                      >
+                        {plugin.error ? t.settings.pluginFailed : t.settings.pluginActive}
+                      </Badge>
+                    </div>
+                    {plugin.description && (
+                      <p className="setting-help text-[11.5px] leading-snug text-muted-foreground">
+                        {localize(plugin.description, locale)}
+                      </p>
+                    )}
+                    {/* A broken plugin shows itself along with its error:
+                        making it disappear would leave the user without an
+                        explanation. */}
+                    {plugin.error && (
+                      <p className="setting-warning text-[11.5px] leading-snug text-destructive">
+                        {plugin.error}
+                      </p>
+                    )}
+                  </li>
+                ))}
               </ul>
             </>
           )}

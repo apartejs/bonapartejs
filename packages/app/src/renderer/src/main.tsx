@@ -1,5 +1,6 @@
 import '@aparte/core/styles.css';
 import './theme.css';
+import './index.css';
 import './app.css';
 import './projects.css';
 import './composer.css';

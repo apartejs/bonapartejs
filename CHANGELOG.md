@@ -143,6 +143,23 @@ published.
 
 ### Changed
 
+- **Tailwind CSS 4 and shadcn/ui dress bonaparte's own controls** — the
+  settings hub and the shared settings form first, the rest of the shell
+  screen by screen. The primitives (button, input, select, switch, menu,
+  popover, tabs, dialog, tooltip…) live in `@aparte/bonaparte-plugin-sdk/ui`:
+  one component library for the app and every plugin view, materialised
+  from shadcn's registry as source, the way shadcn intends. The palette is
+  declared once, as shadcn's semantic variables, and bridged to the chat's
+  `--aparte-*` tokens — the aparté chat, composer and elicitation panel
+  stay: bonaparte exists to prove the library. Tailwind's layers make the
+  migration safe: the kit's and our remaining rules are unlayered and keep
+  winning, our element-level defaults moved to the `base` layer and skip
+  every `[data-slot]` control.
+- **A plugin setting can declare its default** (`default` in
+  `configSchemas`), so the hub shows the value in force instead of an empty
+  choice while the plugin's Node half applies its own fallback. The web
+  search provider says "Embedded".
+
 - **bonaparte wears React's colours.** The default palette is no longer
   apartéJS's brass: the accent is react.dev's own blue (blue-50 in light,
   blue-30 in dark) and the greys are their gray scale, declared on the kit's

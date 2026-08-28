@@ -53,6 +53,7 @@
           { "value": "serper", "label": { "en": "Serper (Google)", "fr": "Serper (Google)" } },
           { "value": "searxng", "label": { "en": "SearXNG (self-hosted)", "fr": "SearXNG (auto-hébergé)" } }
         ],
+        "default": "embedded",
         "scopes": ["global"]
       },
       {

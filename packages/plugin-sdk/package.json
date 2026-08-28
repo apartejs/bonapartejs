@@ -26,6 +26,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui/index.d.ts",
+      "import": "./dist/ui/index.js"
     }
   },
   "files": [
@@ -41,15 +45,20 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@aparte/bonaparte-shared": "workspace:*"
+    "@aparte/bonaparte-shared": "workspace:*",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.35.0",
+    "radix-ui": "1.6.7",
+    "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
-    "tsup": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "^19.2.0",
-    "react": "^19.2.8"
+    "react": "^19.2.8",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "react": "^18 || ^19"

@@ -4,7 +4,15 @@ import {
   type ResolvedSettingDto,
   type SettingScopeDto,
 } from '@aparte/bonaparte-shared';
+import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { cn } from '../lib/utils.js';
+import { Badge } from './badge.js';
+import { Button } from './button.js';
+import { Input } from './input.js';
+import { Label } from './label.js';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select.js';
+import { Switch } from './switch.js';
 
 /**
  * Labels provided by the host. The SDK stays agnostic of the app's i18n
@@ -36,6 +44,9 @@ interface SettingsFormProps {
  *   choice or a default.
  * - **What the change costs.** Settings that enter the KV manifest invalidate
  *   saved contexts: that's said BEFORE, not found out after.
+ *
+ * The class names without utilities (`setting-row`, `setting-help`…) are
+ * hooks for tests and for a host's own rules; they carry no style.
  */
 export function SettingsForm({ settings, scope, labels, locale, onChange }: SettingsFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -44,52 +55,57 @@ export function SettingsForm({ settings, scope, labels, locale, onChange }: Sett
   const hasAdvanced = settings.some((setting) => setting.advanced);
 
   return (
-    <div className="settings-form">
+    <div className="settings-form flex max-w-[560px] flex-col gap-5">
       {visible.map((setting) => (
-        <div className="setting-row" key={setting.key}>
-          <div className="setting-head">
-            <label
-              className="setting-label aparte-field-label"
-              htmlFor={`set-${scope}-${setting.key}`}
-            >
-              {localize(setting.label, locale)}
-            </label>
+        <div className="setting-row flex flex-col gap-1.5" key={setting.key}>
+          <div className="setting-head flex items-center gap-2">
+            <Label htmlFor={`set-${scope}-${setting.key}`}>{localize(setting.label, locale)}</Label>
             {!setting.overridden && (
-              <span className="setting-inherited aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">
+              <Badge
+                variant="outline"
+                className="setting-inherited border-dashed font-mono text-[10.5px] font-normal text-muted-foreground"
+              >
                 {labels.inherited}
-              </span>
+              </Badge>
             )}
             {setting.overridden && (
-              <button
+              <Button
                 type="button"
-                className="setting-reset aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
+                variant="link"
+                size="sm"
+                className="setting-reset ms-auto h-auto p-0 text-xs"
                 onClick={() => onChange(setting.key, undefined)}
               >
                 {labels.reset}
-              </button>
+              </Button>
             )}
           </div>
 
           <Control setting={setting} scope={scope} locale={locale} onChange={onChange} />
 
           {setting.description && (
-            <p className="setting-help aparte-field-hint">{localize(setting.description, locale)}</p>
+            <p className="setting-help text-[11.5px] leading-snug text-muted-foreground">
+              {localize(setting.description, locale)}
+            </p>
           )}
           {setting.invalidatesKv && (
-            <p className="setting-warning">{labels.kvWarning}</p>
+            <p className="setting-warning text-[11.5px] leading-snug text-destructive">{labels.kvWarning}</p>
           )}
         </div>
       ))}
 
       {hasAdvanced && (
-        <button
+        <Button
           type="button"
-          className="setting-advanced-toggle aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
+          variant="ghost"
+          size="sm"
+          className="setting-advanced-toggle self-start px-1 text-muted-foreground"
           onClick={() => setShowAdvanced((shown) => !shown)}
           aria-expanded={showAdvanced}
         >
-          {showAdvanced ? '▾' : '▸'} {labels.advanced}
-        </button>
+          <ChevronRight className={cn('transition-transform', showAdvanced && 'rotate-90')} />
+          {labels.advanced}
+        </Button>
       )}
     </div>
   );
@@ -110,64 +126,56 @@ function Control({
 
   if (setting.type === 'boolean') {
     return (
-      <input
+      <Switch
         id={id}
-        type="checkbox"
-        role="switch"
-        className="aparte-switch"
         checked={setting.value === true}
-        onChange={(event) => onChange(setting.key, event.target.checked)}
+        onCheckedChange={(checked) => onChange(setting.key, checked)}
       />
     );
   }
 
   if (setting.type === 'select') {
     return (
-      <select
-        id={id}
-        className="aparte-field aparte-field--sm"
-        value={String(setting.value ?? '')}
-        onChange={(event) => onChange(setting.key, event.target.value)}
-      >
-        {(setting.options ?? []).map((option) => (
-          <option key={option.value} value={option.value}>
-            {localize(option.label, locale)}
-          </option>
-        ))}
-      </select>
+      <Select value={String(setting.value ?? '')} onValueChange={(value) => onChange(setting.key, value)}>
+        <SelectTrigger id={id} size="sm" className="w-60 font-mono text-xs">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(setting.options ?? []).map((option) => (
+            <SelectItem key={option.value} value={option.value} className="font-mono text-xs">
+              {localize(option.label, locale)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     );
   }
 
   if (setting.type === 'number') {
     return (
-      <input
+      <Input
         id={id}
         type="number"
-        className="aparte-field aparte-field--sm"
+        className="h-8 max-w-60 font-mono text-xs"
         value={setting.value === undefined ? '' : String(setting.value)}
         {...(setting.min !== undefined ? { min: setting.min } : {})}
         {...(setting.max !== undefined ? { max: setting.max } : {})}
         {...(setting.step !== undefined ? { step: setting.step } : {})}
         onChange={(event) =>
           // An emptied field yields to inheritance rather than writing NaN.
-          onChange(
-            setting.key,
-            event.target.value === '' ? undefined : Number(event.target.value),
-          )
+          onChange(setting.key, event.target.value === '' ? undefined : Number(event.target.value))
         }
       />
     );
   }
 
   return (
-    <input
+    <Input
       id={id}
       type="text"
-      className="aparte-field aparte-field--sm"
+      className="h-8 max-w-60 font-mono text-xs"
       value={String(setting.value ?? '')}
-      onChange={(event) =>
-        onChange(setting.key, event.target.value === '' ? undefined : event.target.value)
-      }
+      onChange={(event) => onChange(setting.key, event.target.value === '' ? undefined : event.target.value)}
     />
   );
 }

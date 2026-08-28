@@ -1,3 +1,4 @@
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 
@@ -17,7 +18,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin({ exclude: bundledWorkspace })],
   },
   renderer: {
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     resolve: {
       // Plugin views live outside packages/app and resolve React from
       // THEIR OWN folder. Without deduplication, the bundle could end up

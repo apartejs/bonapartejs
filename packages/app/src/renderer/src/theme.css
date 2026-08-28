@@ -7,62 +7,135 @@
  * light, blue-30 in dark, the logo cyan (#61dafb) being unreadable on white —
  * and the greys are their gray scale.
  *
- * The kit's recipe: declare the masters, it derives the rest — the ink of a
- * solid button from its fill, the text tone of every intent from
- * `--aparte-ink-l`, the scales from their units. Light on `:root`, dark on
+ * Declared ONCE, as the semantic variables shadcn/ui reads (background,
+ * primary, muted, ring…), then bridged to the kit's `--aparte-*` masters so
+ * the chat, the composer and the elicitation panel wear the same palette;
+ * the kit derives its inks and scales from those. Light on `:root`, dark on
  * `[data-aparte-theme="dark"]`, the attribute the app sets on <html>. This
  * sheet loads right after the kit's, so equal specificity resolves by order.
  *
- * Two tokens beyond the documented eight-line rebrand: the user bubble and
- * the inverse text are literals in the kit, not derived — left alone they
- * keep the plum of the original palette on a blue page.
+ * Beyond the kit's documented eight-line rebrand: the user bubble, the
+ * inverse text and the third surface are literals there, not derived — left
+ * alone they keep the plum of the original palette on a blue page.
  */
 
 :root {
-  /* Accent — react.dev `brand` (blue-50), hover one step darker (blue-60). */
-  --aparte-primary: #087ea4;
-  --aparte-primary-hover: #045975;
-  /* Secondary intent: react.dev purple-50; neutral: gray-50. */
+  /* react.dev: wash white, card gray-5, text gray-90, tertiary gray-50, border gray-10 */
+  --background: #f6f7f9;
+  --foreground: #23272f;
+  --card: #ffffff;
+  --card-foreground: #23272f;
+  --popover: #ffffff;
+  --popover-foreground: #23272f;
+  /* brand blue-50; ink on it: white */
+  --primary: #087ea4;
+  --primary-foreground: #ffffff;
+  --primary-hover: #045975;
+  /* their secondary button: gray-10 on gray-90 */
+  --secondary: #ebecf0;
+  --secondary-foreground: #23272f;
+  --muted: #ebecf0;
+  --muted-foreground: #5e687e;
+  /* highlight blue-10, read in blue-60 */
+  --accent: #e6f7ff;
+  --accent-foreground: #045975;
+  --destructive: #c1554d;
+  --destructive-foreground: #ffffff;
+  --border: #ebecf0;
+  --input: #d0d3dc;
+  --ring: #087ea4;
+  --radius: 0.5rem;
+
+  /* The same palette, on the kit's masters. */
+  --aparte-primary: var(--primary);
+  --aparte-primary-hover: var(--primary-hover);
   --aparte-secondary: #575fb7;
-  --aparte-neutral: #5e687e;
-
-  /* Page and surfaces: gray-5 page, white surface, gray-10 / gray-15 below. */
-  --aparte-bg: #f6f7f9;
-  --aparte-surface-1: #ffffff;
-  --aparte-surface-2: #ebecf0;
-  --aparte-surface-3: #d0d3dc;
-
-  /* Text: gray-90, muted gray-50 (their `tertiary`). */
-  --aparte-text: #23272f;
-  --aparte-text-muted: #5e687e;
+  --aparte-neutral: var(--muted-foreground);
+  --aparte-bg: var(--background);
+  --aparte-surface-1: var(--card);
+  --aparte-surface-2: var(--muted);
+  --aparte-surface-3: var(--input);
+  --aparte-text: var(--foreground);
+  --aparte-text-muted: var(--muted-foreground);
   --aparte-text-inverse: #ffffff;
-
-  /* Borders: gray-10 (their `border`). */
-  --aparte-border: #ebecf0;
-
-  /* The user bubble: their `highlight` (blue-10). */
-  --aparte-message-content-bg-user: #e6f7ff;
+  --aparte-border: var(--border);
+  --aparte-message-content-bg-user: var(--accent);
 }
 
 [data-aparte-theme="dark"] {
-  /* Accent — react.dev `brand-dark` (blue-30), hover blue-20. */
-  --aparte-primary: #58c4dc;
-  --aparte-primary-hover: #abe2ed;
+  /* react.dev dark: wash gray-90, card gray-80, text gray-5, tertiary gray-30 */
+  --background: #16181d;
+  --foreground: #f6f7f9;
+  --card: #23272f;
+  --card-foreground: #f6f7f9;
+  --popover: #23272f;
+  --popover-foreground: #f6f7f9;
+  /* brand-dark blue-30; ink on it: gray-95 */
+  --primary: #58c4dc;
+  --primary-foreground: #16181d;
+  --primary-hover: #abe2ed;
+  --secondary: #343a46;
+  --secondary-foreground: #f6f7f9;
+  --muted: #343a46;
+  --muted-foreground: #99a1b3;
+  /* their dark highlight is a 10% blue wash: that wash on gray-90, flattened */
+  --accent: #2a3a44;
+  --accent-foreground: #abe2ed;
+  --destructive: #d07d77;
+  --destructive-foreground: #16181d;
+  --border: #343a46;
+  --input: #404756;
+  --ring: #58c4dc;
+
+  --aparte-primary: var(--primary);
+  --aparte-primary-hover: var(--primary-hover);
   --aparte-secondary: #8891ec;
-  --aparte-neutral: #99a1b3;
-
-  /* gray-95 page, gray-90 surface (their dark `wash`), gray-80 / gray-70 below. */
-  --aparte-bg: #16181d;
-  --aparte-surface-1: #23272f;
-  --aparte-surface-2: #343a46;
-  --aparte-surface-3: #404756;
-
-  --aparte-text: #f6f7f9;
-  --aparte-text-muted: #99a1b3;
+  --aparte-neutral: var(--muted-foreground);
+  --aparte-bg: var(--background);
+  --aparte-surface-1: var(--card);
+  --aparte-surface-2: var(--muted);
+  --aparte-surface-3: var(--input);
+  --aparte-text: var(--foreground);
+  --aparte-text-muted: var(--muted-foreground);
   --aparte-text-inverse: #16181d;
+  --aparte-border: var(--border);
+  --aparte-message-content-bg-user: var(--accent);
+}
 
-  --aparte-border: #343a46;
+/*
+ * Type, motion and the shared bar height — bonaparte's own tokens, next to
+ * the palette so every token the app declares lives in one file. Tailwind
+ * reads the three families as its font-serif / font-sans / font-mono.
+ */
+/* Identity typeface — system stacks only, no network font. */
+:root {
+  --bp-serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  --bp-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bp-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
 
-  /* Their dark `highlight` is a 10% blue wash; this is that wash on gray-90, flattened. */
-  --aparte-message-content-bg-user: #2a3a44;
+  /*
+   * ── Motion ────────────────────────────────────────────────────────────
+   *
+   * A single scale, for the whole app. What was missing wasn't speed: it was
+   * the CURVE. A linear 120 ms transition reads as a jump; the same duration
+   * with a brisk start and a long settle reads as a movement. `--bp-ease`
+   * starts strong and settles (it's the curve of iOS sheets and of Codex);
+   * `--bp-ease-out` only settles, for things that appear.
+   *
+   * Three durations, no more: what responds to the pointer (hover, focus),
+   * what opens (menus, bubbles), what shifts the layout (flanks). Past
+   * 400 ms you're waiting on the interface; under 100 ms you see nothing.
+   */
+  --bp-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --bp-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --bp-fast: 150ms;
+  --bp-base: 260ms;
+  --bp-slow: 400ms;
+
+  /*
+   * Height of the two top bars — the conversation's and the panel's. They
+   * belong to different columns, but must read as a single line: the value
+   * is therefore shared, not copy-pasted.
+   */
+  --bp-bar: 44px;
 }

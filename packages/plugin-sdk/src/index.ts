@@ -143,6 +143,3 @@ export interface ToolingViewProps {
    */
   openView?: (pluginId: string, viewId: string, init?: Record<string, unknown>) => boolean;
 }
-
-export { SettingsForm } from './SettingsForm.js';
-export type { SettingsFormLabels } from './SettingsForm.js';

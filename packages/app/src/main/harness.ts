@@ -453,6 +453,7 @@ export class Harness {
             scopes: field.scopes,
             ...(field.options ? { options: field.options } : {}),
             ...(field.description ? { description: field.description } : {}),
+            ...(field.default !== undefined ? { default: field.default } : {}),
           }),
         ),
       );
