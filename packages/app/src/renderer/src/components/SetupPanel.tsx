@@ -3,6 +3,25 @@ import type {
   EndpointProbeDto,
   PickFileKind,
 } from '@aparte/bonaparte-shared';
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  Label,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from '@aparte/bonaparte-plugin-sdk/ui';
+import { Check, CircleAlert, CircleCheck, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
@@ -20,6 +39,13 @@ interface SetupPanelProps {
  * URL is simply verified before being accepted.
  */
 type Intent = 'managed' | 'existing';
+
+/** The card every first screen wears: centred, one width, a soft entrance. */
+export const SETUP_CARD =
+  'setup-card w-[min(520px,100%)] gap-5 px-10 py-9 animate-in fade-in slide-in-from-bottom-2 duration-500';
+export const SETUP_EYEBROW = 'font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase';
+export const SETUP_NOTE =
+  'setup-note rounded-lg border bg-muted px-3 py-2.5 text-[12.5px] leading-normal text-muted-foreground';
 
 export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) {
   const { t } = useTranslate();
@@ -97,162 +123,155 @@ export function SetupPanel({ initial, busy, error, onSubmit }: SetupPanelProps) 
   };
 
   return (
-    <div className="setup-wrap">
-      <section className="setup-card">
-        <p className="bp-eyebrow">{t.setup.eyebrow}</p>
-        <h1>{t.setup.title}</h1>
-        <p className="setup-intro">{t.setup.intro}</p>
+    <div className="setup-wrap grid flex-1 place-items-center overflow-y-auto p-6">
+      <Card className={SETUP_CARD}>
+        <CardHeader className="gap-1.5 px-0">
+          <p className={SETUP_EYEBROW}>{t.setup.eyebrow}</p>
+          <h1 data-slot="card-title" className="font-serif text-[26px] leading-tight font-normal">{t.setup.title}</h1>
+          <CardDescription className="text-[13.5px] leading-normal">{t.setup.intro}</CardDescription>
+        </CardHeader>
 
-        <div className="segmented aparte-tabs aparte-tabs--segmented" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={intent === 'managed'}
-            className={`aparte-tabs__tab${intent === 'managed' ? ' active' : ''}`}
-            onClick={() => setIntent('managed')}
-          >
-            {t.setup.intentManaged}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={intent === 'existing'}
-            className={`aparte-tabs__tab${intent === 'existing' ? ' active' : ''}`}
-            onClick={() => setIntent('existing')}
-          >
-            {t.setup.intentExisting}
-          </button>
-        </div>
+        <CardContent className="flex flex-col gap-4 px-0">
+          <Tabs value={intent} onValueChange={(value) => setIntent(value as Intent)}>
+            <TabsList className="segmented">
+              <TabsTrigger value="managed">{t.setup.intentManaged}</TabsTrigger>
+              <TabsTrigger value="existing">{t.setup.intentExisting}</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-        {intent === 'managed' ? (
-          <>
-            <p className="setup-note">{t.setup.managedNote}</p>
-            <label className="field">
-              <span className="field-label aparte-field-label">
-                {t.setup.binPath}
-                {binDetected && (
-                  <em className="field-hint aparte-field-hint"> — {t.setup.detected}</em>
-                )}
-              </span>
-              <span className="field-row aparte-field-group">
-                <input
-                  className="aparte-field"
-                  value={binPath}
-                  onChange={(e) => {
-                    setBinPath(e.target.value);
-                    setBinDetected(false);
-                  }}
-                  placeholder={t.setup.binPathPlaceholder}
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  className="aparte-field-group__suffix aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
-                  onClick={() => void browse('binary')}
-                >
-                  {t.setup.browse}
-                </button>
-              </span>
-            </label>
-            {binMissing && !binPath && (
-              <div className="install-hint aparte-alert aparte-alert--info">
-                <div className="aparte-alert__body">
-                  <p className="aparte-alert__message">{t.setup.notInstalled}</p>
-                  <code>winget install ggml.llamacpp</code>
-                  <div className="install-hint-actions">
-                    <button
-                      type="button"
-                      className="aparte-btn aparte-btn--neutral aparte-btn--soft aparte-btn--sm"
-                      onClick={() => void copyWinget()}
+          {intent === 'managed' ? (
+            <>
+              <p className={SETUP_NOTE}>{t.setup.managedNote}</p>
+              <div className="field flex flex-col gap-1.5">
+                <Label htmlFor="setup-bin">
+                  {t.setup.binPath}
+                  {binDetected && (
+                    <span className="field-hint font-normal text-emerald-700 dark:text-emerald-300">
+                      — {t.setup.detected}
+                    </span>
+                  )}
+                </Label>
+                <InputGroup>
+                  <InputGroupInput
+                    id="setup-bin"
+                    className="font-mono text-[13px]"
+                    value={binPath}
+                    onChange={(e) => {
+                      setBinPath(e.target.value);
+                      setBinDetected(false);
+                    }}
+                    placeholder={t.setup.binPathPlaceholder}
+                    spellCheck={false}
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton size="sm" onClick={() => void browse('binary')}>
+                      {t.setup.browse}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
+              </div>
+              {binMissing && !binPath && (
+                <Alert className="install-hint border-dashed">
+                  <Info aria-hidden="true" />
+                  <AlertDescription className="gap-2.5">
+                    <p>{t.setup.notInstalled}</p>
+                    <code className="block rounded-md bg-muted px-2.5 py-1.5 font-mono text-[12.5px] text-foreground select-all">
+                      winget install ggml.llamacpp
+                    </code>
+                    <div className="install-hint-actions flex flex-wrap gap-2">
+                      <Button type="button" variant="secondary" size="sm" onClick={() => void copyWinget()}>
+                        {wingetCopied ? <Check aria-hidden="true" /> : t.setup.installWinget}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          void window.bonaparte.openExternal(
+                            'https://github.com/ggml-org/llama.cpp/releases',
+                          )
+                        }
+                      >
+                        {t.setup.openReleases}
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          ) : (
+            <>
+              <p className={SETUP_NOTE}>{t.setup.existingNote}</p>
+              <div className="field flex flex-col gap-1.5">
+                <Label htmlFor="setup-url">{t.setup.endpointUrl}</Label>
+                <InputGroup>
+                  <InputGroupInput
+                    id="setup-url"
+                    className="font-mono text-[13px]"
+                    value={url}
+                    onChange={(e) => {
+                      setUrl(e.target.value);
+                      setProbe(null);
+                      setProbeFailed(false);
+                    }}
+                    placeholder="http://127.0.0.1:1234/v1"
+                    spellCheck={false}
+                  />
+                  <InputGroupAddon align="inline-end">
+                    <InputGroupButton
+                      size="sm"
+                      onClick={() => void runProbe()}
+                      disabled={probing || url.trim() === ''}
                     >
-                      {wingetCopied ? '✓' : t.setup.installWinget}
-                    </button>
-                    <button
-                      type="button"
-                      className="aparte-btn aparte-btn--neutral aparte-btn--outline aparte-btn--sm"
-                      onClick={() =>
-                        void window.bonaparte.openExternal(
-                          'https://github.com/ggml-org/llama.cpp/releases',
-                        )
-                      }
-                    >
-                      {t.setup.openReleases}
-                    </button>
-                  </div>
-                </div>
+                      {probing ? t.setup.probing : t.setup.endpointProbe}
+                    </InputGroupButton>
+                  </InputGroupAddon>
+                </InputGroup>
               </div>
-            )}
-          </>
-        ) : (
-          <>
-            <p className="setup-note">{t.setup.existingNote}</p>
-            <label className="field">
-              <span className="field-label aparte-field-label">{t.setup.endpointUrl}</span>
-              <span className="field-row aparte-field-group">
-                <input
-                  className="aparte-field"
-                  value={url}
-                  onChange={(e) => {
-                    setUrl(e.target.value);
-                    setProbe(null);
-                    setProbeFailed(false);
-                  }}
-                  placeholder="http://127.0.0.1:1234/v1"
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  className="aparte-field-group__suffix aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--sm"
-                  onClick={() => void runProbe()}
-                  disabled={probing || url.trim() === ''}
-                >
-                  {probing ? t.setup.probing : t.setup.endpointProbe}
-                </button>
-              </span>
-            </label>
 
-            {probeFailed && (
-              <div className="setup-error aparte-alert aparte-alert--danger" role="alert">
-                <div className="aparte-alert__body">
-                  <p className="aparte-alert__message">{t.setup.probeFailed}</p>
-                </div>
-              </div>
-            )}
+              {probeFailed && (
+                <Alert variant="destructive" role="alert" className="setup-error">
+                  <CircleAlert aria-hidden="true" />
+                  <AlertDescription>{t.setup.probeFailed}</AlertDescription>
+                </Alert>
+              )}
 
-            {probe && (
-              <div className="probe-result aparte-alert aparte-alert--success">
-                <div className="aparte-alert__body">
-                  <p className="aparte-alert__message">
-                    <strong>{t.setup.foundLlama}</strong>
-                    {' — '}
-                    {t.setup.persistenceYes}
-                  </p>
-                  {probe.model && <p className="probe-model">{probe.model}</p>}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+              {probe && (
+                <Alert className="probe-result border-emerald-600/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200">
+                  <CircleCheck aria-hidden="true" />
+                  <AlertDescription className="text-current">
+                    <p>
+                      <strong>{t.setup.foundLlama}</strong>
+                      {' — '}
+                      {t.setup.persistenceYes}
+                    </p>
+                    {probe.model && (
+                      <p className="probe-model font-mono text-xs opacity-80 [overflow-wrap:anywhere]">
+                        {probe.model}
+                      </p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </>
+          )}
 
-        {error && (
-          <div className="setup-error aparte-alert aparte-alert--danger" role="alert">
-            <div className="aparte-alert__body">
-              <p className="aparte-alert__message">
+          {error && (
+            <Alert variant="destructive" role="alert" className="setup-error">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>
                 {t.setup.failed} — {error}
-              </p>
-            </div>
-          </div>
-        )}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
 
-        <button
-          type="button"
-          className="primary aparte-btn aparte-btn--primary aparte-btn--solid aparte-btn--lg"
-          disabled={!canSubmit}
-          onClick={submit}
-        >
-          {busy ? t.setup.starting : t.setup.start}
-        </button>
-      </section>
+        <CardFooter className="px-0">
+          <Button type="button" size="lg" className="w-full" disabled={!canSubmit} onClick={submit}>
+            {busy ? t.setup.starting : t.setup.start}
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

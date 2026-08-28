@@ -1,7 +1,27 @@
 import type { ModelInfoDto } from '@aparte/bonaparte-shared';
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  RadioGroup,
+  RadioGroupItem,
+  cn,
+} from '@aparte/bonaparte-plugin-sdk/ui';
+import { CircleAlert, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { modelFileName } from '../models/filter.js';
+import { SETUP_CARD, SETUP_EYEBROW } from './SetupPanel.js';
 
 interface ModelPickerProps {
   busy: boolean;
@@ -18,6 +38,8 @@ function formatSize(bytes: number, units: { gib: string; mib: string }): string 
   if (gib >= 1) return `${gib.toFixed(1)} ${units.gib}`;
   return `${Math.max(1, Math.round(bytes / 1024 ** 2))} ${units.mib}`;
 }
+
+const HINT = 'text-[13.5px] text-muted-foreground';
 
 export function ModelPicker({
   busy,
@@ -59,113 +81,112 @@ export function ModelPicker({
   };
 
   return (
-    <div className="setup-wrap">
-      <section className="setup-card">
-        <p className="bp-eyebrow">{t.picker.eyebrow}</p>
-        <h1>{t.picker.title}</h1>
-        <p className="setup-intro">{t.picker.intro}</p>
+    <div className="setup-wrap grid flex-1 place-items-center overflow-y-auto p-6">
+      <Card className={SETUP_CARD}>
+        <CardHeader className="gap-1.5 px-0">
+          <p className={SETUP_EYEBROW}>{t.picker.eyebrow}</p>
+          <h1 data-slot="card-title" className="font-serif text-[26px] leading-tight font-normal">{t.picker.title}</h1>
+          <CardDescription className="text-[13.5px] leading-normal">{t.picker.intro}</CardDescription>
+        </CardHeader>
 
-        {missingModel && (
-          <div className="aparte-alert aparte-alert--warning picker-missing" role="status">
-            <div className="aparte-alert__body">
-              <p className="aparte-alert__message">
+        <CardContent className="flex flex-col gap-4 px-0">
+          {missingModel && (
+            <Alert
+              role="status"
+              className="picker-missing border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200"
+            >
+              <TriangleAlert aria-hidden="true" />
+              <AlertDescription className="text-current">
                 {t.picker.missingModel.replace('{name}', modelFileName(missingModel))}
                 {pendingMessage ? ` ${t.picker.resendAfterPick}` : ''}
-              </p>
-            </div>
-          </div>
-        )}
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {models !== null && models.length > 0 && (
-          <label className="field picker-search">
-            <span className="field-row aparte-field-group">
-              <input
-                className="aparte-field"
+          {models !== null && models.length > 0 && (
+            <InputGroup className="picker-search">
+              <InputGroupInput
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t.picker.searchPlaceholder}
                 spellCheck={false}
                 autoFocus
+                aria-label={t.picker.searchPlaceholder}
               />
               {query && (
-                <button
-                  type="button"
-                  className="aparte-field-group__suffix aparte-btn aparte-btn--neutral aparte-btn--ghost aparte-btn--icon aparte-btn--sm"
-                  aria-label={t.common.clear}
-                  onClick={() => setQuery('')}
-                >
-                  ✕
-                </button>
+                <InputGroupAddon align="inline-end">
+                  <InputGroupButton size="icon-xs" aria-label={t.common.clear} onClick={() => setQuery('')}>
+                    <X aria-hidden="true" />
+                  </InputGroupButton>
+                </InputGroupAddon>
               )}
-            </span>
-          </label>
-        )}
+            </InputGroup>
+          )}
 
-        {models === null ? (
-          <p className="picker-scanning">{t.picker.scanning}</p>
-        ) : models.length === 0 ? (
-          <p className="picker-empty">{t.picker.empty}</p>
-        ) : visible.length === 0 ? (
-          <p className="picker-empty">{t.picker.noMatch}</p>
-        ) : (
-          <ul className="model-list">
-            {visible.map((model) => (
-              <li key={model.path}>
+          {models === null ? (
+            <p className={cn('picker-scanning', HINT)}>{t.picker.scanning}</p>
+          ) : models.length === 0 ? (
+            <p className={cn('picker-empty', HINT)}>{t.picker.empty}</p>
+          ) : visible.length === 0 ? (
+            <p className={cn('picker-empty', HINT)}>{t.picker.noMatch}</p>
+          ) : (
+            <RadioGroup
+              value={effective ?? ''}
+              onValueChange={setSelected}
+              className="model-list flex max-h-80 flex-col gap-0 overflow-y-auto rounded-lg border"
+              aria-label={t.picker.title}
+            >
+              {visible.map((model) => (
                 <label
-                  className={`model-row aparte-field-choice aparte-field-choice--boxed ${effective === model.path ? 'selected aparte-field-choice--selected' : ''}`}
+                  key={model.path}
+                  className={cn(
+                    'model-row flex cursor-pointer items-center gap-2.5 border-t px-3 py-2.5 first:border-t-0 hover:bg-muted',
+                    effective === model.path && 'selected bg-muted shadow-[inset_3px_0_0_var(--primary)]',
+                  )}
                   title={model.path}
                 >
-                  <input
-                    type="radio"
-                    name="model"
-                    className="aparte-radio"
-                    checked={effective === model.path}
-                    onChange={() => setSelected(model.path)}
-                  />
-                  <span className="model-name">{model.name}</span>
-                  <span className="model-meta">
+                  <RadioGroupItem value={model.path} />
+                  <span className="model-name min-w-0 flex-1 truncate font-mono text-[13px]">{model.name}</span>
+                  <span className="model-meta inline-flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
                     {formatSize(model.sizeBytes, t.units)}
-                    <span
-                      className={`model-source source-${model.source} aparte-badge aparte-badge--neutral aparte-badge--outline aparte-badge--sm`}
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'model-source font-mono text-[10px] font-normal tracking-wide uppercase',
+                        `source-${model.source}`,
+                      )}
                     >
                       {model.source}
-                    </span>
+                    </Badge>
                   </span>
                 </label>
-              </li>
-            ))}
-          </ul>
-        )}
+              ))}
+            </RadioGroup>
+          )}
 
-        {error && (
-          <div className="setup-error aparte-alert aparte-alert--danger" role="alert">
-            <div className="aparte-alert__body">
-              <p className="aparte-alert__message">
+          {error && (
+            <Alert variant="destructive" role="alert" className="setup-error">
+              <CircleAlert aria-hidden="true" />
+              <AlertDescription>
                 {t.setup.failed} — {error}
-              </p>
-            </div>
-          </div>
-        )}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
 
-        <div className="picker-actions">
-          <button
-            type="button"
-            className="aparte-btn aparte-btn--neutral aparte-btn--outline"
-            onClick={() => void browse()}
-            disabled={busy}
-          >
+        <CardFooter className="picker-actions justify-between gap-2.5 px-0">
+          <Button type="button" variant="outline" onClick={() => void browse()} disabled={busy}>
             {t.picker.manual}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="primary aparte-btn aparte-btn--primary aparte-btn--solid"
             disabled={busy || !effective}
             onClick={() => effective && onPick(effective)}
           >
             {busy ? t.setup.starting : t.picker.confirm}
-          </button>
-        </div>
-      </section>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
