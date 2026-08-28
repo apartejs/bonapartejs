@@ -114,6 +114,12 @@ export const FR: AppTranslations = {
     switchWarning:
       'Changer de modèle reconstruit le contexte : l’état sauvegardé ne vaut que pour le modèle qui l’a produit.',
   },
+  resources: {
+    heading: 'Ressources de la machine',
+    cpuHint: 'Processeur, tous cœurs — bonaparte : {app} · serveur du modèle : {server}',
+    ramHint: 'Mémoire vive utilisée sur le total — bonaparte : {app} · serveur du modèle : {server}',
+    gpuHint: 'Mémoire GPU dédiée (+ partagée) et charge des moteurs 3D et calcul',
+  },
   tooling: {
     homeHint: 'Ouvrez une vue, ou lancez un script du projet et suivez-le dans le navigateur.',
     homeScripts: 'Scripts du projet',

@@ -113,6 +113,12 @@ export const EN: AppTranslations = {
     switchWarning:
       'Switching models rebuilds the context: a saved state only holds for the model that produced it.',
   },
+  resources: {
+    heading: 'Machine resources',
+    cpuHint: 'Processor, all cores — bonaparte: {app} · model server: {server}',
+    ramHint: 'RAM in use over the total — bonaparte: {app} · model server: {server}',
+    gpuHint: 'Dedicated (+ shared) GPU memory, and the load of the 3D and compute engines',
+  },
   tooling: {
     homeHint: 'Open a view, or run one of the project’s scripts and follow it in the browser.',
     homeScripts: 'Project scripts',

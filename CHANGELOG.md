@@ -77,6 +77,15 @@ published.
   orphan be killed at the next start, the live configuration every KV
   manifest is checked against. Tested against the fake server with a fake
   spawn; the Electron harness only wires it.
+- **What the machine is doing, in the status strip**: CPU (all cores), RAM
+  in use over the total, and on Windows the GPU's dedicated and shared
+  memory with the load of its 3D and compute engines — sampled every three
+  seconds by core's `ResourceMonitor`; the tooltips break the figures down
+  between bonaparte's own processes and the model server. CPU and RAM come
+  from Node on every platform; the GPU and the server's footprint come from
+  one long-lived PowerShell child reading WDDM counters (the processor and
+  memory counters are localised on a French Windows, the GPU ones are not
+  — hence the split). Absent figures are absent, never guessed.
 - **The project's scripts, one click away — and their page, one more.** The
   tooling panel with no tab open is a home now: every view one click away,
   and the project's `package.json` scripts, each launched and followed

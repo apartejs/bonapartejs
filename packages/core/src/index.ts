@@ -207,3 +207,13 @@ export type {
   SessionContext,
   TaggedEvent,
 } from './engine/conversation-engine.js';
+export { createWindowsProbes, nodeSystemProbe, ResourceMonitor } from './engine/resources.js';
+export type {
+  AppFootprint,
+  GpuReading,
+  MemoryReading,
+  ProcessReading,
+  ResourceMonitorOptions,
+  ResourceSample,
+  WindowsProbes,
+} from './engine/resources.js';

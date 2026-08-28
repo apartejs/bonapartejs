@@ -7,6 +7,7 @@ import {
   type BackendStatusDto,
   type BonaparteBridge,
   type InFlightDto,
+  type ResourceSampleDto,
 } from '@aparte/bonaparte-shared';
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -71,6 +72,11 @@ const api: BonaparteBridge = {
       listener(payload);
     ipcRenderer.on(IPC.evAgent, wrapped);
     return () => ipcRenderer.removeListener(IPC.evAgent, wrapped);
+  },
+  onResources: (listener: (sample: ResourceSampleDto) => void): (() => void) => {
+    const wrapped = (_e: unknown, payload: ResourceSampleDto): void => listener(payload);
+    ipcRenderer.on(IPC.evResources, wrapped);
+    return () => ipcRenderer.removeListener(IPC.evResources, wrapped);
   },
   onBackendStatus: (
     listener: (status: BackendStatusDto) => void,

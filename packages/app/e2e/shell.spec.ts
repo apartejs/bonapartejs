@@ -87,6 +87,14 @@ test('the built-in plugins are discovered from the built entry', async () => {
   ]);
 });
 
+test('the status strip shows what the machine is doing', async () => {
+  // CPU and RAM come from Node everywhere: the first sample arrives after
+  // one interval, the CPU figure with the second.
+  const window = await app.firstWindow();
+  await expect(window.locator('.res-chip', { hasText: 'RAM' })).toBeVisible({ timeout: 12_000 });
+  await expect(window.locator('.res-chip', { hasText: 'CPU' })).toBeVisible({ timeout: 12_000 });
+});
+
 test('no console error at startup', async () => {
   const window = await app.firstWindow();
   const errors: string[] = [];

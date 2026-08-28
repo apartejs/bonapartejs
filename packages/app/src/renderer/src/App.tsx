@@ -3,6 +3,7 @@ import { fr as aparteFr } from '@aparte/locale-fr';
 import type {
   ApprovalRequestDto,
   ApprovalResponseDto,
+  ResourceSampleDto,
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
@@ -201,6 +202,8 @@ export function App() {
   }, [locale]);
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
+  const [resources, setResources] = useState<ResourceSampleDto | null>(null);
+  useEffect(() => window.bonaparte.onResources(setResources), []);
 
   const fail = useCallback((err: unknown, fallbackView: View) => {
     setError(err instanceof Error ? err.message : String(err));
@@ -542,6 +545,7 @@ export function App() {
         contextAtOpen={view === 'chat' ? (opened?.contextTokens ?? null) : null}
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
         lastStats={lastStats}
+        resources={resources}
         saveState={saveState}
         onSave={() => void handleSave()}
         onOpenSettings={() => setSettingsOpen(true)}

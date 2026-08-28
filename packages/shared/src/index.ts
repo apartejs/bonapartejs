@@ -61,6 +61,7 @@ export const IPC = {
   evAgent: 'ev.agent',
   evPlugin: 'ev.plugin',
   evBackendStatus: 'ev.backendStatus',
+  evResources: 'ev.resources',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -286,6 +287,17 @@ export interface ConversationOpenResultDto {
   missingModel?: string;
 }
 
+/** What the machine is doing, sampled every few seconds (see core's ResourceMonitor). */
+export interface ResourceSampleDto {
+  at: number;
+  /** 0–100 over every core; null until two readings exist. */
+  cpu: number | null;
+  memory: { usedBytes: number; totalBytes: number };
+  gpu: { dedicatedBytes: number; sharedBytes: number; utilization: number | null } | null;
+  server: { pid: number; workingSetBytes: number; cpu: number | null } | null;
+  app: { workingSetBytes: number; cpu: number | null } | null;
+}
+
 /** Opening requires a model choice (new conversation in managed mode). */
 export interface NeedsModelDto {
   needsModel: true;
@@ -377,6 +389,7 @@ export interface BonaparteBridge {
   inFlight(): Promise<InFlightDto | null>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;
   onBackendStatus(listener: (status: BackendStatusDto) => void): () => void;
+  onResources(listener: (sample: ResourceSampleDto) => void): () => void;
 
   /** Opens a project folder (native dialog); null if canceled. */
   openProject(): Promise<ProjectDto | null>;

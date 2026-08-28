@@ -118,6 +118,14 @@ export interface AppTranslations {
     /** What actually changes when the model changes. */
     switchWarning: string;
   };
+  /** The machine's chips in the status strip. */
+  resources: {
+    heading: string;
+    /** `{app}` bonaparte's processes, `{server}` the model server. */
+    cpuHint: string;
+    ramHint: string;
+    gpuHint: string;
+  };
   tooling: {
     /** The panel with no tab: what it can open, and the project's scripts. */
     homeHint: string;

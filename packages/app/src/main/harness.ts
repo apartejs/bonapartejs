@@ -16,6 +16,9 @@ import {
   builtinTools,
   ConversationEngine,
   ConversationStore,
+  createWindowsProbes,
+  nodeSystemProbe,
+  ResourceMonitor,
   createSystemDoctorEnv,
   defaultScanRoots,
   EngineSupervisor,
@@ -60,6 +63,7 @@ import {
   type PluginStatusDto,
   type ProjectDto,
   type ProjectSummaryDto,
+  type ResourceSampleDto,
   type ResolvedSettingDto,
   type SettingScopeDto,
   type SetupSuggestionDto,
@@ -195,8 +199,38 @@ export class Harness {
     }
   }
 
+  /**
+   * What the machine is doing: CPU and RAM from Node, GPU and the server's
+   * footprint from Windows' counters, bonaparte's own processes from
+   * Electron. Sampled every few seconds, shown in the status strip.
+   */
+  private readonly machineProbes = createWindowsProbes({
+    serverPid: () => this.supervisor.serverPid,
+  });
+  private readonly resources = new ResourceMonitor({
+    intervalMs: 3000,
+    system: nodeSystemProbe,
+    gpu: this.machineProbes.gpu,
+    serverProcess: this.machineProbes.serverProcess,
+    app: () => {
+      try {
+        const metrics = app.getAppMetrics();
+        return {
+          workingSetBytes: metrics.reduce((sum, m) => sum + m.memory.workingSetSize * 1024, 0),
+          cpu: Math.round(metrics.reduce((sum, m) => sum + m.cpu.percentCPUUsage, 0) * 10) / 10,
+        };
+      } catch {
+        return null;
+      }
+    },
+  });
+
   attachWindow(window: BrowserWindow): void {
     this.window = window;
+    this.resources.onSample((sample) =>
+      this.emit(IPC.evResources, sample satisfies ResourceSampleDto),
+    );
+    this.resources.start();
   }
 
   /** Restores project and mode from config at startup. */
@@ -891,6 +925,8 @@ export class Harness {
     // shutdown: nobody is left to answer, so the answer is no.
     for (const pending of this.pendingApprovals.values()) pending.resolve(false);
     this.pendingApprovals.clear();
+    this.resources.stop();
+    this.machineProbes.dispose();
     await this.conversations.close();
     // Plugins first: they hold dev servers, a shell, a native view. All of
     // that must go down with the app, not outlive it.

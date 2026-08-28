@@ -83,6 +83,8 @@ export class EngineSupervisor {
   private unsubscribe: (() => void) | null = null;
   private liveConfig: LiveBackendConfig | null = null;
   private loadedModel: LoadedModel | null = null;
+  /** Pid of the managed server, while it runs — for whoever watches its footprint. */
+  private spawnedPid: number | null = null;
   private readonly listeners = new Set<(status: BackendStatus) => void>();
   private readonly spawn: SpawnFn;
   private readonly probe: ProcessProbe;
@@ -110,6 +112,10 @@ export class EngineSupervisor {
 
   get engine(): EngineConfig | null {
     return this.config;
+  }
+
+  get serverPid(): number | null {
+    return this.spawnedPid;
   }
 
   status(): BackendStatus {
@@ -269,12 +275,14 @@ export class EngineSupervisor {
   /** The configured spawn, plus the pid trace written when the process starts and erased when it exits. */
   private readonly tracedSpawn: SpawnFn = (binPath, args) => {
     const handle = this.spawn(binPath, args);
+    this.spawnedPid = handle.pid ?? null;
     if (handle.pid !== undefined) void this.rememberPid(handle.pid);
     const traced: ProcessHandle = {
       ...(handle.pid !== undefined ? { pid: handle.pid } : {}),
       kill: () => handle.kill(),
       onExit: (cb) =>
         handle.onExit((code) => {
+          this.spawnedPid = null;
           void this.forgetPid();
           cb(code);
         }),

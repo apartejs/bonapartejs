@@ -2,6 +2,7 @@ import type {
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
+  ResourceSampleDto,
   RestoreDto,
 } from '@aparte/bonaparte-shared';
 import { Mascotte } from '../mascotte/Mascotte.js';
@@ -19,6 +20,8 @@ interface StatusStripProps {
   contextAtOpen: number | null;
   restore: RestoreDto | null;
   lastStats: CompletionStatsDto | null;
+  /** The machine, sampled every few seconds — null until the first sample. */
+  resources: ResourceSampleDto | null;
   saveState: 'idle' | 'saved' | 'failed';
   onSave: () => void;
   onOpenSettings: () => void;
@@ -37,6 +40,11 @@ function mascotteFor(status: BackendStatusDto, streaming: boolean): MascotteStat
     default:
       return 'sleeping';
   }
+}
+
+function gib(bytes: number | undefined | null, unit: string): string {
+  if (bytes === undefined || bytes === null) return '—';
+  return `${(bytes / 1024 ** 3).toFixed(1)} ${unit}`;
 }
 
 function formatMs(ms: number): string {
@@ -79,6 +87,7 @@ export function StatusStrip({
   contextAtOpen,
   restore,
   lastStats,
+  resources,
   saveState,
   onSave,
   onOpenSettings,
@@ -168,6 +177,35 @@ export function StatusStrip({
         )}
       </div>
 
+      {resources && (
+        <span className="res-group" role="group" aria-label={t.resources.heading}>
+          {resources.cpu !== null && (
+            <span
+              className="res-chip"
+              title={t.resources.cpuHint
+                .replace('{app}', resources.app?.cpu === null || resources.app?.cpu === undefined ? '—' : `${resources.app.cpu} %`)
+                .replace('{server}', resources.server?.cpu === null || resources.server?.cpu === undefined ? '—' : `${resources.server.cpu} %`)}
+            >
+              CPU {Math.round(resources.cpu)} %
+            </span>
+          )}
+          <span
+            className="res-chip"
+            title={t.resources.ramHint
+              .replace('{app}', gib(resources.app?.workingSetBytes, t.units.gib))
+              .replace('{server}', gib(resources.server?.workingSetBytes, t.units.gib))}
+          >
+            RAM {gib(resources.memory.usedBytes, t.units.gib)} / {gib(resources.memory.totalBytes, t.units.gib)}
+          </span>
+          {resources.gpu && (
+            <span className="res-chip" title={t.resources.gpuHint}>
+              GPU {gib(resources.gpu.dedicatedBytes, t.units.gib)}
+              {resources.gpu.sharedBytes > 0 ? ` + ${gib(resources.gpu.sharedBytes, t.units.gib)}` : ''}
+              {resources.gpu.utilization !== null ? ` · ${Math.round(resources.gpu.utilization)} %` : ''}
+            </span>
+          )}
+        </span>
+      )}
       <div className="status-right">
         {saveState !== 'idle' && (
           <span
