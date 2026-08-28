@@ -1504,3 +1504,26 @@ pre.shiki {
 .picker-missing {
   margin-block: var(--aparte-space-4);
 }
+
+/* Every scroll area of the shell wears the chat's scrollbar (apartéJS 0.14.0
+   tokens): thin, thumb derived from the neutral, transparent track. Without
+   this, the sidebar, the picker's list and the tooling panel showed the OS
+   scrollbar next to the transcript's — two scrollbars, two designs. */
+.app-shell * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--aparte-scrollbar-thumb) var(--aparte-scrollbar-track);
+}
+.app-shell *::-webkit-scrollbar {
+  width: var(--aparte-scrollbar-width);
+  height: var(--aparte-scrollbar-width);
+}
+.app-shell *::-webkit-scrollbar-track {
+  background: var(--aparte-scrollbar-track);
+}
+.app-shell *::-webkit-scrollbar-thumb {
+  background: var(--aparte-scrollbar-thumb);
+  border-radius: var(--aparte-radius-xs);
+}
+.app-shell *::-webkit-scrollbar-thumb:hover {
+  background: var(--aparte-secondary);
+}

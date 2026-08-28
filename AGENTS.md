@@ -80,6 +80,15 @@ When a library release fixes an entry, mark it resolved (never delete it).
 - **English is the language of everything visible in the repository** —
   code, comments, commit messages, docs, plugin manifests. French is allowed
   only in the private notes (`docs/superpowers/`, `.claude/`).
+- **The aparté UI kit before any hand-rolled control.** `@aparte/core/styles.css`
+  (already imported) ships ordinary classes for ordinary elements —
+  `.aparte-btn` (intent × fill), `.aparte-field`, `.aparte-switch`,
+  `.aparte-checkbox`, `.aparte-alert`, `.aparte-badge`, `.aparte-menu`,
+  `.aparte-tabs`, `.aparte-card`, `.aparte-kbd`… — themed by the
+  `--aparte-*` tokens, light and dark for free. Reference:
+  https://apartejs.dev/reference/classes/ (not linked from the components
+  index). Write our own control only when the kit has nothing, and log that
+  as a friction.
 - **Professional UI finish from the first draft** — an unfinished screen is
   not shown. For layout changes, a validated mock-up comes before code.
 - **What the fake server cannot prove is replayed for real** — grammars, slots,
