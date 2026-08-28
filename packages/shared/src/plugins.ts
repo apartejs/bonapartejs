@@ -82,11 +82,11 @@ export const agentToolContributionSchema = z.object({
 /** A setting exposed by the plugin in the Settings hub. */
 export const configFieldSchema = z.object({
   key: z.string().min(1).max(64),
-  label: z.string().min(1).max(80),
+  label: localizedLabel(80),
   type: z.enum(['string', 'number', 'boolean', 'select']),
   /** For `select` only. */
-  options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
-  description: z.string().max(240).optional(),
+  options: z.array(z.object({ value: z.string(), label: localizedLabel(80) })).optional(),
+  description: localizedLabel(240).optional(),
   /**
    * Scopes where the setting is editable. A global-only setting doesn't
    * appear in a conversation's settings, and vice versa.

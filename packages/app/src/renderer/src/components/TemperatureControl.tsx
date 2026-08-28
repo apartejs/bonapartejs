@@ -1,4 +1,4 @@
-import type { ResolvedSettingDto } from '@aparte/bonaparte-shared';
+import { localize, type ResolvedSettingDto } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
@@ -21,7 +21,7 @@ interface TemperatureControlProps {
  * it within reach.
  */
 export function TemperatureControl({ conversationId }: TemperatureControlProps) {
-  const { t } = useTranslate();
+  const { t, locale } = useTranslate();
   const [setting, setSetting] = useState<ResolvedSettingDto | null>(null);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLSpanElement>(null);
@@ -108,7 +108,9 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
               </button>
             )}
           </div>
-          {setting.description && <p className="temp-help">{setting.description}</p>}
+          {setting.description && (
+            <p className="temp-help">{localize(setting.description, locale)}</p>
+          )}
         </div>
       )}
     </span>

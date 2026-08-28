@@ -58,6 +58,7 @@ export default function ConversationSettingsView({
         settings={settings}
         scope="conversation"
         labels={labels}
+        locale={locale}
         onChange={(key, value) => void change(key, value)}
       />
     </div>

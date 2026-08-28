@@ -129,6 +129,7 @@ export function SettingsHub({
               settings={sampling}
               scope="global"
               labels={labels}
+              locale={locale}
               onChange={(key, value) => void change(key, value)}
             />
           )}
@@ -138,6 +139,7 @@ export function SettingsHub({
               settings={launch}
               scope="global"
               labels={labels}
+              locale={locale}
               onChange={(key, value) => void change(key, value)}
             />
           )}

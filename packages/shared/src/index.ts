@@ -9,7 +9,7 @@
 export * from './plugins.js';
 // An `export *` puts nothing in local scope: the bridge contract, further
 // down, needs the type itself.
-import type { PluginStatusDto } from './plugins.js';
+import type { LocalizedText, PluginStatusDto } from './plugins.js';
 
 export * from './locale.js';
 import type { BonaparteLocale } from './locale.js';
@@ -164,10 +164,11 @@ export type SidebarSortDto = 'updated' | 'title';
 /** A resolved setting, as the UI displays it: value AND provenance. */
 export interface ResolvedSettingDto {
   key: string;
-  label: string;
+  /** UI string, both locales: the component resolves the current one. */
+  label: LocalizedText;
   type: 'string' | 'number' | 'boolean' | 'select';
-  description?: string;
-  options?: { value: string; label: string }[];
+  description?: LocalizedText;
+  options?: { value: string; label: LocalizedText }[];
   min?: number;
   max?: number;
   step?: number;

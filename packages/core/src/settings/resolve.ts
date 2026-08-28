@@ -15,22 +15,26 @@
  *   showing a field whose origin the user has no idea about.
  */
 
+import type { LocalizedText } from '@aparte/bonaparte-shared';
+
 export type SettingScope = 'global' | 'conversation';
 export type SettingsLayer = 'default' | SettingScope;
 
 export interface SettingOption {
   value: string;
-  label: string;
+  /** Shown to the user: both locales, resolved where it is displayed. */
+  label: LocalizedText;
 }
 
 export interface SettingField {
   key: string;
-  label: string;
+  /** Shown to the user: both locales, resolved where it is displayed. */
+  label: LocalizedText;
   type: 'string' | 'number' | 'boolean' | 'select';
   /** Scopes where the setting is editable — at least one. */
   scopes: SettingScope[];
   default?: unknown;
-  description?: string;
+  description?: LocalizedText;
   options?: SettingOption[];
   min?: number;
   max?: number;

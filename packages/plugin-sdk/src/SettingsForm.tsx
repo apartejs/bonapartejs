@@ -1,9 +1,15 @@
-import type { ResolvedSettingDto, SettingScopeDto } from '@aparte/bonaparte-shared';
+import {
+  localize,
+  type BonaparteLocale,
+  type ResolvedSettingDto,
+  type SettingScopeDto,
+} from '@aparte/bonaparte-shared';
 import { useState } from 'react';
 
 /**
- * Labels provided by the host. The SDK stays agnostic of the app's i18n:
- * it knows neither the locales nor the provider — only these five strings.
+ * Labels provided by the host. The SDK stays agnostic of the app's i18n
+ * provider: it knows only these four strings, plus the locale that resolves
+ * the settings' own labels (which travel in both languages).
  */
 export interface SettingsFormLabels {
   advanced: string;
@@ -16,6 +22,7 @@ interface SettingsFormProps {
   settings: ResolvedSettingDto[];
   scope: SettingScopeDto;
   labels: SettingsFormLabels;
+  locale: BonaparteLocale;
   onChange: (key: string, value: unknown) => void;
 }
 
@@ -30,7 +37,7 @@ interface SettingsFormProps {
  * - **What the change costs.** Settings that enter the KV manifest invalidate
  *   saved contexts: that's said BEFORE, not found out after.
  */
-export function SettingsForm({ settings, scope, labels, onChange }: SettingsFormProps) {
+export function SettingsForm({ settings, scope, labels, locale, onChange }: SettingsFormProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const visible = settings.filter((setting) => showAdvanced || !setting.advanced);
@@ -42,7 +49,7 @@ export function SettingsForm({ settings, scope, labels, onChange }: SettingsForm
         <div className="setting-row" key={setting.key}>
           <div className="setting-head">
             <label className="setting-label" htmlFor={`set-${scope}-${setting.key}`}>
-              {setting.label}
+              {localize(setting.label, locale)}
             </label>
             {!setting.overridden && (
               <span className="setting-inherited">{labels.inherited}</span>
@@ -58,10 +65,10 @@ export function SettingsForm({ settings, scope, labels, onChange }: SettingsForm
             )}
           </div>
 
-          <Control setting={setting} scope={scope} onChange={onChange} />
+          <Control setting={setting} scope={scope} locale={locale} onChange={onChange} />
 
           {setting.description && (
-            <p className="setting-help">{setting.description}</p>
+            <p className="setting-help">{localize(setting.description, locale)}</p>
           )}
           {setting.invalidatesKv && (
             <p className="setting-warning">{labels.kvWarning}</p>
@@ -86,10 +93,12 @@ export function SettingsForm({ settings, scope, labels, onChange }: SettingsForm
 function Control({
   setting,
   scope,
+  locale,
   onChange,
 }: {
   setting: ResolvedSettingDto;
   scope: SettingScopeDto;
+  locale: BonaparteLocale;
   onChange: (key: string, value: unknown) => void;
 }) {
   const id = `set-${scope}-${setting.key}`;
@@ -114,7 +123,7 @@ function Control({
       >
         {(setting.options ?? []).map((option) => (
           <option key={option.value} value={option.value}>
-            {option.label}
+            {localize(option.label, locale)}
           </option>
         ))}
       </select>
