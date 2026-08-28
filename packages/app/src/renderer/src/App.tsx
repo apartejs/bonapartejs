@@ -441,7 +441,11 @@ export function App() {
               onToggleSidebar={layout.toggleSidebar}
               onTogglePanel={layout.togglePanel}
             />
+            {/* Keyed by conversation: the chat seeds the library with the
+                messages ONCE, at mount. Without a remount, switching
+                conversation left the previous thread on screen. */}
             <ChatScreen
+              key={opened.conversationId}
               initialEvents={opened.events}
               onStats={setLastStats}
               onStreamingChange={setStreaming}
