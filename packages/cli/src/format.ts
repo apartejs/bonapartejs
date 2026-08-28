@@ -1,5 +1,5 @@
 /**
- * Rendu terminal du rapport doctor. Pur (string → string), testé sans TTY.
+ * Terminal rendering of the doctor report. Pure (string → string), tested without a TTY.
  */
 
 import {

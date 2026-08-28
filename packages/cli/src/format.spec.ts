@@ -24,38 +24,38 @@ const failReport: DoctorReport = {
 };
 
 describe('formatDoctorReport', () => {
-  it('affiche une ligne par check avec son symbole', () => {
+  it('shows one line per check with its symbol', () => {
     const out = formatDoctorReport(okReport, 'fr', { color: false });
     expect(out).toContain('✓ Version de Node.js — v24.14.0');
     expect(out).toContain('! Détection GPU — CPU uniquement');
   });
 
-  it('marque les échecs avec ✗', () => {
+  it('marks failures with ✗', () => {
     const out = formatDoctorReport(failReport, 'fr', { color: false });
     expect(out).toContain('✗ Binaire llama-server — introuvable');
   });
 
-  it('conclut par allGood quand tout va bien', () => {
+  it('ends with allGood when everything is fine', () => {
     const out = formatDoctorReport(okReport, 'fr', { color: false });
     expect(out).toContain(harnessT('fr').doctor.allGood);
   });
 
-  it('conclut par hasBlockingIssues en cas d’échec bloquant', () => {
+  it('ends with hasBlockingIssues on a blocking failure', () => {
     const out = formatDoctorReport(failReport, 'en', { color: false });
     expect(out).toContain(harnessT('en').doctor.hasBlockingIssues);
   });
 
-  it('commence par le titre localisé', () => {
+  it('starts with the localized title', () => {
     const out = formatDoctorReport(okReport, 'fr', { color: false });
     expect(out.startsWith(`('.') ${harnessT('fr').doctor.title}`)).toBe(true);
   });
 
-  it('sans couleur, aucune séquence ANSI', () => {
+  it('without color, no ANSI sequence', () => {
     const out = formatDoctorReport(okReport, 'fr', { color: false });
     expect(out).not.toMatch(/\[/);
   });
 
-  it('avec couleur, les symboles sont colorés', () => {
+  it('with color, the symbols are colored', () => {
     const out = formatDoctorReport(okReport, 'fr', { color: true });
     expect(out).toMatch(/\[32m✓/);
   });

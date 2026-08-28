@@ -8,7 +8,7 @@ export default defineConfig({
   sourcemap: true,
   target: 'node20',
   banner: { js: '#!/usr/bin/env node' },
-  // Le tarball npx doit être autonome tant que core/shared ne sont pas
-  // publiés : on bundle les paquets workspace dans le CLI.
+  // The npx tarball must be self-contained as long as core/shared aren't
+  // published: we bundle the workspace packages into the CLI.
   noExternal: [/^@aparte\/bonaparte-/],
 });

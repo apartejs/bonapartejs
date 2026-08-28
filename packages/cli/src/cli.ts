@@ -1,6 +1,6 @@
 /**
- * CLI bonaparte — point d'entrée `npx @aparte/bonaparte`.
- * v1 : `doctor` (vérification des dépendances machine) et lancement de l'app.
+ * bonaparte CLI — entry point for `npx @aparte/bonaparte`.
+ * v1: `doctor` (checks machine dependencies) and launching the app.
  */
 
 import {
@@ -10,6 +10,7 @@ import {
 import type { BonaparteLocale } from '@aparte/bonaparte-shared';
 import { createRequire } from 'node:module';
 import { formatDoctorReport } from './format.js';
+import { helpText, unknownCommand } from './messages.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
@@ -37,17 +38,9 @@ async function doctor(): Promise<number> {
   return report.ok ? 0 : 1;
 }
 
-const HELP = `('.') bonaparte v${version}
-
-Usage:
-  bonaparte            Lance l'application (bientôt)
-  bonaparte doctor     Vérifie les dépendances machine
-  bonaparte --version  Affiche la version
-  bonaparte --help     Affiche cette aide
-`;
-
 async function main(): Promise<number> {
   const arg = process.argv[2];
+  const locale = detectLocale();
 
   switch (arg) {
     case '--version':
@@ -57,13 +50,13 @@ async function main(): Promise<number> {
     case '--help':
     case '-h':
     case undefined:
-      console.log(HELP);
+      console.log(helpText(locale, version));
       return 0;
     case 'doctor':
       return doctor();
     default:
-      console.error(`Commande inconnue : ${arg}\n`);
-      console.log(HELP);
+      console.error(`${unknownCommand(locale, arg)}\n`);
+      console.log(helpText(locale, version));
       return 1;
   }
 }
