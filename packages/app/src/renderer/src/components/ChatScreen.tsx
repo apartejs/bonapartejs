@@ -51,6 +51,18 @@ let nextId = 0;
 const freshId = (): string => `msg-${Date.now()}-${nextId++}`;
 
 /**
+ * The composer only knows a reply is in flight — and only offers Stop —
+ * through the page's message lifecycle events, filtered by the chat it
+ * targets. Without a client of the library running the turn, the screen
+ * announces the turn itself: start when the message leaves, done when the
+ * turn ends. A `status: 'streaming'` on the bubble is not read for that.
+ */
+function announceTurn(kind: 'start' | 'done'): void {
+  const targetId = document.querySelector('aparte-composer')?.getAttribute('target') ?? undefined;
+  window.dispatchEvent(new CustomEvent(`aparte-message-${kind}`, { detail: { targetId } }));
+}
+
+/**
  * What is open in the current turn. A turn is made of successive segments —
  * reasoning, text, tool chips — rather than a single block of text: this is
  * what allows collapsing the reasoning and showing a tool's activity while
@@ -167,6 +179,7 @@ export function ChatScreen({
       chatRef.current.updateMessage(state.messageId, { status });
       turn.current = null;
       onStreamingChange(false);
+      announceTurn('done');
     };
 
     const unsubscribe = window.bonaparte.onAgentEvent((event: AgentEventDto) => {
@@ -290,6 +303,7 @@ export function ChatScreen({
         role: 'assistant',
         content: '',
         timestamp: Date.now(),
+        status: 'streaming',
       });
       const state: TurnState = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
       if (partial.thinking) {
@@ -310,6 +324,7 @@ export function ChatScreen({
       }
       turn.current = state;
       onStreamingChange(true);
+      announceTurn('start');
     });
     return () => {
       cancelled = true;
@@ -327,17 +342,17 @@ export function ChatScreen({
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
-      // NO `status: 'streaming'` here, and this is measured: `isAwaitingReply()`
-      // returns `true` as soon as the status is `streaming`, without looking
-      // at the content — the bubble would therefore stay "awaiting" (animated
-      // dots, `aria-busy`) throughout the whole reply. Without a status, the
-      // awaiting state goes back to being what it should be: true as long as
-      // there's nothing, false at the first segment. And `updateMessage({
-      // status })` at the end of the turn closes the segments regardless of
-      // what the prior state was.
+      // `status: 'streaming'` is what tells the library a reply is in
+      // flight: without it the composer's button stays a disabled Send, and
+      // Stop does not exist. Measured on 0.15 (the audit of 2026-08-28).
+      // An earlier version kept the bubble "awaiting" for the whole reply
+      // under this status; since 0.14 a streaming bubble is never empty —
+      // the waiting dots are its content until the first segment arrives.
+      status: 'streaming',
     });
     turn.current = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
     onStreamingChange(true);
+    announceTurn('start');
     void window.bonaparte.sendMessage(detail.content);
   };
 
@@ -366,6 +381,17 @@ export function ChatScreen({
     const presenter = document.createElement('aparte-elicitation');
     host.append(presenter);
     return () => presenter.remove();
+  }, []);
+
+  // The composer's Stop. The library announces it on `window` as
+  // `aparte-abort` (not bubbling from the composer): the engine cuts the
+  // turn, what arrived stays, and the turn's end closes the bubble.
+  useEffect(() => {
+    const onAbort = (): void => {
+      if (turn.current) void window.bonaparte.cancelMessage();
+    };
+    window.addEventListener('aparte-abort', onAbort);
+    return () => window.removeEventListener('aparte-abort', onAbort);
   }, []);
 
   // Consent for a tool call, on apartéJS's approval panel: inline in the

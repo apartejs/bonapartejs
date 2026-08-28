@@ -1031,6 +1031,9 @@ export class Harness {
     ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
     ipcMain.handle(IPC.kvSave, () => this.saveKv());
     ipcMain.handle(IPC.agentInFlight, () => this.conversations.inFlight());
+    ipcMain.handle(IPC.agentCancel, () => {
+      if (this.currentConversationId) this.conversations.cancel(this.currentConversationId);
+    });
     ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
     ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
     ipcMain.handle(IPC.endpointProbe, (_e, url: string) => this.probeEndpointUrl(url));

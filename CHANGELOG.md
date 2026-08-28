@@ -77,6 +77,12 @@ published.
   orphan be killed at the next start, the live configuration every KV
   manifest is checked against. Tested against the fake server with a fake
   spawn; the Electron harness only wires it.
+- **Stop.** The composer's button is Stop while a reply streams, and it
+  now cuts the generation: what arrived stays, the turn ends, the next
+  message goes through. The feature audit found the library's Stop wired
+  to nothing while the engine knew how to cancel. The composer learns a
+  reply is in flight from the page's message lifecycle events, which the
+  screen now dispatches at the start and the end of every turn.
 - **What the machine is doing, in the status strip**: CPU (all cores), RAM
   in use over the total, and on Windows the GPU's dedicated and shared
   memory with the load of its 3D and compute engines — sampled every three
@@ -160,7 +166,7 @@ published.
   picker no longer asks for a context size; the context gauge reads what
   the server holds. A state saved under another context size is refused by
   its manifest and announced as a re-prefill.
-- apartéJS 0.2 → 0.15: the library is consumed in lockstep; each bump is
+- apartéJS 0.2 → 0.15.1: the library is consumed in lockstep; each bump is
   checked against a friction journal and contract tests on the rules the chat
   loop depends on. With 0.14.0 the highlighting provider takes a light/dark
   pair, so code blocks follow the theme switch without re-registration; with

@@ -32,6 +32,7 @@ export const IPC = {
   conversationRename: 'conversation.rename',
   agentSend: 'agent.send',
   agentInFlight: 'agent.inFlight',
+  agentCancel: 'agent.cancel',
   kvSave: 'kv.save',
   setupSuggest: 'setup.suggest',
   dialogPickFile: 'dialog.pickFile',
@@ -387,6 +388,8 @@ export interface BonaparteBridge {
   saveKv(): Promise<boolean>;
   /** The turn streaming right now, if any — to catch up on when a screen mounts. */
   inFlight(): Promise<InFlightDto | null>;
+  /** Cuts the turn in flight of the current conversation; what arrived stays. */
+  cancelMessage(): Promise<void>;
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;
   onBackendStatus(listener: (status: BackendStatusDto) => void): () => void;
   onResources(listener: (sample: ResourceSampleDto) => void): () => void;

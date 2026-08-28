@@ -66,6 +66,7 @@ const api: BonaparteBridge = {
     ipcRenderer.invoke(IPC.agentSend, text),
   saveKv: (): Promise<boolean> => ipcRenderer.invoke(IPC.kvSave),
   inFlight: (): Promise<InFlightDto | null> => ipcRenderer.invoke(IPC.agentInFlight),
+  cancelMessage: (): Promise<void> => ipcRenderer.invoke(IPC.agentCancel),
 
   onAgentEvent: (listener: (event: AgentEventDto) => void): (() => void) => {
     const wrapped = (_e: unknown, payload: AgentEventDto): void =>
