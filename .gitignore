@@ -27,3 +27,6 @@ packages/app/playwright-report/
 
 # Paquets locaux (spike npx : pnpm pack)
 *.tgz
+
+# App directory assembled inside the CLI package for `npx` (pnpm pack)
+packages/cli/app/

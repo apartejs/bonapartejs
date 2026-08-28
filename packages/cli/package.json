@@ -26,7 +26,8 @@
     "bonaparte": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "app"
   ],
   "engines": {
     "node": ">=20"
@@ -37,9 +38,13 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "assemble": "node scripts/assemble-app.mjs",
+    "prepack": "node scripts/assemble-app.mjs",
+    "postpack": "node scripts/assemble-app.mjs --clean"
   },
   "devDependencies": {
+    "@aparte/bonaparte-app": "workspace:*",
     "@aparte/bonaparte-core": "workspace:*",
     "@aparte/bonaparte-shared": "workspace:*",
     "@types/node": "catalog:",
@@ -51,5 +56,9 @@
     "tags": [
       "scope:cli"
     ]
+  },
+  "dependencies": {
+    "electron": "^43.4.0",
+    "node-pty": "^1.1.0"
   }
 }

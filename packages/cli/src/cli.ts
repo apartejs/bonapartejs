@@ -8,12 +8,24 @@ import {
   runDoctor,
 } from '@aparte/bonaparte-core';
 import type { BonaparteLocale } from '@aparte/bonaparte-shared';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { formatDoctorReport } from './format.js';
-import { helpText, unknownCommand } from './messages.js';
+import {
+  electronBinary,
+  electronNeedsDownload,
+  electronPackageDir,
+  launchApp,
+  resolveAppDir,
+} from './launch.js';
+import { CLI_MESSAGES, helpText, unknownCommand } from './messages.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
+/** The CLI package root: this file is bundled into `dist/`. */
+const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function detectLocale(): BonaparteLocale {
   const candidates = [
@@ -38,6 +50,35 @@ async function doctor(): Promise<number> {
   return report.ok ? 0 : 1;
 }
 
+async function launch(locale: BonaparteLocale): Promise<number> {
+  const appDir = resolveAppDir(packageRoot, existsSync);
+  if (!appDir) {
+    console.error(CLI_MESSAGES[locale].appNotBuilt);
+    return 1;
+  }
+  const electronDir = electronPackageDir();
+  if (!electronDir) {
+    console.error(CLI_MESSAGES[locale].electronMissing);
+    return 1;
+  }
+  const readPathTxt = (path: string): string | null => {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  if (electronNeedsDownload(electronDir, readPathTxt, existsSync)) {
+    console.log(CLI_MESSAGES[locale].downloadingElectron);
+  }
+  const electron = electronBinary();
+  if (!electron) {
+    console.error(CLI_MESSAGES[locale].electronMissing);
+    return 1;
+  }
+  return launchApp({ appDir, electron });
+}
+
 async function main(): Promise<number> {
   const arg = process.argv[2];
   const locale = detectLocale();
@@ -49,9 +90,10 @@ async function main(): Promise<number> {
       return 0;
     case '--help':
     case '-h':
-    case undefined:
       console.log(helpText(locale, version));
       return 0;
+    case undefined:
+      return launch(locale);
     case 'doctor':
       return doctor();
     default:

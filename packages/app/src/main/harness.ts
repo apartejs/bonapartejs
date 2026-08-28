@@ -66,6 +66,8 @@ import {
 } from '@aparte/bonaparte-shared';
 import { app, dialog, shell } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
+import { existsSync } from 'node:fs';
+import { resolvePluginsDir } from './plugins-dir.js';
 
 /** Only external destinations allowed from the renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
@@ -432,14 +434,15 @@ export class Harness {
 
   // ── Plugins ────────────────────────────────────────────────────────────
 
-  /**
-   * Plugins folder. In development it lives at the root of the repo; once
-   * the app is packaged, inside the resources.
-   */
+  /** Plugins folder — see `resolvePluginsDir` for the three layouts. */
   private pluginsDir(): string {
-    return app.isPackaged
-      ? join(process.resourcesPath, 'plugins')
-      : join(app.getAppPath(), '..', '..', 'plugins');
+    return resolvePluginsDir({
+      env: process.env,
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+      isPackaged: app.isPackaged,
+      exists: existsSync,
+    });
   }
 
   /**

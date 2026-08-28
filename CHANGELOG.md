@@ -54,6 +54,11 @@ published.
   the model is English, the reply language is an explicit instruction.
 - **CLI** `bonaparte doctor`: machine diagnostic (Node, llama-server, slot
   directory, disk, GPU) as a localised table with exit code.
+- **CLI** `bonaparte` launches the app. The published package ships the
+  built app and the built-in plugins next to the CLI and depends on
+  `electron`, so `npx @aparte/bonaparte` needs nothing else; the first
+  launch announces the one-time Electron download before it starts. Help
+  and errors follow the locale.
 - **Electron E2E** (Playwright) with a never-shown window and an isolated data
   directory.
 - Plugin manifests carry their labels (name, description, tab title) in both
