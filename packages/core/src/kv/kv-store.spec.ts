@@ -165,6 +165,21 @@ describe('KvStore (against the fake llama-server)', () => {
     expect(outcome).toEqual({ restored: false, reason: 'refused' });
   });
 
+  it('forget removes the slot file and the manifest from the store directory', async () => {
+    // Found by the security audit of 2026-08-28: the slot file was removed by
+    // its bare NAME, resolved from the process's cwd — never from the store
+    // — and `force` swallowed the miss. A forgotten conversation kept its
+    // whole prompt on disk, as tokens.
+    const { store, dir } = await setup();
+    await writeFile(join(dir, 'conv-1.slot'), 'slot bytes', 'utf8');
+    await writeFile(join(dir, 'conv-1.manifest.json'), JSON.stringify(manifest()), 'utf8');
+
+    await store.forget('conv-1');
+
+    await expect(readFile(join(dir, 'conv-1.slot'))).rejects.toThrow();
+    await expect(readFile(join(dir, 'conv-1.manifest.json'))).rejects.toThrow();
+  });
+
   it('cleanly reports a missing manifest', async () => {
     const { slots, store } = await setup();
     const outcome = await store.restoreState(slots, 0, 'conv-inconnue', LIVE);

@@ -55,14 +55,24 @@ function killTree(child: ChildProcess): void {
   }
 }
 
+/**
+ * A script's name reaches a shell on Windows (`npm run <name>` through
+ * cmd.exe — the only way a `.cmd` shim runs): it must be a token, never a
+ * command line. A cloned package.json naming a script `dev & powershell …`
+ * would otherwise run the tail on the first click (audit, 2026-08-28).
+ */
+export function isSafeScriptName(name: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9:_.-]*$/.test(name);
+}
+
 async function readScripts(projectRoot: string): Promise<ScriptEntry[]> {
   try {
     const raw = await readFile(join(projectRoot, 'package.json'), 'utf8');
     const parsed = JSON.parse(raw) as { scripts?: Record<string, string> };
-    return Object.entries(parsed.scripts ?? {}).map(([name, command]) => ({
-      name,
-      command,
-    }));
+    // A name the launcher would refuse to run is not offered either.
+    return Object.entries(parsed.scripts ?? {})
+      .filter(([name]) => isSafeScriptName(name))
+      .map(([name, command]) => ({ name, command }));
   } catch {
     return [];
   }
@@ -121,6 +131,7 @@ export default definePlugin({
         script?: string;
       };
       if (!projectRoot || !script) throw new Error('projectRoot and script are required');
+      if (!isSafeScriptName(script)) throw new Error(`Refusing to run a script named "${script}".`);
       if (running.has(script)) return { alreadyRunning: true };
 
       const manager = await detectPackageManager(projectRoot);

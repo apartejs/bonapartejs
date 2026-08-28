@@ -242,6 +242,19 @@ published.
 
 ### Fixed
 
+- **Three findings of the security audit, fixed the same evening.** A rule
+  "always allow `pnpm test`" also allowed `pnpm test && curl … | sh`: the
+  word boundary stopped `pnpm testament` but let every shell operator
+  through behind a space — a command with a shell operator (semicolon,
+  ampersand, pipe, redirection, dollar, backtick or a line break) after
+  the prefix is another command, and asks again. Forgetting a conversation
+  removed its slot file by bare name, resolved from the process's working
+  directory, and never found it: the state is now deleted from the store.
+  The project launcher ran a script by name through the Windows shell
+  without checking the name: a script named `dev & …` in a cloned
+  package.json would have run its tail on the first click — names that are
+  not plain tokens are refused, and not offered.
+
 - Switching conversation from the sidebar left the previous thread on
   screen: the chat screen is now remounted per conversation. Covered by an
   Electron E2E.

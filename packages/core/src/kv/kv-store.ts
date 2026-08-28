@@ -112,7 +112,10 @@ export class KvStore {
    * announced re-prefill.
    */
   async forget(conversationId: string): Promise<void> {
-    await rm(this.slotFilename(conversationId), { force: true });
+    // The slot file lives where the server saves it — the store's directory,
+    // which is also the server's --slot-save-path. By its bare name it was
+    // being looked for in the process's cwd, and never found (audit, 28/08).
+    await rm(join(this.manifestDir, this.slotFilename(conversationId)), { force: true });
     await rm(this.manifestPath(conversationId), { force: true });
   }
 
