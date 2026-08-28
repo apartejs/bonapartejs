@@ -121,10 +121,12 @@ published.
   picker no longer asks for a context size; the context gauge reads what
   the server holds. A state saved under another context size is refused by
   its manifest and announced as a re-prefill.
-- apartéJS 0.2 → 0.14: the library is consumed in lockstep; each bump is
+- apartéJS 0.2 → 0.15: the library is consumed in lockstep; each bump is
   checked against a friction journal and contract tests on the rules the chat
   loop depends on. With 0.14.0 the highlighting provider takes a light/dark
-  pair, so code blocks follow the theme switch without re-registration.
+  pair, so code blocks follow the theme switch without re-registration; with
+  0.15.0 a tool call's input and result wrap inside the bubble instead of
+  running past its edge.
 
 ### Fixed
 
