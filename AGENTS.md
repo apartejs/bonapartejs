@@ -127,11 +127,16 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   J3 plugin-first shell ✅ (reversible plugin host, tabbed tooling panel,
   schema-driven settings hub, status strip with context gauge, 4 built-in
   plugins, Playwright E2E) · Consolidation (2026-08-19): the screens are done,
-  the engine is not — `n_ctx` owned by the engine, retention module, GGUF
-  sizes, prefix seeds, compaction-as-rebase, overflow guard, `gpuAcceleration`
-  setting, per-plugin activation, index and branching are all still to do (see
-  the plan); the prompt block order (stable → volatile) is done since
-  2026-08-28 · J4 MCP · J5 npx distribution.
+  the engine is not — retention module, GGUF sizes, prefix seeds,
+  compaction-as-rebase, `gpuAcceleration` setting, per-plugin activation,
+  index and branching are still to do (see the plan) · **Phase 1, engine
+  (2026-08-28)**: the prompt block order (stable → volatile), `EngineSupervisor`
+  and `ConversationEngine` in core (the harness is IPC glue), `n_ctx` owned by
+  the engine, the overflow guard with context shift off, a generation that
+  survives navigation, approvals on apartéJS's elicitation panel, the apartéJS
+  UI kit on every control — all done, 13 Electron E2E against the fake server;
+  left in phase 1: the announced cost of a model switch, per-project
+  allowlists · J4 MCP · J5 npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
   the outcome of each case.
   - **2026-08-28 — 5/5 green.** Qwen3-1.7B Q4_K_M (unsloth), unified `llama`
