@@ -46,7 +46,7 @@
   },
   "dependencies": {
     "@aparte/bonaparte-shared": "workspace:*",
-    "@aparte/core": "0.15.1"
+    "@aparte/core": "0.16.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",

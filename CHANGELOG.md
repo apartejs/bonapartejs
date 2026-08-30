@@ -184,6 +184,18 @@ published.
 
 ### Changed
 
+- **apartéJS bumped to 0.16.1** (from 0.15.1, in lockstep). No code change
+  on our side. What we get: a fenced code block from the model now wraps
+  instead of being silently amputated (`@aparte/plugin-marked`); a link in a
+  reply can no longer choose its own `target`/`rel` — it opens a new tab with
+  `noopener` — and model markup can no longer wear an `aparte-*` class to
+  forge core UI (the two security fixes we filed as issues #38 and, for the
+  approval panel, #37, both shipped in 0.16.0); the composer keeps the
+  transcript's gutter on a narrow pane; scrolling up during a streaming
+  reply works on WebKit; a failed tool call settles on a `failed` status
+  instead of spinning. 451 unit tests (the token and contract specs
+  included), lint, build and 29/29 E2E green on 0.16.1.
+
 - **The settings read as a list, and a field can depend on another.** Every
   row is one line now — label on the start edge, control (switch, select,
   field) on the end — so a plugin's settings and the sampling panel line up
