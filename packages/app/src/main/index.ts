@@ -101,8 +101,8 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
     height: 840,
-    minWidth: 900,
-    minHeight: 600,
+    minWidth: 480,
+    minHeight: 520,
     show: false,
     icon: iconPath(),
     // Background set before any paint to avoid the white flash; the renderer

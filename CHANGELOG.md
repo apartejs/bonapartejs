@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **The shell is responsive: a window gets dragged narrow.** Above a width
+  each flank is DOCKED — the resizable column beside the chat, as before.
+  Below it the flank becomes a DRAWER: it leaves the flow and slides over
+  the chat from its edge with a scrim behind, so the chat keeps its full
+  width whatever the window size (a click on the scrim or Escape closes
+  it). The sidebar undocks later than the panel — a cramped window still
+  wants its conversations reachable. The window's minimum width drops from
+  900 to 480 so it can actually go that narrow.
+
 - **A tray icon, and closing keeps bonaparte waiting.** Closing the window
   sends bonaparte to the notification area (Windows/Linux) or the menu bar
   (macOS) instead of quitting — its model kept warm, a click brings the

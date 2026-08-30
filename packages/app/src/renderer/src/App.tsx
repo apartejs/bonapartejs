@@ -397,7 +397,10 @@ export function App() {
 
   return (
     <div className="app-shell flex h-full flex-col">
-      <div className="app-body flex min-h-0 flex-1">
+      <div className="app-body relative flex min-h-0 flex-1">
+        {layout.anyDrawerOpen && (
+          <div className="shell-scrim" onClick={layout.closeDrawers} aria-hidden="true" />
+        )}
         {/*
           The flanks stay MOUNTED, even when collapsed — their width drops to
           zero, and that's it. This is the only reliable way to animate a
@@ -408,9 +411,11 @@ export function App() {
             <>
               <div
                 className="side-slot"
-                data-collapsed={layout.sidebarCollapsed ? 'true' : 'false'}
-                aria-hidden={layout.sidebarCollapsed}
-                style={{ width: layout.sidebarCollapsed ? 0 : layout.sidebarWidth }}
+                data-side="start"
+                data-mode={layout.sidebar.mode}
+                data-collapsed={layout.sidebar.visible ? 'false' : 'true'}
+                aria-hidden={!layout.sidebar.visible}
+                style={{ width: layout.sidebar.slotWidth }}
               >
                 <ConversationSidebar
                   conversations={conversations}
@@ -430,13 +435,15 @@ export function App() {
                   onGroupingChange={changeGrouping}
                   onSortChange={changeSort}
                 />
-                <ResizeHandle
-                  width={layout.sidebarWidth}
-                  bounds={SIDEBAR_BOUNDS}
-                  side="end"
-                  label={t.layout.resizeSidebar}
-                  onResize={layout.setSidebarWidth}
-                />
+                {layout.sidebar.mode === 'docked' && (
+                  <ResizeHandle
+                    width={layout.sidebar.width}
+                    bounds={SIDEBAR_BOUNDS}
+                    side="end"
+                    label={t.layout.resizeSidebar}
+                    onResize={layout.setSidebarWidth}
+                  />
+                )}
               </div>
             </>
           )}
@@ -483,8 +490,8 @@ export function App() {
               }}
               onCreateProject={() => setProjectDialog({ project: null })}
               onMoveToProject={(id) => void moveConversation(id)}
-              sidebarCollapsed={layout.sidebarCollapsed}
-              panelCollapsed={layout.panelCollapsed}
+              sidebarCollapsed={!layout.sidebar.visible}
+              panelCollapsed={!layout.panel.visible}
               onToggleSidebar={layout.toggleSidebar}
               onTogglePanel={layout.togglePanel}
             />
@@ -517,17 +524,21 @@ export function App() {
         {view === 'chat' && (
             <div
               className="side-slot"
-              data-collapsed={layout.panelCollapsed ? 'true' : 'false'}
-              aria-hidden={layout.panelCollapsed}
-              style={{ width: layout.panelCollapsed ? 0 : layout.panelWidth }}
+              data-side="end"
+              data-mode={layout.panel.mode}
+              data-collapsed={layout.panel.visible ? 'false' : 'true'}
+              aria-hidden={!layout.panel.visible}
+              style={{ width: layout.panel.slotWidth }}
             >
-              <ResizeHandle
-                width={layout.panelWidth}
-                bounds={PANEL_BOUNDS}
-                side="start"
-                label={t.layout.resizePanel}
-                onResize={layout.setPanelWidth}
-              />
+              {layout.panel.mode === 'docked' && (
+                <ResizeHandle
+                  width={layout.panel.width}
+                  bounds={PANEL_BOUNDS}
+                  side="start"
+                  label={t.layout.resizePanel}
+                  onResize={layout.setPanelWidth}
+                />
+              )}
               <ToolingPanel
                 tooling={tooling}
                 projectRoot={projectRoot}

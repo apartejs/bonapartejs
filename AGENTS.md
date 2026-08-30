@@ -98,7 +98,8 @@ When a library release fixes an entry, mark it resolved (never delete it).
   four and small: `theme.css` (the palette, ours and the kit's), `index.css`
   (Tailwind's entry: sources, the dark variant, the theme mapping, the
   `base` layer with the element defaults and the shell's scrollbars),
-  `layout.css` (the resizable flanks) and `terminal.css` (xterm's height
+  `layout.css` (the resizable flanks, which become overlay drawers when
+  the window is narrow) and `terminal.css` (xterm's height
   chain). There is no `app.css` to add a rule to — a new look is a
   utility on the element, or a primitive.
 - **The palette is React's, not the kit's.** react.dev's tokens (blue-50 /

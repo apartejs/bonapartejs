@@ -134,3 +134,66 @@ body.resizing {
     transition: none;
   }
 }
+
+/*
+ * ── Responsive flanks ──────────────────────────────────────────────────
+ *
+ * A window gets dragged narrow. Above a width a flank is DOCKED — the
+ * resizable column above. Below it, the same flank becomes a DRAWER: it
+ * leaves the flow (so the chat keeps its full width) and slides over the
+ * chat from its edge, a scrim behind it. `data-mode` carries which one.
+ */
+.side-slot[data-mode='drawer'] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  /* The width comes from the inline style (the drawer width), and the slot
+     slides in and out with a transform rather than by animating that width. */
+  transition: transform var(--bp-base) var(--bp-ease);
+  background: var(--aparte-surface-1);
+  box-shadow: 0 0 40px rgb(0 0 0 / 34%);
+}
+
+.side-slot[data-mode='drawer'][data-side='start'] {
+  inset-inline-start: 0;
+}
+.side-slot[data-mode='drawer'][data-side='end'] {
+  inset-inline-end: 0;
+}
+
+/* Closed, a drawer is slid fully off its own edge — and captures nothing. */
+.side-slot[data-mode='drawer'][data-collapsed='true'] {
+  pointer-events: none;
+  transform: translateX(-101%);
+}
+.side-slot[data-mode='drawer'][data-side='end'][data-collapsed='true'] {
+  transform: translateX(101%);
+}
+
+/* The scrim over the chat while a drawer is open: a click closes it. */
+.shell-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  background: rgb(0 0 0 / 38%);
+  animation: bp-shell-scrim-in var(--bp-fast) var(--bp-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-slot[data-mode='drawer'] {
+    transition: none;
+  }
+  .shell-scrim {
+    animation: none;
+  }
+}
+
+@keyframes bp-shell-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
