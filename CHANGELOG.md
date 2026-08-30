@@ -193,6 +193,18 @@ published.
 
 ### Changed
 
+- **apartéJS bumped to 0.16.2** (from 0.16.1, in lockstep). No code change
+  on our side, and the headline fix lands right where our responsive shell
+  needed it: moving `<aparte-chat>` in the DOM no longer disconnects the
+  composer — the child elements now bind their listeners in
+  `connectedCallback` instead of `_render()`, so a reparent survives (our
+  flanks reflow around the chat, and a future split-pane would move it
+  outright). In prime: the scroll-to-bottom button floats a steady 16px above
+  the transcript in framework-managed mode (it used to drift 48–278px with the
+  spacer), empty transcripts stop showing a scrollbar, and a new opt-in
+  `overlay-composer` we don't use yet. Typecheck, lint, build, and 29/29 E2E
+  green on 0.16.2.
+
 - **apartéJS bumped to 0.16.1** (from 0.15.1, in lockstep). No code change
   on our side. What we get: a fenced code block from the model now wraps
   instead of being silently amputated (`@aparte/plugin-marked`); a link in a
