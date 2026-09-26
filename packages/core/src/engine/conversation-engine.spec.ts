@@ -21,6 +21,7 @@ import { PermissionEngine } from '../permissions/engine.js';
 import {
   startFakeLlamaServer,
   type FakeLlamaServer,
+  type FakeLlamaServerOptions,
   type FakeSlotSnapshot,
 } from '../testing/fake-llama-server.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -80,6 +81,8 @@ async function makeRig(
     truncate?: boolean;
     /** Answers by prompt instead of by turn (replaces `replies`). */
     responder?: (prompt: string) => string;
+    /** More options for the fake server. */
+    server?: Partial<FakeLlamaServerOptions>;
     modelExists?: boolean;
     /** What the machine measured — shared by the supervisor and the engine, as in the app. */
     measures?: MeasureStore;
@@ -104,6 +107,7 @@ async function makeRig(
         }
       : () => replies[Math.min(turn++, replies.length - 1)] ?? '',
     files: disk,
+    ...options.server,
   });
   servers.push(server);
 
@@ -948,5 +952,29 @@ describe('ConversationEngine — a change while a reply streams (adversarial rev
     await engine.send('conv-a', 'what can you do now?');
 
     expect(prompts.at(-1)).toContain('late_tool');
+  });
+});
+
+describe('ConversationEngine — after a failed request (adversarial review, 2026-09-26)', () => {
+  it('the next message still reaches the model', async () => {
+    let deny = false;
+    const prompts: string[] = [];
+    const { engine } = await makeRig({
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return 'ok';
+      },
+      // Another key than the launch's: the server answers 401 to that request.
+      server: { apiKey: () => (deny ? 'not-our-key' : undefined) },
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'first message');
+    deny = true;
+    await engine.send('conv-a', 'second message').catch(() => undefined);
+    deny = false;
+
+    await engine.send('conv-a', 'third message');
+
+    expect(prompts.at(-1)).toContain('third message');
   });
 });

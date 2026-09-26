@@ -203,6 +203,7 @@ abstract class BaseBackend implements Backend {
     );
 
     const demux = new HermesStreamDemux();
+    let failed = false;
     let stats: CompletionStats = {
       promptMs: 0,
       promptUncachedTokens: 0,
@@ -244,10 +245,18 @@ abstract class BaseBackend implements Backend {
           ? { type: 'text', delta: out.delta }
           : { type: 'thinking', delta: out.delta };
       }
+    } catch (error) {
+      failed = request.signal?.aborted !== true;
+      throw error;
     } finally {
-      // The turn is frozen even on interruption: the prefix stays
-      // consistent with what the server actually saw.
-      turn.commit(demux.raw);
+      // The turn is frozen even on interruption (a Stop): the prefix stays
+      // consistent with what the server saw, and the loop keeps what came.
+      // A request that FAILED leaves no assistant entry in the transcript:
+      // the turn is dropped too, or the renderer runs one entry ahead and
+      // the next message never reaches the model (adversarial review,
+      // 2026-09-26).
+      if (failed) turn.abandon();
+      else turn.commit(demux.raw);
     }
 
     for (const call of parseHermesOutput(demux.raw).calls) {

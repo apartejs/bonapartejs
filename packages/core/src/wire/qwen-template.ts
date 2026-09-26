@@ -86,6 +86,14 @@ export class PromptLog {
     return this.pendingPrompt;
   }
 
+  /**
+   * Drops the turn begun: the request failed and nothing of it enters the
+   * history (the transcript gets no assistant entry either).
+   */
+  abandonAssistantTurn(): void {
+    this.pendingPrompt = null;
+  }
+
   /** Freezes the turn: `raw` is the model's raw output, verbatim. */
   completeAssistantTurn(raw: string): void {
     if (this.pendingPrompt === null) {

@@ -21,6 +21,8 @@ export interface RenderedTurn {
   prompt: string;
   /** Raw turn output, to freeze once generation is done. */
   commit(raw: string): void;
+  /** The request failed: nothing of the turn is kept, the renderer stays in step with the transcript. */
+  abandon(): void;
 }
 
 export class TranscriptRenderer {
@@ -111,6 +113,10 @@ export class TranscriptRenderer {
         this.turnOpen = false;
         // The assistant turn that will follow in the transcript is already rendered.
         this.rendered += 1;
+      },
+      abandon: () => {
+        this.log?.abandonAssistantTurn();
+        this.turnOpen = false;
       },
     };
   }
