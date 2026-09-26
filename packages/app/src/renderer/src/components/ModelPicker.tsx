@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { modelFileName } from '../models/filter.js';
 import { SETUP_CARD, SETUP_EYEBROW } from './SetupPanel.js';
+import { formatBytes, modelFootprint, verdictTone } from '../models/format.js';
 
 interface ModelPickerProps {
   busy: boolean;
@@ -33,12 +34,6 @@ interface ModelPickerProps {
   pendingMessage?: boolean;
 }
 
-function formatSize(bytes: number, units: { gib: string; mib: string }): string {
-  const gib = bytes / 1024 ** 3;
-  if (gib >= 1) return `${gib.toFixed(1)} ${units.gib}`;
-  return `${Math.max(1, Math.round(bytes / 1024 ** 2))} ${units.mib}`;
-}
-
 const HINT = 'text-[13.5px] text-muted-foreground';
 
 export function ModelPicker({
@@ -48,7 +43,7 @@ export function ModelPicker({
   missingModel,
   pendingMessage,
 }: ModelPickerProps) {
-  const { t } = useTranslate();
+  const { t, locale } = useTranslate();
   const [models, setModels] = useState<ModelInfoDto[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -148,7 +143,21 @@ export function ModelPicker({
                   <RadioGroupItem value={model.path} />
                   <span className="model-name min-w-0 flex-1 truncate font-mono text-[13px]">{model.name}</span>
                   <span className="model-meta inline-flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
-                    {formatSize(model.sizeBytes, t.units)}
+                    <span
+                      className={cn('model-footprint', verdictTone(model.memory?.verdict))}
+                      title={
+                        model.memory
+                          ? t.models.memoryHint
+                              .replace('{total}', formatBytes(model.memory.totalBytes, t.units))
+                              .replace('{ctx}', model.memory.nCtx.toLocaleString(locale))
+                              .replace('{weights}', formatBytes(model.memory.weightsBytes, t.units))
+                              .replace('{kv}', formatBytes(model.memory.kvBytes, t.units))
+                          : undefined
+                      }
+                    >
+                      {model.memory ? '≈ ' : ''}
+                      {formatBytes(modelFootprint(model), t.units)}
+                    </span>
                     <Badge
                       variant="outline"
                       className={cn(

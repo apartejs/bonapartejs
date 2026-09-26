@@ -128,6 +128,26 @@ export const EN: AppTranslations = {
     none: 'No model found on this machine.',
     switchWarning:
       'Switching models rebuilds the context: a saved state only holds for the model that produced it.',
+    memoryHint: 'About {total} of memory at {ctx} tokens — model {weights}, context {kv}',
+    tight: 'Tight for this machine’s memory',
+    tooBig: 'Larger than this machine’s memory',
+  },
+  switchModel: {
+    title: 'Switch this conversation to {model}?',
+    intro: 'Before you pay for it, here is what it costs.',
+    load: 'The model loads: {size} read from disk',
+    loadMeasured: 'About {seconds} s last time on this machine',
+    reprefill: 'The conversation is computed again: {tokens} tokens',
+    reprefillMeasured: 'About {seconds} s at the speed measured for this model',
+    reprefillUnmeasured: 'Its speed on this machine is not measured yet',
+    memory: 'It needs about {total} of memory at {ctx} tokens',
+    memoryDetail: 'Model {weights}, context {kv}',
+    tight: 'Tight: this machine has {machine}',
+    tooBig: 'More than this machine’s {machine}: it may not load, or be very slow',
+    stateNote:
+      'The saved context belongs to the current model: going back to it later computes the conversation again.',
+    cancel: 'Cancel',
+    confirm: 'Switch',
   },
   resources: {
     heading: 'Machine resources',

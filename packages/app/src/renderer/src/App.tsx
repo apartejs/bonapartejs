@@ -1,6 +1,7 @@
 import { aparteGlobalConfig } from '@aparte/core';
 import { fr as aparteFr } from '@aparte/locale-fr';
 import type {
+  SwitchEstimateDto,
   ApprovalRequestDto,
   ApprovalResponseDto,
   ResourceSampleDto,
@@ -20,6 +21,7 @@ import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
 import { DeleteConversationDialog } from './components/DeleteConversationDialog.js';
+import { SwitchModelDialog } from './components/SwitchModelDialog.js';
 import { ProjectDialog } from './components/ProjectDialog.js';
 import { SettingsHub } from './components/SettingsHub.js';
 import { ToolingPanel } from './components/ToolingPanel.js';
@@ -84,6 +86,10 @@ export function App() {
   } | null>(null);
   /** The conversation whose deletion is being confirmed. */
   const [toDelete, setToDelete] = useState<ConversationSummaryDto | null>(null);
+  /** A model switch waiting for its cost to be confirmed. */
+  const [switchAsk, setSwitchAsk] = useState<{ conversationId: string; estimate: SwitchEstimateDto } | null>(
+    null,
+  );
   // Menu organization: pure display preference, hence local — lifting it up
   // to the main process would restart the app for a cosmetic setting.
   const [grouping, setGrouping] = useState<SidebarGroupingDto>(
@@ -397,6 +403,29 @@ export function App() {
     else await refreshConversations();
   }, [toDelete, selectConversation, refreshConversations]);
 
+  /**
+   * A conversation changes model: nothing expensive without announcing it
+   * (D-03, P1.7). With a history to compute again — or a model that will
+   * not comfortably fit — the cost is shown first; an empty conversation on
+   * a model that fits just opens.
+   */
+  const requestModel = useCallback(
+    async (conversationId: string, modelPath: string, hasHistory: boolean) => {
+      let estimate: SwitchEstimateDto | null = null;
+      try {
+        estimate = await window.bonaparte.estimateSwitch(conversationId, modelPath);
+      } catch {
+        estimate = null;
+      }
+      const costly =
+        estimate !== null &&
+        (hasHistory || estimate.memory.verdict === 'tight' || estimate.memory.verdict === 'too-big');
+      if (estimate && costly) setSwitchAsk({ conversationId, estimate });
+      else void tryOpen(conversationId, modelPath);
+    },
+    [tryOpen],
+  );
+
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');
@@ -525,7 +554,9 @@ export function App() {
               modelName={opened.modelName ?? null}
               conversationId={opened.conversationId}
               busy={busy}
-              onPickModel={(modelPath) => void tryOpen(opened.conversationId, modelPath)}
+              onPickModel={(modelPath) =>
+                void requestModel(opened.conversationId, modelPath, opened.events.length > 0)
+              }
               missingModel={opened.missingModel ?? null}
               error={error}
               onDismissError={() => setError(null)}
@@ -574,6 +605,17 @@ export function App() {
           }}
           onToggleTheme={toggleTheme}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {switchAsk && (
+        <SwitchModelDialog
+          estimate={switchAsk.estimate}
+          onConfirm={() => {
+            const { conversationId, estimate } = switchAsk;
+            setSwitchAsk(null);
+            void tryOpen(conversationId, estimate.modelPath);
+          }}
+          onCancel={() => setSwitchAsk(null)}
         />
       )}
       {toDelete && (

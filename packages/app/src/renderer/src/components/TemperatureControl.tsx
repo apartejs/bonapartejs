@@ -75,7 +75,7 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
           title={`${t.temperature.label} — ${origin}`}
         >
           <Thermometer className="size-3.5 opacity-70" aria-hidden="true" />
-          {value.toLocaleString()}
+          {value.toLocaleString(locale)}
         </Button>
       </PopoverTrigger>
       {/* Opens UPWARD: the composer is at the bottom of the window. */}
@@ -93,7 +93,7 @@ export function TemperatureControl({ conversationId }: TemperatureControlProps) 
           className="my-2"
         />
         <div className="temp-row mt-3 flex items-center gap-2">
-          <span className="temp-value font-mono text-[13px] tabular-nums">{value.toLocaleString()}</span>
+          <span className="temp-value font-mono text-[13px] tabular-nums">{value.toLocaleString(locale)}</span>
           {/* The origin is stated: without it, you can't tell whether
               you're adjusting this conversation or reading the global
               default. */}

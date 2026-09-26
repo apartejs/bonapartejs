@@ -4,6 +4,7 @@ import { Cpu, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { filterModels } from '../models/filter.js';
+import { formatBytes, modelFootprint, verdictTone } from '../models/format.js';
 import { MENU_LABEL } from './menu-styles.js';
 
 interface ModelSelectorProps {
@@ -14,10 +15,6 @@ interface ModelSelectorProps {
   /** Controlled open, so another surface (the missing-model alert) can raise the menu. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-}
-
-function sizeLabel(bytes: number, unit: string): string {
-  return `${(bytes / 1024 ** 3).toFixed(1)} ${unit}`;
 }
 
 const HINT = 'model-hint mx-1 mt-1.5 mb-0.5 text-[11.5px] leading-normal text-muted-foreground';
@@ -42,7 +39,7 @@ export function ModelSelector({
   open: openProp,
   onOpenChange,
 }: ModelSelectorProps) {
-  const { t } = useTranslate();
+  const { t, locale } = useTranslate();
   const [openState, setOpenState] = useState(false);
   // Controlled when the parent drives it (the alert), self-managed otherwise.
   const open = openProp ?? openState;
@@ -153,8 +150,31 @@ export function ModelSelector({
                       title={model.path}
                     >
                       <span className="model-item-name min-w-0 flex-1 truncate">{model.name}</span>
-                      <span className="model-item-size font-mono text-[10.5px] text-muted-foreground">
-                        {sizeLabel(model.sizeBytes, t.units.gib)}
+                      {/* What it will take in memory at the engine's context —
+                          the cost, read from the header, before the click. */}
+                      <span
+                        className={cn('model-item-size font-mono text-[10.5px]', verdictTone(model.memory?.verdict))}
+                        title={
+                          model.memory
+                            ? [
+                                t.models.memoryHint
+                                  .replace('{total}', formatBytes(model.memory.totalBytes, t.units))
+                                  .replace('{ctx}', model.memory.nCtx.toLocaleString(locale))
+                                  .replace('{weights}', formatBytes(model.memory.weightsBytes, t.units))
+                                  .replace('{kv}', formatBytes(model.memory.kvBytes, t.units)),
+                                model.memory.verdict === 'too-big'
+                                  ? t.models.tooBig
+                                  : model.memory.verdict === 'tight'
+                                    ? t.models.tight
+                                    : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' — ')
+                            : undefined
+                        }
+                      >
+                        {model.memory ? '≈ ' : ''}
+                        {formatBytes(modelFootprint(model), t.units)}
                       </span>
                     </button>
                   );

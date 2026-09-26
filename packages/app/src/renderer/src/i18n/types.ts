@@ -134,6 +134,35 @@ export interface AppTranslations {
     none: string;
     /** What actually changes when the model changes. */
     switchWarning: string;
+    /** `{total}` memory at `{ctx}` tokens; `{weights}` + `{kv}`. */
+    memoryHint: string;
+    tight: string;
+    tooBig: string;
+  };
+  /** The confirmation before a conversation changes model (D-03). */
+  switchModel: {
+    /** `{model}`: the model's name. */
+    title: string;
+    intro: string;
+    /** `{size}`: bytes read. */
+    load: string;
+    /** `{seconds}`. */
+    loadMeasured: string;
+    /** `{tokens}`. */
+    reprefill: string;
+    /** `{seconds}`. */
+    reprefillMeasured: string;
+    reprefillUnmeasured: string;
+    /** `{total}` at `{ctx}` tokens. */
+    memory: string;
+    /** `{weights}`, `{kv}`. */
+    memoryDetail: string;
+    /** `{machine}`: the machine's memory. */
+    tight: string;
+    tooBig: string;
+    stateNote: string;
+    cancel: string;
+    confirm: string;
   };
   /** The machine's chips in the status strip. */
   resources: {

@@ -7,7 +7,8 @@
  * lives in core — here, only wiring.
  */
 
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { totalmem } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
@@ -26,6 +27,10 @@ import {
   createSystemDoctorEnv,
   defaultScanRoots,
   EngineSupervisor,
+  estimateLoad,
+  estimateSwitch,
+  memoryVerdict,
+  readGgufInfo,
   GrantStore,
   HARNESS_SETTINGS,
   APP_SETTINGS,
@@ -42,6 +47,7 @@ import {
   scanModels,
   ToolRegistry,
   type EngineConfig,
+  type GgufInfo,
   type KvCacheType,
   type PlayMode,
   type PluginNodeModule,
@@ -64,6 +70,8 @@ import {
   type ConversationSummaryDto,
   type ConversationOpenReplyDto,
   type EndpointProbeDto,
+  type ModelMemoryDto,
+  type SwitchEstimateDto,
   type GrantDto,
   type ModelInfoDto,
   type PickFileKind,
@@ -1183,8 +1191,122 @@ export class Harness {
     return binPath ? { binPath } : {};
   }
 
+  /**
+   * The models of the machine, each with what it will take in memory at the
+   * engine's context — read from its GGUF header, a few at a time.
+   */
   async scanModelInventory(): Promise<ModelInfoDto[]> {
-    return scanModels(defaultScanRoots());
+    const models = await scanModels(defaultScanRoots());
+    const launch = await this.launchSettings();
+    const out: ModelInfoDto[] = [];
+    for (let i = 0; i < models.length; i += 4) {
+      const batch = models.slice(i, i + 4);
+      const memories = await Promise.all(
+        batch.map((model) => this.memoryOf(model.path, model.sizeBytes, model.modifiedAt, launch)),
+      );
+      batch.forEach((model, index) => {
+        const memory = memories[index];
+        out.push({ ...model, ...(memory ? { memory } : {}) });
+      });
+    }
+    return out;
+  }
+
+  /** Headers already read, by path — valid while the file keeps its size and date. */
+  private readonly ggufInfos = new Map<string, { stamp: string; info: GgufInfo }>();
+
+  private async ggufInfo(modelPath: string, stamp: string): Promise<GgufInfo> {
+    const cached = this.ggufInfos.get(modelPath);
+    if (cached?.stamp === stamp) return cached.info;
+    const info = await readGgufInfo(modelPath);
+    this.ggufInfos.set(modelPath, { stamp, info });
+    return info;
+  }
+
+  /** A model's memory need at the engine's launch settings; undefined when its header cannot be read. */
+  private async memoryOf(
+    modelPath: string,
+    sizeBytes: number,
+    modifiedAt: string,
+    launch: { nCtx: number; cacheType: KvCacheType },
+  ): Promise<ModelMemoryDto | undefined> {
+    try {
+      const info = await this.ggufInfo(modelPath, `${sizeBytes}:${modifiedAt}`);
+      const estimate = estimateLoad(info, sizeBytes, launch.nCtx, launch.cacheType);
+      return {
+        totalBytes: estimate.totalBytes,
+        weightsBytes: estimate.weightsBytes,
+        kvBytes: estimate.kvBytes,
+        nCtx: launch.nCtx,
+        verdict: memoryVerdict(estimate.totalBytes, totalmem()),
+        beyondTraining: estimate.beyondTraining,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * What switching a conversation to another model costs (P1.7, D-03): the
+   * model read from disk, the conversation's context computed again, the
+   * memory — with the durations this machine measured, and only those.
+   */
+  async estimateModelSwitch(conversationId: string, modelPath: string): Promise<SwitchEstimateDto | null> {
+    if (typeof modelPath !== 'string' || !/\.gguf$/i.test(modelPath)) return null;
+    let file: { size: number; mtime: Date };
+    try {
+      file = await stat(modelPath);
+    } catch {
+      return null;
+    }
+    const launch = await this.launchSettings();
+    const memory = await this.memoryOf(modelPath, file.size, file.mtime.toISOString(), launch);
+    if (!memory) return null;
+    const contextTokens =
+      this.conversations.contextTokensOf(conversationId) ??
+      (await this.kv.savedTokens(conversationId)) ??
+      (await this.estimateContextFromLog(conversationId));
+    const loadSeconds = this.supervisor.loadSeconds(modelPath);
+    const prefillTokensPerSecond = this.conversations.prefillRate(modelPath);
+    const cost = estimateSwitch({
+      load: {
+        weightsBytes: memory.weightsBytes,
+        kvBytes: memory.kvBytes,
+        overheadBytes: memory.totalBytes - memory.weightsBytes - memory.kvBytes,
+        totalBytes: memory.totalBytes,
+        kvBytesPerToken: 0,
+        beyondTraining: memory.beyondTraining,
+      },
+      contextTokens,
+      ...(prefillTokensPerSecond !== undefined ? { prefillTokensPerSecond } : {}),
+      ...(loadSeconds !== undefined ? { loadSeconds } : {}),
+    });
+    return {
+      modelPath,
+      modelName: modelDisplayName(modelPath),
+      memory,
+      machineBytes: totalmem(),
+      readBytes: cost.readBytes,
+      ...(cost.loadSeconds !== undefined ? { loadSeconds: cost.loadSeconds } : {}),
+      reprefillTokens: cost.reprefillTokens,
+      ...(cost.reprefillSeconds !== undefined ? { reprefillSeconds: cost.reprefillSeconds } : {}),
+    };
+  }
+
+  /**
+   * A conversation's size when nothing measured it: its words, at about
+   * 3.5 characters a token, plus the system prompt. An order of magnitude
+   * for the announcement — the exact figure is the server's, after.
+   */
+  private async estimateContextFromLog(conversationId: string): Promise<number> {
+    try {
+      const events = await this.store.loadEvents(conversationId);
+      if (events.length === 0) return 0;
+      const chars = events.reduce((sum, event) => sum + JSON.stringify(event).length, 0);
+      return Math.round(chars / 3.5) + 600;
+    } catch {
+      return 0;
+    }
   }
 
   /** Checks that a llama-server actually responds at this URL (remote mode). */
@@ -1291,6 +1413,9 @@ export class Harness {
     });
     handle(IPC.setupSuggest, () => this.suggestSetup());
     handle(IPC.modelsScan, () => this.scanModelInventory());
+    handle(IPC.modelsEstimateSwitch, (conversationId: string, modelPath: string) =>
+      this.estimateModelSwitch(conversationId, modelPath),
+    );
     handle(IPC.endpointProbe, (url: string) => this.probeEndpointUrl(url));
     handle(IPC.dialogPickFile, (kind: PickFileKind) =>
       this.pickFile(kind),

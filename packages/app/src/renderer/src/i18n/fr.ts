@@ -130,6 +130,26 @@ export const FR: AppTranslations = {
     none: 'Aucun modèle trouvé sur cette machine.',
     switchWarning:
       'Changer de modèle reconstruit le contexte : l’état sauvegardé ne vaut que pour le modèle qui l’a produit.',
+    memoryHint: 'Environ {total} de mémoire à {ctx} jetons — modèle {weights}, contexte {kv}',
+    tight: 'Juste pour la mémoire de cette machine',
+    tooBig: 'Plus grand que la mémoire de cette machine',
+  },
+  switchModel: {
+    title: 'Passer cette conversation sur {model} ?',
+    intro: 'Avant de le payer, voici ce que ça coûte.',
+    load: 'Le modèle se charge : {size} lus sur le disque',
+    loadMeasured: 'Environ {seconds} s la dernière fois sur cette machine',
+    reprefill: 'La conversation est recalculée : {tokens} jetons',
+    reprefillMeasured: 'Environ {seconds} s à la vitesse mesurée pour ce modèle',
+    reprefillUnmeasured: 'Sa vitesse sur cette machine n’est pas encore mesurée',
+    memory: 'Il lui faut environ {total} de mémoire à {ctx} jetons',
+    memoryDetail: 'Modèle {weights}, contexte {kv}',
+    tight: 'Juste : cette machine a {machine}',
+    tooBig: 'Plus que les {machine} de cette machine : il risque de ne pas se charger, ou d’être très lent',
+    stateNote:
+      'Le contexte sauvegardé appartient au modèle actuel : y revenir plus tard recalculera la conversation.',
+    cancel: 'Annuler',
+    confirm: 'Changer',
   },
   resources: {
     heading: 'Ressources de la machine',

@@ -15,6 +15,18 @@ published.
 
 ### Added
 
+- **A model's cost is said before it is paid** (P1.7, D-03, D-21). The
+  model menus show what each model will take in memory at the engine's
+  context — read from its GGUF header: the weights, the KV cache (per
+  layer, counting sliding windows and linear-attention layers right), a
+  compute margin — marked as an estimate, amber when tight for the
+  machine, red when larger than it. Switching a conversation that has a
+  history to another model (or to one that will not comfortably fit)
+  first asks, with the cost: the model read from disk, the conversation
+  computed again (its tokens, and seconds only when this machine measured
+  that model's speed or load time), the memory it needs — and that the
+  saved context stays with the current model. Cancel holds the focus.
+
 - **Grants are kept per project, and can be taken back** (P1.8, D-29).
   An "always allow" lived in memory, for the whole app: a `pnpm` grant
   given in one project answered in every other, and a restart forgot it.
@@ -413,6 +425,10 @@ published.
   running past its edge.
 
 ### Fixed
+
+- **Numbers follow the interface's language**, not the operating
+  system's: the temperature's decimal separator and the token counts read
+  `8,192` in English on a French Windows.
 
 - **Picking a model no longer erases the config.** The full-screen model
   picker saved `{ backend, defaultModel }` as the WHOLE config: settings,

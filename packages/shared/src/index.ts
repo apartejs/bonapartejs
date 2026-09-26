@@ -40,6 +40,7 @@ export const IPC = {
   dialogPickFile: 'dialog.pickFile',
   modelsScan: 'models.scan',
   endpointProbe: 'endpoint.probe',
+  modelsEstimateSwitch: 'models.estimateSwitch',
   openExternal: 'shell.openExternal',
   projectOpen: 'project.open',
   projectCurrent: 'project.current',
@@ -96,6 +97,21 @@ export interface EndpointProbeDto {
   totalSlots?: number;
 }
 
+/** How a model's memory need compares with the machine's memory. */
+export type MemoryVerdictDto = 'fits' | 'tight' | 'too-big' | 'unknown';
+
+/** What a model will take in memory at the engine's context size and cache type. */
+export interface ModelMemoryDto {
+  totalBytes: number;
+  weightsBytes: number;
+  kvBytes: number;
+  /** The context size the estimate is for (the engine's). */
+  nCtx: number;
+  verdict: MemoryVerdictDto;
+  /** The context is larger than the one the model was trained for. */
+  beyondTraining: boolean;
+}
+
 /** Model discovered by the inventory (scan of known locations). */
 export interface ModelInfoDto {
   path: string;
@@ -103,6 +119,25 @@ export interface ModelInfoDto {
   sizeBytes: number;
   modifiedAt: string;
   source: 'lmstudio' | 'hf-cache' | 'custom' | 'manual';
+  /** Absent when the GGUF header could not be read. */
+  memory?: ModelMemoryDto;
+}
+
+/** What switching a conversation to another model costs — shown before the switch (D-03, P1.7). */
+export interface SwitchEstimateDto {
+  modelPath: string;
+  modelName: string;
+  memory: ModelMemoryDto;
+  /** The machine's memory, the verdict's denominator. */
+  machineBytes: number;
+  /** Bytes read from disk to load the model. */
+  readBytes: number;
+  /** Seconds this model took to load last time, when measured. */
+  loadSeconds?: number;
+  /** Tokens of the conversation computed again on the new model. */
+  reprefillTokens: number;
+  /** Seconds for that, when this model's prefill speed was measured. */
+  reprefillSeconds?: number;
 }
 
 export interface AppConfigDto {
@@ -371,6 +406,8 @@ export interface BonaparteBridge {
   suggestSetup(): Promise<SetupSuggestionDto>;
   pickFile(kind: PickFileKind): Promise<string | null>;
   scanModels(): Promise<ModelInfoDto[]>;
+  /** What switching this conversation to that model would cost; null when the model cannot be read. */
+  estimateSwitch(conversationId: string, modelPath: string): Promise<SwitchEstimateDto | null>;
   /** Checks that a llama-server does respond at this URL (remote mode). */
   probeEndpoint(url: string): Promise<EndpointProbeDto | null>;
   /** Only opens https URLs from an allowlist (main process). */
