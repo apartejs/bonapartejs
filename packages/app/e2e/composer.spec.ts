@@ -49,6 +49,11 @@ test('the play mode is chosen from a menu that names what each mode allows', asy
   await expect(improv).toContainText('without asking');
   await improv.click();
   await expect(button).toContainText('Improv');
+  // The menu closes with an animation, then hands the focus back to its
+  // trigger: the next test must not open a popover before that (the focus
+  // coming back would dismiss it — only a test clicks that fast).
+  await expect(window.getByRole('menu')).toHaveCount(0);
+  await expect(button).toBeFocused();
 });
 
 test('the reasoning switch is a pressed button', async () => {

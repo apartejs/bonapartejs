@@ -181,12 +181,23 @@ function createWindow(): void {
   });
 
   harness.attachWindow(win);
-  // Electron has no real headless mode: what we can do is NEVER show the
-  // window. The renderer still runs, the DOM is alive, and the tests observe
-  // exactly the same thing — without a window popping up in front of the
-  // user on every run.
+  // Electron has no real headless mode, and the tests must not pop a window
+  // up in front of the user on every run…
   if (!process.env['BONAPARTE_E2E']) {
     win.once('ready-to-show', () => win.show());
+  } else {
+    // …but a window never shown paints no frames: transitions freeze half
+    // way, smooth scrolls never end, and every interaction waits on a frame
+    // that does not come (~2 s a click). Shown, it paints — off-screen,
+    // transparent, deaf to the mouse and out of the taskbar, so nobody at
+    // the machine sees or clicks it. The tests drive it through CDP.
+    win.once('ready-to-show', () => {
+      win.setSkipTaskbar(true);
+      win.setIgnoreMouseEvents(true);
+      win.setOpacity(0);
+      win.setPosition(-32000, -32000);
+      win.showInactive();
+    });
   }
 
   // On close: three cases.
