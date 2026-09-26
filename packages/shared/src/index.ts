@@ -186,6 +186,8 @@ export interface ProjectSummaryDto {
   id: string;
   name: string;
   roots: string[];
+  /** Instruction files the model reads (AGENTS.md…), relative to their root. */
+  instructions?: string[];
 }
 
 /** A conversation in the menu list — enough to display and pick it. */

@@ -150,6 +150,13 @@ export function ConversationHeader({
                   ))
                 )}
               </ul>
+              {/* What the model is told to follow in this project — or where it
+                  would look, so a convention file is one save away. */}
+              <p className="conv-popover-instructions mb-2.5 text-[11.5px] leading-snug text-muted-foreground">
+                {project.instructions && project.instructions.length > 0
+                  ? t.header.instructions.replace('{files}', project.instructions.join(', '))
+                  : t.header.noInstructions}
+              </p>
               <Button
                 type="button"
                 variant="secondary"

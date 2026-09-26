@@ -46,6 +46,12 @@ export interface ConversationMeta {
    * parameters go into the KV manifest and remain global).
    */
   settings?: Record<string, unknown>;
+  /**
+   * Hash of the project instructions the system prompt was frozen with (or
+   * last announced): a different one at open is announced by an appended
+   * message. Absent with no instructions.
+   */
+  instructionsHash?: string;
   /** Kept at the top of the list. A mark, not activity. */
   pinned?: boolean;
   /** Out of the list until asked for. A mark, not activity. */
@@ -257,6 +263,14 @@ export class ConversationStore {
   async setFrozenRoots(id: string, roots: string[]): Promise<void> {
     const meta = await this.meta(id);
     meta.frozenRoots = roots;
+    await this.writeMeta(meta);
+  }
+
+  /** Remembers the instructions in effect (frozen, or last announced); undefined when there are none. */
+  async setInstructionsHash(id: string, hash: string | undefined): Promise<void> {
+    const meta = await this.meta(id);
+    if (hash === undefined) delete meta.instructionsHash;
+    else meta.instructionsHash = hash;
     await this.writeMeta(meta);
   }
 

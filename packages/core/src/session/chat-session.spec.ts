@@ -197,6 +197,51 @@ describe('ChatSession — opening', () => {
   });
 });
 
+describe('ChatSession — project instructions, frozen then announced when they change', () => {
+  it('freezes the instructions in the system prompt at the first open', async () => {
+    const rig = await makeRig({});
+    await ChatSession.open({ ...rig.options, projectInstructions: 'Use pnpm, never npm.' }, 'conv-1');
+    const meta = await rig.options.store.meta('conv-1');
+    expect((meta.backendState as { systemPrompt: string }).systemPrompt).toContain('Use pnpm, never npm.');
+    expect(await rig.options.store.loadEvents('conv-1')).toEqual([]);
+  });
+
+  it('a change is APPENDED as a service message — the frozen prompt never moves', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-session-instr-'));
+    dirs.push(dir);
+    const first = await makeRig({ baseDir: dir });
+    await ChatSession.open({ ...first.options, projectInstructions: 'Use pnpm.' }, 'conv-1');
+    const frozen = (await first.options.store.meta('conv-1')).backendState;
+
+    const second = await makeRig({ baseDir: dir });
+    await ChatSession.open({ ...second.options, projectInstructions: 'Use pnpm. Tests first.' }, 'conv-1');
+
+    expect((await second.options.store.meta('conv-1')).backendState).toEqual(frozen);
+    const service = (await second.options.store.loadEvents('conv-1')).find((e) => e.type === 'service') as {
+      text: string;
+    };
+    expect(service.text).toContain('Tests first.');
+
+    // Announced once: the same instructions again append nothing.
+    const third = await makeRig({ baseDir: dir });
+    await ChatSession.open({ ...third.options, projectInstructions: 'Use pnpm. Tests first.' }, 'conv-1');
+    expect((await third.options.store.loadEvents('conv-1')).filter((e) => e.type === 'service')).toHaveLength(1);
+  });
+
+  it('instructions removed since the freeze are announced as removed', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-session-instr-'));
+    dirs.push(dir);
+    const first = await makeRig({ baseDir: dir });
+    await ChatSession.open({ ...first.options, projectInstructions: 'Use pnpm.' }, 'conv-1');
+    const second = await makeRig({ baseDir: dir });
+    await ChatSession.open(second.options, 'conv-1');
+    const service = (await second.options.store.loadEvents('conv-1')).find((e) => e.type === 'service') as {
+      text: string;
+    };
+    expect(service.text).toMatch(/no longer|removed/i);
+  });
+});
+
 describe('ChatSession — sending', () => {
   it('streams the response and persists the turn', async () => {
     const rig = await makeRig({ replies: ['Bonjour Paul.'] });

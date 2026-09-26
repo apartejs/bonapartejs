@@ -150,6 +150,12 @@ export type {
 } from './permissions/engine.js';
 export { alwaysRule, commandBinary, isArmedPath, PermissionEngine, PLAY_MODES } from './permissions/engine.js';
 export { GrantStore, type Grant } from './permissions/grants.js';
+export {
+  INSTRUCTION_FILES,
+  MAX_INSTRUCTIONS_CHARS,
+  readProjectInstructions,
+  type ProjectInstructions,
+} from './project/instructions.js';
 
 export type {
   AgentEvent,

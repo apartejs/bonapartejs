@@ -21,7 +21,12 @@ import type {
 } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import { renderInventoryDelta, renderPerimeterDelta } from '../wire/system-prompt.js';
+import { createHash } from 'node:crypto';
+import { renderInstructionsDelta, renderInventoryDelta, renderPerimeterDelta } from '../wire/system-prompt.js';
+
+function instructionsHash(text: string | undefined): string | undefined {
+  return text ? createHash('sha256').update(text).digest('hex').slice(0, 32) : undefined;
+}
 
 export interface ChatSessionOptions {
   backend: Backend;
@@ -155,6 +160,9 @@ export class ChatSession {
     // Has the scenery changed since the freeze? Same rule: we append.
     if (meta.toolNames !== undefined) {
       await session.announcePerimeterDelta(meta.frozenRoots ?? []);
+      // And the project's instructions: the frozen prompt holds the old
+      // ones; the new ones are appended.
+      await session.announceInstructionsDelta(meta.instructionsHash);
     }
 
     if (!backend.slots) {
@@ -194,6 +202,7 @@ export class ChatSession {
       // that, reopening would think a project had just appeared and would
       // announce a change that never happened.
       await store.setFrozenRoots(this.conversationId, this.options.roots ?? []);
+      await store.setInstructionsHash(this.conversationId, instructionsHash(this.options.projectInstructions));
       return;
     }
 
@@ -220,6 +229,14 @@ export class ChatSession {
 
     await this.appendService(message);
     await this.options.store.setFrozenRoots(this.conversationId, current);
+  }
+
+  private async announceInstructionsDelta(frozenHash: string | undefined): Promise<void> {
+    const current = this.options.projectInstructions;
+    const hash = instructionsHash(current);
+    if (hash === frozenHash) return;
+    await this.appendService(renderInstructionsDelta(current));
+    await this.options.store.setInstructionsHash(this.conversationId, hash);
   }
 
   /** Service message: in the transcript AND in the log, never in the UI. */

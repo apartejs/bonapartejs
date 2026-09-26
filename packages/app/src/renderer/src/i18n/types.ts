@@ -263,6 +263,9 @@ export interface AppTranslations {
     noRoots: string;
     /** Root the model resolves its relative paths against. */
     defaultRoot: string;
+    /** `{files}`: the instruction files the model reads. */
+    instructions: string;
+    noInstructions: string;
     rename: string;
     actions: string;
     moveTo: string;

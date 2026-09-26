@@ -15,6 +15,17 @@ published.
 
 ### Added
 
+- **The project's instructions reach the model** (06 §2, must-have). The
+  system prompt had a place for them and nothing filled it. Per project
+  root, the first of `.bonaparte/instructions.md`, `AGENTS.md`,
+  `CLAUDE.md` is read (a file made only of `@file` imports — a CLAUDE.md
+  saying `@AGENTS.md` — is followed, inside its root), capped at 16 000
+  characters. It is frozen into a conversation's system prompt at its
+  first open; when the file changes later, the new text is appended as a
+  message — the frozen prompt, and the saved context built on it, never
+  move. The header's project panel says which file the model follows, or
+  where it would look.
+
 - **Pin, archive, search, duplicate, branch** (P2.7, D-43/D-44). Each
   sidebar row's menu pins (pinned conversations lead the list, whatever
   the grouping), archives (out of the list until "Show archived" in the

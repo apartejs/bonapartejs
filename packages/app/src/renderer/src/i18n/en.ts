@@ -220,12 +220,15 @@ export const EN: AppTranslations = {
     noProject: 'No project',
     noProjectHint: 'This conversation is not attached to a project',
     noProjectExplain:
-      'This conversation has no project. Tools still work, but nothing confines them: relative paths resolve from your home directory.',
+      'This conversation has no project. Tools still work inside your home folder — relative paths start there — and nothing outside it.',
     createProject: 'Create a project',
     editProject: 'Edit project',
     projectPanel: 'Conversation project',
     noRoots: 'No source folder — this project is just a group.',
     defaultRoot: 'default',
+    instructions: 'The model follows {files}',
+    noInstructions:
+      'No instructions file: the model reads AGENTS.md, CLAUDE.md or .bonaparte/instructions.md when the project has one.',
     rename: 'Rename conversation',
     actions: 'Actions',
     moveTo: 'Move to a project',

@@ -172,6 +172,17 @@ export function renderPerimeterDelta(
   return parts.join('\n');
 }
 
+/**
+ * The project instructions changed since the system prompt was frozen: the
+ * new text is appended, never re-rendered into the frozen prompt.
+ */
+export function renderInstructionsDelta(current: string | undefined): string {
+  if (!current) {
+    return '[project update]\nThe project instructions no longer exist: disregard the ones in the system prompt.';
+  }
+  return `[project update]\nThe project instructions changed. They now read:\n${current}`;
+}
+
 /** Message appended when the tooling changes mid-conversation. */
 export function renderInventoryDelta(delta: ToolInventoryDelta): string | null {
   if (delta.added.length === 0 && delta.removed.length === 0) return null;

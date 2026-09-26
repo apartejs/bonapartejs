@@ -32,6 +32,7 @@ import {
   estimateSwitch,
   memoryVerdict,
   readGgufInfo,
+  readProjectInstructions,
   GrantStore,
   HARNESS_SETTINGS,
   APP_SETTINGS,
@@ -209,9 +210,12 @@ export class Harness {
       supervisor: this.supervisor,
       defaultModel: async () => (await this.loadConfig()).defaultModel?.path,
       rootsOf: (id) => this.rootsOf(id),
-      context: async () => ({
+      context: async (conversationId) => ({
         // The thread is in English; only the reply language follows the user.
         replyLanguage: (await this.loadConfig()).locale === 'en' ? 'English' : 'French',
+        // The repository's conventions: frozen at the first open, a change
+        // appended as a message (never re-rendered).
+        ...(await this.instructionsFor(conversationId)),
         sampling: await this.currentSampling(),
         thinking: await this.currentThinking(),
         ...(await this.currentContextLimit()),
@@ -417,6 +421,24 @@ export class Harness {
     this.projectOf.set(conversationId, projectId);
     if (!projectId) return [];
     return (await this.projects.get(projectId))?.roots ?? [];
+  }
+
+  /** The project's instruction files, as the prompt carries them. */
+  private async instructionsFor(conversationId: string): Promise<{ projectInstructions?: string }> {
+    const roots = await this.rootsOf(conversationId).catch(() => []);
+    const found = await readProjectInstructions(roots);
+    return found ? { projectInstructions: found.text } : {};
+  }
+
+  /** A project as the renderer lists it, with the instruction files the model reads. */
+  private async projectSummary(project: { id: string; name: string; roots: string[] }): Promise<ProjectSummaryDto> {
+    const found = await readProjectInstructions(project.roots);
+    return {
+      id: project.id,
+      name: project.name,
+      roots: project.roots,
+      ...(found ? { instructions: found.sources } : {}),
+    };
   }
 
   /** Project name for display, or nothing if there is none. */
@@ -810,19 +832,17 @@ export class Harness {
   // ── Projects ───────────────────────────────────────────────────────────
 
   async listProjects(): Promise<ProjectSummaryDto[]> {
-    const projects = await this.projects.list();
-    return projects.map(({ id, name, roots }) => ({ id, name, roots }));
+    return Promise.all((await this.projects.list()).map((project) => this.projectSummary(project)));
   }
 
   async createProject(name: string, roots: string[] = []): Promise<ProjectSummaryDto> {
-    const { id, roots: saved } = await this.projects.create({ name, roots });
-    return { id, name, roots: saved };
+    return this.projectSummary(await this.projects.create({ name, roots }));
   }
 
   async renameProject(id: string, name: string): Promise<ProjectSummaryDto> {
     const project = await this.projects.rename(id, name);
     await this.refreshRoots();
-    return { id: project.id, name: project.name, roots: project.roots };
+    return this.projectSummary(project);
   }
 
   async setProjectRoots(id: string, roots: string[]): Promise<ProjectSummaryDto> {
@@ -830,7 +850,7 @@ export class Harness {
     // The scope has changed: the ongoing session carries the old one, it must
     // be rebuilt so the delta gets announced to the model on reopening.
     await this.refreshRoots();
-    return { id: project.id, name: project.name, roots: project.roots };
+    return this.projectSummary(project);
   }
 
   async removeProject(id: string): Promise<void> {

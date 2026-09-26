@@ -222,12 +222,15 @@ export const FR: AppTranslations = {
     noProject: 'Sans projet',
     noProjectHint: 'Cette conversation n’est rattachée à aucun projet',
     noProjectExplain:
-      'Cette conversation n’a pas de projet. Les outils fonctionnent quand même, mais rien ne les confine : les chemins relatifs partent de votre dossier personnel.',
+      'Cette conversation n’a pas de projet. Les outils fonctionnent dans votre dossier personnel — les chemins relatifs partent de là — et rien au-dehors.',
     createProject: 'Créer un projet',
     editProject: 'Modifier le projet',
     projectPanel: 'Projet de la conversation',
     noRoots: 'Aucun dossier source — ce projet est un simple groupe.',
     defaultRoot: 'défaut',
+    instructions: 'Le modèle suit {files}',
+    noInstructions:
+      'Pas de fichier d’instructions : le modèle lit AGENTS.md, CLAUDE.md ou .bonaparte/instructions.md quand le projet en a un.',
     rename: 'Renommer la conversation',
     actions: 'Actions',
     moveTo: 'Déplacer vers un projet',
