@@ -157,6 +157,19 @@ describe('edit_file', () => {
     expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('const x = 1;\nlet y = 2;');
   });
 
+  it('writes new_string literally — $& and $` are text, not replacement patterns', async () => {
+    // String.replace(string, string) expands $&, $`, $' and $$ in the
+    // replacement: a shell script or a regex in new_string corrupted the file.
+    const root = await project({ 'run.sh': 'echo OLD\n' });
+    const res = await call(
+      'edit_file',
+      { path: 'run.sh', old_string: 'echo OLD', new_string: 'echo "$&" && echo $` $$' },
+      root,
+    );
+    expect(res.ok).toBe(true);
+    expect(await readFile(join(root, 'run.sh'), 'utf8')).toBe('echo "$&" && echo $` $$\n');
+  });
+
   it('refuses if the pattern is absent', async () => {
     const root = await project({ 'a.ts': 'rien' });
     const res = await call(

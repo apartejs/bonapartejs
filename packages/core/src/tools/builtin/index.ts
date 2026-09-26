@@ -235,7 +235,9 @@ const editFileTool: BuiltinTool = {
     }
 
     try {
-      await writeFile(resolved.path, content.replace(oldString, newString), 'utf8');
+      // A function, not the string: replace() would expand $&, $` and $' in
+      // new_string — a shell script or a regex written into the file mangled.
+      await writeFile(resolved.path, content.replace(oldString, () => newString), 'utf8');
     } catch (error) {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }

@@ -457,6 +457,11 @@ published.
 
 ### Fixed
 
+- **`edit_file` writes `new_string` literally.** It used
+  `String.replace(old, new)`, which expands `$&`, `` $` ``, `$'` and `$$`
+  in the replacement: a shell script, a regex or a PHP variable written by
+  the model came out mangled.
+
 - **Numbers follow the interface's language**, not the operating
   system's: the temperature's decimal separator and the token counts read
   `8,192` in English on a French Windows.
