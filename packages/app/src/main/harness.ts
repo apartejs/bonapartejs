@@ -1577,7 +1577,6 @@ export class Harness {
     handle(IPC.kvFree, () => this.freeKv());
     handle(IPC.agentInFlight, () => this.conversations.inFlight());
     handle(IPC.agentCancel, () => {
-')[2] ?? '');
       if (this.currentConversationId) this.conversations.cancel(this.currentConversationId);
     });
     handle(IPC.setupSuggest, () => this.suggestSetup());
