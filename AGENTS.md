@@ -167,6 +167,16 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
   the outcome of each case.
+  - **2026-09-26 — 7/7 green** (Qwen3-1.7B Q4_K_M, b10217-ddd4ec142, same
+    settings). New case: **the managed server demands its per-launch key**
+    — the real server answers `/props` without it with HTTP 401, and with
+    it to the backend (`LLAMA_API_KEY` in the child's environment,
+    `--no-webui`, `/props` checked against the launched model). Figures:
+    tool round-trip served 1 755 tokens from the cache on turn 2 (prefill
+    18.7 ms); save/restore with tool turns 893 tokens; branch 602 of 602;
+    seed 518, first turn prefill 18.6 ms. A second full run timed out once
+    on the cache case (the 1.7B reasoned past the per-case limit on turn
+    1) and passed alone — the small model's dice, not the harness.
   - **2026-08-28 (evening) — 6/6 green.** Same model and build. New case:
     **prefix seeds** — a fresh conversation restores the shared prefix
     (518 tokens, the whole system block) and its first turn is served

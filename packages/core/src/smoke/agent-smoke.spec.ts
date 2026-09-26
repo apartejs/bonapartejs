@@ -81,8 +81,11 @@ function installExitGuards(): void {
   }
 }
 
-function spawnServer(binPath: string, args: string[]): ProcessHandle {
+function spawnServer(binPath: string, args: string[], env?: Record<string, string>): ProcessHandle {
   const child = spawn(binPath, args, {
+    // The API key travels here: dropping it would launch an open server
+    // and prove nothing about the key.
+    ...(env ? { env: { ...process.env, ...env } } : {}),
     stdio: ['ignore', 'ignore', 'pipe'],
     windowsHide: true,
     ...(process.platform === 'win32' ? {} : { detached: true }),
@@ -215,6 +218,18 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
   afterAll(async () => {
     await backend?.stop().catch(() => undefined);
   });
+
+  it(
+    'the real server refuses a request without our key (--api-key via LLAMA_API_KEY)',
+    async () => {
+      const bare = await fetch(`http://127.0.0.1:${PORT}/props`);
+      console.log(`[smoke] /props without the key: HTTP ${bare.status}`);
+      expect(bare.status).toBe(401);
+      // …while the backend, which holds the key, reads it.
+      await expect(backend.props()).resolves.toMatchObject({ modelPath: expect.any(String) });
+    },
+    TURN_TIMEOUT_MS,
+  );
 
   it(
     'calls a real tool and uses its result',
