@@ -51,7 +51,9 @@ afterEach(async () => {
 
 const MODEL = 'D:\\models\\qwen3.gguf';
 
+let spawns = 0;
 const fakeSpawn: SpawnFn = () => {
+  spawns++;
   const handle: ProcessHandle = { pid: 1, onExit: () => undefined, kill: () => undefined };
   return handle;
 };
@@ -976,5 +978,67 @@ describe('ConversationEngine — after a failed request (adversarial review, 202
     await engine.send('conv-a', 'third message');
 
     expect(prompts.at(-1)).toContain('third message');
+  });
+});
+
+describe('ConversationEngine — one thing at a time (adversarial review, 2026-09-26)', () => {
+  const words = Array.from({ length: 30 }, (_, i) => `w${i} `).join('');
+
+  it('two messages to a conversation not open yet start the server once, and both reach the model', async () => {
+    const prompts: string[] = [];
+    const { engine, store } = await makeRig({
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return 'ok';
+      },
+    });
+    await store.create('conv-a', { modelPath: MODEL });
+    spawns = 0;
+
+    await Promise.all([engine.send('conv-a', 'first message'), engine.send('conv-a', 'second message')]);
+
+    expect(spawns).toBe(1);
+    expect(prompts.some((p) => p.includes('first message'))).toBe(true);
+    expect(prompts.some((p) => p.includes('second message'))).toBe(true);
+  });
+
+  it('a slow open does not let a second message open a second session — neither is lost', async () => {
+    let calls = 0;
+    const prompts: string[] = [];
+    const { engine, store } = await makeRig({
+      paceMs: 5,
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return 'reply';
+      },
+      engine: {
+        context: async () => {
+          if (calls++ === 0) await new Promise((resolve) => setTimeout(resolve, 300));
+          return { replyLanguage: 'English' };
+        },
+      },
+    });
+    await store.create('conv-a', { modelPath: MODEL });
+    const one = engine.send('conv-a', 'message one');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const two = engine.send('conv-a', 'message two');
+    await Promise.all([one, two]);
+
+    expect(prompts.some((p) => p.includes('message one'))).toBe(true);
+    expect(prompts.some((p) => p.includes('message two'))).toBe(true);
+  });
+
+  it('Stop stops the turn that streams — not the one waiting behind it', async () => {
+    const { engine, events } = await makeRig({ paceMs: 15, replies: [words, 'second reply'] });
+    await engine.open('conv-a', MODEL);
+    const one = engine.send('conv-a', 'one');
+    const two = engine.send('conv-a', 'two');
+    await until(() => assistantText(events, 'conv-a').includes('w3 '));
+
+    engine.cancel('conv-a');
+    await Promise.all([one, two]);
+
+    expect(assistantText(events, 'conv-a')).not.toContain('w29');
+    expect(assistantText(events, 'conv-a')).toContain('second reply');
   });
 });

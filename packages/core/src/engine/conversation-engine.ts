@@ -278,6 +278,15 @@ export class ConversationEngine {
   private session: ChatSession | null = null;
   private activeId: string | null = null;
   private turn: Turn | null = null;
+  /** The tail of the work queued: each open, turn, compaction, branch or undo waits for it. */
+  private gate: Promise<unknown> = Promise.resolve();
+
+  private exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.gate.then(task, task);
+    this.gate = run.catch(() => undefined);
+    return run;
+  }
+
   /** The session's settings are out of date: reopened (warm) at the next message. */
   private stale = false;
   /** Tokens the slot holds for the active conversation — prompt and replies so far. */
@@ -350,7 +359,18 @@ export class ConversationEngine {
    * (pinned; an explicit `modelPath` replaces the pin — the user chose it),
    * the session opens and its state is restored when the manifest matches.
    */
-  async open(conversationId: string, modelPath?: string): Promise<OpenOutcome> {
+  /**
+   * Opens a conversation on the slot. One thing at a time: an open, a turn,
+   * a compaction, a branch, an undo each wait for the one before — two
+   * messages racing to a conversation not open yet used to start the server
+   * twice (one orphaned), or open two sessions on one renderer and lose a
+   * message (adversarial review, 2026-09-26).
+   */
+  open(conversationId: string, modelPath?: string): Promise<OpenOutcome> {
+    return this.exclusive(() => this.openNow(conversationId, modelPath));
+  }
+
+  private async openNow(conversationId: string, modelPath?: string): Promise<OpenOutcome> {
     const { store, supervisor } = this.options;
     const engine = supervisor.engine;
     if (!engine) throw new Error('Engine not configured.');
@@ -498,19 +518,23 @@ export class ConversationEngine {
    * a host showing another conversation can route or ignore it. Resolves
    * when the turn is over — or at once with what is missing to run it.
    */
-  async send(
+  send(conversationId: string, text: string, attachments?: MessageAttachment[]): Promise<NeedsModel | undefined> {
+    return this.exclusive(() => this.sendNow(conversationId, text, attachments));
+  }
+
+  private async sendNow(
     conversationId: string,
     text: string,
     attachments?: MessageAttachment[],
   ): Promise<NeedsModel | undefined> {
     if (this.activeId !== conversationId || !this.session) {
-      const outcome = await this.open(conversationId);
+      const outcome = await this.openNow(conversationId);
       if ('needsModel' in outcome) return outcome;
       const { events: _events, ...opened } = outcome;
       this.emit({ conversationId, event: { type: 'session_opened', opened } });
     } else if (this.stale) {
       // New settings for the conversation in the slot: reopened warm.
-      await this.open(conversationId);
+      await this.openNow(conversationId);
     }
     await this.settle();
     const session = this.session;
@@ -595,8 +619,10 @@ export class ConversationEngine {
    */
   async close(): Promise<void> {
     this.turn?.controller.abort();
-    await this.settle();
-    await this.release();
+    await this.exclusive(async () => {
+      await this.settle();
+      await this.release();
+    });
   }
 
   /**
@@ -606,7 +632,15 @@ export class ConversationEngine {
    * shared prefix from the cache instead of computing it again. The parent,
    * if open, saves first, so the copy is its latest. Between turns only.
    */
-  async branch(
+  branch(
+    sourceId: string,
+    newId: string,
+    options: { title: string; afterTurn?: number },
+  ): Promise<{ inheritedState: boolean }> {
+    return this.exclusive(() => this.branchNow(sourceId, newId, options));
+  }
+
+  private async branchNow(
     sourceId: string,
     newId: string,
     options: { title: string; afterTurn?: number },
@@ -633,10 +667,14 @@ export class ConversationEngine {
    * restarts from the summary and the last `keepTurns` readable turns; the
    * screen keeps every turn. Between turns only.
    */
-  async compact(conversationId: string, options: { keepTurns?: number } = {}): Promise<CompactionResult> {
+  compact(conversationId: string, options: { keepTurns?: number } = {}): Promise<CompactionResult> {
+    return this.exclusive(() => this.compactNow(conversationId, options));
+  }
+
+  private async compactNow(conversationId: string, options: { keepTurns?: number }): Promise<CompactionResult> {
     await this.settle();
     if (this.activeId !== conversationId || !this.session) {
-      const outcome = await this.open(conversationId);
+      const outcome = await this.openNow(conversationId);
       if ('needsModel' in outcome) throw new Error('No model to summarise this conversation with.');
     }
     const session = this.session;
@@ -684,7 +722,11 @@ export class ConversationEngine {
    * a file changed again since, left alone — and the model is told, or it
    * would go on believing its edits are there. Between turns.
    */
-  async undoTurn(conversationId: string, turnId: string): Promise<UndoResult> {
+  undoTurn(conversationId: string, turnId: string): Promise<UndoResult> {
+    return this.exclusive(() => this.undoTurnNow(conversationId, turnId));
+  }
+
+  private async undoTurnNow(conversationId: string, turnId: string): Promise<UndoResult> {
     const checkpoints = this.options.checkpoints;
     if (!checkpoints) return { restored: [], conflicts: [] };
     await this.settle();
@@ -709,6 +751,11 @@ export class ConversationEngine {
    * leave exactly what the user asked to remove.
    */
   async remove(conversationId: string): Promise<void> {
+    if (this.turn?.conversationId === conversationId) this.turn.controller.abort();
+    await this.exclusive(() => this.removeNow(conversationId));
+  }
+
+  private async removeNow(conversationId: string): Promise<void> {
     if (this.turn?.conversationId === conversationId) {
       this.turn.controller.abort();
       await this.settle();
