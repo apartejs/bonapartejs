@@ -56,12 +56,20 @@ export interface ChatSessionOptions {
   thinking?: boolean;
   /** Where a turn's file changes are kept, to be undone. Absent: no undo. */
   checkpoints?: CheckpointStore;
+  /**
+   * The slot already holds this conversation (a session reopened for new
+   * settings): nothing is restored, nothing seeded.
+   */
+  warm?: boolean;
 }
 
 export type OpenResult = {
   session: ChatSession;
-  /** 'unsupported': the backend does not have the kvPersistence capability. */
-  restore: RestoreOutcome | { restored: false; reason: 'unsupported' };
+  /**
+   * 'unsupported': the backend does not have the kvPersistence capability;
+   * 'warm': the slot already held the conversation.
+   */
+  restore: RestoreOutcome | { restored: false; reason: 'unsupported' | 'warm' };
   /** When nothing of the conversation's own was restored: what the shared prefix did. */
   seed?: SeedOutcome;
 };
@@ -163,6 +171,7 @@ export class ChatSession {
     // Has the tooling moved since the freeze? If so: an APPENDED service
     // message (never a re-render of the system prompt).
     await session.announceInventoryDelta(meta.toolNames);
+    session.announcedTools = options.registry.list().map((tool) => tool.name);
     // Has the scenery changed since the freeze? Same rule: we append.
     if (meta.toolNames !== undefined) {
       await session.announcePerimeterDelta(meta.frozenRoots ?? []);
@@ -171,6 +180,7 @@ export class ChatSession {
       await session.announceInstructionsDelta(meta.instructionsHash);
     }
 
+    if (options.warm) return { session, restore: { restored: false, reason: 'warm' } };
     if (!backend.slots) {
       return { session, restore: { restored: false, reason: 'unsupported' } };
     }
@@ -221,6 +231,14 @@ export class ChatSession {
     await store.setFrozenTools(this.conversationId, names);
   }
 
+  private async announceToolChanges(): Promise<void> {
+    const message = renderInventoryDelta(this.options.registry.diff({ names: this.announcedTools, hash: '' }));
+    if (!message) return;
+    await this.appendService(message);
+    this.announcedTools = this.options.registry.list().map((tool) => tool.name);
+    await this.options.store.setFrozenTools(this.conversationId, this.announcedTools);
+  }
+
   /**
    * The system prompt is frozen at creation: if the perimeter has moved
    * since then — a folder added, removed, or simply REORDERED, which
@@ -263,6 +281,13 @@ export class ChatSession {
 
   /** Turns run one at a time: a send waits for the one in flight to finish. */
   private queue: Promise<void> = Promise.resolve();
+  /**
+   * The tools the prompt knows of: frozen with it, or announced since. The
+   * registry can move at any moment (an MCP server, a plugin); what the
+   * model is told must follow at the next message, as a delta — and never
+   * be recorded as known in silence.
+   */
+  private announcedTools: string[] = [];
 
   /**
    * Sends a message and runs the agentic loop. Every transcript mutation
@@ -297,6 +322,8 @@ export class ChatSession {
     const now = (): string => new Date().toISOString();
 
     const turnId = `${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`;
+    // Tools that came or went since the last message: said first.
+    await this.announceToolChanges();
     await store.appendEvent(this.conversationId, {
       type: 'user',
       text,
@@ -342,11 +369,7 @@ export class ChatSession {
     // The backend may have frozen its state on the first turn (system prompt).
     const state = backend.exportState?.(this.conversationId);
     if (state !== undefined) {
-      await store.freezeBackendState(
-        this.conversationId,
-        state,
-        this.options.registry.list().map((d) => d.name),
-      );
+      await store.freezeBackendState(this.conversationId, state, this.announcedTools);
     }
   }
 

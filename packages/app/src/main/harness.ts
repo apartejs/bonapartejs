@@ -667,10 +667,9 @@ export class Harness {
     await this.pluginHost.deactivateAll();
     this.pluginGeneration += 1;
     await this.loadPlugins();
-    // The tool inventory may have changed: ongoing conversations will learn
-    // about it via a delta on their next opening.
+    // The tool inventory may have changed: the conversation learns it by a
+    // delta at its next message — the reply in flight, if any, goes on.
     this.registerBuiltinTools();
-    void this.conversations.close();
     return this.listPlugins();
   }
 
@@ -726,7 +725,9 @@ export class Harness {
    */
   private readonly mcp = new McpClientManager({
     registry: this.registry,
-    onChange: () => void this.conversations.close(),
+    // Nothing to do on a change: the conversation is told by a delta at its
+    // next message, and a reply in flight is never cut for it.
+    onChange: () => undefined,
     clientVersion: app.getVersion(),
   });
   private mcpErrors: McpConfigError[] = [];
@@ -901,7 +902,6 @@ export class Harness {
     if (enabled) await this.activatePlugin(id);
     else await this.pluginHost.deactivate(id);
     this.registerBuiltinTools();
-    void this.conversations.close();
     return this.listPlugins();
   }
 
@@ -999,8 +999,8 @@ export class Harness {
       if (!id) return;
       await this.store.setSetting(id, key, value);
       // The session carries the sampling params: it is reopened on the next
-      // message with the new values — once the turn in flight, if any, ends.
-      void this.conversations.close();
+      // message with the new values — the turn in flight, if any, goes on.
+      this.conversations.invalidate();
       return;
     }
     let settings: Record<string, unknown> = {};
@@ -1022,7 +1022,7 @@ export class Harness {
       await this.supervisor.configure(await this.engineConfig(config.backend));
       return;
     }
-    void this.conversations.close();
+    this.conversations.invalidate();
   }
 
   /**
@@ -1190,7 +1190,7 @@ export class Harness {
   private async refreshRoots(): Promise<void> {
     if (!this.currentConversationId) return;
     this.roots = await this.rootsOf(this.currentConversationId);
-    void this.conversations.close();
+    this.conversations.invalidate();
     this.registerBuiltinTools();
   }
 
@@ -1224,7 +1224,7 @@ export class Harness {
     }
 
     this.roots = await this.rootsOf(id);
-    void this.conversations.close();
+    this.conversations.invalidate();
     this.registerBuiltinTools();
 
     let recents: string[] = [];
@@ -1403,9 +1403,9 @@ export class Harness {
     if (locale !== 'fr' && locale !== 'en') throw new Error(`Unknown locale: ${String(locale)}`);
     if ((await this.loadConfig()).locale === locale) return;
     await this.updateConfig((config) => ({ ...config, locale }));
-    // The tray menu reads it; the next session opens with the new reply language.
+    // The tray menu reads it; the next message reopens with the new reply language.
     await this.refreshAppBehaviour();
-    void this.conversations.close();
+    this.conversations.invalidate();
   }
 
   async openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto> {
@@ -1449,7 +1449,7 @@ export class Harness {
               ? { prefillEstimateMs: Math.round(opened.restore.prefillEstimateMs) }
               : {}),
           }
-        : { restored: false, reason: opened.restore.reason },
+        : { restored: false, reason: opened.restore.reason === 'warm' ? 'held' : opened.restore.reason },
     };
   }
 

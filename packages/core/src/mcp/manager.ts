@@ -220,21 +220,21 @@ export class McpClientManager {
     }
     for (const tool of tools) {
       const name = mcpToolName(connection.config.id, tool.name);
-      const previous = connection.registered.get(tool.name);
-      if (previous) registry.unregister(previous);
-      else if (registry.get(name)) continue; // two server names folding to one: the first stays
       const description = (tool.description ?? tool.title ?? tool.name).trim();
-      registry.register(
-        {
-          name,
-          description:
-            description.length > MAX_DESCRIPTION_CHARS ? `${description.slice(0, MAX_DESCRIPTION_CHARS)}…` : description,
-          inputSchema: tool.inputSchema as Record<string, unknown>,
-          effect: mcpEffect(tool.annotations),
-        },
-        (args, ctx) => this.call(connection, tool.name, args, ctx.signal),
-        'mcp',
-      );
+      const def = {
+        name,
+        description: description.length > MAX_DESCRIPTION_CHARS ? `${description.slice(0, MAX_DESCRIPTION_CHARS)}…` : description,
+        inputSchema: tool.inputSchema as Record<string, unknown>,
+        effect: mcpEffect(tool.annotations),
+      };
+      const previous = connection.registered.get(tool.name);
+      if (previous) {
+        // The same tool, said again (a list_changed that changes nothing):
+        // no change — nothing to tell anyone.
+        if (JSON.stringify(registry.get(previous)?.def) === JSON.stringify(def)) continue;
+        registry.unregister(previous);
+      } else if (registry.get(name)) continue; // two server names folding to one: the first stays
+      registry.register(def, (args, ctx) => this.call(connection, tool.name, args, ctx.signal), 'mcp');
       connection.registered.set(tool.name, name);
       changed = true;
     }

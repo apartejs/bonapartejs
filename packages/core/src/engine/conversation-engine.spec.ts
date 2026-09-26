@@ -868,3 +868,85 @@ describe('ConversationEngine — the file changes of a turn can be undone (06 §
     });
   });
 });
+
+describe('ConversationEngine — a change while a reply streams (adversarial reviews, 2026-09-26)', () => {
+  const words = Array.from({ length: 30 }, (_, i) => `w${i} `).join('') + 'END';
+  const lastTurnEnd = (events: TaggedEvent[]) => {
+    const end = events.filter((e) => e.event.type === 'turn_end').at(-1)?.event;
+    if (end?.type !== 'turn_end') throw new Error('no turn_end');
+    return end;
+  };
+
+  it('invalidate() lets the reply finish; the next message reopens with the new context, from the warm slot', async () => {
+    let contextCalls = 0;
+    const { engine, events } = await makeRig({
+      paceMs: 10,
+      replies: [words, 'second'],
+      engine: {
+        context: async () => {
+          contextCalls++;
+          return { replyLanguage: 'English' };
+        },
+      },
+    });
+    await engine.open('conv-a', MODEL);
+    const pending = engine.send('conv-a', 'first');
+    await until(() => assistantText(events, 'conv-a').includes('w3 '));
+
+    engine.invalidate();
+    await pending;
+
+    expect(assistantText(events, 'conv-a')).toContain('END');
+    const held = lastTurnEnd(events).contextTokens;
+    const callsBefore = contextCalls;
+    events.length = 0;
+    await engine.send('conv-a', 'next');
+    // Reopened with the context read anew…
+    expect(contextCalls).toBeGreaterThan(callsBefore);
+    // …but nothing restored: the slot already held the conversation.
+    expect(lastTurnEnd(events).cachedTokens).toBeGreaterThanOrEqual(held - 1);
+    expect(events.some((e) => e.event.type === 'session_opened')).toBe(false);
+  });
+
+  it('opening the conversation already in the slot restores nothing over it', async () => {
+    const { engine, events } = await makeRig({ replies: ['a fairly long answer '.repeat(30)] });
+    await engine.open('conv-a', MODEL);
+    for (const message of ['one', 'two', 'three']) await engine.send('conv-a', message);
+    const held = lastTurnEnd(events).contextTokens;
+
+    const reopened = await engine.open('conv-a', MODEL);
+
+    if ('needsModel' in reopened) throw new Error('needs model');
+    expect(reopened.restore).toEqual({ restored: false, reason: 'warm' });
+    expect(reopened.contextTokens).toBe(held);
+    await engine.send('conv-a', 'four');
+    expect(lastTurnEnd(events).cachedTokens).toBeGreaterThanOrEqual(held - 1);
+  });
+
+  it('a tool that appears mid-turn is announced at the next message — never recorded as known in silence', async () => {
+    const registry = new ToolRegistry();
+    const prompts: string[] = [];
+    const { engine, events } = await makeRig({
+      paceMs: 10,
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return prompts.length === 1 ? words : 'ok';
+      },
+      engine: { registry },
+    });
+    await engine.open('conv-a', MODEL);
+    const pending = engine.send('conv-a', 'first');
+    await until(() => assistantText(events, 'conv-a').includes('w3 '));
+    registry.register(
+      { name: 'late_tool', description: 'Appeared mid-turn.', inputSchema: { type: 'object', properties: {} }, effect: 'read' },
+      async () => ({ ok: true, content: '' }),
+      'mcp',
+    );
+    await pending;
+    expect(assistantText(events, 'conv-a')).toContain('END');
+
+    await engine.send('conv-a', 'what can you do now?');
+
+    expect(prompts.at(-1)).toContain('late_tool');
+  });
+});

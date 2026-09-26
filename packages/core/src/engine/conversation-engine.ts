@@ -278,6 +278,8 @@ export class ConversationEngine {
   private session: ChatSession | null = null;
   private activeId: string | null = null;
   private turn: Turn | null = null;
+  /** The session's settings are out of date: reopened (warm) at the next message. */
+  private stale = false;
   /** Tokens the slot holds for the active conversation — prompt and replies so far. */
   private contextUsed = 0;
   /** Model of the active session. */
@@ -354,6 +356,15 @@ export class ConversationEngine {
     if (!engine) throw new Error('Engine not configured.');
 
     await this.settle();
+    // Already in the slot, on that model: its state is the live one — never
+    // restore an older one over it (a warm reopen for new settings aside).
+    if (this.session && this.activeId === conversationId && this.activeModel !== null) {
+      const same = modelPath === undefined || modelPath === this.activeModel;
+      if (same && (engine.mode === 'remote' || supervisor.loaded?.modelPath === this.activeModel)) {
+        if (this.stale) await this.openSession(conversationId, this.activeModel, { warm: true });
+        return this.heldState(conversationId);
+      }
+    }
     if (this.activeId !== null && this.activeId !== conversationId) {
       await this.release();
     }
@@ -387,31 +398,7 @@ export class ConversationEngine {
 
     if (!meta) await store.create(conversationId, { modelPath: model });
 
-    const context = (await this.options.context?.(conversationId)) ?? {};
-    const roots = (await this.options.rootsOf?.(conversationId)) ?? [];
-    const { session, restore, seed } = await ChatSession.open(
-      {
-        backend,
-        kv: this.options.kv,
-        store,
-        registry: this.options.registry,
-        permissions: this.options.permissions,
-        ...(roots.length > 0 ? { roots } : {}),
-        ...(this.options.approve ? { approve: this.options.approve } : {}),
-        ...(context.replyLanguage ? { replyLanguage: context.replyLanguage } : {}),
-        ...(context.projectInstructions
-          ? { projectInstructions: context.projectInstructions }
-          : {}),
-        ...(context.sampling ? { sampling: context.sampling } : {}),
-        ...(context.thinking !== undefined ? { thinking: context.thinking } : {}),
-        ...(this.options.checkpoints ? { checkpoints: this.options.checkpoints } : {}),
-        live,
-      },
-      conversationId,
-    );
-    this.session = session;
-    this.activeId = conversationId;
-    this.activeModel = model;
+    const { restore, seed } = await this.openSession(conversationId, model, { warm: false });
     // A restored state says how full the slot is; so does a seed, restored
     // or just prepared; a fresh prefill says nothing until its first turn.
     this.contextUsed = restore.restored
@@ -441,6 +428,71 @@ export class ConversationEngine {
   }
 
   /**
+   * A session on the conversation — the settings, roots and instructions
+   * read now. `warm`: the slot already holds it (new settings, same
+   * conversation), so nothing is restored and the context held stays.
+   */
+  private async openSession(
+    conversationId: string,
+    model: string,
+    options: { warm: boolean },
+  ): Promise<Pick<OpenResult, 'restore' | 'seed'>> {
+    const { store, supervisor } = this.options;
+    const backend = supervisor.backend;
+    const live = supervisor.live;
+    if (!backend || !live) throw new Error('Backend not started.');
+    const context = (await this.options.context?.(conversationId)) ?? {};
+    const roots = (await this.options.rootsOf?.(conversationId)) ?? [];
+    const { session, restore, seed } = await ChatSession.open(
+      {
+        backend,
+        kv: this.options.kv,
+        store,
+        registry: this.options.registry,
+        permissions: this.options.permissions,
+        ...(roots.length > 0 ? { roots } : {}),
+        ...(this.options.approve ? { approve: this.options.approve } : {}),
+        ...(context.replyLanguage ? { replyLanguage: context.replyLanguage } : {}),
+        ...(context.projectInstructions ? { projectInstructions: context.projectInstructions } : {}),
+        ...(context.sampling ? { sampling: context.sampling } : {}),
+        ...(context.thinking !== undefined ? { thinking: context.thinking } : {}),
+        ...(this.options.checkpoints ? { checkpoints: this.options.checkpoints } : {}),
+        ...(options.warm ? { warm: true } : {}),
+        live,
+      },
+      conversationId,
+    );
+    this.session = session;
+    this.activeId = conversationId;
+    this.activeModel = model;
+    this.stale = false;
+    return { restore, ...(seed ? { seed } : {}) };
+  }
+
+  /** The open conversation as it stands in the slot — nothing restored. */
+  private async heldState(conversationId: string): Promise<Opened> {
+    const live = this.options.supervisor.live;
+    return {
+      conversationId,
+      modelPath: this.activeModel ?? '',
+      ...(live && live.nCtx > 0 ? { nCtx: live.nCtx } : {}),
+      contextTokens: this.contextUsed,
+      restore: { restored: false, reason: 'warm' },
+      events: readableEvents(await this.options.store.loadEvents(conversationId)),
+    };
+  }
+
+  /**
+   * Settings, roots or instructions changed: the session is reopened at the
+   * next message, warm — never by cutting the reply in flight (adversarial
+   * review, 2026-09-26: a click on Reasoning, a plugin switched, an MCP
+   * server coming up used to end the turn mid-sentence).
+   */
+  invalidate(): void {
+    this.stale = true;
+  }
+
+  /**
    * Runs one turn. The conversation takes the slot first if it does not
    * hold it; every event is tagged with the conversation it belongs to, so
    * a host showing another conversation can route or ignore it. Resolves
@@ -456,6 +508,9 @@ export class ConversationEngine {
       if ('needsModel' in outcome) return outcome;
       const { events: _events, ...opened } = outcome;
       this.emit({ conversationId, event: { type: 'session_opened', opened } });
+    } else if (this.stale) {
+      // New settings for the conversation in the slot: reopened warm.
+      await this.open(conversationId);
     }
     await this.settle();
     const session = this.session;
@@ -673,6 +728,7 @@ export class ConversationEngine {
     await this.saveState();
     this.session = null;
     this.activeId = null;
+    this.stale = false;
   }
 
   private async settle(): Promise<void> {

@@ -114,6 +114,19 @@ describe('McpClientManager — stdio', () => {
     expect(result.content).toBe('first part\n[image/png image omitted]\nsecond part');
   });
 
+  it('a list_changed that changes nothing is no change', async () => {
+    const { manager, registry, changes } = await rig();
+    await manager.apply([stdio('fake')]);
+    await call(registry, 'mcp__fake__grow');
+    await until(() => registry.get('mcp__fake__extra') !== undefined);
+    const after = changes();
+
+    await call(registry, 'mcp__fake__grow'); // announces list_changed again, adds nothing
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(changes()).toBe(after);
+  });
+
   it('passes its environment to the server', async () => {
     const { manager, registry } = await rig();
     await manager.apply([stdio('fake', { env: { FAKE_MCP_SECRET: 's3cret' } })]);
