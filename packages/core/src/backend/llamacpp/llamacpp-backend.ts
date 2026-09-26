@@ -162,6 +162,10 @@ abstract class BaseBackend implements Backend {
     return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
   }
 
+  withdrawLastTurn(conversationId: string): void {
+    this.renderer(conversationId).withdraw();
+  }
+
   prefixText(conversationId: string): string | undefined {
     const prefix = this.renderer(conversationId).prefix;
     return prefix === '' ? undefined : prefix;

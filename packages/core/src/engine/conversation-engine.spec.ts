@@ -1042,3 +1042,56 @@ describe('ConversationEngine — one thing at a time (adversarial review, 2026-0
     expect(assistantText(events, 'conv-a')).toContain('second reply');
   });
 });
+
+describe('ConversationEngine — a message the server refuses (adversarial review, 2026-09-26)', () => {
+  const overflows = (events: TaggedEvent[]) => events.filter((e) => e.event.type === 'context_overflow').length;
+
+  it('is withdrawn: the next message reaches the model without it, and the log reads without it', async () => {
+    const prompts: string[] = [];
+    const { engine, events, store } = await makeRig({
+      // The engine believes 4096; the server holds 300 — its refusal is the safety net.
+      serverNCtx: 300,
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return 'ok';
+      },
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'hello');
+    await engine.send('conv-a', '1234567890'.repeat(120));
+    expect(overflows(events)).toBe(1);
+
+    await engine.send('conv-a', 'short question');
+
+    expect(overflows(events)).toBe(1);
+    expect(prompts.at(-1)).toContain('short question');
+    expect(prompts.at(-1)).not.toContain('1234567890');
+    const history = await engine.history('conv-a');
+    expect(history.events.map((e) => e.text)).not.toContain('1234567890'.repeat(120));
+    void store;
+  });
+
+  it('a cancelled turn counts what its prefill read: a resend is refused before anything is sent', async () => {
+    const { engine, events } = await makeRig({
+      nCtx: 4096,
+      serverNCtx: 4096,
+      server: { prefillBatch: 200, prefillPaceMs: 30 },
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'hello');
+    const big = 'lorem ipsum dolor sit amet '.repeat(300);
+    events.length = 0;
+    const pending = engine.send('conv-a', big);
+    await until(() => events.some((e) => e.event.type === 'prefill'));
+    engine.cancel('conv-a');
+    await pending;
+
+    await engine.send('conv-a', big);
+    await engine.send('conv-a', 'ok, forget it — just say hi');
+
+    // The resend is refused by the engine's own check (nothing persisted);
+    // the short message after it goes through.
+    expect(overflows(events)).toBe(1);
+    expect(events.filter((e) => e.event.type === 'turn_end').length).toBeGreaterThanOrEqual(2);
+  });
+});

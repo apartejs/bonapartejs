@@ -87,6 +87,17 @@ export class PromptLog {
   }
 
   /**
+   * Back to an earlier state of the history — a PREFIX of it, never another
+   * text: what the server refused never reached its cache, so the prompt
+   * returns to the prefix it did see. Not a re-render.
+   */
+  rewind(to: string): void {
+    if (!this.history.startsWith(to)) throw new Error('rewind: not a prefix of the history.');
+    this.history = to;
+    this.pendingPrompt = null;
+  }
+
+  /**
    * Drops the turn begun: the request failed and nothing of it enters the
    * history (the transcript gets no assistant entry either).
    */

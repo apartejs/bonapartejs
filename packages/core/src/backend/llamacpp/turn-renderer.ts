@@ -30,6 +30,8 @@ export class TranscriptRenderer {
   private rendered = 0;
   private frozenSystemPrompt: string | null = null;
   private turnOpen = false;
+  /** The history and the count before the last turn's sync — what a withdrawal returns to. */
+  private beforeTurn: { history: string | null; rendered: number } | null = null;
 
   /** Frozen system prompt: rebuilding it would let it drift. */
   get systemPrompt(): string | null {
@@ -99,6 +101,7 @@ export class TranscriptRenderer {
     tools: ToolDefLike[],
     options: { thinking?: boolean } = {},
   ): RenderedTurn {
+    this.beforeTurn = { history: this.log?.frozen ?? null, rendered: this.rendered };
     this.sync(transcript, system, tools);
     const log = this.log as PromptLog;
     const prompt = log.beginAssistantTurn({
@@ -119,6 +122,25 @@ export class TranscriptRenderer {
         this.turnOpen = false;
       },
     };
+  }
+
+  /**
+   * The server refused the last turn's prompt: what that turn appended (the
+   * user's message, a delta before it) is taken back, the renderer returns
+   * to the prefix the server saw — and the transcript drops the message.
+   */
+  withdraw(): void {
+    const before = this.beforeTurn;
+    if (!before) return;
+    this.beforeTurn = null;
+    this.turnOpen = false;
+    if (before.history === null) {
+      this.log = null;
+      this.rendered = 0;
+      return;
+    }
+    this.log?.rewind(before.history);
+    this.rendered = before.rendered;
   }
 
   private append(entry: TranscriptEntry): void {

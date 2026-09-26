@@ -356,6 +356,10 @@ export class ChatSession {
           entry: event.entry as Extract<TranscriptEntry, { role: 'assistant' }>,
           at: now(),
         });
+      } else if (event.type === 'withdrawn') {
+        // Refused by the server as too long: the message never reached the
+        // model, and the log says so — replays and the screen skip it.
+        await store.appendEvent(this.conversationId, { type: 'withdrawn', at: now() });
       } else if (event.type === 'results_committed') {
         await store.appendEvent(this.conversationId, {
           type: 'tool_results',

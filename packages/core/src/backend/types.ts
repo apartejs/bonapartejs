@@ -275,5 +275,10 @@ export interface Backend {
   props(): Promise<ServerProps>;
   /** Present if and only if capabilities.kvPersistence. */
   slots?: SlotApi;
+  /**
+   * The server refused the last turn's prompt as too long: take back what
+   * that turn appended to the conversation's rendered prompt.
+   */
+  withdrawLastTurn?(conversationId: string): void;
   onStatusChange(listener: (status: BackendStatus) => void): () => void;
 }

@@ -27,6 +27,7 @@ import {
   type ConversationEvent,
   type ConversationStore,
   type MessageAttachment,
+  withdrawnIndices,
 } from '../conversation/store.js';
 import type { KvStore } from '../kv/kv-store.js';
 import type { CheckpointStore, UndoResult } from '../checkpoints/store.js';
@@ -228,7 +229,9 @@ export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
     turn = null;
   };
 
-  for (const event of events) {
+  const skip = withdrawnIndices(events);
+  for (const [index, event] of events.entries()) {
+    if (skip.has(index)) continue;
     if (event.type === 'rebase') {
       flush();
       out.push({ type: 'compaction', text: event.summary, at: event.at });
@@ -569,7 +572,11 @@ export class ConversationEngine {
       for await (const event of session.send(text, controller.signal, attachments)) {
         if (event.type === 'token') turn.text += event.text;
         else if (event.type === 'thinking') turn.thinking += event.text;
-        else if (event.type === 'turn_end') {
+        else if (event.type === 'prefill') {
+          // What the slot holds while the prompt is read — a turn cancelled
+          // before its end still counts it (adversarial review, 2026-09-26).
+          this.contextUsed = Math.max(this.contextUsed, event.processed);
+        } else if (event.type === 'turn_end') {
           if (event.contextTokens > 0) this.contextUsed = event.contextTokens;
           this.measurePrefill(event.promptTokens - event.cachedTokens, event.promptMs);
         }

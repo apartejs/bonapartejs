@@ -101,7 +101,9 @@ export interface BranchOptions {
 export function cutAfterTurn(events: ConversationEvent[], turn: number): number {
   let readable = -1;
   let inAssistantTurn = false;
+  const skip = withdrawnIndices(events);
   for (let i = 0; i < events.length; i++) {
+    if (skip.has(i)) continue;
     const event = events[i] as ConversationEvent;
     if (event.type === 'rebase') {
       // A compaction is a readable turn of its own (the screen marks it).
@@ -126,7 +128,9 @@ export function cutAfterTurn(events: ConversationEvent[], turn: number): number 
 export function countTurns(events: ConversationEvent[]): number {
   let readable = 0;
   let inAssistantTurn = false;
-  for (const event of events) {
+  const skip = withdrawnIndices(events);
+  for (const [index, event] of events.entries()) {
+    if (skip.has(index)) continue;
     if (event.type === 'rebase') {
       inAssistantTurn = false;
       readable += 1;
@@ -179,7 +183,28 @@ export type ConversationEvent =
    * re-frozen system prompt, this summary, and the raw events from
    * `keepFrom` — the earlier turns stay in the log, for the screen.
    */
-  | { type: 'rebase'; summary: string; keepFrom: number; at: string };
+  | { type: 'rebase'; summary: string; keepFrom: number; at: string }
+  /** The message before it was refused by the server as too long: never part of the conversation. */
+  | { type: 'withdrawn'; at: string };
+
+/**
+ * Indices of the messages the server refused, and of their markers: every
+ * reader of the log skips them (raw indices kept — a rebase counts in them).
+ */
+export function withdrawnIndices(events: ConversationEvent[]): Set<number> {
+  const skip = new Set<number>();
+  events.forEach((event, index) => {
+    if (event.type !== 'withdrawn') return;
+    skip.add(index);
+    for (let i = index - 1; i >= 0; i--) {
+      if (events[i]?.type === 'user' && !skip.has(i)) {
+        skip.add(i);
+        break;
+      }
+    }
+  });
+  return skip;
+}
 
 /** How a summary opens the prompt after a rebase. */
 export function renderSummaryMessage(summary: string): string {
@@ -458,7 +483,8 @@ export class ConversationStore {
 export function rebuildTranscript(
   events: ConversationEvent[],
 ): TranscriptEntry[] {
-  const toEntry = (event: Exclude<ConversationEvent, { type: 'rebase' }>): TranscriptEntry => {
+  const skip = withdrawnIndices(events);
+  const toEntry = (event: Exclude<ConversationEvent, { type: 'rebase' | 'withdrawn' }>): TranscriptEntry => {
     if (event.type === 'assistant') return event.entry;
     if (event.type === 'tool_results') return event.entry;
     if (event.type === 'service') return { role: 'service', text: event.text };
@@ -470,12 +496,13 @@ export function rebuildTranscript(
   events.forEach((event, index) => {
     if (event.type === 'rebase') last = index;
   });
-  if (last < 0) {
-    return events.filter((e): e is Exclude<ConversationEvent, { type: 'rebase' }> => e.type !== 'rebase').map(toEntry);
-  }
+  type Readable = Exclude<ConversationEvent, { type: 'rebase' | 'withdrawn' }>;
+  const kept = (from: number, to: number): Readable[] =>
+    events
+      .slice(from, to)
+      .filter((e, offset): e is Readable => !skip.has(from + offset) && e.type !== 'rebase' && e.type !== 'withdrawn');
+  if (last < 0) return kept(0, events.length).map(toEntry);
   const rebase = events[last] as Extract<ConversationEvent, { type: 'rebase' }>;
-  const kept = [...events.slice(Math.min(rebase.keepFrom, last), last), ...events.slice(last + 1)].filter(
-    (e): e is Exclude<ConversationEvent, { type: 'rebase' }> => e.type !== 'rebase',
-  );
-  return [{ role: 'service', text: renderSummaryMessage(rebase.summary) }, ...kept.map(toEntry)];
+  const tail = [...kept(Math.min(rebase.keepFrom, last), last), ...kept(last + 1, events.length)];
+  return [{ role: 'service', text: renderSummaryMessage(rebase.summary) }, ...tail.map(toEntry)];
 }

@@ -59,6 +59,8 @@ export type AgentEvent =
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
+  /** The server refused the message as too long: it is withdrawn from the conversation. */
+  | { type: 'withdrawn' }
   /** The files the turn wrote, before its end — what can be undone. */
   | { type: 'files_changed'; turnId: string; files: string[] }
   | {
@@ -114,6 +116,12 @@ function raceAbort(answer: Promise<boolean>, signal: AbortSignal): Promise<boole
       },
     );
   });
+}
+
+/** llama-server's refusal of a prompt longer than its context (400, "context size"). */
+function isContextRefusal(error: unknown): boolean {
+  const status = (error as { status?: unknown } | null)?.status;
+  return status === 400 && error instanceof Error && /context size/i.test(error.message);
 }
 
 export class AgentLoop {
@@ -192,7 +200,17 @@ export class AgentLoop {
         // A cancelled stream is not a failure: what arrived is what the
         // model wrote, and what the server's KV cache holds. It is committed
         // as the turn, so the next prompt stays a prefix of that cache.
-        if (!signal.aborted) throw error;
+        if (!signal.aborted) {
+          // The message itself cannot fit: it never reached the model, and
+          // it is withdrawn — kept, every later message would be refused
+          // too (adversarial review, 2026-09-26).
+          if (turn === 0 && isContextRefusal(error)) {
+            if (transcript.at(-1)?.role === 'user') transcript.pop();
+            this.options.backend.withdrawLastTurn?.(this.options.conversationId);
+            yield { type: 'withdrawn' };
+          }
+          throw error;
+        }
       }
 
       const entry: TranscriptEntry = {
