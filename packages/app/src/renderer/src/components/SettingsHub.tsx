@@ -9,6 +9,8 @@ import {
 import {
   Badge,
   Button,
+  Kbd,
+  KbdGroup,
   Label,
   Select,
   SelectContent,
@@ -204,6 +206,34 @@ export function SettingsHub({
                   onChange={(key, value) => void change(key, value)}
                 />
               )}
+              {/* Every shortcut, in one place: the ones in the fingers already
+                  (VS Code's), and the tooling's. */}
+              <div className="shortcut-list flex flex-col gap-1.5 border-t pt-4">
+                <span className="setting-label text-sm font-medium">{t.settings.shortcuts}</span>
+                <ul className="flex flex-col gap-1">
+                  {(
+                    [
+                      [t.settings.shortcutNew, ['Ctrl', 'N']],
+                      [t.settings.shortcutSearch, ['Ctrl', 'K']],
+                      [t.settings.shortcutComposer, ['Ctrl', 'L']],
+                      [t.settings.shortcutSidebar, ['Ctrl', 'B']],
+                      [t.settings.shortcutPanel, ['Ctrl', 'Alt', 'B']],
+                      [t.settings.shortcutTerminal, ['Ctrl', '`']],
+                      [t.settings.shortcutBrowser, ['Ctrl', 'T']],
+                      [t.settings.shortcutSettings, ['Ctrl', ',']],
+                    ] as const
+                  ).map(([label, keys]) => (
+                    <li key={label} className="flex items-center justify-between gap-3 text-[12.5px]">
+                      <span className="text-muted-foreground">{label}</span>
+                      <KbdGroup>
+                        {keys.map((key) => (
+                          <Kbd key={key}>{key}</Kbd>
+                        ))}
+                      </KbdGroup>
+                    </li>
+                  ))}
+                </ul>
+              </div>
               {/* The budget's other half: what the saved contexts take now,
                   and a way to take it back — they are a cache. */}
               {kv && (

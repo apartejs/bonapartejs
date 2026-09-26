@@ -121,6 +121,15 @@ export interface AppTranslations {
     pluginReloadHint: string;
     permissions: string;
     permissionsHint: string;
+    shortcuts: string;
+    shortcutNew: string;
+    shortcutSearch: string;
+    shortcutComposer: string;
+    shortcutSidebar: string;
+    shortcutPanel: string;
+    shortcutTerminal: string;
+    shortcutBrowser: string;
+    shortcutSettings: string;
     permissionsEmpty: string;
     /** `{binary}`: the program. */
     grantBinary: string;

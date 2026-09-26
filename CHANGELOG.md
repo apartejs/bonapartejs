@@ -15,6 +15,11 @@ published.
 
 ### Added
 
+- **Keyboard shortcuts for the conversation** — Ctrl+N a new
+  conversation, Ctrl+K the search, Ctrl+L the message field, Ctrl+, the
+  settings — beside the flanks' Ctrl+B / Ctrl+Alt+B and the tooling's
+  Ctrl+T / Ctrl+`. Settings → General lists them all.
+
 - **A notification when a reply is ready and bonaparte is not in front**
   (06 §6) — another window on top, or waiting in the tray. A local model
   takes minutes; the notification names the conversation, and a click

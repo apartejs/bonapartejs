@@ -471,6 +471,32 @@ export function App() {
     [conversations, t.conversations, refreshConversations, selectConversation],
   );
 
+  // The conversation's keyboard — VS Code's fingers, where they already are
+  // (Ctrl+B / Ctrl+Alt+B for the flanks live in the layout, Ctrl+T and
+  // Ctrl+` open the tooling's views).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === 'n' && !event.shiftKey) {
+        event.preventDefault();
+        if (view === 'chat' && !busy) void createConversation();
+      } else if (key === 'k') {
+        event.preventDefault();
+        if (!layout.sidebar.visible) layout.toggleSidebar();
+        requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.conv-search input')?.focus());
+      } else if (key === 'l') {
+        event.preventDefault();
+        document.querySelector<HTMLElement>('.aparte-ci-editor')?.focus();
+      } else if (key === ',') {
+        event.preventDefault();
+        setSettingsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [view, busy, createConversation, layout]);
+
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');

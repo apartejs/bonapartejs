@@ -115,6 +115,15 @@ export const FR: AppTranslations = {
     pluginReloadHint:
       'Démonte et réactive les plugins sans redémarrer bonaparte — le modèle reste chargé.',
     permissions: 'Autorisations',
+    shortcuts: 'Raccourcis clavier',
+    shortcutNew: 'Nouvelle conversation',
+    shortcutSearch: 'Chercher une conversation',
+    shortcutComposer: 'Aller au champ de message',
+    shortcutSidebar: 'Afficher ou masquer les conversations',
+    shortcutPanel: 'Afficher ou masquer le panneau d’outillage',
+    shortcutTerminal: 'Ouvrir un terminal',
+    shortcutBrowser: 'Ouvrir un onglet de navigateur',
+    shortcutSettings: 'Réglages',
     permissionsHint:
       'Ce qu’un « toujours autoriser » a accordé, projet par projet. Une autorisation retirée redemande la prochaine fois.',
     permissionsEmpty:

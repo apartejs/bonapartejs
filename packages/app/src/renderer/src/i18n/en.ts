@@ -114,6 +114,15 @@ export const EN: AppTranslations = {
     pluginReloadHint:
       'Tears down and re-activates plugins without restarting bonaparte — the model stays loaded.',
     permissions: 'Permissions',
+    shortcuts: 'Keyboard shortcuts',
+    shortcutNew: 'New conversation',
+    shortcutSearch: 'Search conversations',
+    shortcutComposer: 'Go to the message field',
+    shortcutSidebar: 'Show or hide the conversations',
+    shortcutPanel: 'Show or hide the tooling panel',
+    shortcutTerminal: 'Open a terminal',
+    shortcutBrowser: 'Open a browser tab',
+    shortcutSettings: 'Settings',
     permissionsHint:
       'What an “always allow” granted, per project. A revoked grant asks again the next time.',
     permissionsEmpty: 'Nothing is allowed without asking. An “always allow” given in an approval lands here.',
