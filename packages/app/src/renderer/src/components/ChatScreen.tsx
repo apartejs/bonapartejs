@@ -1,7 +1,7 @@
 import { aparteGlobalConfig, requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import { Alert, AlertDescription, Button } from '@aparte/bonaparte-plugin-sdk/ui';
-import { CircleAlert, Layers, Paperclip, TriangleAlert, X } from 'lucide-react';
+import { CircleAlert, Hourglass, Layers, Paperclip, TriangleAlert, X } from 'lucide-react';
 import type {
   AgentEventDto,
   ApprovalRequestDto,
@@ -37,6 +37,11 @@ interface ChatScreenProps {
   compacting: boolean;
   /** Asks for a compaction (the caller confirms first). */
   onCompact: () => void;
+  /**
+   * Another conversation's reply waits for an approval: named here, with
+   * a way there or a way out — and the composer holds meanwhile.
+   */
+  waitingElsewhere?: { title: string; onOpen: () => void; onStop: () => void } | null;
   /** An opening is in progress: the selector must not relaunch on top of it. */
   busy: boolean;
   /** Temperature is carried by the conversation: it's reread on change. */
@@ -147,6 +152,7 @@ export const ChatScreen = memo(function ChatScreen({
   onBranch,
   compacting,
   onCompact,
+  waitingElsewhere = null,
   busy,
   conversationId,
   missingModel,
@@ -619,6 +625,22 @@ export const ChatScreen = memo(function ChatScreen({
 
   return (
     <div className="chat-wrap mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col px-4">
+      {waitingElsewhere && (
+        <Alert role="status" className="approval-elsewhere mt-3 shrink-0">
+          <Hourglass aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span className="flex-1">
+              {t.chat.approvalElsewhere.replace('{title}', () => waitingElsewhere.title)}
+            </span>
+            <Button type="button" variant="secondary" size="sm" onClick={waitingElsewhere.onOpen}>
+              {t.chat.openIt}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={waitingElsewhere.onStop}>
+              {t.chat.stopIt}
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       {missingModel && (
         <Alert
           role="status"
@@ -701,6 +723,9 @@ export const ChatScreen = memo(function ChatScreen({
         // a tool call vanished, the bubble stuck on "Typing…" (1 run in 2 at
         // full frame rate; apartejs/aparte#97).
         messages={chat.messages}
+        // Held while another conversation waits for consent: a message sent
+        // now would wait for an answer nobody on this screen can give.
+        disabled={Boolean(waitingElsewhere)}
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
         centerWhenEmpty

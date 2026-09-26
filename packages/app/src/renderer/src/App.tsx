@@ -17,7 +17,7 @@ import type {
   SidebarGroupingDto,
   SidebarSortDto,
 } from '@aparte/bonaparte-shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
@@ -266,6 +266,11 @@ export function App() {
   useEffect(
     () =>
       window.bonaparte.onAgentEvent((event) => {
+        // A turn that ends has answered its question (a Stop is a refusal):
+        // the approval goes with it, wherever it was asked.
+        if (event.type === 'done' || event.type === 'error') {
+          setApproval((current) => (current && current.conversationId === event.conversationId ? null : current));
+        }
         if (event.conversationId !== openedRef.current?.conversationId) return;
         if (event.type === 'session_opened') {
           setOpened((current) =>
@@ -595,6 +600,22 @@ export function App() {
   const askCompact = useCallback(() => {
     if (openedId) setCompactAsk(openedId);
   }, [openedId]);
+  // An approval waiting in another conversation: the one on screen says so.
+  const waitingId = approval && approval.conversationId !== openedId ? approval.conversationId : null;
+  const waitingTitle = waitingId
+    ? conversations.find((conversation) => conversation.id === waitingId)?.title || t.conversations.untitled
+    : null;
+  const waitingElsewhere = useMemo(
+    () =>
+      waitingId && waitingTitle !== null
+        ? {
+            title: waitingTitle,
+            onOpen: () => void selectConversationRef.current(waitingId),
+            onStop: () => void window.bonaparte.cancelMessage(),
+          }
+        : null,
+    [waitingId, waitingTitle],
+  );
 
   return (
     <div className="app-shell flex h-full flex-col">
@@ -720,6 +741,7 @@ export function App() {
               onBranch={branchFromAnswer}
               compacting={compacting}
               onCompact={askCompact}
+              waitingElsewhere={waitingElsewhere}
             />
           </div>
           ) : null}

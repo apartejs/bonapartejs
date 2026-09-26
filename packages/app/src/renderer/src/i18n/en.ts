@@ -86,6 +86,9 @@ export const EN: AppTranslations = {
   chat: {
     branchHere: 'Branch from here',
     attachSkipped: 'Not joined: {files} — the model reads text files of up to 200 KB.',
+    approvalElsewhere: 'A reply in “{title}” is waiting for your answer — nothing else can run meanwhile.',
+    openIt: 'Open it',
+    stopIt: 'Stop it',
     changedOne: 'Changed {files}',
     changedMany: 'Changed {count} files: {files}',
     undoChanges: 'Undo these changes',

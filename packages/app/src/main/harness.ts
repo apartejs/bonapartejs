@@ -1875,8 +1875,11 @@ export class Harness {
     handle(IPC.kvUsage, () => this.kvUsage());
     handle(IPC.kvFree, () => this.freeKv());
     handle(IPC.agentInFlight, () => this.conversations.inFlight());
+    // Stop stops the turn that runs — which may not be the conversation on
+    // screen (one waiting for consent while the user went elsewhere).
     handle(IPC.agentCancel, () => {
-      if (this.currentConversationId) this.conversations.cancel(this.currentConversationId);
+      const running = this.conversations.inFlight()?.conversationId ?? this.currentConversationId;
+      if (running) this.conversations.cancel(running);
     });
     handle(IPC.setupSuggest, () => this.suggestSetup());
     handle(IPC.modelsScan, () => this.scanModelInventory());

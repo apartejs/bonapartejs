@@ -94,6 +94,10 @@ export interface AppTranslations {
     branchHere: string;
     /** `{files}`: files that could not be joined. */
     attachSkipped: string;
+    /** `{title}`: a conversation whose reply waits for an approval. */
+    approvalElsewhere: string;
+    openIt: string;
+    stopIt: string;
     /** `{count}` files, `{files}` their names. */
     changedOne: string;
     changedMany: string;

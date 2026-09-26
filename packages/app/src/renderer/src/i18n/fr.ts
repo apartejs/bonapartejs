@@ -87,6 +87,9 @@ export const FR: AppTranslations = {
   chat: {
     branchHere: 'Brancher d’ici',
     attachSkipped: 'Non joint : {files} — le modèle lit les fichiers texte de 200 Ko au plus.',
+    approvalElsewhere: 'Une réponse dans « {title} » attend votre accord — rien d’autre ne peut tourner d’ici là.',
+    openIt: 'Y aller',
+    stopIt: 'L’arrêter',
     changedOne: 'A modifié {files}',
     changedMany: 'A modifié {count} fichiers : {files}',
     undoChanges: 'Annuler ces changements',
