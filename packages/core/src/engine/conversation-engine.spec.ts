@@ -1095,3 +1095,25 @@ describe('ConversationEngine — a message the server refuses (adversarial revie
     expect(events.filter((e) => e.event.type === 'turn_end').length).toBeGreaterThanOrEqual(2);
   });
 });
+
+describe('ConversationEngine — a branch counts its own prompt (adversarial review, 2026-09-26)', () => {
+  it('branching early from a long conversation does not refuse every message', async () => {
+    const long = 'word '.repeat(2600);
+    let calls = 0;
+    const { engine, events } = await makeRig({
+      responder: () => (calls++ === 1 ? long : 'short answer'),
+    });
+    await engine.open('src', MODEL);
+    await engine.send('src', 'hello');
+    await engine.send('src', 'go on');
+    await engine.branch('src', 'br', { title: 'branch', afterTurn: 1 });
+
+    const opened = await engine.open('br', MODEL);
+    events.length = 0;
+    await engine.send('br', 'a new question for the branch');
+
+    if ('needsModel' in opened) throw new Error('needs model');
+    expect(opened.contextTokens).toBeLessThan(1000);
+    expect(events.find((e) => e.event.type === 'context_overflow')).toBeUndefined();
+  });
+});

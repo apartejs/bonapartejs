@@ -197,6 +197,20 @@ export class ChatSession {
     return { session, restore, ...(seed ? { seed } : {}) };
   }
 
+  /**
+   * The conversation as text — the frozen system block and every entry —
+   * for a rough size where the server has given no figure yet.
+   */
+  roughText(): string {
+    const system = this.options.backend.prefixText?.(this.conversationId) ?? '';
+    const entries = this.transcript.map((entry) => {
+      if (entry.role === 'assistant') return entry.raw ?? entry.text;
+      if (entry.role === 'tool_results') return entry.results.map((result) => result.content).join('\n');
+      return entry.text;
+    });
+    return [system, ...entries].join('\n');
+  }
+
   get id(): string {
     return this.conversationId;
   }

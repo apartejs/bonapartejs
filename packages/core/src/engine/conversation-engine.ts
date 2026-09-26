@@ -424,8 +424,13 @@ export class ConversationEngine {
     const { restore, seed } = await this.openSession(conversationId, model, { warm: false });
     // A restored state says how full the slot is; so does a seed, restored
     // or just prepared; a fresh prefill says nothing until its first turn.
+    // A branch restores its parent's whole state, but its own prompt is
+    // what the next turn keeps of it: counted as the parent's, every
+    // message of an early branch was refused (adversarial review,
+    // 2026-09-26). The first turn gives the server's exact figure.
+    const ownSize = meta?.parentId && this.session ? estimateTokens(this.session.roughText()) : Infinity;
     this.contextUsed = restore.restored
-      ? restore.nRestored
+      ? Math.min(restore.nRestored, ownSize)
       : seed?.restored
         ? seed.nRestored
         : seed?.created
