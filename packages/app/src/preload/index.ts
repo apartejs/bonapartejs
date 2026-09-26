@@ -86,6 +86,11 @@ const api: BonaparteBridge = {
     ipcRenderer.on(IPC.evResources, wrapped);
     return () => ipcRenderer.removeListener(IPC.evResources, wrapped);
   },
+  onNavigate: (listener: (conversationId: string) => void): (() => void) => {
+    const wrapped = (_e: unknown, conversationId: string): void => listener(conversationId);
+    ipcRenderer.on(IPC.evNavigate, wrapped);
+    return () => ipcRenderer.removeListener(IPC.evNavigate, wrapped);
+  },
   onBackendStatus: (
     listener: (status: BackendStatusDto) => void,
   ): (() => void) => {

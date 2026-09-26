@@ -33,6 +33,11 @@ export const EN: HarnessTranslations = {
       'Restore refused: the model configuration changed since this state was saved.',
     reprefillNeeded: 'The context must be fully recomputed (re-prefill).',
   },
+  notifications: {
+    replyReady: 'The reply is ready in “{title}”.',
+    replyFailed: 'The turn in “{title}” stopped on an error.',
+    untitled: 'a new conversation',
+  },
   dialogs: {
     ggufModel: 'GGUF model',
     executable: 'Executable',

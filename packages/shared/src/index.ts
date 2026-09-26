@@ -72,6 +72,7 @@ export const IPC = {
   evPlugin: 'ev.plugin',
   evBackendStatus: 'ev.backendStatus',
   evResources: 'ev.resources',
+  evNavigate: 'ev.navigate',
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];
@@ -525,6 +526,8 @@ export interface BonaparteBridge {
   onAgentEvent(listener: (event: AgentEventDto) => void): () => void;
   onBackendStatus(listener: (status: BackendStatusDto) => void): () => void;
   onResources(listener: (sample: ResourceSampleDto) => void): () => void;
+  /** The main process asks the screen to show a conversation (a notification was clicked). */
+  onNavigate(listener: (conversationId: string) => void): () => void;
 
   /** Opens a project folder (native dialog); null if canceled. */
   openProject(): Promise<ProjectDto | null>;

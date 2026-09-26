@@ -215,6 +215,14 @@ export function App() {
   }, [locale]);
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
+  // A notification was clicked: the screen goes to that conversation.
+  useEffect(
+    () =>
+      window.bonaparte.onNavigate((conversationId) => {
+        if (openedRef.current?.conversationId !== conversationId) void selectConversationRef.current(conversationId);
+      }),
+    [],
+  );
   const [resources, setResources] = useState<ResourceSampleDto | null>(null);
   useEffect(() => window.bonaparte.onResources(setResources), []);
 
@@ -300,6 +308,9 @@ export function App() {
     },
     [fail, refreshConversations],
   );
+
+  const selectConversationRef = useRef(selectConversation);
+  selectConversationRef.current = selectConversation;
 
   const startWith = useCallback(
     async (engine: BackendConfigDto) => {

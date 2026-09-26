@@ -15,6 +15,14 @@ published.
 
 ### Added
 
+- **A notification when a reply is ready and bonaparte is not in front**
+  (06 §6) — another window on top, or waiting in the tray. A local model
+  takes minutes; the notification names the conversation, and a click
+  brings the window back on it. A setting turns it off.
+- **Sleep unloads the model.** When the computer goes to sleep, the open
+  conversation's state is saved and the model's memory freed — the same
+  path as idleness, under the same setting.
+
 - **A tool row says what the call targets** — `read_file src/a.ts`,
   `run_shell pnpm test`, `web_search llama.cpp slots` — after the tool's
   name, with the row's states and disclosure kept (apartéJS 0.17.1's

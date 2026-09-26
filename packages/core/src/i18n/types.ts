@@ -38,6 +38,14 @@ export interface HarnessTranslations {
     restoreRefusedMismatch: string;
     reprefillNeeded: string;
   };
+  /** The OS notification when a reply finishes while bonaparte is not in front. */
+  notifications: {
+    /** `{title}`: the conversation. */
+    replyReady: string;
+    /** `{title}`: the conversation. */
+    replyFailed: string;
+    untitled: string;
+  };
   /** Native file-picker filter names (shown by the OS dialog). */
   dialogs: {
     ggufModel: string;

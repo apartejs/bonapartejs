@@ -89,7 +89,7 @@ import {
   type SetupSuggestionDto,
   type BonaparteLocale,
 } from '@aparte/bonaparte-shared';
-import { app, dialog, shell } from 'electron';
+import { Notification, app, dialog, powerMonitor, shell } from 'electron';
 import type { BrowserWindow, IpcMain } from 'electron';
 import { existsSync } from 'node:fs';
 import { resolvePluginsDir } from './plugins-dir.js';
@@ -133,6 +133,13 @@ export class Harness {
     else if (status === 'stopped' || status === 'crashed') this.clearIdleTimer();
   });
 
+  /** Notify when a turn ends while the window is not in front. Cached from the settings. */
+  private notifyTurnEndCached = true;
+  /** How the main process brings the window back (set by index.ts: the tray knows how). */
+  private showWindow: () => void = () => undefined;
+  setShowWindow(show: () => void): void {
+    this.showWindow = show;
+  }
   /** Closing the window keeps bonaparte in the tray rather than quitting. Cached for the sync close handler. */
   private closeToTrayCached = true;
   get closeToTray(): boolean {
@@ -331,6 +338,7 @@ export class Harness {
     const resolved = resolveSettings(APP_SETTINGS, await this.settingLayers(), 'global');
     const value = (key: string): unknown => resolved.find((setting) => setting.key === key)?.value;
     this.closeToTrayCached = value('closeToTray') !== false;
+    this.notifyTurnEndCached = value('notifyTurnEnd') !== false;
     const budget = value('kvBudgetGb');
     this.kvBudgetBytes = (typeof budget === 'number' && budget > 0 ? budget : 16) * 1024 ** 3;
     this.localeCached = (await this.loadConfig()).locale === 'en' ? 'en' : 'fr';
@@ -360,6 +368,52 @@ export class Harness {
     const minutes = typeof value('idleUnloadMinutes') === 'number' ? (value('idleUnloadMinutes') as number) : 15;
     this.idleTimer = setTimeout(() => void this.onIdle(), Math.max(1, minutes) * 60_000);
     this.idleTimer.unref?.();
+  }
+
+  /**
+   * The computer goes to sleep: a model held in memory through a long sleep
+   * is waste, and some GPUs wake badly. Same path as idleness — the state is
+   * saved, the model unloaded, the next message reloads it — under the same
+   * setting.
+   */
+  watchPower(): void {
+    powerMonitor.on('suspend', () => void this.onSuspend());
+  }
+
+  private async onSuspend(): Promise<void> {
+    const resolved = resolveSettings(APP_SETTINGS, await this.settingLayers(), 'global');
+    if (resolved.find((setting) => setting.key === 'idleUnload')?.value === false) return;
+    if (!this.supervisor.loaded || this.conversations.inFlight()) return;
+    console.log('[power] going to sleep: saving the conversation state and unloading the model');
+    await this.conversations.saveState().catch(() => undefined);
+    await this.supervisor.stop().catch(() => undefined);
+  }
+
+  /**
+   * A turn ended while bonaparte is not in front: a local model takes
+   * minutes, and whoever went elsewhere should know when to come back. A
+   * click shows the window on that conversation. E2E records instead of
+   * notifying (its window is never in front).
+   */
+  private async notifyIfAway(conversationId: string, outcome: 'done' | 'error'): Promise<void> {
+    if (!this.notifyTurnEndCached) return;
+    const win = this.window;
+    if (!win || win.isDestroyed() || (win.isVisible() && win.isFocused())) return;
+    const t = harnessT(this.localeCached).notifications;
+    const title = (await this.store.meta(conversationId).catch(() => null))?.title || t.untitled;
+    const body = (outcome === 'done' ? t.replyReady : t.replyFailed).replace('{title}', () => title);
+    if (process.env['BONAPARTE_E2E']) {
+      const scope = globalThis as { __bonaparteNotifications?: { conversationId: string; body: string }[] };
+      (scope.__bonaparteNotifications ??= []).push({ conversationId, body });
+      return;
+    }
+    if (!Notification.isSupported()) return;
+    const notification = new Notification({ title: 'bonaparte', body });
+    notification.on('click', () => {
+      this.showWindow();
+      this.emit(IPC.evNavigate, conversationId);
+    });
+    notification.show();
   }
 
   private async onIdle(): Promise<void> {
@@ -1205,6 +1259,7 @@ export class Harness {
         body = { type: 'tool_result', name: event.name, ok: event.ok, content: event.content };
         break;
       case 'turn_end':
+        void this.notifyIfAway(conversationId, 'done');
         body = {
           type: 'done',
           stats: {
@@ -1227,6 +1282,7 @@ export class Harness {
         body = { type: 'context_overflow', used: event.used, nCtx: event.nCtx, limit: event.limit, needed: event.needed };
         break;
       case 'error':
+        void this.notifyIfAway(conversationId, 'error');
         body = { type: 'error', message: event.message };
         break;
       default:

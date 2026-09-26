@@ -158,11 +158,22 @@ export const APP_SETTINGS: SettingField[] = [
     default: true,
   },
   {
+    key: 'notifyTurnEnd',
+    label: { en: 'Notify when a reply is ready', fr: 'Prévenir quand une réponse est prête' },
+    description: {
+      en: 'A local model can take minutes. When bonaparte is not in front — another window, or waiting in the tray — a notification says the turn is over; a click brings you back to the conversation.',
+      fr: 'Un modèle local peut prendre des minutes. Quand bonaparte n’est pas au premier plan — une autre fenêtre, ou en attente dans le bandeau — une notification dit que le tour est fini ; un clic ramène à la conversation.',
+    },
+    type: 'boolean',
+    scopes: ['global'],
+    default: true,
+  },
+  {
     key: 'idleUnload',
     label: { en: 'Unload the model when idle', fr: 'Décharger le modèle en cas d’inactivité' },
     description: {
-      en: 'After a while with no message, save the conversation’s state and free the model’s memory. The next message reloads it.',
-      fr: 'Après un moment sans message, sauvegarder l’état de la conversation et libérer la mémoire du modèle. Le message suivant le recharge.',
+      en: 'After a while with no message — and when the computer goes to sleep — save the conversation’s state and free the model’s memory. The next message reloads it.',
+      fr: 'Après un moment sans message — et quand l’ordinateur se met en veille — sauvegarder l’état de la conversation et libérer la mémoire du modèle. Le message suivant le recharge.',
     },
     type: 'boolean',
     scopes: ['global'],

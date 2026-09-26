@@ -108,7 +108,7 @@ export function SettingsHub({
   // Sampling keys are the ones also adjustable per conversation.
   const samplingKeys = new Set(['temperature', 'topP', 'topK', 'minP', 'seed']);
   const sampling = settings.filter((setting) => samplingKeys.has(setting.key));
-  const appKeys = new Set(['closeToTray', 'idleUnload', 'idleUnloadMinutes', 'kvBudgetGb']);
+  const appKeys = new Set(['closeToTray', 'notifyTurnEnd', 'idleUnload', 'idleUnloadMinutes', 'kvBudgetGb']);
   const appSettings = settings.filter((setting) => appKeys.has(setting.key));
   const launch = settings.filter(
     (setting) =>

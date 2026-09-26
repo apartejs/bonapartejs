@@ -239,6 +239,8 @@ app.whenReady().then(async () => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
 
   harness.registerIpc(ipcMain, app.getVersion(), isAppUrl);
+  harness.setShowWindow(showWindow);
+  harness.watchPower();
   await harness.restoreSession();
   createWindow();
   createTray();

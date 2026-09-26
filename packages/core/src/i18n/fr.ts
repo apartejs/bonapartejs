@@ -34,6 +34,11 @@ export const FR: HarnessTranslations = {
     reprefillNeeded:
       'Le contexte doit être recalculé entièrement (re-prefill).',
   },
+  notifications: {
+    replyReady: 'La réponse est prête dans « {title} ».',
+    replyFailed: 'Le tour de « {title} » s’est arrêté sur une erreur.',
+    untitled: 'une nouvelle conversation',
+  },
   dialogs: {
     ggufModel: 'Modèle GGUF',
     executable: 'Exécutable',
