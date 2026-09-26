@@ -93,6 +93,14 @@ export {
   type KvCacheTypeName,
 } from './models/gguf.js';
 export {
+  estimateLoad,
+  estimateSwitch,
+  memoryVerdict,
+  type LoadEstimate,
+  type MemoryVerdict,
+  type SwitchCost,
+} from './models/cost.js';
+export {
   isSupportedLlamaBuild,
   MIN_LLAMA_BUILD,
   parseLlamaBuildNumber,

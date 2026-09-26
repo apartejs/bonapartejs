@@ -129,6 +129,16 @@ export class KvStore {
     }
   }
 
+  /** Tokens a conversation's saved state holds — what re-prefilling it would cost; undefined without one. */
+  async savedTokens(conversationId: string): Promise<number | undefined> {
+    try {
+      const manifest = JSON.parse(await readFile(this.manifestPath(conversationId), 'utf8')) as Partial<KvManifest>;
+      return typeof manifest.promptTokenCount === 'number' ? manifest.promptTokenCount : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   /**
    * Forgets a conversation's state: the slot file AND its manifest.
    *

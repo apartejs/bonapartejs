@@ -85,6 +85,8 @@ export class EngineSupervisor {
   private loadedModel: LoadedModel | null = null;
   /** Pid of the managed server, while it runs — for whoever watches its footprint. */
   private spawnedPid: number | null = null;
+  /** Seconds each model took to become ready, last time — what a switch to it will cost. */
+  private readonly loadTimes = new Map<string, number>();
   private readonly listeners = new Set<(status: BackendStatus) => void>();
   private readonly spawn: SpawnFn;
   private readonly probe: ProcessProbe;
@@ -116,6 +118,11 @@ export class EngineSupervisor {
 
   get serverPid(): number | null {
     return this.spawnedPid;
+  }
+
+  /** How long this model took to load on this machine, last time; undefined if never measured. */
+  loadSeconds(modelPath: string): number | undefined {
+    return this.loadTimes.get(modelPath);
   }
 
   status(): BackendStatus {
@@ -211,7 +218,9 @@ export class EngineSupervisor {
     this.adopt(backend);
 
     await mkdir(this.options.slotsDir, { recursive: true });
+    const started = Date.now();
     await backend.start();
+    this.loadTimes.set(modelPath, (Date.now() - started) / 1000);
 
     this.loadedModel = { modelPath, nCtx: engine.nCtx };
     this.liveConfig = {

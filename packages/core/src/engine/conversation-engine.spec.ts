@@ -320,6 +320,21 @@ describe('ConversationEngine — state', () => {
   });
 });
 
+describe('ConversationEngine — what this machine measured', () => {
+  it('learns the prefill speed of a model from its turns, and the size of the open context', async () => {
+    const { engine } = await makeRig({ msPerToken: 2 }); // the fake server: 2 ms per uncached token
+    await engine.open('conv-a', MODEL);
+    expect(engine.prefillRate(MODEL)).toBeUndefined();
+
+    await engine.send('conv-a', 'a message long enough to be measured '.repeat(20));
+
+    // 2 ms per token: 500 tokens per second.
+    expect(engine.prefillRate(MODEL)).toBeCloseTo(500, -1);
+    expect(engine.contextTokensOf('conv-a')).toBeGreaterThan(0);
+    expect(engine.contextTokensOf('conv-b')).toBeUndefined();
+  });
+});
+
 describe('ConversationEngine — deleting a conversation', () => {
   it('erases the log, the meta and the saved state', async () => {
     const { engine, store, kv } = await makeRig();

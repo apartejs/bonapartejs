@@ -7,7 +7,7 @@
 
 import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 
 export type ModelSource = 'lmstudio' | 'hf-cache' | 'custom' | 'manual';
 
@@ -27,7 +27,19 @@ export interface ScanRoot {
 }
 
 /** Known locations, depending on the platform (absent ones are ignored when scanning). */
-export function defaultScanRoots(): ScanRoot[] {
+/**
+ * Where models are looked for. `BONAPARTE_MODEL_DIRS` (folders separated by
+ * the platform's path delimiter) replaces the known locations: folders of
+ * one's own — and a test that does not depend on the machine's models.
+ */
+export function defaultScanRoots(env: Record<string, string | undefined> = process.env): ScanRoot[] {
+  const custom = env['BONAPARTE_MODEL_DIRS'];
+  if (custom) {
+    return custom
+      .split(delimiter)
+      .filter((dir) => dir.trim() !== '')
+      .map((dir) => ({ dir, source: 'custom' as const }));
+  }
   const home = homedir();
   return [
     { dir: join(home, '.lmstudio', 'models'), source: 'lmstudio' },

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { defaultScanRoots, scanModels } from './inventory.js';
 
@@ -94,8 +94,16 @@ describe('scanModels', () => {
 
 describe('defaultScanRoots', () => {
   it('offers LM Studio and the Hugging Face cache', () => {
-    const roots = defaultScanRoots();
+    const roots = defaultScanRoots({});
     expect(roots.some((r) => r.source === 'lmstudio')).toBe(true);
     expect(roots.some((r) => r.source === 'hf-cache')).toBe(true);
+  });
+
+  it('BONAPARTE_MODEL_DIRS replaces them — folders of your own, and a machine-independent test', () => {
+    const roots = defaultScanRoots({ BONAPARTE_MODEL_DIRS: ['/models/a', '/models/b'].join(delimiter) });
+    expect(roots).toEqual([
+      { dir: '/models/a', source: 'custom' },
+      { dir: '/models/b', source: 'custom' },
+    ]);
   });
 });

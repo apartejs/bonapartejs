@@ -151,6 +151,19 @@ describe('EngineSupervisor — managed engine', () => {
     expect(supervisor.backend?.slots).toBeDefined();
   });
 
+  it('measures how long a model took to load — what a switch to it will cost next time', async () => {
+    const server = await fakeServer();
+    const spawn = makeFakeSpawn();
+    const { supervisor } = await makeSupervisor(server, spawn);
+    await supervisor.configure(MANAGED);
+    expect(supervisor.loadSeconds(MODEL_A)).toBeUndefined();
+
+    await supervisor.ensureLoaded(MODEL_A);
+
+    expect(supervisor.loadSeconds(MODEL_A)).toBeGreaterThanOrEqual(0);
+    expect(supervisor.loadSeconds(MODEL_B)).toBeUndefined();
+  });
+
   it('the same model does not relaunch — two conversations on one model share the server', async () => {
     const server = await fakeServer();
     const spawn = makeFakeSpawn();

@@ -212,6 +212,10 @@ export class ConversationEngine {
   private turn: Turn | null = null;
   /** Tokens the slot holds for the active conversation — prompt and replies so far. */
   private contextUsed = 0;
+  /** Model of the active session. */
+  private activeModel: string | null = null;
+  /** Prefill speed measured per model on this machine, tokens per second (a running average). */
+  private readonly prefillRates = new Map<string, number>();
   private readonly listeners = new Set<(event: TaggedEvent) => void>();
   private readonly modelExists: (modelPath: string) => boolean;
 
@@ -227,6 +231,16 @@ export class ConversationEngine {
   onEvent(listener: (event: TaggedEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  /** Tokens per second this machine prefills with this model, once measured. */
+  prefillRate(modelPath: string): number | undefined {
+    return this.prefillRates.get(modelPath);
+  }
+
+  /** Tokens the slot holds for this conversation, when it is the open one. */
+  contextTokensOf(conversationId: string): number | undefined {
+    return this.activeId === conversationId && this.session ? this.contextUsed : undefined;
   }
 
   inFlight(): InFlight | null {
@@ -327,6 +341,7 @@ export class ConversationEngine {
     );
     this.session = session;
     this.activeId = conversationId;
+    this.activeModel = model;
     // A restored state says how full the slot is; so does a seed, restored
     // or just prepared; a fresh prefill says nothing until its first turn.
     this.contextUsed = restore.restored
@@ -392,8 +407,9 @@ export class ConversationEngine {
       for await (const event of session.send(text, controller.signal)) {
         if (event.type === 'token') turn.text += event.text;
         else if (event.type === 'thinking') turn.thinking += event.text;
-        else if (event.type === 'turn_end' && event.contextTokens > 0) {
-          this.contextUsed = event.contextTokens;
+        else if (event.type === 'turn_end') {
+          if (event.contextTokens > 0) this.contextUsed = event.contextTokens;
+          this.measurePrefill(event.promptTokens - event.cachedTokens, event.promptMs);
         }
         this.emit({ conversationId, event });
       }
@@ -460,6 +476,7 @@ export class ConversationEngine {
     if (this.activeId === conversationId) {
       this.session = null;
       this.activeId = null;
+      this.activeModel = null;
       this.contextUsed = 0;
     }
     await this.options.store.remove(conversationId);
@@ -474,6 +491,17 @@ export class ConversationEngine {
 
   private async settle(): Promise<void> {
     while (this.turn) await this.turn.done;
+  }
+
+  /**
+   * A turn that prefilled enough to be meaningful teaches the speed of its
+   * model on this machine — what a switch back to it will be announced at.
+   */
+  private measurePrefill(uncached: number, ms: number): void {
+    if (!this.activeModel || uncached < 64 || !(ms > 0)) return;
+    const rate = uncached / (ms / 1000);
+    const previous = this.prefillRates.get(this.activeModel);
+    this.prefillRates.set(this.activeModel, previous === undefined ? rate : previous * 0.5 + rate * 0.5);
   }
 
   private emit(event: TaggedEvent): void {

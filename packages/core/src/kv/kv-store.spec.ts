@@ -102,6 +102,14 @@ describe('KvStore (against the fake llama-server)', () => {
     dirs = [];
   });
 
+  it('savedTokens reads how many tokens a saved state holds — undefined without one', async () => {
+    const { slots, client, store } = await setup();
+    expect(await store.savedTokens('conv-1')).toBeUndefined();
+    await prefill(client, 'x'.repeat(400)); // 100 tokens
+    await store.saveState(slots, 0, 'conv-1', LIVE);
+    expect(await store.savedTokens('conv-1')).toBe(100);
+  });
+
   it('saveState saves the slot and writes a complete manifest', async () => {
     const { slots, client, store, dir } = await setup();
     await prefill(client, 'x'.repeat(400)); // 100 tokens
