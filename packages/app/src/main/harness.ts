@@ -482,13 +482,15 @@ export class Harness {
       return;
     }
     for (const id of ids) {
-      let raw: string;
+      let meta: unknown;
       try {
-        raw = await readFile(join(dir, id, 'meta.json'), 'utf8');
+        meta = JSON.parse(await readFile(join(dir, id, 'meta.json'), 'utf8'));
       } catch {
         continue;
       }
-      if (!raw.includes('"projectRoot"')) continue;
+      // The old shape carried a `projectRoot` KEY. A test on the raw text
+      // also caught a conversation TITLED "projectRoot", and deleted it.
+      if (typeof meta !== 'object' || meta === null || !Object.hasOwn(meta, 'projectRoot')) continue;
       await this.store.remove(id);
       await this.kv.forget(id);
       console.log(`[conversations] old-shape conversation purged: ${id}`);
