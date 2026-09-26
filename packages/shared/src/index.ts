@@ -65,6 +65,12 @@ export const IPC = {
   pluginsSetEnabled: 'plugins.setEnabled',
   appGpuStatus: 'app.gpuStatus',
   appRelaunch: 'app.relaunch',
+  mcpList: 'mcp.list',
+  mcpAdd: 'mcp.add',
+  mcpSetEnabled: 'mcp.setEnabled',
+  mcpRemove: 'mcp.remove',
+  mcpReload: 'mcp.reload',
+  mcpEditFile: 'mcp.editFile',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   kvUsage: 'kv.usage',
@@ -297,6 +303,27 @@ export interface ApprovalResponseDto {
   granted: boolean;
   /** Remember the grant for this project ("always allow"), with its scope. */
   always?: AlwaysScopeDto;
+}
+
+/** An MCP server as the hub shows it (P4.2). */
+export interface McpServerDto {
+  id: string;
+  transport: 'stdio' | 'http';
+  /** The command line, or the URL — never the headers (they hold keys). */
+  target: string;
+  state: 'off' | 'connecting' | 'connected' | 'failed';
+  /** The server's own tool names. */
+  tools: string[];
+  /** What went wrong — the server's own words when it said any. */
+  error?: string;
+}
+
+export interface McpOverviewDto {
+  servers: McpServerDto[];
+  /** Entries of `mcp-servers.json` that could not be read, by name. */
+  errors: { id: string; code: string }[];
+  /** Where the file lives — shown, and opened by "Edit the file". */
+  configPath: string;
 }
 
 /**
@@ -544,6 +571,16 @@ export interface BonaparteBridge {
   gpuStatus(): Promise<GpuStatusDto>;
   /** Restarts bonaparte: the conversation's state is saved first, the model reloads. */
   relaunch(): Promise<void>;
+  /** The MCP servers and their state (P4). */
+  listMcpServers(): Promise<McpOverviewDto>;
+  /** Adds a server from a name and a command line or URL; `error` names the field at fault. */
+  addMcpServer(name: string, target: string): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' }>;
+  setMcpServerEnabled(id: string, enabled: boolean): Promise<McpOverviewDto>;
+  removeMcpServer(id: string): Promise<McpOverviewDto>;
+  /** Reads `mcp-servers.json` again — after an edit by hand — and retries failed servers. */
+  reloadMcpServers(): Promise<McpOverviewDto>;
+  /** Opens `mcp-servers.json` in the system's editor (created empty if absent). */
+  editMcpConfig(): Promise<void>;
   /**
    * Subscribes to events PUSHED by a plugin's Node half.
    *

@@ -18,6 +18,11 @@ import {
   builtinTools,
   wantsGpuAcceleration,
   MeasureStore,
+  McpClientManager,
+  mcpServerFromForm,
+  parseMcpConfig,
+  serializeMcpConfig,
+  type McpConfigError,
   validateSettingValue,
   alwaysRule,
   commandBinary,
@@ -86,6 +91,7 @@ import {
   type PlayModeDto,
   type PluginStatusDto,
   type GpuStatusDto,
+  type McpOverviewDto,
   type ProjectDto,
   type ProjectSummaryDto,
   type ResourceSampleDto,
@@ -342,6 +348,9 @@ export class Harness {
       this.roots = await this.rootsOf(config.currentConversationId);
     }
     this.registerBuiltinTools();
+    // The user's MCP servers start in the background: one that downloads
+    // itself (`npx`) or never answers must not hold the window.
+    void this.reloadMcpServers().catch((error) => console.error('[mcp]', error));
     if (config.mode) this.permissions.setMode(config.mode as PlayMode);
     await this.refreshAppBehaviour();
   }
@@ -700,6 +709,97 @@ export class Harness {
    * off tears everything it registered down, on activates it again. The
    * choice is remembered; the conversation learns of its tools by a delta.
    */
+  // ── MCP servers (P4) ─────────────────────────────────────────────────
+
+  /** `mcp-servers.json` — the shape every MCP guide shows, pasted as is. */
+  private readonly mcpConfigPath = join(bonaparteDataDir(), 'config', 'mcp-servers.json');
+  /**
+   * One client per declared server; their tools join the registry, and a
+   * change reaches the conversation as an inventory delta at its next
+   * message, like a plugin's.
+   */
+  private readonly mcp = new McpClientManager({
+    registry: this.registry,
+    onChange: () => void this.conversations.close(),
+    clientVersion: app.getVersion(),
+  });
+  private mcpErrors: McpConfigError[] = [];
+
+  /** The file as it is — entries we cannot read stay in it, untouched. */
+  private async readMcpFile(): Promise<{ mcpServers: Record<string, unknown> }> {
+    try {
+      const raw = JSON.parse(await readFile(this.mcpConfigPath, 'utf8')) as { mcpServers?: unknown };
+      const servers = raw.mcpServers;
+      return {
+        ...raw,
+        mcpServers: typeof servers === 'object' && servers !== null && !Array.isArray(servers) ? (servers as Record<string, unknown>) : {},
+      };
+    } catch {
+      return { mcpServers: {} };
+    }
+  }
+
+  private async writeMcpFile(content: { mcpServers: Record<string, unknown> }): Promise<void> {
+    await mkdir(dirname(this.mcpConfigPath), { recursive: true });
+    await writeFile(this.mcpConfigPath, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
+  }
+
+  /** Reads the file and brings the clients to it: new servers start, failed ones retry. */
+  async reloadMcpServers(): Promise<McpOverviewDto> {
+    const { servers, errors } = parseMcpConfig(await this.readMcpFile());
+    this.mcpErrors = errors;
+    for (const error of errors) console.warn(`[mcp] ${error.id}: ${error.message}`);
+    await this.mcp.apply(servers);
+    return this.mcpOverview();
+  }
+
+  mcpOverview(): McpOverviewDto {
+    return {
+      servers: this.mcp.status(),
+      errors: this.mcpErrors.map(({ id, code }) => ({ id, code })),
+      configPath: this.mcpConfigPath,
+    };
+  }
+
+  async addMcpServer(
+    name: string,
+    target: string,
+  ): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' }> {
+    const server = mcpServerFromForm(String(name ?? ''), String(target ?? ''));
+    if ('error' in server) return server;
+    const file = await this.readMcpFile();
+    if (server.id in file.mcpServers) return { error: 'exists' };
+    const entry = serializeMcpConfig([server]).mcpServers[server.id];
+    await this.writeMcpFile({ ...file, mcpServers: { ...file.mcpServers, [server.id]: entry } });
+    return this.reloadMcpServers();
+  }
+
+  async setMcpServerEnabled(id: string, enabled: boolean): Promise<McpOverviewDto> {
+    const file = await this.readMcpFile();
+    const entry = file.mcpServers[id];
+    if (typeof entry !== 'object' || entry === null) return this.mcpOverview();
+    const { disabled: _disabled, ...rest } = entry as Record<string, unknown>;
+    await this.writeMcpFile({
+      ...file,
+      mcpServers: { ...file.mcpServers, [id]: enabled ? rest : { ...rest, disabled: true } },
+    });
+    return this.reloadMcpServers();
+  }
+
+  async removeMcpServer(id: string): Promise<McpOverviewDto> {
+    const file = await this.readMcpFile();
+    if (!(id in file.mcpServers)) return this.mcpOverview();
+    const { [id]: _removed, ...rest } = file.mcpServers;
+    await this.writeMcpFile({ ...file, mcpServers: rest });
+    return this.reloadMcpServers();
+  }
+
+  async editMcpConfig(): Promise<void> {
+    if (!existsSync(this.mcpConfigPath)) await this.writeMcpFile({ mcpServers: {} });
+    const failure = await shell.openPath(this.mcpConfigPath);
+    if (failure) throw new Error(failure);
+  }
+
   /** Whether the interface's GPU matches the settings (P3.1), and what a restart costs. */
   async gpuStatus(): Promise<GpuStatusDto> {
     const loaded = this.supervisor.loaded;
@@ -1449,6 +1549,8 @@ export class Harness {
     // Plugins first: they hold dev servers, a shell, a native view. All of
     // that must go down with the app, not outlive it.
     await this.pluginHost.deactivateAll().catch(() => undefined);
+    // Same for the MCP servers: their processes go down with the app.
+    await this.mcp.stopAll().catch(() => undefined);
     this.unsubscribeEngineStatus();
     await this.supervisor.stop();
   }
@@ -1652,6 +1754,12 @@ export class Harness {
     handle(IPC.pluginsSetEnabled, (id: string, enabled: boolean) => this.setPluginEnabled(id, enabled === true));
     handle(IPC.appGpuStatus, () => this.gpuStatus());
     handle(IPC.appRelaunch, () => this.relaunch());
+    handle(IPC.mcpList, () => this.mcpOverview());
+    handle(IPC.mcpAdd, (name: string, target: string) => this.addMcpServer(name, target));
+    handle(IPC.mcpSetEnabled, (id: string, enabled: boolean) => this.setMcpServerEnabled(String(id), enabled === true));
+    handle(IPC.mcpRemove, (id: string) => this.removeMcpServer(String(id)));
+    handle(IPC.mcpReload, () => this.reloadMcpServers());
+    handle(IPC.mcpEditFile, () => this.editMcpConfig());
     handle(
       IPC.pluginsAck,
       (pluginId: string, instanceId: string, bytes: number) => {

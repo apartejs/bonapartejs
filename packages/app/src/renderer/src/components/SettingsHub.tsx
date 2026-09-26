@@ -28,8 +28,9 @@ import { MonitorCog } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { formatBytes } from '../models/format.js';
+import { McpServers } from './McpServers.js';
 
-type Section = 'general' | 'sampling' | 'launch' | 'plugins' | 'permissions';
+type Section = 'general' | 'sampling' | 'launch' | 'plugins' | 'mcp' | 'permissions';
 
 interface SettingsHubProps {
   engine: BackendConfigDto | undefined;
@@ -134,6 +135,7 @@ export function SettingsHub({
     { id: 'sampling', label: t.settings.sampling },
     { id: 'launch', label: t.settings.launch },
     { id: 'plugins', label: t.settings.plugins },
+    { id: 'mcp', label: t.settings.mcp },
     { id: 'permissions', label: t.settings.permissions },
   ];
 
@@ -302,6 +304,8 @@ export function SettingsHub({
               />
             </div>
           )}
+
+          {section === 'mcp' && <McpServers />}
 
           {section === 'permissions' && (
             <div className="grants flex max-w-[560px] flex-col gap-4">

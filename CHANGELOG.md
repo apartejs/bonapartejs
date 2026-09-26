@@ -15,6 +15,24 @@ published.
 
 ### Added
 
+- **MCP servers** (P4). bonaparte is an MCP client, over stdio and
+  streamable HTTP, on the official SDK. Servers are declared in
+  `mcp-servers.json` (in bonaparte's config folder), in the shape every MCP
+  guide shows — `{ "mcpServers": { "<name>": { "command", "args", "env" } |
+  { "url", "headers" } } }` — so a server's documented snippet pastes as
+  is. They start with the app, in the background; their tools join the
+  model's list as `mcp__<server>__<tool>` and reach a conversation as an
+  inventory delta, never a re-render. The hub's "MCP servers" section lists
+  each with its state, its tools or what it said when it failed; a server
+  is added from a command line or a URL, switched off, retried or removed,
+  and the file follows (entries it cannot read stay untouched, and are
+  named). MCP tools go through the play modes like ours: one its server
+  marks read-only counts as reaching outside (it asks in Reading and
+  Rehearsal), anything else as a command; "always allow" works per tool. A
+  server that dies mid-session is reported and its tools leave; nothing a
+  server started outlives the app — on Windows the process tree goes down,
+  `npx` wrappers included.
+
 - **An honest gauge** (P2.8). The status strip shows how fast a reply came
   (tokens per second, the server's clock). A resumed conversation says what
   its restore saved: "context restored · 1 032 tokens in 180 ms — instead

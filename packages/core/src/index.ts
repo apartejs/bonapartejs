@@ -216,6 +216,24 @@ export { wantsGpuAcceleration, type GpuAccelerationChoice } from './settings/gpu
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────
 export { EngineSupervisor } from './engine/supervisor.js';
 export { MeasureStore, type ModelMeasures } from './engine/measures.js';
+
+// ── MCP client (P4) ───────────────────────────────────────────────────────
+export {
+  MCP_SERVER_ID,
+  mcpServerFromForm,
+  parseMcpConfig,
+  serializeMcpConfig,
+  splitCommandLine,
+  type McpConfigError,
+  type McpConfigErrorCode,
+  type McpServerConfig,
+} from './mcp/config.js';
+export {
+  McpClientManager,
+  mcpToolName,
+  type McpServerState,
+  type McpServerStatus,
+} from './mcp/manager.js';
 export { assertLlamaBinary, validateSettingValue } from './engine/validate.js';
 export type {
   EngineConfig,

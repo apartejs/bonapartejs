@@ -50,6 +50,12 @@ const api: BonaparteBridge = {
   setPluginEnabled: (pluginId, enabled) => ipcRenderer.invoke(IPC.pluginsSetEnabled, pluginId, enabled),
   gpuStatus: () => ipcRenderer.invoke(IPC.appGpuStatus),
   relaunch: () => ipcRenderer.invoke(IPC.appRelaunch),
+  listMcpServers: () => ipcRenderer.invoke(IPC.mcpList),
+  addMcpServer: (name, target) => ipcRenderer.invoke(IPC.mcpAdd, name, target),
+  setMcpServerEnabled: (id, enabled) => ipcRenderer.invoke(IPC.mcpSetEnabled, id, enabled),
+  removeMcpServer: (id) => ipcRenderer.invoke(IPC.mcpRemove, id),
+  reloadMcpServers: () => ipcRenderer.invoke(IPC.mcpReload),
+  editMcpConfig: () => ipcRenderer.invoke(IPC.mcpEditFile),
   onPluginEvent: (listener) => {
     const wrapped = (
       _e: unknown,

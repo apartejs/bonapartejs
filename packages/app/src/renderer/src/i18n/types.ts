@@ -139,6 +139,33 @@ export interface AppTranslations {
     gpuRestartCostUnknown: string;
     gpuRestartFree: string;
     restartNow: string;
+    /** MCP servers (P4). */
+    mcp: string;
+    mcpHint: string;
+    mcpEmpty: string;
+    mcpName: string;
+    mcpNamePlaceholder: string;
+    mcpTarget: string;
+    mcpTargetPlaceholder: string;
+    mcpAdd: string;
+    mcpAdding: string;
+    /** Why the form was refused. */
+    mcpFormErrors: Record<'name' | 'target' | 'exists', string>;
+    /** `{count}`: the server's tools. */
+    mcpConnected: string;
+    mcpConnecting: string;
+    mcpFailed: string;
+    mcpOff: string;
+    /** `{name}`: the server. */
+    mcpSwitch: string;
+    mcpRetry: string;
+    mcpRemove: string;
+    mcpConfirmRemove: string;
+    mcpEditFile: string;
+    mcpReload: string;
+    /** Entries of the file that could not be read. */
+    mcpFileErrors: string;
+    mcpFileErrorCodes: Record<string, string>;
     /** `{name}`: the plugin. */
     pluginSwitch: string;
     conversationScope: string;
