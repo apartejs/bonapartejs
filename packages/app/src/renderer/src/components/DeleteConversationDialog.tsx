@@ -35,7 +35,7 @@ export function DeleteConversationDialog({ title, onConfirm, onCancel }: DeleteC
             {t.conversations.deleteTitle}
           </DialogTitle>
           <DialogDescription className="leading-relaxed">
-            {t.conversations.deleteBody.replace('{title}', title || t.conversations.untitled)}
+            {t.conversations.deleteBody.replace('{title}', () => title || t.conversations.untitled)}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="mt-2">

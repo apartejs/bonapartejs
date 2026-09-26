@@ -161,7 +161,7 @@ export function ConversationSidebar({
 
   const row = (conversation: ConversationSummaryDto): ReactElement => {
     const active = conversation.id === currentId;
-    const branchOf = t.conversations.branchOf.replace('{title}', conversation.parentTitle || t.conversations.untitled);
+    const branchOf = t.conversations.branchOf.replace('{title}', () => conversation.parentTitle || t.conversations.untitled);
     return (
       <li key={conversation.id} className="conv-row group relative">
         {/* A row: the title on its line, the rest muted underneath. No

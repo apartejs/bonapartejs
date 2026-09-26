@@ -622,7 +622,7 @@ export function ChatScreen({
         >
           <TriangleAlert aria-hidden="true" />
           <AlertDescription className="flex flex-wrap items-center gap-2 text-current">
-            <span className="flex-1">{t.chat.missingModel.replace('{name}', modelFileName(missingModel))}</span>
+            <span className="flex-1">{t.chat.missingModel.replace('{name}', () => modelFileName(missingModel))}</span>
             <Button
               type="button"
               variant="outline"

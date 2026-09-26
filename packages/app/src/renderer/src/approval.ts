@@ -39,7 +39,7 @@ export function approvalOptions(t: ApprovalStrings, request: ApprovalRequestDto)
             ? [
                 {
                   value: 'always-binary',
-                  label: t.alwaysBinary.replace('{binary}', request.binary),
+                  label: t.alwaysBinary.replace('{binary}', () => request.binary),
                   description: t.alwaysBinaryHint.replaceAll('{binary}', request.binary),
                 },
               ]
@@ -48,7 +48,7 @@ export function approvalOptions(t: ApprovalStrings, request: ApprovalRequestDto)
       : [
           {
             value: 'always',
-            label: t.alwaysTool.replace('{tool}', request.tool),
+            label: t.alwaysTool.replace('{tool}', () => request.tool),
             description: t.alwaysToolHint,
           },
         ];

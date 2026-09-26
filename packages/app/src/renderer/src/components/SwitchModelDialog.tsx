@@ -58,7 +58,7 @@ export function SwitchModelDialog({ estimate, onConfirm, onCancel }: SwitchModel
       <DialogContent className="switch-model sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle className="font-serif text-[19px] font-medium">
-            {s.title.replace('{model}', estimate.modelName)}
+            {s.title.replace('{model}', () => estimate.modelName)}
           </DialogTitle>
           <DialogDescription>{s.intro}</DialogDescription>
         </DialogHeader>

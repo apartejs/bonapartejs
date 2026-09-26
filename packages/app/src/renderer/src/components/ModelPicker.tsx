@@ -92,7 +92,7 @@ export function ModelPicker({
             >
               <TriangleAlert aria-hidden="true" />
               <AlertDescription className="text-current">
-                {t.picker.missingModel.replace('{name}', modelFileName(missingModel))}
+                {t.picker.missingModel.replace('{name}', () => modelFileName(missingModel))}
                 {pendingMessage ? ` ${t.picker.resendAfterPick}` : ''}
               </AlertDescription>
             </Alert>

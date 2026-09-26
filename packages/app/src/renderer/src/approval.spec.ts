@@ -56,6 +56,15 @@ describe('approval on the library panel', () => {
     expect(options[1]?.label).toBe('Always allow edit_file');
   });
 
+  it('names a program as it is, even one that looks like a replacement pattern', () => {
+    // `String.replace` reads `$&` in a replacement string as "the match":
+    // a program named so would have been shown as "{binary}".
+    const odd = { ...request, command: '$&tool --x', binary: '$&tool' };
+    const labels = approvalOptions(EN.approval, odd).map((o) => o.label);
+    expect(labels.some((label) => label.includes('$&tool'))).toBe(true);
+    expect(labels.some((label) => label.includes('{binary}'))).toBe(false);
+  });
+
   it('names the tool and what it is about to do', () => {
     expect(approvalMessage(EN.approval, request)).toBe(
       'bonaparte wants to act on your machine — run_shell · pnpm test',
