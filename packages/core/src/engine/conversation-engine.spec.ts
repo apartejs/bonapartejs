@@ -1117,3 +1117,37 @@ describe('ConversationEngine — a branch counts its own prompt (adversarial rev
     expect(events.find((e) => e.event.type === 'context_overflow')).toBeUndefined();
   });
 });
+
+describe('ConversationEngine — compaction that pays off (adversarial review, 2026-09-26)', () => {
+  it('one long agentic turn is compacted, not kept verbatim beside its summary', async () => {
+    const long = 'data '.repeat(1500);
+    const prompts: string[] = [];
+    const { engine } = await makeRig({
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return prompt.includes('Summarize this conversation') ? 'SUMMARY' : long;
+      },
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'do the whole job');
+
+    const result = await engine.compact('conv-a');
+    await engine.send('conv-a', 'next');
+
+    expect(result.compactedTurns).toBeGreaterThan(0);
+    expect(prompts.at(-1)).not.toContain('data data data');
+    expect(prompts.at(-1)).toContain('SUMMARY');
+  });
+
+  it('a summary cut at the context ceiling is refused — never committed as the rebase', async () => {
+    const { engine, store } = await makeRig({
+      truncate: true,
+      responder: (prompt) => (prompt.includes('Summarize this conversation') ? 'The password is ORANGE-42-VER' : 'ok'),
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'remember ORANGE-42-VERMILLON');
+
+    await expect(engine.compact('conv-a')).rejects.toThrow(/cut/i);
+    expect((await store.loadEvents('conv-a')).some((event) => event.type === 'rebase')).toBe(false);
+  });
+});

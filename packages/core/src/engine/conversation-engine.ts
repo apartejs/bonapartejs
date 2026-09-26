@@ -691,14 +691,31 @@ export class ConversationEngine {
     }
     const session = this.session;
     if (!session) throw new Error('No conversation open.');
-    const summary = await session.summarize(SUMMARY_QUESTION, SUMMARY_MAX_TOKENS);
-    if (!summary) throw new Error('The engine cannot summarise a conversation.');
-
     const { store, kv, supervisor } = this.options;
     const events = await store.loadEvents(conversationId);
     const total = countTurns(events);
-    const keep = Math.max(0, Math.min(options.keepTurns ?? 2, total));
-    const keepFrom = keep === 0 ? events.length : keep >= total ? 0 : cutAfterTurn(events, total - keep - 1);
+    if (total === 0) throw new Error('Nothing to compact yet.');
+    let keep = Math.max(0, Math.min(options.keepTurns ?? 2, total));
+    let keepFrom = keep === 0 ? events.length : keep >= total ? 0 : cutAfterTurn(events, total - keep - 1);
+    // The turns kept verbatim must be worth keeping beside the summary:
+    // all of them (one long agentic turn is two readable turns), or most of
+    // the context, and the compaction would save nothing — the summary then
+    // carries it all (adversarial review, 2026-09-26).
+    const keptSize = estimateTokens(JSON.stringify(events.slice(keepFrom)));
+    if (keepFrom === 0 || keptSize > estimateTokens(JSON.stringify(events)) / 2) {
+      keep = 0;
+      keepFrom = events.length;
+    }
+
+    let summary: string | undefined;
+    try {
+      summary = await session.summarize(SUMMARY_QUESTION, SUMMARY_MAX_TOKENS);
+    } catch (error) {
+      // Cut at the ceiling: the conversation stays as it is — a partial
+      // summary would lose what it did not say.
+      throw new Error(`The summary was cut: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (!summary) throw new Error('The engine cannot summarise a conversation.');
     await store.appendEvent(conversationId, {
       type: 'rebase',
       summary,

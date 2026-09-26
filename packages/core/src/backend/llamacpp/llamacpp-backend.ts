@@ -150,6 +150,7 @@ abstract class BaseBackend implements Backend {
   }): Promise<string> {
     const history = this.renderer(request.conversationId).sync(request.transcript, request.system, request.tools);
     let text = '';
+    let cut = false;
     for await (const event of this.complete({
       prompt: history + renderSideTurn(request.question),
       idSlot: request.idSlot ?? 0,
@@ -158,7 +159,11 @@ abstract class BaseBackend implements Backend {
       ...(request.signal ? { signal: request.signal } : {}),
     })) {
       if (event.type === 'token') text += event.text;
+      else if (event.type === 'done') cut = event.stats.truncated === true;
     }
+    // Cut at the context ceiling, an answer is incomplete — for a summary
+    // that replaces the conversation, lost for good. Refused, never kept.
+    if (cut) throw new Error('The answer was cut at the context ceiling: there is no room left for it.');
     return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
   }
 
