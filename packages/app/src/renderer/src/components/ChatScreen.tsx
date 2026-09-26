@@ -415,20 +415,6 @@ export function ChatScreen({
     onAutoSent();
   });
 
-  // The library presents questions through an <aparte-elicitation> INSIDE the
-  // chat — without one, requestUserInput() rejects at once (it says so in the
-  // console). The React wrapper has no slot for it, so it is placed by hand
-  // once the chat is in the DOM, and removed with the screen.
-  useEffect(() => {
-    // The React wrapper is a framework host: a [data-aparte-chat] container,
-    // not an <aparte-chat> element.
-    const host = document.querySelector('aparte-chat, [data-aparte-chat]');
-    if (!host || host.querySelector('aparte-elicitation')) return;
-    const presenter = document.createElement('aparte-elicitation');
-    host.append(presenter);
-    return () => presenter.remove();
-  }, []);
-
   // The composer's Stop. The library announces it on `window` as
   // `aparte-abort` (not bubbling from the composer): the engine cuts the
   // turn, what arrived stays, and the turn's end closes the bubble.
