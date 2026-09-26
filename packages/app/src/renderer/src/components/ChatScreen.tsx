@@ -472,12 +472,24 @@ export function ChatScreen({
       message: approvalMessage(t.approval, approval),
       kind: 'approval',
       options: approvalOptions(t.approval, approval),
+      // A file write shows its diff: the change is what is signed.
+      ...(approval.preview ? { details: approval.preview } : {}),
       signal: controller.signal,
     })
       .then((result) => onApprovalResponse(answerToResponse(approval.id, result)))
       .catch(() => undefined);
     return () => controller.abort();
   }, [approval, conversationId, onApprovalResponse, t.approval]);
+
+  // A turn that ends while its question is open — a Stop, an error — has
+  // answered it already (as a refusal): the panel goes with the turn.
+  useEffect(() => {
+    if (!approval || approval.conversationId !== conversationId) return;
+    return window.bonaparte.onAgentEvent((event) => {
+      if (event.conversationId !== conversationId) return;
+      if (event.type === 'done' || event.type === 'error') onApprovalResponse({ id: approval.id, granted: false });
+    });
+  }, [approval, conversationId, onApprovalResponse]);
 
   return (
     <div className="chat-wrap mx-auto flex min-h-0 w-full max-w-[920px] flex-1 flex-col px-4">

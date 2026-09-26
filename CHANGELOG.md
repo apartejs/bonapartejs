@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **An approval shows the change, not just the path** (06 §2, must-have).
+  Approving `edit_file src/a.ts` meant signing without seeing the edit.
+  A file write now comes with its unified diff against the file on disk —
+  context, the lines that go, the lines that come; a new file as added
+  lines; a huge rewrite summarised; an edit that will fail (pattern absent
+  or ambiguous) says so — in the approval panel's details block.
+- **A question leaves with its turn.** Stopping a turn (or an error) while
+  its approval was on screen left the panel open; it now goes too.
+
 - **The project's instructions reach the model** (06 §2, must-have). The
   system prompt had a place for them and nothing filled it. Per project
   root, the first of `.bonaparte/instructions.md`, `AGENTS.md`,

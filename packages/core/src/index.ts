@@ -150,6 +150,7 @@ export type {
 } from './permissions/engine.js';
 export { alwaysRule, commandBinary, isArmedPath, PermissionEngine, PLAY_MODES } from './permissions/engine.js';
 export { GrantStore, type Grant } from './permissions/grants.js';
+export { previewToolCall, unifiedDiff } from './tools/preview.js';
 export {
   INSTRUCTION_FILES,
   MAX_INSTRUCTIONS_CHARS,

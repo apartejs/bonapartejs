@@ -277,6 +277,8 @@ export interface ApprovalRequestDto {
    * exact line can be remembered.
    */
   binary?: string;
+  /** For a file write: the change as a unified diff against the file on disk — what is being signed. */
+  preview?: string;
 }
 
 /** What an "always allow" covers: this exact command, or every command of its program. */

@@ -33,6 +33,7 @@ import {
   memoryVerdict,
   readGgufInfo,
   readProjectInstructions,
+  previewToolCall,
   GrantStore,
   HARNESS_SETTINGS,
   APP_SETTINGS,
@@ -967,14 +968,21 @@ export class Harness {
     await this.saveConfig({ ...config, mode });
   }
 
-  /** Asks for the user's consent; resolved by respondToApproval. */
-  private readonly approve = (request: {
+  /**
+   * Asks for the user's consent; resolved by respondToApproval. A file write
+   * comes with its diff against the disk: the change is what is signed, not
+   * the path (06 §2).
+   */
+  private readonly approve = async (request: {
     id: string;
     tool: string;
     args: Record<string, unknown>;
     command?: string;
-  }): Promise<boolean> =>
-    new Promise<boolean>((resolve) => {
+  }): Promise<boolean> => {
+    const active = this.conversations.active;
+    const roots = active ? await this.rootsOf(active).catch(() => []) : [];
+    const preview = await previewToolCall(request.tool, request.args, roots).catch(() => undefined);
+    return new Promise<boolean>((resolve) => {
       if (!this.window || this.window.isDestroyed()) {
         resolve(false); // no one to ask: fail-safe
         return;
@@ -991,8 +999,10 @@ export class Harness {
         ...request,
         conversationId: this.conversations.active ?? '',
         ...(binary ? { binary } : {}),
+        ...(preview ? { preview } : {}),
       } satisfies ApprovalRequestDto);
     });
+  };
 
   async respondToApproval(response: ApprovalResponseDto): Promise<void> {
     const pending = this.pendingApprovals.get(response.id);
