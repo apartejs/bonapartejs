@@ -141,6 +141,47 @@ class Reader {
     return (await this.take(length)).toString('utf8');
   }
 
+  /** Moves past `bytes` without reading them into a value. */
+  async skip(bytes: number): Promise<void> {
+    const end = this.position + bytes;
+    if (end <= this.bufferStart + this.buffer.length) {
+      this.position = end;
+      return;
+    }
+    // Past the buffer: the next read refills from the new position (and
+    // fails there if the file is shorter).
+    this.position = end;
+  }
+
+  /**
+   * Skips a vocabulary: every string's length, then its bytes, never
+   * decoded — synchronously over the buffer (a vocabulary is 150 000
+   * strings; one await each cost ~150 ms a header), refilling only when a
+   * string straddles the buffer's end.
+   */
+  async skipStrings(count: number): Promise<void> {
+    let done = 0;
+    while (done < count) {
+      await this.ensure(8);
+      let offset = this.position - this.bufferStart;
+      const limit = this.buffer.length;
+      while (done < count && offset + 8 <= limit) {
+        const length = Number(this.buffer.readBigUInt64LE(offset));
+        if (length > MAX_COUNT) throw new Error('GGUF string length out of range');
+        if (offset + 8 + length > limit) break;
+        offset += 8 + length;
+        done += 1;
+      }
+      this.position = this.bufferStart + offset;
+      if (done < count) {
+        const length = await this.u64();
+        if (length > MAX_COUNT) throw new Error('GGUF string length out of range');
+        await this.skip(length);
+        done += 1;
+      }
+    }
+  }
+
   async scalar(type: ValueType): Promise<number | boolean> {
     const bytes = await this.take(SCALAR_SIZE[type] ?? 0);
     switch (type) {
@@ -178,14 +219,18 @@ class Reader {
       const itemType = (await this.u32()) as ValueType;
       const count = await this.u64();
       if (count > MAX_COUNT) throw new Error('GGUF array length out of range');
-      if (itemType === ValueType.String || itemType === ValueType.Array) {
-        for (let i = 0; i < count; i++) await this.value(itemType);
+      if (itemType === ValueType.String) {
+        await this.skipStrings(count);
         return undefined; // a vocabulary: not needed, not kept
+      }
+      if (itemType === ValueType.Array) {
+        for (let i = 0; i < count; i++) await this.value(itemType);
+        return undefined;
       }
       const size = SCALAR_SIZE[itemType];
       if (size === undefined) throw new Error(`GGUF: unknown array item type ${itemType}`);
       if (count > 4096) {
-        await this.take(count * size); // token scores and the like: skipped
+        await this.skip(count * size); // token scores and the like: skipped
         return undefined;
       }
       const items: (number | boolean)[] = [];
