@@ -15,6 +15,13 @@ published.
 
 ### Added
 
+- **One bonaparte at a time.** A second launch — a double click on the
+  shortcut, the command typed twice — no longer starts a second process
+  that fights the first for the server's port and writes the same
+  conversations: it hands over (the running app brings its window back,
+  from the tray too) and exits. Scoped by data directory, so an isolated
+  profile is its own instance.
+
 - **The shell is responsive: a window gets dragged narrow.** Above a width
   each flank is DOCKED — the resizable column beside the chat, as before.
   Below it the flank becomes a DRAWER: it leaves the flow and slides over

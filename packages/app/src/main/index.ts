@@ -8,6 +8,15 @@ import { Harness } from './harness.js';
 const isolatedDataDir = process.env['BONAPARTE_DATA_DIR'];
 if (isolatedDataDir) app.setPath('userData', join(isolatedDataDir, 'electron'));
 
+// One bonaparte per data directory (the lock is scoped by userData, so an
+// isolated profile is its own instance). A second launch would fight the
+// first for the server's port and write the same conversations: it hands
+// over — the running app shows its window — and leaves before touching
+// anything. `exit`, not `quit`: nothing of ours has started, nothing to
+// shut down.
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.exit(0);
+
 const harness = new Harness();
 
 // Closing the window keeps bonaparte in the notification area (a setting);
@@ -168,7 +177,18 @@ app.disableHardwareAcceleration();
 // before the first window.
 if (process.platform === 'win32') app.setAppUserModelId('dev.apartejs.bonaparte');
 
+app.on('second-instance', () => {
+  if (process.env['BONAPARTE_E2E']) {
+    // The E2E window is never shown; the test reads that the hand-over came.
+    const scope = globalThis as { __bonaparteSecondInstances?: number };
+    scope.__bonaparteSecondInstances = (scope.__bonaparteSecondInstances ?? 0) + 1;
+    return;
+  }
+  showWindow();
+});
+
 app.whenReady().then(async () => {
+  if (!primary) return;
   // No menu bar: the app carries its own navigation. On macOS we keep it,
   // the system attaches the standard editing shortcuts to it.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
