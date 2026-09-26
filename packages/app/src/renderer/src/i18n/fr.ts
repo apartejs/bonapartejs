@@ -113,6 +113,16 @@ export const FR: AppTranslations = {
     pluginReloading: 'Rechargement…',
     pluginReloadHint:
       'Démonte et réactive les plugins sans redémarrer bonaparte — le modèle reste chargé.',
+    permissions: 'Autorisations',
+    permissionsHint:
+      'Ce qu’un « toujours autoriser » a accordé, projet par projet. Une autorisation retirée redemande la prochaine fois.',
+    permissionsEmpty:
+      'Rien n’est autorisé sans demander. Un « toujours autoriser » donné lors d’une approbation arrive ici.',
+    grantBinary: 'Toute commande {binary}',
+    grantCommand: 'Cette commande exacte',
+    grantTool: 'Sans demander',
+    grantNoProject: 'Sans projet',
+    revoke: 'Retirer',
   },
   models: {
     pick: 'Choisir un modèle',

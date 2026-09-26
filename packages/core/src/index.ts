@@ -132,6 +132,7 @@ export type {
   PlayMode,
 } from './permissions/engine.js';
 export { alwaysRule, commandBinary, PermissionEngine, PLAY_MODES } from './permissions/engine.js';
+export { GrantStore, type Grant } from './permissions/grants.js';
 
 export type {
   AgentEvent,

@@ -26,6 +26,7 @@ import {
   createSystemDoctorEnv,
   defaultScanRoots,
   EngineSupervisor,
+  GrantStore,
   HARNESS_SETTINGS,
   APP_SETTINGS,
   CONTEXT_SETTINGS,
@@ -63,6 +64,7 @@ import {
   type ConversationSummaryDto,
   type ConversationOpenReplyDto,
   type EndpointProbeDto,
+  type GrantDto,
   type ModelInfoDto,
   type PickFileKind,
   type PlayModeDto,
@@ -157,7 +159,21 @@ export class Harness {
       this.emit(IPC.evPlugin, { pluginId, instanceId, event, payload });
     },
   });
-  private readonly permissions = new PermissionEngine('repetition');
+  /**
+   * What "always allow" granted, per project, on disk (P1.8). The engine
+   * reads the grants of the project whose conversation holds the slot —
+   * the one whose turn is asking — on every tool call.
+   */
+  private readonly grants = new GrantStore(join(bonaparteDataDir(), 'config'));
+  /** Project of each conversation seen, kept by `rootsOf`: the rules provider is synchronous. */
+  private readonly projectOf = new Map<string, string | undefined>();
+  private activeProject(): string | undefined {
+    const active = this.conversationsEngine?.active;
+    return active ? this.projectOf.get(active) : undefined;
+  }
+  private readonly permissions = new PermissionEngine('repetition', () =>
+    this.grants.rulesFor(this.activeProject()),
+  );
   private readonly pendingApprovals = new Map<
     string,
     {
@@ -266,6 +282,7 @@ export class Harness {
   async restoreSession(): Promise<void> {
     // First of all: a server left behind by a session that died abruptly.
     await this.supervisor.killOrphan();
+    await this.grants.load();
     await this.purgeLegacyConversations();
     await this.loadPlugins();
     const config = await this.loadConfig();
@@ -375,6 +392,7 @@ export class Harness {
    */
   private async rootsOf(conversationId: string): Promise<string[]> {
     const { projectId } = await this.store.meta(conversationId);
+    this.projectOf.set(conversationId, projectId);
     if (!projectId) return [];
     return (await this.projects.get(projectId))?.roots ?? [];
   }
@@ -773,6 +791,8 @@ export class Harness {
       if (meta.projectId === id) await this.store.setProjectId(meta.id, undefined);
     }
     await this.projects.remove(id);
+    // Its grants go with it: they answered for its folders only.
+    await this.grants.dropProject(id);
     await this.refreshRoots();
   }
 
@@ -847,6 +867,26 @@ export class Harness {
     return this.project(recents);
   }
 
+  async listGrants(): Promise<GrantDto[]> {
+    const names = new Map((await this.projects.list()).map((project) => [project.id, project.name]));
+    return this.grants.all().map(({ projectId, rule }) => ({
+      ...(projectId ? { projectId } : {}),
+      ...(projectId && names.has(projectId) ? { projectName: names.get(projectId) as string } : {}),
+      tool: rule.tool,
+      ...(rule.commandPrefix !== undefined ? { commandPrefix: rule.commandPrefix } : {}),
+      ...(rule.exactCommand !== undefined ? { exactCommand: rule.exactCommand } : {}),
+    }));
+  }
+
+  async revokeGrant(grant: GrantDto): Promise<void> {
+    if (typeof grant?.tool !== 'string') throw new Error('Not a grant');
+    await this.grants.revoke(grant.projectId, {
+      tool: grant.tool,
+      ...(typeof grant.commandPrefix === 'string' ? { commandPrefix: grant.commandPrefix } : {}),
+      ...(typeof grant.exactCommand === 'string' ? { exactCommand: grant.exactCommand } : {}),
+    });
+  }
+
   getMode(): PlayModeDto {
     return this.permissions.getMode();
   }
@@ -893,7 +933,9 @@ export class Harness {
       // "Always allow" says what it covers (Q-24, audit C1): the exact line,
       // or every command of a plain-named program — never a first word
       // that happened to start a longer line.
-      this.permissions.remember(
+      // Remembered for the project of the conversation that asked, on disk.
+      await this.grants.add(
+        this.activeProject(),
         alwaysRule(pending.request.tool, pending.request.command, response.always === 'binary' ? 'binary' : 'command'),
       );
     }
@@ -1272,6 +1314,8 @@ export class Harness {
       (conversationId: string, projectId: string | null) =>
         this.setConversationProject(conversationId, projectId),
     );
+    handle(IPC.grantsList, () => this.listGrants());
+    handle(IPC.grantsRevoke, (grant: GrantDto) => this.revokeGrant(grant));
     handle(IPC.modeGet, () => this.getMode());
     handle(IPC.modeSet, (mode: PlayModeDto) => this.setMode(mode));
     handle(IPC.approvalRespond, (response: ApprovalResponseDto) =>

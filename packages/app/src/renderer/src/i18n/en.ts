@@ -111,7 +111,16 @@ export const EN: AppTranslations = {
     pluginReload: 'Reload plugins',
     pluginReloading: 'Reloading…',
     pluginReloadHint:
-      'Tears down and re-activates plugins without restarting bonaparte — the model stays loaded.'
+      'Tears down and re-activates plugins without restarting bonaparte — the model stays loaded.',
+    permissions: 'Permissions',
+    permissionsHint:
+      'What an “always allow” granted, per project. A revoked grant asks again the next time.',
+    permissionsEmpty: 'Nothing is allowed without asking. An “always allow” given in an approval lands here.',
+    grantBinary: 'Every {binary} command',
+    grantCommand: 'This exact command',
+    grantTool: 'Without asking',
+    grantNoProject: 'No project',
+    revoke: 'Revoke',
   },
   models: {
     pick: 'Choose a model',

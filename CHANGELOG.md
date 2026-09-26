@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **Grants are kept per project, and can be taken back** (P1.8, D-29).
+  An "always allow" lived in memory, for the whole app: a `pnpm` grant
+  given in one project answered in every other, and a restart forgot it.
+  Grants now belong to the project of the conversation that asked (a
+  conversation without a project has its own bucket), are saved in
+  `config/grants.json`, go with a deleted project, and are listed in a new
+  **Settings → Permissions** section — grouped by project, each with what
+  it covers and a Revoke button.
+
 - **What a tool returns cannot speak as a role** (audit, C3). `/completion`
   turns special tokens in the prompt text into real ones, so a file the
   model read — or a web page, a command's output — containing

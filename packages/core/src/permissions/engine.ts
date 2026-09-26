@@ -66,10 +66,19 @@ export interface PermissionQuery {
 }
 
 export class PermissionEngine {
+  /**
+   * `rules`: a fixed list, or a provider read on every evaluation — the
+   * host answers with the grants of the project whose turn is running.
+   * `remember`/`forget` edit a fixed list only.
+   */
   constructor(
     private mode: PlayMode = 'repetition',
-    private rules: AllowRule[] = [],
+    private rules: AllowRule[] | (() => AllowRule[]) = [],
   ) {}
+
+  private currentRules(): AllowRule[] {
+    return typeof this.rules === 'function' ? this.rules() : this.rules;
+  }
 
   getMode(): PlayMode {
     return this.mode;
@@ -80,16 +89,19 @@ export class PermissionEngine {
   }
 
   listRules(): AllowRule[] {
-    return this.rules.map((rule) => ({ ...rule }));
+    return this.currentRules().map((rule) => ({ ...rule }));
   }
 
   remember(rule: AllowRule): void {
-    if (!this.rules.some((existing) => sameRule(existing, rule))) {
-      this.rules = [...this.rules, { ...rule }];
+    const rules = this.currentRules();
+    if (typeof this.rules === 'function') throw new Error('Rules come from a provider: remember them there.');
+    if (!rules.some((existing) => sameRule(existing, rule))) {
+      this.rules = [...rules, { ...rule }];
     }
   }
 
   forget(rule: AllowRule): void {
+    if (typeof this.rules === 'function') throw new Error('Rules come from a provider: forget them there.');
     this.rules = this.rules.filter((existing) => !sameRule(existing, rule));
   }
 
@@ -97,7 +109,7 @@ export class PermissionEngine {
     const ceiling = MODE_MATRIX[this.mode][query.effect];
     // The mode is a ceiling: a rule can only loosen an "ask".
     if (ceiling !== 'ask') return ceiling;
-    return this.rules.some((rule) => matches(rule, query)) ? 'allow' : 'ask';
+    return this.currentRules().some((rule) => matches(rule, query)) ? 'allow' : 'ask';
   }
 }
 

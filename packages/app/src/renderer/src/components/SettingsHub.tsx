@@ -1,6 +1,7 @@
 import {
   localize,
   type BackendConfigDto,
+  type GrantDto,
   type PluginStatusDto,
   type ResolvedSettingDto,
 } from '@aparte/bonaparte-shared';
@@ -16,10 +17,10 @@ import {
   SettingsForm,
   cn,
 } from '@aparte/bonaparte-plugin-sdk/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 
-type Section = 'general' | 'sampling' | 'launch' | 'plugins';
+type Section = 'general' | 'sampling' | 'launch' | 'plugins' | 'permissions';
 
 interface SettingsHubProps {
   engine: BackendConfigDto | undefined;
@@ -47,11 +48,38 @@ export function SettingsHub({
   const [settings, setSettings] = useState<ResolvedSettingDto[]>([]);
   const [plugins, setPlugins] = useState<PluginStatusDto[]>([]);
   const [reloading, setReloading] = useState(false);
+  const [grants, setGrants] = useState<GrantDto[]>([]);
 
   const refresh = useCallback(async () => {
     setSettings(await window.bonaparte.getSettings('global'));
     setPlugins(await window.bonaparte.listPlugins());
+    setGrants(await window.bonaparte.listGrants());
   }, []);
+
+  const revoke = useCallback(
+    async (grant: GrantDto) => {
+      await window.bonaparte.revokeGrant(grant);
+      setGrants(await window.bonaparte.listGrants());
+    },
+    [],
+  );
+
+  /** Grants grouped by project — "no project" last. */
+  const grantGroups = useMemo(() => {
+    const groups = new Map<string, { title: string; items: GrantDto[] }>();
+    for (const grant of grants) {
+      const key = grant.projectId ?? '';
+      const title = grant.projectId
+        ? (grant.projectName ?? grant.projectId)
+        : t.settings.grantNoProject;
+      const group = groups.get(key) ?? { title, items: [] };
+      group.items.push(grant);
+      groups.set(key, group);
+    }
+    return [...groups.entries()]
+      .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : 0))
+      .map(([key, group]) => ({ key, ...group }));
+  }, [grants, t.settings.grantNoProject]);
 
   useEffect(() => {
     void refresh();
@@ -89,6 +117,7 @@ export function SettingsHub({
     { id: 'sampling', label: t.settings.sampling },
     { id: 'launch', label: t.settings.launch },
     { id: 'plugins', label: t.settings.plugins },
+    { id: 'permissions', label: t.settings.permissions },
   ];
 
   return (
@@ -191,6 +220,55 @@ export function SettingsHub({
               locale={locale}
               onChange={(key, value) => void change(key, value)}
             />
+          )}
+
+          {section === 'permissions' && (
+            <div className="grants flex max-w-[560px] flex-col gap-4">
+              <p className="setting-help text-[12px] leading-snug text-muted-foreground">
+                {t.settings.permissionsHint}
+              </p>
+              {grantGroups.length === 0 ? (
+                <p className="grants-empty text-[12.5px] text-muted-foreground">{t.settings.permissionsEmpty}</p>
+              ) : (
+                grantGroups.map((group) => (
+                  <section key={group.key} className="grant-group flex flex-col gap-1">
+                    <h3 className="grant-group-title text-[12px] font-semibold text-muted-foreground">
+                      {group.title}
+                    </h3>
+                    <ul className="flex flex-col">
+                      {group.items.map((grant) => (
+                        <li
+                          key={`${grant.tool}|${grant.commandPrefix ?? ''}|${grant.exactCommand ?? ''}`}
+                          className="grant-row flex items-center gap-3 border-b py-2 last:border-b-0"
+                        >
+                          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="text-[13px]">
+                              {grant.commandPrefix
+                                ? t.settings.grantBinary.replace('{binary}', grant.commandPrefix)
+                                : grant.exactCommand
+                                  ? t.settings.grantCommand
+                                  : grant.tool}
+                            </span>
+                            <span className="truncate font-mono text-[11px] text-muted-foreground">
+                              {grant.exactCommand ?? (grant.commandPrefix ? grant.tool : t.settings.grantTool)}
+                            </span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => void revoke(grant)}
+                          >
+                            {t.settings.revoke}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))
+              )}
+            </div>
           )}
 
           {section === 'plugins' && (

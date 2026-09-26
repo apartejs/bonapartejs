@@ -11,7 +11,7 @@
 import { ConversationStore } from '@aparte/bonaparte-core';
 import { startFakeLlamaServer, type FakeLlamaServer } from '@aparte/bonaparte-core/testing';
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,12 +19,20 @@ const TOOL_CALL = '<tool_call>{"name": "run_shell", "arguments": {"command": "ec
 
 let app: ElectronApplication;
 let server: FakeLlamaServer;
+let dataDir: string;
 
 test.beforeAll(async () => {
-  let turn = 0;
-  server = await startFakeLlamaServer({ responder: () => (turn++ === 0 ? TOOL_CALL : 'after refusal') });
+  // A user message asks for the command; a tool result gets a word back —
+  // which says whether the command was refused or ran.
+  server = await startFakeLlamaServer({
+    responder: (prompt) => {
+      const lastUser = prompt.slice(prompt.lastIndexOf('<|im_start|>user'));
+      if (!lastUser.includes('[tool result:')) return TOOL_CALL;
+      return lastUser.includes('declined') ? 'after refusal' : 'command ran';
+    },
+  });
 
-  const dataDir = await mkdtemp(join(tmpdir(), 'bonaparte-e2e-approval-'));
+  dataDir = await mkdtemp(join(tmpdir(), 'bonaparte-e2e-approval-'));
   await mkdir(join(dataDir, 'config'), { recursive: true });
   await writeFile(
     join(dataDir, 'config', 'global.json'),
@@ -81,4 +89,27 @@ test('a command asks on the library panel; refusing ends the round-trip', async 
 
   await expect(options).toHaveCount(0);
   await expect(window.locator('.chat-wrap')).toContainText('after refusal', { timeout: 10_000 });
+});
+
+test('"always allow this command" is remembered on disk, and the same command no longer asks', async () => {
+  const window = await app.firstWindow();
+  const editor = window.locator('.aparte-ci-editor');
+  const options = window.locator('.aparte-approval-option');
+
+  await editor.fill('run it for good');
+  await editor.press('Enter');
+  await expect(options).toHaveCount(4, { timeout: 10_000 });
+  await options.filter({ hasText: 'Always allow this command' }).click();
+  await expect(window.locator('.chat-wrap')).toContainText('command ran', { timeout: 10_000 });
+
+  const grants = JSON.parse(await readFile(join(dataDir, 'config', 'grants.json'), 'utf8')) as {
+    projects: Record<string, unknown[]>;
+  };
+  // No project on this conversation: its own bucket.
+  expect(grants.projects['']).toEqual([{ tool: 'run_shell', exactCommand: 'echo hi' }]);
+
+  await editor.fill('run it again');
+  await editor.press('Enter');
+  await expect(window.locator('.chat-wrap').getByText('command ran')).toHaveCount(2, { timeout: 10_000 });
+  await expect(options).toHaveCount(0);
 });

@@ -59,6 +59,8 @@ export const IPC = {
   pluginsAck: 'plugins.ack',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
+  grantsList: 'grants.list',
+  grantsRevoke: 'grants.revoke',
   evApproval: 'ev.approval',
   /** Events pushed main → renderer. */
   evAgent: 'ev.agent',
@@ -192,6 +194,18 @@ export interface ResolvedSettingDto {
 }
 
 export type SettingScopeDto = 'global' | 'conversation';
+
+/** A standing "always allow", as the hub lists it. */
+export interface GrantDto {
+  /** Absent: granted in a conversation without a project. */
+  projectId?: string;
+  projectName?: string;
+  tool: string;
+  /** Every command of this program. */
+  commandPrefix?: string;
+  /** This exact command line. */
+  exactCommand?: string;
+}
 
 /** Approval request pushed to the renderer during the loop. */
 export interface ApprovalRequestDto {
@@ -458,6 +472,10 @@ export interface BonaparteBridge {
     conversationId: string,
     projectId: string | null,
   ): Promise<void>;
+  /** Every standing "always allow", with its project. */
+  listGrants(): Promise<GrantDto[]>;
+  /** Takes one back: the next such call asks again. */
+  revokeGrant(grant: GrantDto): Promise<void>;
   getMode(): Promise<PlayModeDto>;
   setMode(mode: PlayModeDto): Promise<void>;
   respondToApproval(response: ApprovalResponseDto): Promise<void>;

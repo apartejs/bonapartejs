@@ -117,6 +117,15 @@ export interface AppTranslations {
     pluginReload: string;
     pluginReloading: string;
     pluginReloadHint: string;
+    permissions: string;
+    permissionsHint: string;
+    permissionsEmpty: string;
+    /** `{binary}`: the program. */
+    grantBinary: string;
+    grantCommand: string;
+    grantTool: string;
+    grantNoProject: string;
+    revoke: string;
   };
   /** Model choice, in the composer. */
   models: {

@@ -99,6 +99,8 @@ const api: BonaparteBridge = {
   pickDirectory: () => ipcRenderer.invoke(IPC.dialogPickDirectory),
   setConversationProject: (conversationId, projectId) =>
     ipcRenderer.invoke(IPC.conversationSetProject, conversationId, projectId),
+  listGrants: () => ipcRenderer.invoke(IPC.grantsList),
+  revokeGrant: (grant) => ipcRenderer.invoke(IPC.grantsRevoke, grant),
   getMode: () => ipcRenderer.invoke(IPC.modeGet),
   setMode: (mode) => ipcRenderer.invoke(IPC.modeSet, mode),
   respondToApproval: (response) =>
