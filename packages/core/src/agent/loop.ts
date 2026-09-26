@@ -88,6 +88,25 @@ export type AgentEvent =
 
 const DEFAULT_MAX_TURNS = 10;
 
+/** An answer, or `false` as soon as the signal aborts — whichever comes first. */
+function raceAbort(answer: Promise<boolean>, signal: AbortSignal): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    const onAbort = (): void => resolve(false);
+    signal.addEventListener('abort', onAbort, { once: true });
+    answer.then(
+      (granted) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(granted);
+      },
+      () => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(false);
+      },
+    );
+  });
+}
+
 export class AgentLoop {
   private approvalSeq = 0;
 
@@ -268,12 +287,18 @@ export class AgentLoop {
           content: `Not authorized: ${name} requires approval, which is unavailable here.`,
         };
       }
-      const granted = await approve({
-        id: `approval-${this.approvalSeq++}`,
-        tool: name,
-        args,
-        ...(command !== undefined ? { command } : {}),
-      });
+      // The question may never be answered — a Stop, a deleted
+      // conversation, a shutdown. An abort counts as a refusal, so the turn
+      // ends instead of hanging on a panel nobody will click.
+      const granted = await raceAbort(
+        approve({
+          id: `approval-${this.approvalSeq++}`,
+          tool: name,
+          args,
+          ...(command !== undefined ? { command } : {}),
+        }),
+        signal,
+      );
       if (!granted) {
         return {
           name,

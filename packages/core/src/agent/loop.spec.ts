@@ -256,6 +256,26 @@ describe('AgentLoop — permissions', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('an abort while the approval is pending ends the turn — nobody is left waiting on it', async () => {
+    // Stop, a deleted conversation, a settings change: the question on
+    // screen may never be answered. The turn must not hang on it, or every
+    // later open/save that waits for the turn hangs with it.
+    const controller = new AbortController();
+    const { loop, transcript, calls } = await rig({
+      replies: [toolCall('write_file'), 'never reached'],
+      tools: [{ def: def('write_file', 'write') }],
+      mode: 'repetition',
+      approve: () => {
+        setTimeout(() => controller.abort(), 20);
+        return new Promise<boolean>(() => undefined); // never answered
+      },
+    });
+    const { all } = await collect(loop.run(transcript, 'x', controller.signal));
+    expect(calls).toEqual([]);
+    const result = all.find((e) => e.type === 'tool_result') as { ok: boolean } | undefined;
+    expect(result?.ok ?? false).toBe(false);
+  });
+
   it('Rehearsal mode: a user refusal executes nothing', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'compris'],

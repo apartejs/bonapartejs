@@ -326,6 +326,13 @@ published.
 
 ### Fixed
 
+- **A turn waiting for an approval no longer hangs a Stop.** The loop
+  awaited the answer to an approval without listening to the turn's abort
+  signal: a Stop, a settings change or a deletion while the question was
+  on screen left the turn — and everything that waits for it, the next
+  open, the next save — hanging until someone clicked. An abort now counts
+  as a refusal.
+
 - **The dark theme stays React's on a dark OS.** Since apartéJS 0.16.7 the
   kit declares its own dark palette under `prefers-color-scheme: dark` as
   `:root:not([data-aparte-theme=light])`, which outranks a bare
