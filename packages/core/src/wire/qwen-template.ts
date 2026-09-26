@@ -32,6 +32,15 @@ const ASSISTANT_HEADER = `${IM_START}assistant\n`;
 const EMPTY_THINK = '<think>\n\n</think>\n\n';
 
 /**
+ * A question asked beside the conversation — never frozen into it: a user
+ * turn and an assistant header with reasoning off, to append to a frozen
+ * history for one completion (a compaction's summary).
+ */
+export function renderSideTurn(text: string): string {
+  return renderUser(text) + ASSISTANT_HEADER + EMPTY_THINK;
+}
+
+/**
  * Append-only accumulator for a conversation's prompt.
  * Cycle: appendUser() → beginAssistantTurn() → (the server generates `raw`)
  * → completeAssistantTurn(raw) → appendUser() → …

@@ -250,6 +250,22 @@ export interface Backend {
    * then holds, recorded with the seed.
    */
   prefill?(conversationId: string, idSlot: number): Promise<number>;
+  /**
+   * One completion beside the conversation — its frozen history plus a
+   * question — never committed to its prompt: a compaction's summary.
+   */
+  sideCompletion?(request: {
+    conversationId: string;
+    transcript: TranscriptEntry[];
+    system: SystemSpec;
+    tools: ToolDefLike[];
+    question: string;
+    maxTokens: number;
+    idSlot?: number;
+    signal?: AbortSignal;
+  }): Promise<string>;
+  /** A rebase: the conversation's rendered prompt is forgotten; the next open freezes a new one. */
+  forgetConversation?(conversationId: string): void;
   /** Low-level primitive — useful for raw-completion backends. */
   complete(request: CompletionRequest): AsyncIterable<CompletionEvent>;
   props(): Promise<ServerProps>;

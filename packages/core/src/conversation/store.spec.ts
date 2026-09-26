@@ -281,3 +281,47 @@ describe('cutAfterTurn — where a branch from a readable turn cuts the log', ()
     expect(cutAfterTurn(events, 9)).toBe(6);
   });
 });
+
+describe('rebase — compaction is an explicit event in the log (P2.5, D-19)', () => {
+  const at = 't';
+  const events: ConversationEvent[] = [
+    { type: 'user', text: 'old question', at },
+    { type: 'assistant', entry: { role: 'assistant', text: 'old answer', raw: 'old answer' }, at },
+    { type: 'user', text: 'recent question', at },
+    { type: 'assistant', entry: { role: 'assistant', text: 'recent answer', raw: 'recent answer' }, at },
+    { type: 'rebase', summary: 'THE SUMMARY', keepFrom: 2, at },
+    { type: 'user', text: 'after', at },
+  ];
+
+  it('the prompt restarts from the summary, then the kept turns, then what came after', () => {
+    const transcript = rebuildTranscript(events);
+    expect(transcript[0]).toMatchObject({ role: 'service' });
+    expect((transcript[0] as { text: string }).text).toContain('THE SUMMARY');
+    expect(transcript.slice(1)).toEqual([
+      { role: 'user', text: 'recent question' },
+      { role: 'assistant', text: 'recent answer', raw: 'recent answer' },
+      { role: 'user', text: 'after' },
+    ]);
+  });
+
+  it('a second rebase replaces the first: only the latest summary starts the prompt', () => {
+    const twice: ConversationEvent[] = [
+      ...events,
+      { type: 'assistant', entry: { role: 'assistant', text: 'a', raw: 'a' }, at },
+      { type: 'rebase', summary: 'SECOND SUMMARY', keepFrom: 5, at },
+    ];
+    const transcript = rebuildTranscript(twice);
+    expect((transcript[0] as { text: string }).text).toContain('SECOND SUMMARY');
+    expect(JSON.stringify(transcript)).not.toContain('THE SUMMARY');
+    expect(transcript.slice(1)).toEqual([
+      { role: 'user', text: 'after' },
+      { role: 'assistant', text: 'a', raw: 'a' },
+    ]);
+  });
+
+  it('a rebase is one readable turn: a branch after it cuts in the right place', () => {
+    // Readable: 0 old q, 1 old a, 2 recent q, 3 recent a, 4 compaction, 5 after.
+    expect(cutAfterTurn(events, 4)).toBe(5);
+    expect(cutAfterTurn(events, 3)).toBe(4);
+  });
+});

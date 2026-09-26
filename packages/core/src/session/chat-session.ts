@@ -315,6 +315,31 @@ export class ChatSession {
     }
   }
 
+  /**
+   * The model's summary of the conversation so far, asked beside it: the
+   * frozen history is in the slot (served from the cache), the question and
+   * the answer never enter the log. Undefined when the backend cannot.
+   */
+  async summarize(question: string, maxTokens: number, signal?: AbortSignal): Promise<string | undefined> {
+    const { backend, registry } = this.options;
+    if (!backend.sideCompletion) return undefined;
+    await this.queue;
+    return backend.sideCompletion({
+      conversationId: this.conversationId,
+      transcript: this.transcript,
+      system: {
+        ...(this.options.roots && this.options.roots.length > 0 ? { roots: this.options.roots } : {}),
+        ...(this.options.replyLanguage ? { replyLanguage: this.options.replyLanguage } : {}),
+        ...(this.options.projectInstructions ? { projectInstructions: this.options.projectInstructions } : {}),
+      },
+      tools: registry.list(),
+      question,
+      maxTokens,
+      ...(this.options.idSlot !== undefined ? { idSlot: this.options.idSlot } : {}),
+      ...(signal ? { signal } : {}),
+    });
+  }
+
   /** Saves the KV state; false if the backend does not allow it. */
   async save(): Promise<boolean> {
     const { backend, kv, live } = this.options;

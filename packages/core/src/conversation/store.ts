@@ -80,7 +80,12 @@ export function cutAfterTurn(events: ConversationEvent[], turn: number): number 
   let inAssistantTurn = false;
   for (let i = 0; i < events.length; i++) {
     const event = events[i] as ConversationEvent;
-    if (event.type === 'user') {
+    if (event.type === 'rebase') {
+      // A compaction is a readable turn of its own (the screen marks it).
+      inAssistantTurn = false;
+      readable += 1;
+      if (readable === turn + 1) return i;
+    } else if (event.type === 'user') {
       inAssistantTurn = false;
       if (event.text.trim() === '') continue;
       readable += 1;
@@ -92,6 +97,25 @@ export function cutAfterTurn(events: ConversationEvent[], turn: number): number 
     }
   }
   return events.length;
+}
+
+/** Readable turns in a log, as `readableEvents` counts them. */
+export function countTurns(events: ConversationEvent[]): number {
+  let readable = 0;
+  let inAssistantTurn = false;
+  for (const event of events) {
+    if (event.type === 'rebase') {
+      inAssistantTurn = false;
+      readable += 1;
+    } else if (event.type === 'user') {
+      inAssistantTurn = false;
+      if (event.text.trim() !== '') readable += 1;
+    } else if (event.type === 'assistant' && event.entry && !inAssistantTurn) {
+      inAssistantTurn = true;
+      readable += 1;
+    }
+  }
+  return readable;
 }
 
 export interface CreateConversationOptions {
@@ -119,7 +143,21 @@ export type ConversationEvent =
       at: string;
     }
   /** Service message (inventory delta): in the prompt, not in the UI. */
-  | { type: 'service'; text: string; at: string };
+  | { type: 'service'; text: string; at: string }
+  /**
+   * A compaction (P2.5, D-19): from here on, the prompt restarts from a
+   * re-frozen system prompt, this summary, and the raw events from
+   * `keepFrom` — the earlier turns stay in the log, for the screen.
+   */
+  | { type: 'rebase'; summary: string; keepFrom: number; at: string };
+
+/** How a summary opens the prompt after a rebase. */
+export function renderSummaryMessage(summary: string): string {
+  return (
+    '[conversation summary]\nThe earlier turns of this conversation were compacted to save context. ' +
+    `What they established:\n${summary}`
+  );
+}
 
 export class ConversationStore {
   constructor(readonly dir: string) {}
@@ -266,6 +304,20 @@ export class ConversationStore {
     await this.writeMeta(meta);
   }
 
+  /**
+   * A rebase re-freezes everything the system prompt was built from: the
+   * frozen prompt, the inventory, the scope and the instructions go, and the
+   * next open freezes them anew — the deltas folded in.
+   */
+  async resetFrozen(id: string): Promise<void> {
+    const meta = await this.meta(id);
+    delete meta.backendState;
+    delete meta.toolNames;
+    delete meta.frozenRoots;
+    delete meta.instructionsHash;
+    await this.writeMeta(meta);
+  }
+
   /** Remembers the instructions in effect (frozen, or last announced); undefined when there are none. */
   async setInstructionsHash(id: string, hash: string | undefined): Promise<void> {
     const meta = await this.meta(id);
@@ -354,10 +406,24 @@ export class ConversationStore {
 export function rebuildTranscript(
   events: ConversationEvent[],
 ): TranscriptEntry[] {
-  return events.map((event): TranscriptEntry => {
+  const toEntry = (event: Exclude<ConversationEvent, { type: 'rebase' }>): TranscriptEntry => {
     if (event.type === 'assistant') return event.entry;
     if (event.type === 'tool_results') return event.entry;
     if (event.type === 'service') return { role: 'service', text: event.text };
     return { role: 'user', text: event.text };
+  };
+  // After a compaction the prompt restarts: the latest summary, the events
+  // it kept, and what came after it. Earlier rebases are behind the cut.
+  let last = -1;
+  events.forEach((event, index) => {
+    if (event.type === 'rebase') last = index;
   });
+  if (last < 0) {
+    return events.filter((e): e is Exclude<ConversationEvent, { type: 'rebase' }> => e.type !== 'rebase').map(toEntry);
+  }
+  const rebase = events[last] as Extract<ConversationEvent, { type: 'rebase' }>;
+  const kept = [...events.slice(Math.min(rebase.keepFrom, last), last), ...events.slice(last + 1)].filter(
+    (e): e is Exclude<ConversationEvent, { type: 'rebase' }> => e.type !== 'rebase',
+  );
+  return [{ role: 'service', text: renderSummaryMessage(rebase.summary) }, ...kept.map(toEntry)];
 }

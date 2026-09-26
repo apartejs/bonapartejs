@@ -20,8 +20,10 @@ import type {
   SlotApi,
   SystemSpec,
   ToolDefLike,
+  TranscriptEntry,
   TurnRequest,
 } from '../types.js';
+import { renderSideTurn } from '../../wire/qwen-template.js';
 import { randomBytes } from 'node:crypto';
 import { buildLlamaServerArgs, type LlamaCppLaunchConfig } from './args.js';
 import { LlamaCppHttpClient } from './http-client.js';
@@ -124,6 +126,40 @@ abstract class BaseBackend implements Backend {
     if (typeof systemPrompt === 'string') {
       this.renderer(conversationId).restore(systemPrompt);
     }
+  }
+
+  /** A rebase: the conversation's renderer goes, the next open freezes a new one. */
+  forgetConversation(conversationId: string): void {
+    this.renderers.delete(conversationId);
+  }
+
+  /**
+   * One completion BESIDE the conversation (a compaction's summary): the
+   * frozen history — in the slot already, so served from the cache — plus a
+   * question, never committed to the conversation's prompt.
+   */
+  async sideCompletion(request: {
+    conversationId: string;
+    transcript: TranscriptEntry[];
+    system: SystemSpec;
+    tools: ToolDefLike[];
+    question: string;
+    maxTokens: number;
+    idSlot?: number;
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const history = this.renderer(request.conversationId).sync(request.transcript, request.system, request.tools);
+    let text = '';
+    for await (const event of this.complete({
+      prompt: history + renderSideTurn(request.question),
+      idSlot: request.idSlot ?? 0,
+      cachePrompt: true,
+      nPredict: request.maxTokens,
+      ...(request.signal ? { signal: request.signal } : {}),
+    })) {
+      if (event.type === 'token') text += event.text;
+    }
+    return text.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
   }
 
   prefixText(conversationId: string): string | undefined {

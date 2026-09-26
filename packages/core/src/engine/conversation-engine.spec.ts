@@ -74,6 +74,8 @@ async function makeRig(
     serverNCtx?: number;
     /** The fake server flags the final event as truncated (the context ceiling). */
     truncate?: boolean;
+    /** Answers by prompt instead of by turn (replaces `replies`). */
+    responder?: (prompt: string) => string;
     modelExists?: boolean;
     engine?: Partial<ConversationEngineOptions>;
   } = {},
@@ -89,7 +91,12 @@ async function makeRig(
     ...(options.paceMs !== undefined ? { paceMs: options.paceMs } : {}),
     ...(options.serverNCtx !== undefined ? { nCtx: options.serverNCtx } : {}),
     ...(options.truncate ? { truncate: true } : {}),
-    responder: () => replies[Math.min(turn++, replies.length - 1)] ?? '',
+    responder: options.responder
+      ? (prompt: string) => {
+          turn++;
+          return options.responder!(prompt);
+        }
+      : () => replies[Math.min(turn++, replies.length - 1)] ?? '',
     files: disk,
   });
   servers.push(server);
@@ -369,6 +376,72 @@ describe('ConversationEngine — branches and duplicates (D-44)', () => {
     ]);
     expect((await engine.history('conv-a')).events).toHaveLength(4);
     expect((await store.meta('conv-c')).title).toBe('A (branch)');
+  });
+});
+
+describe('ConversationEngine — compaction is the rebase (P2.5, D-19)', () => {
+  it('summarises, restarts the prompt from the summary with a re-frozen system prompt, and drops the stale state', async () => {
+    const prompts: string[] = [];
+    const { engine, store, kv } = await makeRig({
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return prompt.includes('Summarize this conversation') ? 'SUMMARY OF THE WORK' : 'an answer';
+      },
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'first question');
+    await engine.send('conv-a', 'second question');
+    await engine.send('conv-a', 'third question');
+    await engine.saveState();
+    expect(await kv.has('conv-a')).toBe(true);
+
+    const result = await engine.compact('conv-a', { keepTurns: 2 });
+
+    expect(result).toMatchObject({ summary: 'SUMMARY OF THE WORK', compactedTurns: 4, keptTurns: 2 });
+    const log = await store.loadEvents('conv-a');
+    expect(log.at(-1)).toMatchObject({ type: 'rebase', summary: 'SUMMARY OF THE WORK' });
+    // The summary request itself never enters the log.
+    expect(JSON.stringify(log)).not.toContain('Summarize this conversation');
+    // The saved state was built on the old prompt: gone.
+    expect(await kv.has('conv-a')).toBe(false);
+    expect(engine.active).toBeNull();
+
+    // The screen keeps every turn, with the compaction marked.
+    const history = await engine.history('conv-a');
+    expect(history.events.map((event) => event.type)).toEqual([
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+      'user',
+      'assistant',
+      'compaction',
+    ]);
+    expect(history.events.at(-1)?.text).toBe('SUMMARY OF THE WORK');
+
+    // The next turn's prompt: a system block, the summary, the kept turns —
+    // not the compacted ones.
+    await engine.send('conv-a', 'fourth question');
+    const next = prompts.at(-1) as string;
+    expect(next.startsWith('<|im_start|>system')).toBe(true);
+    expect(next).toContain('SUMMARY OF THE WORK');
+    expect(next).toContain('third question');
+    expect(next).not.toContain('first question');
+    expect(next).not.toContain('second question');
+  });
+
+  it('a conversation that is not open is opened to be summarised', async () => {
+    const { engine, store } = await makeRig({
+      responder: (prompt) => (prompt.includes('Summarize this conversation') ? 'S' : 'a'),
+    });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'one');
+    await engine.send('conv-a', 'two');
+    await engine.open('conv-b', MODEL);
+
+    await engine.compact('conv-a', { keepTurns: 0 });
+
+    expect((await store.loadEvents('conv-a')).at(-1)).toMatchObject({ type: 'rebase', summary: 'S', keepFrom: 4 });
   });
 });
 

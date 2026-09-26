@@ -67,12 +67,12 @@ export class TranscriptRenderer {
     return this.frozenSystemPrompt;
   }
 
-  next(
-    transcript: TranscriptEntry[],
-    system: SystemSpec,
-    tools: ToolDefLike[],
-    options: { thinking?: boolean } = {},
-  ): RenderedTurn {
+  /**
+   * Brings the frozen history up to the transcript, without opening a turn,
+   * and returns it — what a side question (a compaction's summary) is
+   * appended to.
+   */
+  sync(transcript: TranscriptEntry[], system: SystemSpec, tools: ToolDefLike[]): string {
     const systemPrompt = this.ensureSystemPrompt(system, tools);
     if (this.log === null) {
       this.log = new PromptLog(systemPrompt);
@@ -84,13 +84,22 @@ export class TranscriptRenderer {
       this.log.completeAssistantTurn('');
       this.turnOpen = false;
     }
-
     for (const entry of transcript.slice(this.rendered)) {
       this.append(entry);
       this.rendered += 1;
     }
+    return this.log.frozen;
+  }
 
-    const prompt = this.log.beginAssistantTurn({
+  next(
+    transcript: TranscriptEntry[],
+    system: SystemSpec,
+    tools: ToolDefLike[],
+    options: { thinking?: boolean } = {},
+  ): RenderedTurn {
+    this.sync(transcript, system, tools);
+    const log = this.log as PromptLog;
+    const prompt = log.beginAssistantTurn({
       thinking: options.thinking ?? false,
     });
     this.turnOpen = true;

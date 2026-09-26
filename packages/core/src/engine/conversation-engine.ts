@@ -19,7 +19,12 @@ import { existsSync } from 'node:fs';
 import type { AgentEvent, ApprovalResolver } from '../agent/loop.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
 import type { SamplingParams } from '../backend/types.js';
-import { cutAfterTurn, type ConversationEvent, type ConversationStore } from '../conversation/store.js';
+import {
+  countTurns,
+  cutAfterTurn,
+  type ConversationEvent,
+  type ConversationStore,
+} from '../conversation/store.js';
 import type { KvStore } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import { ChatSession, type OpenResult } from '../session/chat-session.js';
@@ -70,7 +75,8 @@ export type ReadableSegment =
  * tool calls and their outcome, text. `text` is the visible text alone.
  */
 export interface ReadableEvent {
-  type: 'user' | 'assistant';
+  /** `compaction`: the turns before it were summarised for the model — `text` is the summary. */
+  type: 'user' | 'assistant' | 'compaction';
   text: string;
   at: string;
   segments?: ReadableSegment[];
@@ -126,6 +132,28 @@ interface Turn extends InFlight {
 const MAX_TITLE = 60;
 
 /**
+ * What a compaction asks the model — in English, like everything sent to
+ * it. The summary replaces the earlier turns in the prompt, so it has to
+ * carry what the work needs to go on.
+ */
+const SUMMARY_QUESTION =
+  'Summarize this conversation so far, for your own use: it will replace the earlier turns in your context. ' +
+  'Keep what the work needs to continue — the user’s goal and constraints, the decisions taken and why, ' +
+  'the files and code involved (paths, names), what was done and verified, what failed, what remains to do. ' +
+  'Be factual and complete; no preamble, no advice to the user.';
+
+/** Room for the summary itself. */
+const SUMMARY_MAX_TOKENS = 1536;
+
+export interface CompactionResult {
+  summary: string;
+  /** Readable turns folded into the summary. */
+  compactedTurns: number;
+  /** Readable turns kept verbatim after it. */
+  keptTurns: number;
+}
+
+/**
  * Room kept for the reply when deciding whether a message fits. The loop
  * does not cap generation yet; when it does, this becomes that cap.
  */
@@ -170,6 +198,11 @@ export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
   };
 
   for (const event of events) {
+    if (event.type === 'rebase') {
+      flush();
+      out.push({ type: 'compaction', text: event.summary, at: event.at });
+      continue;
+    }
     if (event.type === 'user') {
       flush();
       if (event.text.trim() !== '') out.push({ type: 'user', text: event.text, at: event.at });
@@ -483,6 +516,49 @@ export class ConversationEngine {
       ...(keepEvents !== undefined ? { keepEvents } : {}),
     });
     return { inheritedState: await kv.copyState(sourceId, newId) };
+  }
+
+  /**
+   * Compaction IS the rebase (P2.5, D-19) — an explicit event, never a side
+   * effect. The model summarises the conversation beside it (the context is
+   * in the slot: served from the cache); a `rebase` event lands in the log;
+   * the frozen system prompt, inventory, scope and instructions are reset —
+   * the next open freezes them anew with the deltas folded in — and the
+   * saved state, built on the old prompt, is forgotten. The prompt then
+   * restarts from the summary and the last `keepTurns` readable turns; the
+   * screen keeps every turn. Between turns only.
+   */
+  async compact(conversationId: string, options: { keepTurns?: number } = {}): Promise<CompactionResult> {
+    await this.settle();
+    if (this.activeId !== conversationId || !this.session) {
+      const outcome = await this.open(conversationId);
+      if ('needsModel' in outcome) throw new Error('No model to summarise this conversation with.');
+    }
+    const session = this.session;
+    if (!session) throw new Error('No conversation open.');
+    const summary = await session.summarize(SUMMARY_QUESTION, SUMMARY_MAX_TOKENS);
+    if (!summary) throw new Error('The engine cannot summarise a conversation.');
+
+    const { store, kv, supervisor } = this.options;
+    const events = await store.loadEvents(conversationId);
+    const total = countTurns(events);
+    const keep = Math.max(0, Math.min(options.keepTurns ?? 2, total));
+    const keepFrom = keep === 0 ? events.length : keep >= total ? 0 : cutAfterTurn(events, total - keep - 1);
+    await store.appendEvent(conversationId, {
+      type: 'rebase',
+      summary,
+      keepFrom,
+      at: new Date().toISOString(),
+    });
+    await store.resetFrozen(conversationId);
+    supervisor.backend?.forgetConversation?.(conversationId);
+    await kv.forget(conversationId);
+    // The slot holds the old prompt: let go of it without saving.
+    this.session = null;
+    this.activeId = null;
+    this.activeModel = null;
+    this.contextUsed = 0;
+    return { summary, compactedTurns: total - keep, keptTurns: keep };
   }
 
   /**
