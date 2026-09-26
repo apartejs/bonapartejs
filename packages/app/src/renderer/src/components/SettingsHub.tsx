@@ -329,7 +329,7 @@ export function SettingsHub({
                           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                             <span className="text-[13px]">
                               {grant.commandPrefix
-                                ? t.settings.grantBinary.replace('{binary}', () => grant.commandPrefix)
+                                ? t.settings.grantBinary.replace('{binary}', () => grant.commandPrefix ?? '')
                                 : grant.exactCommand
                                   ? t.settings.grantCommand
                                   : grant.tool}

@@ -39,8 +39,8 @@ export function approvalOptions(t: ApprovalStrings, request: ApprovalRequestDto)
             ? [
                 {
                   value: 'always-binary',
-                  label: t.alwaysBinary.replace('{binary}', () => request.binary),
-                  description: t.alwaysBinaryHint.replaceAll('{binary}', request.binary),
+                  label: t.alwaysBinary.replace('{binary}', () => request.binary ?? ''),
+                  description: t.alwaysBinaryHint.replaceAll('{binary}', () => request.binary ?? ''),
                 },
               ]
             : []),

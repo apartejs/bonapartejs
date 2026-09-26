@@ -60,7 +60,7 @@ describe('approval on the library panel', () => {
     // `String.replace` reads `$&` in a replacement string as "the match":
     // a program named so would have been shown as "{binary}".
     const odd = { ...request, command: '$&tool --x', binary: '$&tool' };
-    const labels = approvalOptions(EN.approval, odd).map((o) => o.label);
+    const labels = approvalOptions(EN.approval, odd).map((o) => (typeof o.label === 'function' ? o.label() : o.label));
     expect(labels.some((label) => label.includes('$&tool'))).toBe(true);
     expect(labels.some((label) => label.includes('{binary}'))).toBe(false);
   });
