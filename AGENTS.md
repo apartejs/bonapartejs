@@ -167,6 +167,14 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
   the outcome of each case.
+  - **2026-09-26 (later) — 8/8 green**, same model and build. New case:
+    **compaction is the rebase** — the model's summary, asked beside the
+    conversation, kept the secret read from a file ("…contained the
+    password ORANGE-42-VERMILLON…"); after the rebase the prompt restarts
+    from a re-frozen system prompt and that summary alone, and the model
+    answers the password from it, with no tool. Tool round-trip: 3 175
+    tokens from the cache on turn 2 (prefill 19.9 ms); save/restore with
+    tools 1 079 tokens; branch 602/602; seed 518 (prefill 16.7 ms).
   - **2026-09-26 — 7/7 green** (Qwen3-1.7B Q4_K_M, b10217-ddd4ec142, same
     settings). New case: **the managed server demands its per-launch key**
     — the real server answers `/props` without it with HTTP 401, and with
