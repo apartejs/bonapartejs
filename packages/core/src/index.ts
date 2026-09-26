@@ -131,7 +131,7 @@ export type {
   PermissionQuery,
   PlayMode,
 } from './permissions/engine.js';
-export { PermissionEngine, PLAY_MODES } from './permissions/engine.js';
+export { alwaysRule, commandBinary, PermissionEngine, PLAY_MODES } from './permissions/engine.js';
 
 export type {
   AgentEvent,

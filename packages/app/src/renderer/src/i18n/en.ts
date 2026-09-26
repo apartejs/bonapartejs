@@ -58,8 +58,13 @@ export const EN: AppTranslations = {
   approval: {
     title: 'bonaparte wants to act on your machine',
     allow: 'Allow',
-    always: 'Always allow',
     refuse: 'Refuse',
+    alwaysCommand: 'Always allow this command',
+    alwaysBinary: 'Always allow {binary}',
+    alwaysBinaryHint:
+      'Every {binary} command in this project — never one chained with ; & | or redirected',
+    alwaysTool: 'Always allow {tool}',
+    alwaysToolHint: 'In this project, without asking again',
   },
   modes: {
     hint: 'Play mode: what the agent may do without asking',

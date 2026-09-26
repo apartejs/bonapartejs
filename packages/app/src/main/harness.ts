@@ -16,6 +16,8 @@ import {
   bonaparteDataDir,
   builtinTools,
   validateSettingValue,
+  alwaysRule,
+  commandBinary,
   ConversationEngine,
   ConversationStore,
   createWindowsProbes,
@@ -874,9 +876,11 @@ export class Harness {
           ...(request.command !== undefined ? { command: request.command } : {}),
         },
       });
+      const binary = request.command !== undefined ? commandBinary(request.command) : undefined;
       this.emit(IPC.evApproval, {
         ...request,
         conversationId: this.conversations.active ?? '',
+        ...(binary ? { binary } : {}),
       } satisfies ApprovalRequestDto);
     });
 
@@ -886,13 +890,12 @@ export class Harness {
     this.pendingApprovals.delete(response.id);
 
     if (response.granted && response.always) {
-      // "Always allow": for a command, the rule applies to its first word
-      // (e.g. "pnpm"), not the whole line.
-      const prefix = pending.request.command?.trim().split(/\s+/)[0];
-      this.permissions.remember({
-        tool: pending.request.tool,
-        ...(prefix ? { commandPrefix: prefix } : {}),
-      });
+      // "Always allow" says what it covers (Q-24, audit C1): the exact line,
+      // or every command of a plain-named program — never a first word
+      // that happened to start a longer line.
+      this.permissions.remember(
+        alwaysRule(pending.request.tool, pending.request.command, response.always === 'binary' ? 'binary' : 'command'),
+      );
     }
     pending.resolve(response.granted);
   }

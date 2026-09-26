@@ -66,10 +66,15 @@ test('a command asks on the library panel; refusing ends the round-trip', async 
   await editor.fill('run something');
   await editor.press('Enter');
 
-  // The library's approval panel, with OUR options.
+  // The library's approval panel, with OUR options — and an "always" that
+  // says what it covers: this exact line, or every command of its program.
   const options = window.locator('.aparte-approval-option');
-  await expect(options).toHaveCount(3, { timeout: 10_000 });
+  await expect(options).toHaveCount(4, { timeout: 10_000 });
   await expect(options.first()).toHaveText('Allow');
+  await expect(options.nth(1)).toContainText('Always allow this command');
+  await expect(options.nth(1)).toContainText('echo hi');
+  await expect(options.nth(2)).toContainText('Always allow echo');
+  await expect(options.nth(2)).toContainText('Every echo command in this project');
   await expect(window.locator('.modal-card')).toHaveCount(0);
 
   await options.filter({ hasText: 'Refuse' }).click();

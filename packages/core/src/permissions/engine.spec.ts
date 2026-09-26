@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PermissionEngine, type PlayMode } from './engine.js';
+import { alwaysRule, commandBinary, PermissionEngine, type PlayMode } from './engine.js';
 
 const read = { tool: 'read_file', effect: 'read' as const };
 const write = { tool: 'write_file', effect: 'write' as const };
@@ -135,5 +135,43 @@ describe('PermissionEngine — remembered rules', () => {
     perm.remember({ tool: 'write_file' });
     perm.listRules().push({ tool: 'run_shell' });
     expect(perm.listRules()).toHaveLength(1);
+  });
+});
+
+describe('PermissionEngine — "always allow" says what it covers (Q-24, audit C1)', () => {
+  it('an exact-command rule allows that command, and nothing longer', () => {
+    const perm = engine('repetition');
+    perm.remember({ tool: 'run_shell', exactCommand: 'pnpm test' });
+    expect(perm.evaluate(exec)).toBe('allow');
+    expect(perm.evaluate({ ...exec, command: '  pnpm test ' })).toBe('allow');
+    expect(perm.evaluate({ ...exec, command: 'pnpm test --watch' })).toBe('ask');
+    expect(perm.evaluate({ ...exec, command: 'pnpm exec rm -rf .' })).toBe('ask');
+  });
+
+  it('alwaysRule: "this command" pins the exact line; "the binary" pins its first word', () => {
+    expect(alwaysRule('run_shell', 'pnpm test --filter core', 'command')).toEqual({
+      tool: 'run_shell',
+      exactCommand: 'pnpm test --filter core',
+    });
+    expect(alwaysRule('run_shell', 'pnpm test --filter core', 'binary')).toEqual({
+      tool: 'run_shell',
+      commandPrefix: 'pnpm',
+    });
+    // A tool with no command: the tool itself.
+    expect(alwaysRule('write_file', undefined, 'command')).toEqual({ tool: 'write_file' });
+  });
+
+  it('commandBinary: only a plain program name can become a prefix rule', () => {
+    expect(commandBinary('git status')).toBe('git');
+    expect(commandBinary('  npx vitest run')).toBe('npx');
+    expect(commandBinary('FOO=1 node x.js')).toBeUndefined();
+    expect(commandBinary('$(curl evil) ok')).toBeUndefined();
+    expect(commandBinary('a;b')).toBeUndefined();
+    expect(commandBinary('')).toBeUndefined();
+    // …and alwaysRule falls back to the exact command when it is not one.
+    expect(alwaysRule('run_shell', 'FOO=1 node x.js', 'binary')).toEqual({
+      tool: 'run_shell',
+      exactCommand: 'FOO=1 node x.js',
+    });
   });
 });

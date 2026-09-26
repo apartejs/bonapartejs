@@ -59,7 +59,12 @@ export const FR: AppTranslations = {
   approval: {
     title: 'bonaparte veut agir sur votre machine',
     allow: 'Autoriser',
-    always: 'Toujours autoriser',
+    alwaysCommand: 'Toujours autoriser cette commande',
+    alwaysBinary: 'Toujours autoriser {binary}',
+    alwaysBinaryHint:
+      'Toute commande {binary} dans ce projet — jamais enchaînée avec ; & | ni redirigée',
+    alwaysTool: 'Toujours autoriser {tool}',
+    alwaysToolHint: 'Dans ce projet, sans redemander',
     refuse: 'Refuser',
   },
   modes: {

@@ -9,39 +9,82 @@ const request: ApprovalRequestDto = {
   tool: 'run_shell',
   args: { command: 'pnpm test' },
   command: 'pnpm test',
+  binary: 'pnpm',
 };
 
-describe('approval on the library panel', () => {
-  it('offers the three decisions the harness can honour, allow first', () => {
-    // The options travel with the request (the library fixes none): a gate
-    // that can remember a grant offers three, and the labels are ours.
-    const options = approvalOptions(EN.approval);
+const describe_ = (option: { description?: string | (() => string) } | undefined): string | undefined =>
+  typeof option?.description === 'function' ? option.description() : option?.description;
 
-    expect(options.map((o) => o.value)).toEqual(['allow', 'always', 'refuse']);
-    expect(options.map((o) => o.label)).toEqual(['Allow', 'Always allow', 'Refuse']);
+describe('approval on the library panel', () => {
+  it('a command offers two scopes for "always": this exact line, or every command of its program', () => {
+    // Q-24 / audit C1: "always allow" used to remember the first word — a
+    // grant for `pnpm test` covered `pnpm exec rm -rf .`. Each scope now
+    // says what it covers, on its option's second line.
+    const options = approvalOptions(EN.approval, request);
+
+    expect(options.map((o) => o.value)).toEqual(['allow', 'always-command', 'always-binary', 'refuse']);
+    expect(options.map((o) => o.label)).toEqual([
+      'Allow',
+      'Always allow this command',
+      'Always allow pnpm',
+      'Refuse',
+    ]);
+    expect(describe_(options[1])).toBe('pnpm test');
+    expect(describe_(options[2])).toMatch(/every pnpm command/i);
     expect(options[0]?.tone).toBe('affirm');
-    expect(options[2]?.tone).toBe('deny');
-    expect(options[1]?.tone).toBeUndefined();
+    expect(options[3]?.tone).toBe('deny');
+  });
+
+  it('a command whose program is not a plain name offers the exact line only', () => {
+    const { binary: _none, ...unsafe } = { ...request, command: 'FOO=1 node x.js' };
+    expect(approvalOptions(EN.approval, unsafe).map((o) => o.value)).toEqual([
+      'allow',
+      'always-command',
+      'refuse',
+    ]);
+  });
+
+  it('a tool without a command offers "always" for the tool', () => {
+    const write: ApprovalRequestDto = {
+      id: 'req-2',
+      conversationId: 'conv-a',
+      tool: 'edit_file',
+      args: { path: 'src/a.ts' },
+    };
+    const options = approvalOptions(EN.approval, write);
+    expect(options.map((o) => o.value)).toEqual(['allow', 'always', 'refuse']);
+    expect(options[1]?.label).toBe('Always allow edit_file');
   });
 
   it('names the tool and what it is about to do', () => {
     expect(approvalMessage(EN.approval, request)).toBe(
       'bonaparte wants to act on your machine — run_shell · pnpm test',
     );
-    expect(
-      approvalMessage(EN.approval, { ...request, command: undefined, args: { path: 'src/a.ts' } }),
-    ).toBe('bonaparte wants to act on your machine — run_shell · src/a.ts');
+    const { command: _c, ...pathOnly } = { ...request, args: { path: 'src/a.ts' } };
+    expect(approvalMessage(EN.approval, pathOnly)).toBe(
+      'bonaparte wants to act on your machine — run_shell · src/a.ts',
+    );
   });
 
-  it('maps an accepted option to the harness response', () => {
+  it('maps an accepted option to the harness response, with the scope of an "always"', () => {
     expect(answerToResponse('req-1', { action: 'accept', content: { option: 'allow' } })).toEqual({
       id: 'req-1',
       granted: true,
     });
+    expect(answerToResponse('req-1', { action: 'accept', content: { option: 'always-command' } })).toEqual({
+      id: 'req-1',
+      granted: true,
+      always: 'command',
+    });
+    expect(answerToResponse('req-1', { action: 'accept', content: { option: 'always-binary' } })).toEqual({
+      id: 'req-1',
+      granted: true,
+      always: 'binary',
+    });
     expect(answerToResponse('req-1', { action: 'accept', content: { option: 'always' } })).toEqual({
       id: 'req-1',
       granted: true,
-      always: true,
+      always: 'command',
     });
     expect(answerToResponse('req-1', { action: 'accept', content: { option: 'refuse' } })).toEqual({
       id: 'req-1',

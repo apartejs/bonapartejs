@@ -201,13 +201,22 @@ export interface ApprovalRequestDto {
   tool: string;
   args: Record<string, unknown>;
   command?: string;
+  /**
+   * The program the command runs, when it is a plain name an "always" can
+   * safely cover (`git`, `pnpm`) — absent otherwise, and then only the
+   * exact line can be remembered.
+   */
+  binary?: string;
 }
+
+/** What an "always allow" covers: this exact command, or every command of its program. */
+export type AlwaysScopeDto = 'command' | 'binary';
 
 export interface ApprovalResponseDto {
   id: string;
   granted: boolean;
-  /** Remember the rule for this project ("always allow"). */
-  always?: boolean;
+  /** Remember the grant for this project ("always allow"), with its scope. */
+  always?: AlwaysScopeDto;
 }
 
 export type BackendStatusDto =

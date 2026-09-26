@@ -248,6 +248,14 @@ published.
 
 ### Changed
 
+- **"Always allow" says what it covers** (audit C1, Q-24). It remembered
+  the first word of a command: a grant for `pnpm test` covered
+  `pnpm exec rm -rf .`. The approval panel now offers two scopes, each
+  with a second line saying what it means — *this command* (the exact
+  line) and *every `pnpm` command* (offered only when the program is a
+  plain name; never a command chained with `; & |` or redirected). A tool
+  without a command keeps a single "always allow edit_file".
+
 - **apartéJS bumped to 0.17.2** (from 0.16.2, in lockstep — twelve releases,
   changelogs read line by line). The 0.17 breaking changes miss us: we
   build no `AparteChatMessage[]` (the tool roles), register no composer

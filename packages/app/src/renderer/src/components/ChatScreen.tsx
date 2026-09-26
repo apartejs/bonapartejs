@@ -437,7 +437,7 @@ export function ChatScreen({
     void requestUserInput({
       message: approvalMessage(t.approval, approval),
       kind: 'approval',
-      options: approvalOptions(t.approval),
+      options: approvalOptions(t.approval, approval),
       signal: controller.signal,
     })
       .then((result) => onApprovalResponse(answerToResponse(approval.id, result)))

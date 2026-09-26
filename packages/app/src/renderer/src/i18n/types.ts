@@ -59,8 +59,14 @@ export interface AppTranslations {
   approval: {
     title: string;
     allow: string;
-    always: string;
     refuse: string;
+    alwaysCommand: string;
+    /** `{binary}`: the program a command runs. */
+    alwaysBinary: string;
+    alwaysBinaryHint: string;
+    /** `{tool}`: the tool's name. */
+    alwaysTool: string;
+    alwaysToolHint: string;
   };
   modes: {
     hint: string;
