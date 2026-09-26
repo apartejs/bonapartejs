@@ -63,6 +63,8 @@ export const IPC = {
   pluginsReload: 'plugins.reload',
   pluginsAck: 'plugins.ack',
   pluginsSetEnabled: 'plugins.setEnabled',
+  appGpuStatus: 'app.gpuStatus',
+  appRelaunch: 'app.relaunch',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   kvUsage: 'kv.usage',
@@ -297,6 +299,21 @@ export interface ApprovalResponseDto {
   always?: AlwaysScopeDto;
 }
 
+/**
+ * The interface's GPU (P3.1): what this process started with, what the
+ * settings now ask for, and what a restart to reconcile them costs.
+ */
+export interface GpuStatusDto {
+  /** Chromium's GPU mode, fixed when the process started. */
+  active: boolean;
+  /** What the saved settings ask for — applied at the next start. */
+  wanted: boolean;
+  /** A model is loaded: the restart reloads it. */
+  modelLoaded: boolean;
+  /** Seconds that model took to load last time, when measured. */
+  reloadSeconds?: number;
+}
+
 export type BackendStatusDto =
   | 'stopped'
   | 'starting'
@@ -509,6 +526,10 @@ export interface BonaparteBridge {
   reloadPlugins(): Promise<PluginStatusDto[]>;
   /** Switches a plugin on or off, live; returns the up-to-date inventory. */
   setPluginEnabled(pluginId: string, enabled: boolean): Promise<PluginStatusDto[]>;
+  /** Whether the interface's GPU matches the settings, and the restart's cost. */
+  gpuStatus(): Promise<GpuStatusDto>;
+  /** Restarts bonaparte: the conversation's state is saved first, the model reloads. */
+  relaunch(): Promise<void>;
   /**
    * Subscribes to events PUSHED by a plugin's Node half.
    *

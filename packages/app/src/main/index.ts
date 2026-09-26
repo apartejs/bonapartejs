@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron';
+import { readFileSync } from 'node:fs';
+import { bonaparteDataDir, wantsGpuAcceleration } from '@aparte/bonaparte-core';
 import { Harness } from './harness.js';
 
 // An isolated data directory isolates EVERYTHING: the renderer's localStorage
@@ -213,9 +215,19 @@ function createWindow(): void {
 
 // A harness for LOCAL models doesn't spend VRAM compositing pixels. The
 // interface is text, lists, and diffs: it has nothing to ask of the GPU,
-// whereas every megabyte of VRAM handed to the model is more context. Must
-// be called BEFORE `whenReady`.
-app.disableHardwareAcceleration();
+// whereas every megabyte of VRAM handed to the model is more context. A
+// setting gives it back (the browser view renders real pages): Chromium
+// fixes its GPU mode at startup, so it is read here, synchronously, from
+// the saved config, and must be applied BEFORE `whenReady` (D-23, P3.1).
+if (!wantsGpuAcceleration(readSavedConfig())) app.disableHardwareAcceleration();
+
+function readSavedConfig(): unknown {
+  try {
+    return JSON.parse(readFileSync(join(bonaparteDataDir(), 'config', 'global.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
 
 // Windows groups and illustrates windows by this identifier: without it, the
 // taskbar shows Electron's icon, regardless of the window's own. Must be set

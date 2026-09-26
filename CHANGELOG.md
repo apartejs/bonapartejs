@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **Graphics acceleration, a setting** (P3.1, D-23). The interface still
+  starts without the GPU by default — all video memory is left to the
+  model — and "Engine and model" now offers Off, On, or Auto (on while the
+  Browser plugin is on, for pages that need it). Chromium fixes its GPU
+  mode at startup, so the choice is read from the saved config before the
+  app is ready; a change shows what the restart costs (the model reloads,
+  with its last measured load time, or nothing when none is loaded) and a
+  "Restart now" that saves the conversation first.
+
 - **Switch a plugin on or off** (P3.2). Each row of the hub's Plugins
   section has a switch. Off, the host tears the plugin down whole: its
   views leave the tooling panel at once, its tools leave the model's list

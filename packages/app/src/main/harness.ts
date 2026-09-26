@@ -16,6 +16,7 @@ import {
   assertLlamaBinary,
   bonaparteDataDir,
   builtinTools,
+  wantsGpuAcceleration,
   validateSettingValue,
   alwaysRule,
   commandBinary,
@@ -82,6 +83,7 @@ import {
   type PickFileKind,
   type PlayModeDto,
   type PluginStatusDto,
+  type GpuStatusDto,
   type ProjectDto,
   type ProjectSummaryDto,
   type ResourceSampleDto,
@@ -692,6 +694,34 @@ export class Harness {
    * off tears everything it registered down, on activates it again. The
    * choice is remembered; the conversation learns of its tools by a delta.
    */
+  /** Whether the interface's GPU matches the settings (P3.1), and what a restart costs. */
+  async gpuStatus(): Promise<GpuStatusDto> {
+    const loaded = this.supervisor.loaded;
+    const reloadSeconds = loaded ? this.supervisor.loadSeconds(loaded.modelPath) : undefined;
+    return {
+      active: app.isHardwareAccelerationEnabled(),
+      wanted: wantsGpuAcceleration(await this.loadConfig()),
+      modelLoaded: loaded !== null,
+      ...(reloadSeconds !== undefined ? { reloadSeconds: Math.round(reloadSeconds) } : {}),
+    };
+  }
+
+  /**
+   * Restarts the app — asked by the user, its cost announced first. The
+   * quit path saves the conversation's state and stops the server as any
+   * quit does; the new process starts with the settings as saved.
+   */
+  relaunch(): void {
+    if (process.env['BONAPARTE_E2E']) {
+      // A relaunch would leave the test's control: it reads that it was asked.
+      const scope = globalThis as { __bonaparteRelaunches?: number };
+      scope.__bonaparteRelaunches = (scope.__bonaparteRelaunches ?? 0) + 1;
+      return;
+    }
+    app.relaunch();
+    app.quit();
+  }
+
   async setPluginEnabled(id: string, enabled: boolean): Promise<PluginStatusDto[]> {
     if (typeof id !== 'string' || !this.pluginHost.get(id)) throw new Error(`Unknown plugin: ${String(id)}`);
     const config = await this.loadConfig();
@@ -1589,6 +1619,8 @@ export class Harness {
     handle(IPC.pluginsList, () => this.listPlugins());
     handle(IPC.pluginsReload, () => this.reloadPlugins());
     handle(IPC.pluginsSetEnabled, (id: string, enabled: boolean) => this.setPluginEnabled(id, enabled === true));
+    handle(IPC.appGpuStatus, () => this.gpuStatus());
+    handle(IPC.appRelaunch, () => this.relaunch());
     handle(
       IPC.pluginsAck,
       (pluginId: string, instanceId: string, bytes: number) => {

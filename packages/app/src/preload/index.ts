@@ -48,6 +48,8 @@ const api: BonaparteBridge = {
   listPlugins: () => ipcRenderer.invoke(IPC.pluginsList),
   reloadPlugins: () => ipcRenderer.invoke(IPC.pluginsReload),
   setPluginEnabled: (pluginId, enabled) => ipcRenderer.invoke(IPC.pluginsSetEnabled, pluginId, enabled),
+  gpuStatus: () => ipcRenderer.invoke(IPC.appGpuStatus),
+  relaunch: () => ipcRenderer.invoke(IPC.appRelaunch),
   onPluginEvent: (listener) => {
     const wrapped = (
       _e: unknown,

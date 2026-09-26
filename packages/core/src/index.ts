@@ -211,6 +211,7 @@ export {
   CONTEXT_SETTINGS,
   APP_SETTINGS,
 } from './settings/catalog.js';
+export { wantsGpuAcceleration, type GpuAccelerationChoice } from './settings/gpu.js';
 
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────
 export { EngineSupervisor } from './engine/supervisor.js';

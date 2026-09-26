@@ -132,6 +132,13 @@ export interface AppTranslations {
     pluginActive: string;
     pluginFailed: string;
     pluginOff: string;
+    /** The interface's GPU differs from the setting until a restart (P3.1). */
+    gpuRestart: string;
+    /** `{seconds}`: the model's last load time. */
+    gpuRestartCost: string;
+    gpuRestartCostUnknown: string;
+    gpuRestartFree: string;
+    restartNow: string;
     /** `{name}`: the plugin. */
     pluginSwitch: string;
     conversationScope: string;

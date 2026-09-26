@@ -1,12 +1,15 @@
 import {
   localize,
   type BackendConfigDto,
+  type GpuStatusDto,
   type GrantDto,
   type KvUsageDto,
   type PluginStatusDto,
   type ResolvedSettingDto,
 } from '@aparte/bonaparte-shared';
 import {
+  Alert,
+  AlertDescription,
   Badge,
   Button,
   Kbd,
@@ -21,6 +24,7 @@ import {
   Switch,
   cn,
 } from '@aparte/bonaparte-plugin-sdk/ui';
+import { MonitorCog } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { formatBytes } from '../models/format.js';
@@ -59,12 +63,14 @@ export function SettingsHub({
   const [grants, setGrants] = useState<GrantDto[]>([]);
   const [kv, setKv] = useState<KvUsageDto | null>(null);
   const [freed, setFreed] = useState<number | null>(null);
+  const [gpu, setGpu] = useState<GpuStatusDto | null>(null);
 
   const refresh = useCallback(async () => {
     setSettings(await window.bonaparte.getSettings('global'));
     setPlugins(await window.bonaparte.listPlugins());
     setGrants(await window.bonaparte.listGrants());
     setKv(await window.bonaparte.kvUsage());
+    setGpu(await window.bonaparte.gpuStatus());
   }, []);
 
   const revoke = useCallback(
@@ -285,13 +291,16 @@ export function SettingsHub({
           )}
 
           {section === 'launch' && (
-            <SettingsForm
-              settings={launch}
-              scope="global"
-              labels={labels}
-              locale={locale}
-              onChange={(key, value) => void change(key, value)}
-            />
+            <div className="flex flex-col gap-4">
+              {gpu && gpu.active !== gpu.wanted && <GpuRestartNotice gpu={gpu} />}
+              <SettingsForm
+                settings={launch}
+                scope="global"
+                labels={labels}
+                locale={locale}
+                onChange={(key, value) => void change(key, value)}
+              />
+            </div>
           )}
 
           {section === 'permissions' && (
@@ -427,6 +436,8 @@ export function SettingsHub({
                             setPlugins(next);
                             onPluginsChange?.(next);
                             setSettings(await window.bonaparte.getSettings('global'));
+                            // "Auto" follows the Browser plugin: its switch can call for a restart.
+                            setGpu(await window.bonaparte.gpuStatus());
                           });
                         }}
                       />
@@ -457,4 +468,41 @@ export function SettingsHub({
 
 function engineLabel(engine: BackendConfigDto): string {
   return engine.mode === 'managed' ? `llama.cpp — ${engine.binPath}` : engine.url;
+}
+
+/**
+ * The interface's GPU mode is fixed when the app starts (D-23): a changed
+ * setting waits for a restart, and the restart has a price — the model
+ * reloads. Said before it is paid, with the figure when one was measured.
+ */
+function GpuRestartNotice({ gpu }: { gpu: GpuStatusDto }) {
+  const { t } = useTranslate();
+  const [restarting, setRestarting] = useState(false);
+  const cost = !gpu.modelLoaded
+    ? t.settings.gpuRestartFree
+    : gpu.reloadSeconds !== undefined
+      ? t.settings.gpuRestartCost.replace('{seconds}', () => String(Math.max(1, gpu.reloadSeconds ?? 1)))
+      : t.settings.gpuRestartCostUnknown;
+  return (
+    <Alert role="status" className="gpu-restart max-w-[560px]">
+      <MonitorCog aria-hidden="true" />
+      <AlertDescription className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1">
+          {t.settings.gpuRestart} {cost}
+        </span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          disabled={restarting}
+          onClick={() => {
+            setRestarting(true);
+            void window.bonaparte.relaunch().finally(() => setRestarting(false));
+          }}
+        >
+          {t.settings.restartNow}
+        </Button>
+      </AlertDescription>
+    </Alert>
+  );
 }

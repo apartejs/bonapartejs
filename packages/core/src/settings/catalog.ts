@@ -270,6 +270,30 @@ export const LAUNCH_SETTINGS: SettingField[] = [
     scopes: ['global'],
     default: true,
   },
+  {
+    // The app's own launch parameter, not the engine's: Chromium fixes its
+    // GPU mode at startup, so a change applies at the next start (D-23).
+    key: 'gpuAcceleration',
+    label: { en: 'Graphics acceleration', fr: 'Accélération graphique' },
+    description: {
+      en:
+        'Off, the interface uses no video memory: all of it is left to the model. ' +
+        'On, pages in the browser view render faster. Auto: on while the Browser plugin is on. ' +
+        'Applies when bonaparte restarts.',
+      fr:
+        'Coupée, l’interface n’utilise aucune mémoire vidéo : toute est laissée au modèle. ' +
+        'Active, les pages de la vue navigateur s’affichent plus vite. Auto : active tant que le plugin Navigateur l’est. ' +
+        'S’applique au redémarrage de bonaparte.',
+    },
+    type: 'select',
+    scopes: ['global'],
+    default: 'off',
+    options: [
+      { value: 'off', label: { en: 'Off (default)', fr: 'Coupée (défaut)' } },
+      { value: 'auto', label: { en: 'Auto — with Browser', fr: 'Auto — avec Navigateur' } },
+      { value: 'on', label: { en: 'On', fr: 'Active' } },
+    ],
+  },
 ];
 
 /** All of the harness's settings; plugins add theirs on top. */
