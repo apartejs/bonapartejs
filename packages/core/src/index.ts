@@ -187,6 +187,7 @@ export {
 
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────
 export { EngineSupervisor } from './engine/supervisor.js';
+export { assertLlamaBinary, validateSettingValue } from './engine/validate.js';
 export type {
   EngineConfig,
   EngineSupervisorOptions,

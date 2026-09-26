@@ -43,9 +43,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     document.documentElement.lang = next;
     // The harness needs the locale: it decides the language the model
     // replies in (the protocol itself stays English).
-    void window.bonaparte?.getConfig().then((config) =>
-      window.bonaparte.setConfig({ ...config, locale: next }),
-    );
+    void window.bonaparte?.setLocale(next);
   }, []);
 
   // The stored config is the durable choice, shared with the main process
@@ -68,7 +66,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
-      void window.bonaparte.setConfig({ ...config, locale });
+      void window.bonaparte.setLocale(locale);
     });
     // Mount only: switches go through setLocale, which writes the config itself.
   }, []);

@@ -238,7 +238,7 @@ app.whenReady().then(async () => {
   // the system attaches the standard editing shortcuts to it.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
 
-  harness.registerIpc(ipcMain, app.getVersion());
+  harness.registerIpc(ipcMain, app.getVersion(), isAppUrl);
   await harness.restoreSession();
   createWindow();
   createTray();

@@ -21,7 +21,8 @@ import type { BonaparteLocale } from './locale.js';
 export const IPC = {
   appVersion: 'app.version',
   configGet: 'config.get',
-  configSet: 'config.set',
+  configSetDefaultModel: 'config.setDefaultModel',
+  configSetLocale: 'config.setLocale',
   backendStart: 'backend.start',
   backendRegister: 'backend.register',
   conversationHistory: 'conversation.history',
@@ -353,7 +354,15 @@ export interface BonaparteBridge {
   openExternal(url: string): Promise<void>;
   getVersion(): Promise<string>;
   getConfig(): Promise<AppConfigDto>;
-  setConfig(config: AppConfigDto): Promise<void>;
+  /**
+   * The config is written by narrow operations only — never whole: a
+   * whole-config write let one screen erase what another had saved (the
+   * model picker wrote `{ backend, defaultModel }` and dropped the rest),
+   * and let the renderer write anything the engine would later read. The
+   * engine config is saved by `startBackend` itself, once it works.
+   */
+  setDefaultModel(modelPath: string): Promise<void>;
+  setLocale(locale: BonaparteLocale): Promise<void>;
   getBackendStatus(): Promise<BackendStatusDto>;
   startBackend(config: BackendConfigDto): Promise<BackendStatusDto>;
   /** Registers the engine without connecting to it (cold start). */

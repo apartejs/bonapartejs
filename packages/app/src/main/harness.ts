@@ -12,8 +12,10 @@ import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import {
+  assertLlamaBinary,
   bonaparteDataDir,
   builtinTools,
+  validateSettingValue,
   ConversationEngine,
   ConversationStore,
   createWindowsProbes,
@@ -603,6 +605,9 @@ export class Harness {
   }
 
   async setSetting(scope: SettingScopeDto, key: string, value: unknown): Promise<void> {
+    // A known key, in a scope it has, with a value of its type — the engine
+    // and the plugins read what lands here.
+    validateSettingValue(this.settingFields(), scope, key, value);
     if (scope === 'conversation') {
       const id = this.currentConversationId;
       if (!id) return;
@@ -655,7 +660,13 @@ export class Harness {
   }
 
   private async engineConfig(config: BackendConfigDto): Promise<EngineConfig> {
-    if (config.mode === 'remote') return { mode: 'remote', url: config.url };
+    if (config.mode === 'remote') {
+      if (!/^https?:\/\//i.test(config.url)) throw new Error(`Not an http(s) URL: ${config.url}`);
+      return { mode: 'remote', url: config.url };
+    }
+    // The renderer names the binary we are about to execute (audit 07,
+    // finding 3): a llama.cpp server, never an arbitrary program.
+    assertLlamaBinary(config.binPath);
     const launch = await this.launchSettings();
     const nGpuLayers = config.nGpuLayers ?? launch.nGpuLayers;
     return {
@@ -929,11 +940,37 @@ export class Harness {
     await this.supervisor.configure(await this.engineConfig(config));
   }
 
-  /** Remote: immediate connection. Managed: the server starts with the first conversation that names a model. */
+  /**
+   * Remote: immediate connection. Managed: the server starts with the first
+   * conversation that names a model. The engine config is saved here, once
+   * it registered (and connected, for a remote one) — not by the renderer.
+   */
   async startEngine(config: BackendConfigDto): Promise<BackendStatusDto> {
     await this.registerEngine(config);
     if (config.mode === 'remote') await this.supervisor.connect();
+    const saved = await this.loadConfig();
+    await this.saveConfig({ ...saved, backend: config });
     return this.status();
+  }
+
+  /** The model new conversations start on — chosen in the picker. */
+  async setDefaultModel(modelPath: string): Promise<void> {
+    if (typeof modelPath !== 'string' || !/\.gguf$/i.test(modelPath)) {
+      throw new Error(`Not a GGUF model: ${String(modelPath)}`);
+    }
+    const config = await this.loadConfig();
+    await this.saveConfig({ ...config, defaultModel: { path: modelPath } });
+  }
+
+  /** The UI language — and with it the language the model replies in. */
+  async setLocale(locale: BonaparteLocale): Promise<void> {
+    if (locale !== 'fr' && locale !== 'en') throw new Error(`Unknown locale: ${String(locale)}`);
+    const config = await this.loadConfig();
+    if (config.locale === locale) return;
+    await this.saveConfig({ ...config, locale });
+    // The tray menu reads it; the next session opens with the new reply language.
+    await this.refreshAppBehaviour();
+    void this.conversations.close();
   }
 
   async openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto> {
@@ -1142,88 +1179,102 @@ export class Harness {
     return result.canceled ? null : (result.filePaths[0] ?? null);
   }
 
-  registerIpc(ipcMain: IpcMain, appVersion: string): void {
-    ipcMain.handle(IPC.appVersion, () => appVersion);
-    ipcMain.handle(IPC.configGet, () => this.loadConfig());
-    ipcMain.handle(IPC.configSet, (_e, config: AppConfigDto) =>
-      this.saveConfig(config),
-    );
-    ipcMain.handle(IPC.backendStatus, () => this.status());
-    ipcMain.handle(IPC.backendStart, (_e, config: BackendConfigDto) =>
+  /**
+   * `isTrusted` says whether a frame URL is the app's own page. Every
+   * channel checks it (audit 07, finding 7): the bridge answers the app's
+   * top frame, never a page the window was made to show, never a subframe.
+   */
+  registerIpc(ipcMain: IpcMain, appVersion: string, isTrusted: (frameUrl: string) => boolean): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- each channel types its own arguments
+    const handle = (channel: string, fn: (...args: any[]) => unknown): void => {
+      ipcMain.handle(channel, (event, ...args: unknown[]) => {
+        const frame = event.senderFrame;
+        if (!frame || frame.parent !== null || !isTrusted(frame.url)) {
+          throw new Error(`IPC ${channel} refused from ${frame?.url ?? 'an unknown frame'}`);
+        }
+        return fn(...args);
+      });
+    };
+    handle(IPC.appVersion, () => appVersion);
+    handle(IPC.configGet, () => this.loadConfig());
+    handle(IPC.configSetDefaultModel, (modelPath: string) => this.setDefaultModel(modelPath));
+    handle(IPC.configSetLocale, (locale: BonaparteLocale) => this.setLocale(locale));
+    handle(IPC.backendStatus, () => this.status());
+    handle(IPC.backendStart, (config: BackendConfigDto) =>
       this.startEngine(config),
     );
-    ipcMain.handle(IPC.backendRegister, (_e, config: BackendConfigDto) =>
+    handle(IPC.backendRegister, (config: BackendConfigDto) =>
       this.registerEngine(config),
     );
-    ipcMain.handle(IPC.conversationHistory, (_e, select?: string) =>
+    handle(IPC.conversationHistory, (select?: string) =>
       this.conversationHistory(select),
     );
-    ipcMain.handle(IPC.conversationList, () => this.listConversations());
-    ipcMain.handle(IPC.pluginsList, () => this.listPlugins());
-    ipcMain.handle(IPC.pluginsReload, () => this.reloadPlugins());
-    ipcMain.handle(
+    handle(IPC.conversationList, () => this.listConversations());
+    handle(IPC.pluginsList, () => this.listPlugins());
+    handle(IPC.pluginsReload, () => this.reloadPlugins());
+    handle(
       IPC.pluginsAck,
-      (_e, pluginId: string, instanceId: string, bytes: number) => {
+      (pluginId: string, instanceId: string, bytes: number) => {
         this.pluginHost.acknowledge(pluginId, instanceId, bytes);
       },
     );
-    ipcMain.handle(
+    handle(
       IPC.pluginsInvoke,
-      (_e, pluginId: string, command: string, payload?: unknown) =>
+      (pluginId: string, command: string, payload?: unknown) =>
         this.pluginHost.invoke(pluginId, command, payload),
     );
-    ipcMain.handle(IPC.settingsGet, (_e, scope: SettingScopeDto) => this.getSettings(scope));
-    ipcMain.handle(IPC.settingsSet, (_e, scope: SettingScopeDto, key: string, value: unknown) =>
+    handle(IPC.settingsGet, (scope: SettingScopeDto) => this.getSettings(scope));
+    handle(IPC.settingsSet, (scope: SettingScopeDto, key: string, value: unknown) =>
       this.setSetting(scope, key, value),
     );
-    ipcMain.handle(IPC.conversationCreate, (_e, projectRoot?: string) =>
+    handle(IPC.conversationCreate, (projectRoot?: string) =>
       this.createConversation(projectRoot),
     );
-    ipcMain.handle(IPC.conversationRename, (_e, id: string, title: string) =>
+    handle(IPC.conversationRename, (id: string, title: string) =>
       this.renameConversation(id, title),
     );
-    ipcMain.handle(IPC.conversationDelete, (_e, id: string) => this.deleteConversation(id));
-    ipcMain.handle(
+    handle(IPC.conversationDelete, (id: string) => this.deleteConversation(id));
+    handle(
       IPC.conversationOpen,
-      (_e, id?: string, modelPath?: string) => this.openConversation(id, modelPath),
+      (id?: string, modelPath?: string) => this.openConversation(id, modelPath),
     );
-    ipcMain.handle(IPC.agentSend, (_e, text: string) => this.send(text));
-    ipcMain.handle(IPC.kvSave, () => this.saveKv());
-    ipcMain.handle(IPC.agentInFlight, () => this.conversations.inFlight());
-    ipcMain.handle(IPC.agentCancel, () => {
+    handle(IPC.agentSend, (text: string) => this.send(text));
+    handle(IPC.kvSave, () => this.saveKv());
+    handle(IPC.agentInFlight, () => this.conversations.inFlight());
+    handle(IPC.agentCancel, () => {
       if (this.currentConversationId) this.conversations.cancel(this.currentConversationId);
     });
-    ipcMain.handle(IPC.setupSuggest, () => this.suggestSetup());
-    ipcMain.handle(IPC.modelsScan, () => this.scanModelInventory());
-    ipcMain.handle(IPC.endpointProbe, (_e, url: string) => this.probeEndpointUrl(url));
-    ipcMain.handle(IPC.dialogPickFile, (_e, kind: PickFileKind) =>
+    handle(IPC.setupSuggest, () => this.suggestSetup());
+    handle(IPC.modelsScan, () => this.scanModelInventory());
+    handle(IPC.endpointProbe, (url: string) => this.probeEndpointUrl(url));
+    handle(IPC.dialogPickFile, (kind: PickFileKind) =>
       this.pickFile(kind),
     );
-    ipcMain.handle(IPC.projectOpen, () => this.openProject());
-    ipcMain.handle(IPC.projectCurrent, () => this.currentProject());
-    ipcMain.handle(IPC.projectsList, () => this.listProjects());
-    ipcMain.handle(IPC.projectCreate, (_e, name: string, roots?: string[]) =>
+    handle(IPC.projectOpen, () => this.openProject());
+    handle(IPC.projectCurrent, () => this.currentProject());
+    handle(IPC.projectsList, () => this.listProjects());
+    handle(IPC.projectCreate, (name: string, roots?: string[]) =>
       this.createProject(name, roots),
     );
-    ipcMain.handle(IPC.projectRename, (_e, id: string, name: string) =>
+    handle(IPC.projectRename, (id: string, name: string) =>
       this.renameProject(id, name),
     );
-    ipcMain.handle(IPC.projectSetRoots, (_e, id: string, roots: string[]) =>
+    handle(IPC.projectSetRoots, (id: string, roots: string[]) =>
       this.setProjectRoots(id, roots),
     );
-    ipcMain.handle(IPC.projectRemove, (_e, id: string) => this.removeProject(id));
-    ipcMain.handle(IPC.dialogPickDirectory, () => this.pickDirectory());
-    ipcMain.handle(
+    handle(IPC.projectRemove, (id: string) => this.removeProject(id));
+    handle(IPC.dialogPickDirectory, () => this.pickDirectory());
+    handle(
       IPC.conversationSetProject,
-      (_e, conversationId: string, projectId: string | null) =>
+      (conversationId: string, projectId: string | null) =>
         this.setConversationProject(conversationId, projectId),
     );
-    ipcMain.handle(IPC.modeGet, () => this.getMode());
-    ipcMain.handle(IPC.modeSet, (_e, mode: PlayModeDto) => this.setMode(mode));
-    ipcMain.handle(IPC.approvalRespond, (_e, response: ApprovalResponseDto) =>
+    handle(IPC.modeGet, () => this.getMode());
+    handle(IPC.modeSet, (mode: PlayModeDto) => this.setMode(mode));
+    handle(IPC.approvalRespond, (response: ApprovalResponseDto) =>
       this.respondToApproval(response),
     );
-    ipcMain.handle(IPC.openExternal, async (_e, url: string) => {
+    handle(IPC.openExternal, async (url: string) => {
       if (!EXTERNAL_URL_ALLOWLIST.some((re) => re.test(url))) {
         throw new Error(`External URL refused: ${url}`);
       }

@@ -24,8 +24,8 @@ const api: BonaparteBridge = {
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   getVersion: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   getConfig: (): Promise<AppConfigDto> => ipcRenderer.invoke(IPC.configGet),
-  setConfig: (config: AppConfigDto): Promise<void> =>
-    ipcRenderer.invoke(IPC.configSet, config),
+  setDefaultModel: (modelPath) => ipcRenderer.invoke(IPC.configSetDefaultModel, modelPath),
+  setLocale: (locale) => ipcRenderer.invoke(IPC.configSetLocale, locale),
   getBackendStatus: (): Promise<BackendStatusDto> =>
     ipcRenderer.invoke(IPC.backendStatus),
   startBackend: (config: BackendConfigDto): Promise<BackendStatusDto> =>

@@ -300,9 +300,8 @@ export function App() {
       setBusy(true);
       setError(null);
       try {
+        // The harness saves the engine config itself once it works.
         await window.bonaparte.startBackend(engine);
-        const existing = await window.bonaparte.getConfig();
-        await window.bonaparte.setConfig({ ...existing, backend: engine });
         setConfig(engine);
         setBusy(false);
         await selectConversation();
@@ -487,12 +486,7 @@ export function App() {
             onPick={(modelPath) => {
               // The choice also becomes the default for future conversations —
               // the distribution screen won't reappear (Settings hub in J3).
-              if (config) {
-                void window.bonaparte.setConfig({
-                  backend: config,
-                  defaultModel: { path: modelPath },
-                });
-              }
+              void window.bonaparte.setDefaultModel(modelPath);
               void tryOpen(pendingConv.current, modelPath);
             }}
           />

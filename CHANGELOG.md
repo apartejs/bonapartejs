@@ -15,6 +15,13 @@ published.
 
 ### Added
 
+- **The bridge checks what reaches it** (audit, findings 3 and 7). Every
+  IPC channel answers the app's own top frame only; the engine binary the
+  renderer names must be a llama.cpp server (`llama-server`, the `llama`
+  CLI or a build named after them), a remote URL http(s); a setting write
+  must be a known key, in a scope it has, with a value of its type (in
+  range, among its options, bounded length).
+
 - **The managed server answers to bonaparte alone** (audit, C1/C2). It
   listened on localhost with CORS open: any web page in a browser, any
   local process could drive it — read a conversation's slot, run a
@@ -356,6 +363,14 @@ published.
   running past its edge.
 
 ### Fixed
+
+- **Picking a model no longer erases the config.** The full-screen model
+  picker saved `{ backend, defaultModel }` as the WHOLE config: settings,
+  language, play mode, recent folders and the current conversation were
+  dropped. The renderer can no longer write the config whole at all —
+  only the default model and the language, each checked; the engine config
+  is saved by the harness once the engine starts. (Two whole-config writers
+  racing each other also lost updates.)
 
 - **A turn waiting for an approval no longer hangs a Stop.** The loop
   awaited the answer to an approval without listening to the turn's abort
