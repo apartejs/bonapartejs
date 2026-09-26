@@ -15,6 +15,14 @@ published.
 
 ### Added
 
+- **Files joined to a message** (06 §1 B). A text file dropped on the
+  composer — or picked with its paperclip — travels with the message: the
+  model reads its content (in a fenced block, control tokens neutralised
+  like a tool result), and the thread shows it as a chip, after a reload
+  too. A file the model cannot read (an image, a binary, over 200 KB) is
+  named in a notice rather than dropped in silence. The log keeps the
+  message and its files apart.
+
 - **Compaction — the conversation goes on when the context is full**
   (P2.5, D-19). When a message does not fit, or a reply is cut at the
   ceiling, a banner offers to compact; the header's menu offers it any

@@ -37,6 +37,7 @@ import { ConversationStore } from '../conversation/store.js';
 import { fingerprintModelFile } from '../kv/fingerprint.js';
 import { KvStore, type LiveBackendConfig } from '../kv/kv-store.js';
 import { PermissionEngine } from '../permissions/engine.js';
+import { SUMMARY_QUESTION } from '../engine/conversation-engine.js';
 import { ChatSession, type ChatSessionOptions } from '../session/chat-session.js';
 import { builtinTools } from '../tools/builtin/index.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -302,6 +303,47 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
       console.log(`[smoke] turn 2 prefill: ${stats?.promptMs} ms`);
 
       expect(stats?.cachedTokens ?? 0).toBeGreaterThan(0);
+    },
+    TURN_TIMEOUT_MS,
+  );
+
+  it(
+    'compaction keeps what the work needs: the summary carries the secret, the rebased prompt answers from it',
+    async () => {
+      const id = 'smoke-compact';
+      const { session } = await ChatSession.open(base, id);
+      await collect(
+        session.send(
+          'Use the read_file tool on notes.txt and tell me the password it contains. ' +
+            'Answer with the password itself.',
+        ),
+      );
+
+      // The steps of ConversationEngine.compact, on the session: the summary
+      // is asked beside the conversation — served from the slot.
+      const summary = (await session.summarize(SUMMARY_QUESTION, 1024)) ?? '';
+      console.log(`[smoke] summary: ${summary.replace(/\s+/g, ' ').slice(0, 240)}`);
+      expect(summary).toContain(SECRET);
+
+      const events = await base.store.loadEvents(id);
+      await base.store.appendEvent(id, {
+        type: 'rebase',
+        summary,
+        keepFrom: events.length,
+        at: new Date().toISOString(),
+      });
+      await base.store.resetFrozen(id);
+      base.backend.forgetConversation?.(id);
+      await base.kv.forget(id);
+
+      // The prompt now restarts from the summary alone: the file's content
+      // is no longer in it, only what the summary kept.
+      const reopened = await ChatSession.open(base, id);
+      const after = await collect(
+        reopened.session.send('What is the password? Answer from the conversation summary, without using any tool.'),
+      );
+      console.log(`[smoke] after compaction: ${after.text.trim().slice(0, 120)} (tools: ${after.calls.join(', ') || 'none'})`);
+      expect(after.text).toContain(SECRET);
     },
     TURN_TIMEOUT_MS,
   );

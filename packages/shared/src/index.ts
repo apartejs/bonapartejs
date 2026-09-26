@@ -362,6 +362,8 @@ export interface ConversationEventDto {
   type: 'user' | 'assistant' | 'compaction';
   text: string;
   at: string;
+  /** Files joined to a user message, by name. */
+  attachments?: string[];
   /** An assistant turn, segment by segment — reasoning, tool calls with their outcome, text. */
   segments?: ConversationSegmentDto[];
 }
@@ -520,7 +522,8 @@ export interface BonaparteBridge {
   /** Sets an override; `undefined` removes it and restores inheritance. */
   setSetting(scope: SettingScopeDto, key: string, value: unknown): Promise<void>;
   openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto>;
-  sendMessage(text: string): Promise<void>;
+  /** Sends a message; text files joined to it travel with it (the model reads their content). */
+  sendMessage(text: string, attachments?: { name: string; content: string }[]): Promise<void>;
   saveKv(): Promise<boolean>;
   /** What the saved contexts take on disk. */
   kvUsage(): Promise<KvUsageDto>;

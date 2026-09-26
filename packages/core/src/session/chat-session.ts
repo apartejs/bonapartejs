@@ -11,7 +11,9 @@ import { AgentLoop, type AgentEvent, type ApprovalResolver } from '../agent/loop
 import type { Backend, SamplingParams, TranscriptEntry } from '../backend/types.js';
 import {
   rebuildTranscript,
+  renderUserMessage,
   type ConversationStore,
+  type MessageAttachment,
 } from '../conversation/store.js';
 import type {
   KvStore,
@@ -262,7 +264,7 @@ export class ChatSession {
    * slot would interleave the prompts, the events and the log — the second
    * simply queues behind the first.
    */
-  async *send(text: string, signal?: AbortSignal): AsyncIterable<AgentEvent> {
+  async *send(text: string, signal?: AbortSignal, attachments?: MessageAttachment[]): AsyncIterable<AgentEvent> {
     const previous = this.queue;
     let release: () => void = () => undefined;
     this.queue = new Promise<void>((resolve) => {
@@ -270,13 +272,17 @@ export class ChatSession {
     });
     try {
       await previous;
-      yield* this.runTurn(text, signal);
+      yield* this.runTurn(text, signal, attachments);
     } finally {
       release();
     }
   }
 
-  private async *runTurn(text: string, signal?: AbortSignal): AsyncIterable<AgentEvent> {
+  private async *runTurn(
+    text: string,
+    signal?: AbortSignal,
+    attachments?: MessageAttachment[],
+  ): AsyncIterable<AgentEvent> {
     const { store, backend } = this.options;
     const now = (): string => new Date().toISOString();
 
@@ -284,10 +290,14 @@ export class ChatSession {
       type: 'user',
       text,
       at: now(),
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
     });
 
     const effective = signal ?? new AbortController().signal;
-    for await (const event of this.loop.run(this.transcript, text, effective)) {
+    // The model reads the text and the joined files — the same rendering
+    // the log will replay (rebuildTranscript), byte for byte.
+    const userText = renderUserMessage(text, attachments);
+    for await (const event of this.loop.run(this.transcript, userText, effective)) {
       if (event.type === 'assistant_committed') {
         await store.appendEvent(this.conversationId, {
           type: 'assistant',

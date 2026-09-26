@@ -22,8 +22,10 @@ import type { SamplingParams } from '../backend/types.js';
 import {
   countTurns,
   cutAfterTurn,
+  renderUserMessage,
   type ConversationEvent,
   type ConversationStore,
+  type MessageAttachment,
 } from '../conversation/store.js';
 import type { KvStore } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
@@ -80,6 +82,8 @@ export interface ReadableEvent {
   text: string;
   at: string;
   segments?: ReadableSegment[];
+  /** Files joined to a user message, by name (their content is the model's, not the screen's). */
+  attachments?: string[];
 }
 
 export interface NeedsModel {
@@ -136,7 +140,7 @@ const MAX_TITLE = 60;
  * it. The summary replaces the earlier turns in the prompt, so it has to
  * carry what the work needs to go on.
  */
-const SUMMARY_QUESTION =
+export const SUMMARY_QUESTION =
   'Summarize this conversation so far, for your own use: it will replace the earlier turns in your context. ' +
   'Keep what the work needs to continue — the user’s goal and constraints, the decisions taken and why, ' +
   'the files and code involved (paths, names), what was done and verified, what failed, what remains to do. ' +
@@ -205,7 +209,10 @@ export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
     }
     if (event.type === 'user') {
       flush();
-      if (event.text.trim() !== '') out.push({ type: 'user', text: event.text, at: event.at });
+      const files = event.attachments?.map((file) => file.name) ?? [];
+      if (event.text.trim() !== '' || files.length > 0) {
+        out.push({ type: 'user', text: event.text, at: event.at, ...(files.length > 0 ? { attachments: files } : {}) });
+      }
       continue;
     }
     // A corrupted log line is skipped: it does not take the conversation down.
@@ -402,7 +409,11 @@ export class ConversationEngine {
    * a host showing another conversation can route or ignore it. Resolves
    * when the turn is over — or at once with what is missing to run it.
    */
-  async send(conversationId: string, text: string): Promise<NeedsModel | undefined> {
+  async send(
+    conversationId: string,
+    text: string,
+    attachments?: MessageAttachment[],
+  ): Promise<NeedsModel | undefined> {
     if (this.activeId !== conversationId || !this.session) {
       const outcome = await this.open(conversationId);
       if ('needsModel' in outcome) return outcome;
@@ -418,7 +429,7 @@ export class ConversationEngine {
     // server's own refusal, below, is the safety net.
     const nCtx = this.options.supervisor.live?.nCtx ?? 0;
     const limit = effectiveLimit(nCtx, (await this.options.context?.(conversationId))?.contextLimit);
-    const needed = this.contextUsed + estimateTokens(text) + REPLY_ROOM;
+    const needed = this.contextUsed + estimateTokens(renderUserMessage(text, attachments)) + REPLY_ROOM;
     if (limit > 0 && needed > limit) {
       this.emit({
         conversationId,
@@ -437,7 +448,7 @@ export class ConversationEngine {
     const turn: Turn = { conversationId, text: '', thinking: '', controller, done };
     this.turn = turn;
     try {
-      for await (const event of session.send(text, controller.signal)) {
+      for await (const event of session.send(text, controller.signal, attachments)) {
         if (event.type === 'token') turn.text += event.text;
         else if (event.type === 'thinking') turn.thinking += event.text;
         else if (event.type === 'turn_end') {

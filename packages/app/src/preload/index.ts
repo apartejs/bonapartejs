@@ -68,8 +68,7 @@ const api: BonaparteBridge = {
   setSetting: (scope, key, value) => ipcRenderer.invoke(IPC.settingsSet, scope, key, value),
   openConversation: (id?: string, modelPath?: string) =>
     ipcRenderer.invoke(IPC.conversationOpen, id, modelPath),
-  sendMessage: (text: string): Promise<void> =>
-    ipcRenderer.invoke(IPC.agentSend, text),
+  sendMessage: (text, attachments) => ipcRenderer.invoke(IPC.agentSend, text, attachments),
   saveKv: (): Promise<boolean> => ipcRenderer.invoke(IPC.kvSave),
   kvUsage: () => ipcRenderer.invoke(IPC.kvUsage),
   freeKv: () => ipcRenderer.invoke(IPC.kvFree),

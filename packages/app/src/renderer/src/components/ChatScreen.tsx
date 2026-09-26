@@ -1,7 +1,7 @@
 import { aparteGlobalConfig, requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import { Alert, AlertDescription, Button } from '@aparte/bonaparte-plugin-sdk/ui';
-import { CircleAlert, Layers, TriangleAlert, X } from 'lucide-react';
+import { CircleAlert, Layers, Paperclip, TriangleAlert, X } from 'lucide-react';
 import type {
   AgentEventDto,
   ApprovalRequestDto,
@@ -61,6 +61,15 @@ let nextId = 0;
 const freshId = (): string => `msg-${Date.now()}-${nextId++}`;
 
 const BRANCH_ACTION = 'bp-branch';
+
+/** A joined file the model can read: text, up to 200 KB. */
+const MAX_ATTACHMENT_BYTES = 200 * 1024;
+const TEXT_EXTENSIONS =
+  /\.(txt|md|markdown|json|jsonc|ya?ml|toml|ini|cfg|conf|env|csv|tsv|xml|html?|css|scss|less|js|jsx|mjs|cjs|ts|tsx|mts|cts|vue|svelte|py|rb|go|rs|java|kt|kts|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|ps1|bat|cmd|sql|graphql|gql|proto|lua|dart|r|scala|clj|ex|exs|erl|hs|ml|fs|tf|gradle|dockerfile|makefile|lock|log|diff|patch)$/i;
+
+function readable(file: File): boolean {
+  return file.size <= MAX_ATTACHMENT_BYTES && (file.type.startsWith('text/') || TEXT_EXTENSIONS.test(file.name));
+}
 /** Lucide's git-branch, drawn at the bubble toolbar's size. */
 const BRANCH_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>';
@@ -129,6 +138,8 @@ export function ChatScreen({
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   /** The context filled up in this screen: a compaction is offered. */
   const [contextFull, setContextFull] = useState(false);
+  /** Files that could not be joined to the last message, by name. */
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
 
   // A conversation reads back the way it was seen: an assistant turn comes
   // with its segments — reasoning collapsed, tool calls with their outcome,
@@ -162,7 +173,23 @@ export function ChatScreen({
           };
         }
         if (event.type === 'user' || !event.segments) {
-          return { id, role: event.type, content: event.text, timestamp };
+          const role = event.type === 'user' ? 'user' : 'assistant';
+          return {
+            id,
+            role,
+            content: event.text,
+            timestamp,
+            ...(event.attachments && event.attachments.length > 0
+              ? {
+                  attachments: event.attachments.map((name, index) => ({
+                    id: `${id}-file-${index}`,
+                    name,
+                    type: 'text/plain',
+                    url: '',
+                  })),
+                }
+              : {}),
+          };
         }
         const segments = event.segments.map((segment, index): AparteSegment => {
           const segmentId = `${id}-s${index}`;
@@ -417,7 +444,7 @@ export function ChatScreen({
     };
   }, [conversationId, onStreamingChange, t.chat.thinking]);
 
-  const handleSent = (detail: { content: string }): void => {
+  const handleSent = (detail: { content: string; files?: File[] }): void => {
     // Empty assistant bubble: the lib renders it "awaiting" (animated dots,
     // aria-busy, no action bar) as long as nothing is written to it. Between
     // sending and the first token, a minute of prefill can go by.
@@ -439,7 +466,19 @@ export function ChatScreen({
     turn.current = { messageId, thinking: null, text: null, pendingCalls: [], seq: 0 };
     onStreamingChange(true);
     announceTurn('start');
-    void window.bonaparte.sendMessage(detail.content);
+    // Joined files: text ones are read and travel with the message (the
+    // model reads their content); the others are named, not dropped silently.
+    const files = detail.files ?? [];
+    const accepted = files.filter(readable);
+    setSkippedFiles(files.filter((file) => !readable(file)).map((file) => file.name));
+    if (accepted.length === 0) {
+      void window.bonaparte.sendMessage(detail.content);
+      return;
+    }
+    void Promise.all(accepted.map(async (file) => ({ name: file.name, content: await file.text() }))).then(
+      (attachments) => window.bonaparte.sendMessage(detail.content, attachments),
+      () => window.bonaparte.sendMessage(detail.content),
+    );
   };
 
   // A message typed before the model pick: the lib only appends what its
@@ -559,6 +598,23 @@ export function ChatScreen({
           </AlertDescription>
         </Alert>
       )}
+      {skippedFiles.length > 0 && (
+        <Alert role="status" className="attach-skipped mt-3 shrink-0">
+          <Paperclip aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span className="flex-1">{t.chat.attachSkipped.replace('{files}', () => skippedFiles.join(', '))}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => setSkippedFiles([])}
+              aria-label={t.common.clear}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
       {error && (
         <Alert
           role="alert"
@@ -588,9 +644,9 @@ export function ChatScreen({
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
         centerWhenEmpty
-        // No attachments: the lib strips them by default, and our loop
-        // doesn't consume `detail.files` yet — better to promise nothing
-        // than to silently drop the files.
+        attachments
+        // Attachments: text files are read and sent with the message; the
+        // others are named in a notice, never dropped in silence.
         //
         // The composer's toolbar carries what conditions the NEXT message:
         // what the agent is allowed to do, and who will answer.

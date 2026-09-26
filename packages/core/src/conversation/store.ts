@@ -7,6 +7,26 @@
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { TranscriptEntry } from '../backend/types.js';
+import { neutralizeControlTokens } from '../wire/control-tokens.js';
+
+/** A text file joined to a user message: kept apart in the log, rendered for the model. */
+export interface MessageAttachment {
+  name: string;
+  content: string;
+}
+
+/**
+ * What the model reads for a user message: the text, then each joined file
+ * in a fenced block — its content neutralised like a tool result (a file
+ * is not the user speaking). Deterministic: the log replays it byte for byte.
+ */
+export function renderUserMessage(text: string, attachments?: MessageAttachment[]): string {
+  if (!attachments || attachments.length === 0) return text;
+  const files = attachments.map(
+    (file) => `[attached file: ${file.name}]\n\`\`\`\n${neutralizeControlTokens(file.content)}\n\`\`\``,
+  );
+  return [text, ...files].join('\n\n');
+}
 
 export interface ConversationMeta {
   id: string;
@@ -131,7 +151,7 @@ export interface CreateConversationOptions {
  * it possible to replay a byte-identical render.
  */
 export type ConversationEvent =
-  | { type: 'user'; text: string; at: string }
+  | { type: 'user'; text: string; at: string; attachments?: MessageAttachment[] }
   | {
       type: 'assistant';
       entry: Extract<TranscriptEntry, { role: 'assistant' }>;
@@ -410,7 +430,7 @@ export function rebuildTranscript(
     if (event.type === 'assistant') return event.entry;
     if (event.type === 'tool_results') return event.entry;
     if (event.type === 'service') return { role: 'service', text: event.text };
-    return { role: 'user', text: event.text };
+    return { role: 'user', text: renderUserMessage(event.text, event.attachments) };
   };
   // After a compaction the prompt restarts: the latest summary, the events
   // it kept, and what came after it. Earlier rebases are behind the cut.

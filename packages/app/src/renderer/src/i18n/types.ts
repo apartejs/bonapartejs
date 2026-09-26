@@ -85,6 +85,8 @@ export interface AppTranslations {
   chat: {
     /** The bubble action that starts a new conversation from this point. */
     branchHere: string;
+    /** `{files}`: files that could not be joined. */
+    attachSkipped: string;
     /** The compaction turn, in the thread. */
     compacted: string;
     compactedSummary: string;

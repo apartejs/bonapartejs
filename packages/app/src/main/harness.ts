@@ -97,6 +97,10 @@ import { resolvePluginsDir } from './plugins-dir.js';
 /** Global settings that are launch parameters of the engine (D-17). */
 const LAUNCH_KEYS = new Set(['nCtx', 'cacheType', 'nGpuLayers']);
 
+/** Text files joined to one message: how many, and how large each (characters). */
+const MAX_ATTACHMENTS = 10;
+const MAX_ATTACHMENT_CHARS = 256 * 1024;
+
 /** Only external destinations allowed from the renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
@@ -1241,10 +1245,23 @@ export class Harness {
     };
   }
 
-  async send(text: string): Promise<void> {
+  async send(text: string, attachments?: { name: string; content: string }[]): Promise<void> {
     void this.armIdleTimer();
     const id = await this.ensureConversationId();
-    const outcome = await this.conversations.send(id, text);
+    // Joined files, checked at the boundary: a few text files of bounded size.
+    const files = Array.isArray(attachments)
+      ? attachments
+          .filter(
+            (file) =>
+              typeof file?.name === 'string' &&
+              typeof file?.content === 'string' &&
+              file.name.length <= 255 &&
+              file.content.length <= MAX_ATTACHMENT_CHARS,
+          )
+          .slice(0, MAX_ATTACHMENTS)
+          .map((file) => ({ name: file.name, content: file.content }))
+      : [];
+    const outcome = await this.conversations.send(id, text, files.length > 0 ? files : undefined);
     if (outcome) {
       // Not an error: a choice to make. The renderer opens the picker and
       // keeps the message for after the pick.
@@ -1571,7 +1588,9 @@ export class Harness {
       IPC.conversationOpen,
       (id?: string, modelPath?: string) => this.openConversation(id, modelPath),
     );
-    handle(IPC.agentSend, (text: string) => this.send(text));
+    handle(IPC.agentSend, (text: string, attachments?: { name: string; content: string }[]) =>
+      this.send(text, attachments),
+    );
     handle(IPC.kvSave, () => this.saveKv());
     handle(IPC.kvUsage, () => this.kvUsage());
     handle(IPC.kvFree, () => this.freeKv());

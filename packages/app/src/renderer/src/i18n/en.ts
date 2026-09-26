@@ -81,6 +81,7 @@ export const EN: AppTranslations = {
   },
   chat: {
     branchHere: 'Branch from here',
+    attachSkipped: 'Not joined: {files} — the model reads text files of up to 200 KB.',
     compacted: 'The earlier turns were compacted: the model now works from their summary.',
     compactedSummary: 'Summary the model keeps',
     compactOffer: 'The context is full. Compacting summarises the earlier turns so the conversation can go on.',

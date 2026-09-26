@@ -26,6 +26,7 @@ import {
 import { ToolRegistry } from '../tools/registry.js';
 import {
   ConversationEngine,
+  readableEvents,
   type ConversationEngineOptions,
   type TaggedEvent,
 } from './conversation-engine.js';
@@ -735,5 +736,14 @@ describe('readableEvents — a turn reads back the way it was seen', () => {
       { kind: 'tool', name: 'run_shell', args: { command: 'ls' }, ok: false, content: 'The user declined this action: run_shell.' },
     ]);
     expect(events[1]?.text).toBe('');
+  });
+});
+
+describe('readableEvents — attachments read back as names, not contents', () => {
+  it('a user message shows its text and its files by name', () => {
+    const events = readableEvents([
+      { type: 'user', text: 'see file', attachments: [{ name: 'notes.md', content: 'LONG CONTENT' }], at: 't' },
+    ]);
+    expect(events).toEqual([{ type: 'user', text: 'see file', at: 't', attachments: ['notes.md'] }]);
   });
 });
