@@ -574,6 +574,28 @@ export function App() {
     }
   }, []);
 
+  // The chat is memoised, and its props must hold still: App re-renders
+  // often — a resource sample every 3 s, the prefill chip — and none of
+  // that is the chat's business.
+  const openedId = opened?.conversationId;
+  const openedHasEvents = (opened?.events.length ?? 0) > 0;
+  const pickModel = useCallback(
+    (modelPath: string) => {
+      if (openedId) void requestModel(openedId, modelPath, openedHasEvents);
+    },
+    [openedId, openedHasEvents, requestModel],
+  );
+  const dismissError = useCallback(() => setError(null), []);
+  const branchFromAnswer = useCallback(
+    (afterTurn: number) => {
+      if (openedId) void branchConversation(openedId, afterTurn);
+    },
+    [openedId, branchConversation],
+  );
+  const askCompact = useCallback(() => {
+    if (openedId) setCompactAsk(openedId);
+  }, [openedId]);
+
   return (
     <div className="app-shell flex h-full flex-col">
       <div className="app-body relative flex min-h-0 flex-1">
@@ -667,7 +689,7 @@ export function App() {
               }}
               onCreateProject={() => setProjectDialog({ project: null })}
               onMoveToProject={(id) => void moveConversation(id)}
-              onCompact={() => setCompactAsk(opened.conversationId)}
+              onCompact={askCompact}
               sidebarCollapsed={!layout.sidebar.visible}
               panelCollapsed={!layout.panel.visible}
               onToggleSidebar={layout.toggleSidebar}
@@ -686,20 +708,18 @@ export function App() {
               modelName={opened.modelName ?? null}
               conversationId={opened.conversationId}
               busy={busy}
-              onPickModel={(modelPath) =>
-                void requestModel(opened.conversationId, modelPath, opened.events.length > 0)
-              }
+              onPickModel={pickModel}
               missingModel={opened.missingModel ?? null}
               error={error}
-              onDismissError={() => setError(null)}
+              onDismissError={dismissError}
               onNeedsModel={needsModel}
               autoSend={pendingText}
               onAutoSent={clearPendingText}
               approval={approval}
               onApprovalResponse={answerApproval}
-              onBranch={(afterTurn) => void branchConversation(opened.conversationId, afterTurn)}
+              onBranch={branchFromAnswer}
               compacting={compacting}
-              onCompact={() => setCompactAsk(opened.conversationId)}
+              onCompact={askCompact}
             />
           </div>
           ) : null}

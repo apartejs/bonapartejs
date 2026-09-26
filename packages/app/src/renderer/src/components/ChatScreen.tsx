@@ -10,7 +10,7 @@ import type {
   PlayModeDto,
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { answerToResponse, approvalDetails, approvalMessage, approvalOptions } from '../approval.js';
 import { UNDO_TURN_EVENT, type ChangesSegment } from '../aparte-bootstrap.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
@@ -132,7 +132,11 @@ function useChangesSegment(): (id: string, turnId: string, files: string[], undo
   };
 }
 
-export function ChatScreen({
+/**
+ * Memoised: App re-renders for reasons that are not the chat's (a resource
+ * sample every 3 s, the prefill chip), and the whole thread need not follow.
+ */
+export const ChatScreen = memo(function ChatScreen({
   initialEvents,
   onStats,
   onStreamingChange,
@@ -690,8 +694,13 @@ export function ChatScreen({
       )}
       <AparteChat
         ref={chat.ref}
+        // Uncontrolled: the thread is seeded once and then written only by
+        // the imperative stream. Echoing it back (onMessagesChange →
+        // setMessages → messages) made <AparteChat> re-apply an OLDER
+        // snapshot over what the stream had written since — the reply after
+        // a tool call vanished, the bubble stuck on "Typing…" (1 run in 2 at
+        // full frame rate; apartejs/aparte#97).
         messages={chat.messages}
-        onMessagesChange={chat.setMessages}
         onMessageSent={handleSent}
         placeholder={t.chat.placeholder}
         centerWhenEmpty
@@ -727,4 +736,4 @@ export function ChatScreen({
       />
     </div>
   );
-}
+});
