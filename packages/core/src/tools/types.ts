@@ -32,7 +32,16 @@ export interface ToolContext {
    */
   roots: string[];
   signal: AbortSignal;
+  /**
+   * Called by a tool right before it writes a file (absolute path, and the
+   * path as shown) and right after — what lets a turn's changes be undone.
+   */
+  beforeWrite?: (path: string, display: string) => Promise<void>;
+  afterWrite?: (path: string) => Promise<void>;
 }
+
+/** The write hooks a turn gives its tools. */
+export type WriteHooks = Pick<ToolContext, 'beforeWrite' | 'afterWrite'>;
 
 export interface ToolResult {
   ok: boolean;

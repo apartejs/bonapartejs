@@ -22,6 +22,7 @@ import type {
 } from '../backend/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import type { WriteHooks } from '../tools/types.js';
 import { neutralizeControlTokens } from '../wire/control-tokens.js';
 
 export interface ApprovalRequest {
@@ -55,6 +56,8 @@ export type AgentEvent =
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
+  /** The files the turn wrote, before its end — what can be undone. */
+  | { type: 'files_changed'; turnId: string; files: string[] }
   | {
       type: 'turn_end';
       promptMs: number;
@@ -109,6 +112,8 @@ function raceAbort(answer: Promise<boolean>, signal: AbortSignal): Promise<boole
 }
 
 export class AgentLoop {
+  /** The current run's write hooks, handed to every tool call. */
+  private writeHooks: WriteHooks = {};
   private approvalSeq = 0;
 
   constructor(private readonly options: AgentLoopOptions) {}
@@ -121,7 +126,9 @@ export class AgentLoop {
     transcript: TranscriptEntry[],
     userText: string,
     signal: AbortSignal,
+    hooks: WriteHooks = {},
   ): AsyncIterable<AgentEvent> {
+    this.writeHooks = hooks;
     const maxTurns = this.options.maxTurns ?? DEFAULT_MAX_TURNS;
     transcript.push({ role: 'user', text: userText });
 
@@ -321,7 +328,7 @@ export class AgentLoop {
     const roots = this.options.system.roots ?? [];
 
     try {
-      const result = await registered.handler(args, { roots, signal });
+      const result = await registered.handler(args, { roots, signal, ...this.writeHooks });
       return { name, ok: result.ok, content: result.content };
     } catch (error) {
       return {

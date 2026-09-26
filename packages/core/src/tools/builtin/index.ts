@@ -173,8 +173,10 @@ const writeFileTool: BuiltinTool = {
     if ('error' in resolved) return ko(resolved.error);
 
     try {
+      await ctx.beforeWrite?.(resolved.path, displayInPerimeter(ctx.roots, resolved.path));
       await mkdir(dirname(resolved.path), { recursive: true });
       await writeFile(resolved.path, content, 'utf8');
+      await ctx.afterWrite?.(resolved.path);
     } catch (error) {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }
@@ -237,7 +239,9 @@ const editFileTool: BuiltinTool = {
     try {
       // A function, not the string: replace() would expand $&, $` and $' in
       // new_string — a shell script or a regex written into the file mangled.
+      await ctx.beforeWrite?.(resolved.path, displayInPerimeter(ctx.roots, resolved.path));
       await writeFile(resolved.path, content.replace(oldString, () => newString), 'utf8');
+      await ctx.afterWrite?.(resolved.path);
     } catch (error) {
       return ko(`Cannot write file: ${requested} (${describeError(error)})`);
     }

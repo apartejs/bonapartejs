@@ -151,6 +151,7 @@ export type {
 export { alwaysRule, commandBinary, isArmedPath, PermissionEngine, PLAY_MODES } from './permissions/engine.js';
 export { GrantStore, type Grant } from './permissions/grants.js';
 export { previewToolCall, unifiedDiff } from './tools/preview.js';
+export { CheckpointStore, type TurnChanges, type UndoResult } from './checkpoints/store.js';
 export { renderUserMessage, type MessageAttachment } from './conversation/store.js';
 export {
   INSTRUCTION_FILES,

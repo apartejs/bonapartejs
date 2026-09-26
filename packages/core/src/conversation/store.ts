@@ -151,7 +151,14 @@ export interface CreateConversationOptions {
  * it possible to replay a byte-identical render.
  */
 export type ConversationEvent =
-  | { type: 'user'; text: string; at: string; attachments?: MessageAttachment[] }
+  | {
+      type: 'user';
+      text: string;
+      at: string;
+      attachments?: MessageAttachment[];
+      /** The turn this message opened — the key of its checkpoint. */
+      turnId?: string;
+    }
   | {
       type: 'assistant';
       entry: Extract<TranscriptEntry, { role: 'assistant' }>;

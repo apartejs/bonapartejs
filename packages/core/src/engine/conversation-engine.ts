@@ -28,6 +28,7 @@ import {
   type MessageAttachment,
 } from '../conversation/store.js';
 import type { KvStore } from '../kv/kv-store.js';
+import type { CheckpointStore, UndoResult } from '../checkpoints/store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import { ChatSession, type OpenResult } from '../session/chat-session.js';
 import type { ToolRegistry } from '../tools/registry.js';
@@ -62,6 +63,8 @@ export interface ConversationEngineOptions {
   context?: (conversationId: string) => Promise<SessionContext>;
   approve?: ApprovalResolver;
   logger?: (line: string) => void;
+  /** Where a turn's file changes are kept, to be undone (06 §1 D). */
+  checkpoints?: CheckpointStore;
 }
 
 /** One piece of an assistant turn, as it was seen live: reasoning, text, a tool call with its outcome. */
@@ -84,6 +87,10 @@ export interface ReadableEvent {
   segments?: ReadableSegment[];
   /** Files joined to a user message, by name (their content is the model's, not the screen's). */
   attachments?: string[];
+  /** The turn an assistant event answers — the key of its checkpoint. */
+  turnId?: string;
+  /** What that turn wrote, and whether it was undone. */
+  changes?: { turnId: string; files: string[]; undone: boolean };
 }
 
 export interface NeedsModel {
@@ -189,6 +196,7 @@ export function stripThink(raw: string): string {
 export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
   const out: ReadableEvent[] = [];
   let turn: { at: string; segments: ReadableSegment[] } | null = null;
+  let turnId: string | undefined;
 
   const flush = (): void => {
     if (turn && turn.segments.length > 0) {
@@ -196,7 +204,7 @@ export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
         .filter((segment): segment is Extract<ReadableSegment, { kind: 'text' }> => segment.kind === 'text')
         .map((segment) => segment.text)
         .join('\n\n');
-      out.push({ type: 'assistant', text, at: turn.at, segments: turn.segments });
+      out.push({ type: 'assistant', text, at: turn.at, segments: turn.segments, ...(turnId ? { turnId } : {}) });
     }
     turn = null;
   };
@@ -209,6 +217,7 @@ export function readableEvents(events: ConversationEvent[]): ReadableEvent[] {
     }
     if (event.type === 'user') {
       flush();
+      turnId = event.turnId;
       const files = event.attachments?.map((file) => file.name) ?? [];
       if (event.text.trim() !== '' || files.length > 0) {
         out.push({ type: 'user', text: event.text, at: event.at, ...(files.length > 0 ? { attachments: files } : {}) });
@@ -300,7 +309,7 @@ export class ConversationEngine {
       return { conversationId, events: [] };
     }
     const meta = await store.meta(conversationId);
-    const events = readableEvents(await store.loadEvents(conversationId));
+    const events = await this.withChanges(conversationId, readableEvents(await store.loadEvents(conversationId)));
     const missing =
       meta.modelPath !== undefined &&
       supervisor.engine?.mode === 'managed' &&
@@ -375,6 +384,7 @@ export class ConversationEngine {
           : {}),
         ...(context.sampling ? { sampling: context.sampling } : {}),
         ...(context.thinking !== undefined ? { thinking: context.thinking } : {}),
+        ...(this.options.checkpoints ? { checkpoints: this.options.checkpoints } : {}),
         live,
       },
       conversationId,
@@ -572,6 +582,41 @@ export class ConversationEngine {
     return { summary, compactedTurns: total - keep, keptTurns: keep };
   }
 
+  /** Each assistant turn that wrote files says which, and whether they were undone. */
+  private async withChanges(conversationId: string, events: ReadableEvent[]): Promise<ReadableEvent[]> {
+    const checkpoints = this.options.checkpoints;
+    if (!checkpoints) return events;
+    return Promise.all(
+      events.map(async (event) => {
+        if (event.type !== 'assistant' || !event.turnId) return event;
+        const changes = await checkpoints.changes(conversationId, event.turnId);
+        return changes ? { ...event, changes: { turnId: event.turnId, ...changes } } : event;
+      }),
+    );
+  }
+
+  /**
+   * Undoes a turn's file changes (06 §1 D): the originals go back — except
+   * a file changed again since, left alone — and the model is told, or it
+   * would go on believing its edits are there. Between turns.
+   */
+  async undoTurn(conversationId: string, turnId: string): Promise<UndoResult> {
+    const checkpoints = this.options.checkpoints;
+    if (!checkpoints) return { restored: [], conflicts: [] };
+    await this.settle();
+    const result = await checkpoints.undo(conversationId, turnId);
+    if (result.restored.length === 0) return result;
+    const text =
+      '[user action]\nThe user undid the file changes of an earlier turn: ' +
+      `${result.restored.join(', ')} ${result.restored.length === 1 ? 'is' : 'are'} back to their state before it.` +
+      (result.conflicts.length > 0
+        ? ` Left as they are, because they changed since: ${result.conflicts.join(', ')}.`
+        : '');
+    if (this.activeId === conversationId && this.session) await this.session.note(text);
+    else await this.options.store.appendEvent(conversationId, { type: 'service', text, at: new Date().toISOString() });
+    return result;
+  }
+
   /**
    * Erases a conversation for good: its log, its meta, its saved state. A
    * turn in flight there is cut and allowed to finish writing FIRST, so
@@ -592,6 +637,7 @@ export class ConversationEngine {
     }
     await this.options.store.remove(conversationId);
     await this.options.kv.forget(conversationId);
+    await this.options.checkpoints?.forget(conversationId);
   }
 
   private async release(): Promise<void> {

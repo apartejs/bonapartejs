@@ -10,7 +10,7 @@
  * a screen that comes back can catch up on what arrived meanwhile.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -24,6 +24,8 @@ import {
   type FakeSlotSnapshot,
 } from '../testing/fake-llama-server.js';
 import { ToolRegistry } from '../tools/registry.js';
+import { builtinTools } from '../tools/builtin/index.js';
+import { CheckpointStore } from '../checkpoints/store.js';
 import {
   ConversationEngine,
   readableEvents,
@@ -745,5 +747,52 @@ describe('readableEvents — attachments read back as names, not contents', () =
       { type: 'user', text: 'see file', attachments: [{ name: 'notes.md', content: 'LONG CONTENT' }], at: 't' },
     ]);
     expect(events).toEqual([{ type: 'user', text: 'see file', at: 't', attachments: ['notes.md'] }]);
+  });
+});
+
+describe('ConversationEngine — the file changes of a turn can be undone (06 §1 D, Q-19)', () => {
+  it('reports the files a turn wrote, and undo puts them back and tells the model', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'bp-ckpt-repo-'));
+    const data = await mkdtemp(join(tmpdir(), 'bp-ckpt-data-'));
+    dirs.push(repo, data);
+    await writeFile(join(repo, 'a.txt'), 'OLD', 'utf8');
+    const registry = new ToolRegistry();
+    for (const tool of builtinTools()) registry.register(tool.def, tool.handler, 'builtin');
+    const { engine, store, events } = await makeRig({
+      replies: [
+        '<tool_call>{"name": "write_file", "arguments": {"path": "a.txt", "content": "NEW"}}</tool_call>',
+        'written',
+      ],
+      engine: {
+        registry,
+        permissions: new PermissionEngine('impro'),
+        rootsOf: async () => [repo],
+        checkpoints: new CheckpointStore(data),
+      },
+    });
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'write it');
+
+    expect(await readFile(join(repo, 'a.txt'), 'utf8')).toBe('NEW');
+    const changed = events.find((e) => e.event.type === 'files_changed')?.event;
+    expect(changed).toMatchObject({ type: 'files_changed', files: ['a.txt'] });
+    const turnId = changed?.type === 'files_changed' ? changed.turnId : '';
+
+    const result = await engine.undoTurn('conv-a', turnId);
+
+    expect(result).toEqual({ restored: ['a.txt'], conflicts: [] });
+    expect(await readFile(join(repo, 'a.txt'), 'utf8')).toBe('OLD');
+    // The model is told — or it would believe its edit is still there.
+    const log = await store.loadEvents('conv-a');
+    expect(log.at(-1)).toMatchObject({ type: 'service' });
+    expect((log.at(-1) as { text: string }).text).toContain('a.txt');
+    // And the history says so, for the screen.
+    const history = await engine.history('conv-a');
+    expect(history.events.find((e) => e.type === 'assistant')?.changes).toEqual({
+      turnId,
+      files: ['a.txt'],
+      undone: true,
+    });
   });
 });

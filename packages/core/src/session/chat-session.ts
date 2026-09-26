@@ -23,6 +23,8 @@ import type {
 } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import type { CheckpointStore } from '../checkpoints/store.js';
+import { randomBytes } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import { renderInstructionsDelta, renderInventoryDelta, renderPerimeterDelta } from '../wire/system-prompt.js';
 
@@ -52,6 +54,8 @@ export interface ChatSessionOptions {
   sampling?: SamplingParams;
   /** Whether the model may reason before answering. Default: on. */
   thinking?: boolean;
+  /** Where a turn's file changes are kept, to be undone. Absent: no undo. */
+  checkpoints?: CheckpointStore;
 }
 
 export type OpenResult = {
@@ -241,6 +245,12 @@ export class ChatSession {
     await this.options.store.setInstructionsHash(this.conversationId, hash);
   }
 
+  /** Something the model must know that no turn said (an undo): appended, never re-rendered. */
+  async note(text: string): Promise<void> {
+    await this.queue;
+    await this.appendService(text);
+  }
+
   /** Service message: in the transcript AND in the log, never in the UI. */
   private async appendService(text: string): Promise<void> {
     this.transcript.push({ role: 'service', text });
@@ -286,18 +296,33 @@ export class ChatSession {
     const { store, backend } = this.options;
     const now = (): string => new Date().toISOString();
 
+    const turnId = `${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`;
     await store.appendEvent(this.conversationId, {
       type: 'user',
       text,
       at: now(),
       ...(attachments && attachments.length > 0 ? { attachments } : {}),
+      turnId,
     });
+    const checkpoints = this.options.checkpoints;
+    const hooks = checkpoints
+      ? {
+          beforeWrite: (path: string, display: string) => checkpoints.before(this.conversationId, turnId, path, display),
+          afterWrite: (path: string) => checkpoints.after(this.conversationId, turnId, path),
+        }
+      : {};
 
     const effective = signal ?? new AbortController().signal;
     // The model reads the text and the joined files — the same rendering
     // the log will replay (rebuildTranscript), byte for byte.
     const userText = renderUserMessage(text, attachments);
-    for await (const event of this.loop.run(this.transcript, userText, effective)) {
+    for await (const event of this.loop.run(this.transcript, userText, effective, hooks)) {
+      // The files the turn wrote are said before its end: the screen closes
+      // the bubble on turn_end.
+      if (event.type === 'turn_end' && checkpoints) {
+        const changes = await checkpoints.changes(this.conversationId, turnId);
+        if (changes) yield { type: 'files_changed', turnId, files: changes.files };
+      }
       if (event.type === 'assistant_committed') {
         await store.appendEvent(this.conversationId, {
           type: 'assistant',
