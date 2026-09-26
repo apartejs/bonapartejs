@@ -115,6 +115,9 @@ const LAUNCH_KEYS = new Set(['nCtx', 'cacheType', 'nGpuLayers']);
 const MAX_ATTACHMENTS = 10;
 const MAX_ATTACHMENT_CHARS = 256 * 1024;
 
+/** `mcp-servers.json` exists but does not parse: never read as empty, never written over. */
+class McpFileUnreadableError extends Error {}
+
 /** Only external destinations allowed from the renderer. */
 const EXTERNAL_URL_ALLOWLIST = [/^https:\/\/github\.com\/ggml-org\/llama\.cpp(\/|$)/];
 
@@ -725,26 +728,47 @@ export class Harness {
     clientVersion: app.getVersion(),
   });
   private mcpErrors: McpConfigError[] = [];
+  /** `mcp-servers.json` did not parse — what the parser said. */
+  private mcpFileError: string | undefined;
   /** One read-modify-write at a time per file (the config, the MCP servers). */
   private readonly fileQueue = new KeyedQueue();
 
   /** The file as it is — entries we cannot read stay in it, untouched. */
+  /**
+   * The file as it is — entries we cannot read stay in it, untouched. A
+   * missing file is no server; a file that does not parse is NOT an empty
+   * one: it is reported, and nothing is written over it (it may hold every
+   * server's keys).
+   */
   private async readMcpFile(): Promise<{ mcpServers: Record<string, unknown> }> {
+    let raw: { mcpServers?: unknown };
     try {
-      const raw = (await readJsonFile(this.mcpConfigPath)) as { mcpServers?: unknown };
-      const servers = raw.mcpServers;
-      return {
-        ...raw,
-        mcpServers: typeof servers === 'object' && servers !== null && !Array.isArray(servers) ? (servers as Record<string, unknown>) : {},
-      };
-    } catch {
-      return { mcpServers: {} };
+      raw = (await readJsonFile(this.mcpConfigPath)) as { mcpServers?: unknown };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { mcpServers: {} };
+      throw new McpFileUnreadableError(error instanceof Error ? error.message : String(error));
     }
+    const servers = raw?.mcpServers;
+    return {
+      ...raw,
+      mcpServers: typeof servers === 'object' && servers !== null && !Array.isArray(servers) ? (servers as Record<string, unknown>) : {},
+    };
   }
 
   private async writeMcpFile(content: { mcpServers: Record<string, unknown> }): Promise<void> {
     await mkdir(dirname(this.mcpConfigPath), { recursive: true });
     await writeJsonFile(this.mcpConfigPath, content);
+  }
+
+  /** As `updateMcpFile`; an unreadable file is left as it is (the overview says so). */
+  private async updateMcpFileIfReadable(
+    change: (file: { mcpServers: Record<string, unknown> }) => { mcpServers: Record<string, unknown> } | null,
+  ): Promise<void> {
+    try {
+      await this.updateMcpFile(change);
+    } catch (error) {
+      if (!(error instanceof McpFileUnreadableError)) throw error;
+    }
   }
 
   /** A change of `mcp-servers.json`, alone on the file — two clicks in the hub never lose one. */
@@ -759,7 +783,18 @@ export class Harness {
 
   /** Reads the file and brings the clients to it: new servers start, failed ones retry. */
   async reloadMcpServers(): Promise<McpOverviewDto> {
-    const { servers, errors } = parseMcpConfig(await this.readMcpFile());
+    let file: { mcpServers: Record<string, unknown> };
+    try {
+      file = await this.readMcpFile();
+      this.mcpFileError = undefined;
+    } catch (error) {
+      // Unreadable: said, and the servers keep running as they were.
+      if (!(error instanceof McpFileUnreadableError)) throw error;
+      this.mcpFileError = error.message;
+      console.warn(`[mcp] ${this.mcpConfigPath} is unreadable: ${error.message}`);
+      return this.mcpOverview();
+    }
+    const { servers, errors } = parseMcpConfig(file);
     this.mcpErrors = errors;
     for (const error of errors) console.warn(`[mcp] ${error.id}: ${error.message}`);
     await this.mcp.apply(servers);
@@ -771,30 +806,36 @@ export class Harness {
       servers: this.mcp.status(),
       errors: this.mcpErrors.map(({ id, code }) => ({ id, code })),
       configPath: this.mcpConfigPath,
+      ...(this.mcpFileError ? { fileError: this.mcpFileError } : {}),
     };
   }
 
   async addMcpServer(
     name: string,
     target: string,
-  ): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' }> {
+  ): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' | 'unreadable' }> {
     const server = mcpServerFromForm(String(name ?? ''), String(target ?? ''));
     if ('error' in server) return server;
     let exists = false;
-    await this.updateMcpFile((file) => {
-      if (Object.hasOwn(file.mcpServers, server.id)) {
-        exists = true;
-        return null;
-      }
-      const entry = serializeMcpConfig([server]).mcpServers[server.id];
-      return { ...file, mcpServers: { ...file.mcpServers, [server.id]: entry } };
-    });
+    try {
+      await this.updateMcpFile((file) => {
+        if (Object.hasOwn(file.mcpServers, server.id)) {
+          exists = true;
+          return null;
+        }
+        const entry = serializeMcpConfig([server]).mcpServers[server.id];
+        return { ...file, mcpServers: { ...file.mcpServers, [server.id]: entry } };
+      });
+    } catch (error) {
+      if (error instanceof McpFileUnreadableError) return { error: 'unreadable' };
+      throw error;
+    }
     if (exists) return { error: 'exists' };
     return this.reloadMcpServers();
   }
 
   async setMcpServerEnabled(id: string, enabled: boolean): Promise<McpOverviewDto> {
-    await this.updateMcpFile((file) => {
+    await this.updateMcpFileIfReadable((file) => {
       const entry = Object.hasOwn(file.mcpServers, id) ? file.mcpServers[id] : undefined;
       if (typeof entry !== 'object' || entry === null) return null;
       const { disabled: _disabled, ...rest } = entry as Record<string, unknown>;
@@ -804,7 +845,7 @@ export class Harness {
   }
 
   async removeMcpServer(id: string): Promise<McpOverviewDto> {
-    await this.updateMcpFile((file) => {
+    await this.updateMcpFileIfReadable((file) => {
       if (!Object.hasOwn(file.mcpServers, id)) return null;
       const { [id]: _removed, ...rest } = file.mcpServers;
       return { ...file, mcpServers: rest };

@@ -102,6 +102,13 @@ export function McpServers() {
         ))}
       </ul>
 
+      {overview?.fileError && (
+        <div className="mcp-file-unreadable flex flex-col gap-1 text-[11.5px] leading-snug text-destructive" role="alert">
+          <p>{t.settings.mcpFileUnreadable}</p>
+          <p className="font-mono text-[11px] break-words">{overview.fileError}</p>
+        </div>
+      )}
+
       {errors.length > 0 && (
         <div className="mcp-file-errors flex flex-col gap-1 text-[11.5px] leading-snug text-destructive">
           <p>{t.settings.mcpFileErrors}</p>

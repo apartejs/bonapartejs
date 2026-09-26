@@ -145,7 +145,10 @@ export const EN: AppTranslations = {
       name: 'A name is letters, digits, "-" or "_" — 32 at most.',
       target: 'Give the command that starts the server, or its http(s) URL.',
       exists: 'A server already has this name.',
+      unreadable: 'The file cannot be read, so nothing was added to it — fix it first.',
     },
+    mcpFileUnreadable:
+      'mcp-servers.json cannot be read, so it is left exactly as it is and the servers keep running as they were. Fix it, then read it again:',
     mcpConnected: 'connected · {count} tools',
     mcpConnecting: 'starting',
     mcpFailed: 'failed',

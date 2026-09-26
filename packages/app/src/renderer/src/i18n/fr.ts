@@ -145,7 +145,10 @@ export const FR: AppTranslations = {
       name: 'Un nom, c’est des lettres, des chiffres, « - » ou « _ » — 32 au plus.',
       target: 'Donnez la commande qui lance le serveur, ou son URL http(s).',
       exists: 'Un serveur porte déjà ce nom.',
+      unreadable: 'Le fichier est illisible, rien n’y a été ajouté — corrigez-le d’abord.',
     },
+    mcpFileUnreadable:
+      'mcp-servers.json est illisible : il est laissé tel quel et les serveurs continuent comme avant. Corrigez-le, puis relisez-le :',
     mcpConnected: 'connecté · {count} outils',
     mcpConnecting: 'démarrage',
     mcpFailed: 'en échec',

@@ -330,6 +330,8 @@ export interface McpOverviewDto {
   errors: { id: string; code: string }[];
   /** Where the file lives — shown, and opened by "Edit the file". */
   configPath: string;
+  /** The file exists but does not parse: what the parser said. Nothing is written over it. */
+  fileError?: string;
 }
 
 /**
@@ -580,7 +582,10 @@ export interface BonaparteBridge {
   /** The MCP servers and their state (P4). */
   listMcpServers(): Promise<McpOverviewDto>;
   /** Adds a server from a name and a command line or URL; `error` names the field at fault. */
-  addMcpServer(name: string, target: string): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' }>;
+  addMcpServer(
+    name: string,
+    target: string,
+  ): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' | 'unreadable' }>;
   setMcpServerEnabled(id: string, enabled: boolean): Promise<McpOverviewDto>;
   removeMcpServer(id: string): Promise<McpOverviewDto>;
   /** Reads `mcp-servers.json` again — after an edit by hand — and retries failed servers. */

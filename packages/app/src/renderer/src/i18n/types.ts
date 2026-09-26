@@ -159,7 +159,9 @@ export interface AppTranslations {
     mcpAdd: string;
     mcpAdding: string;
     /** Why the form was refused. */
-    mcpFormErrors: Record<'name' | 'target' | 'exists', string>;
+    mcpFormErrors: Record<'name' | 'target' | 'exists' | 'unreadable', string>;
+    /** The file exists but does not parse. */
+    mcpFileUnreadable: string;
     /** `{count}`: the server's tools. */
     mcpConnected: string;
     mcpConnecting: string;

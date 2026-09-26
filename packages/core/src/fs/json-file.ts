@@ -45,7 +45,7 @@ export async function writeJsonFile(path: string, value: unknown): Promise<void>
  */
 export async function readJsonFile(path: string): Promise<unknown> {
   for (let attempt = 0; ; attempt++) {
-    const raw = await readFile(path, 'utf8');
+    const raw = decode(await readFile(path));
     try {
       return JSON.parse(raw) as unknown;
     } catch (error) {
@@ -53,6 +53,17 @@ export async function readJsonFile(path: string): Promise<unknown> {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
   }
+}
+
+/**
+ * Text as Windows editors save it: UTF-8 with or without a BOM (Notepad,
+ * PowerShell 5's `Set-Content -Encoding utf8`), or UTF-16 LE with its BOM
+ * (PowerShell's `>`). A file the user edited by hand must read as written.
+ */
+function decode(bytes: Buffer): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return bytes.subarray(2).toString('utf16le');
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return bytes.subarray(3).toString('utf8');
+  return bytes.toString('utf8');
 }
 
 /** One task at a time per key, in the order they came; a failure does not block the next. */

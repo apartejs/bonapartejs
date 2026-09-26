@@ -39,6 +39,16 @@ describe('writeJsonFile / readJsonFile', () => {
     expect(((await readJsonFile(file)) as { n: number }).n).toBe(60);
   });
 
+  it('reads what Windows editors write: a UTF-8 BOM, or UTF-16 from PowerShell', async () => {
+    const folder = await dir();
+    const bom = join(folder, 'bom.json');
+    await writeFile(bom, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{"a":1}', 'utf8')]));
+    expect(await readJsonFile(bom)).toEqual({ a: 1 });
+    const utf16 = join(folder, 'utf16.json');
+    await writeFile(utf16, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('{"b":2}', 'utf16le')]));
+    expect(await readJsonFile(utf16)).toEqual({ b: 2 });
+  });
+
   it('a file that stays unreadable is an error, after a few tries', async () => {
     const file = join(await dir(), 'bad.json');
     await writeFile(file, '{ nope', 'utf8');
