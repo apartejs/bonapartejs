@@ -99,7 +99,9 @@ async function makeSupervisor(
     buildTag: async () => 'b9999',
     commandPrefix: () => [],
     healthIntervalMs: 5,
-    healthTimeoutMs: 300,
+    // Generous: under the whole suite a loaded machine answered the first
+    // health probe after 300 ms, and a clean start was taken for a failure.
+    healthTimeoutMs: 3_000,
     ...overrides,
   });
   return { supervisor, dir };
