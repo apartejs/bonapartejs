@@ -1063,17 +1063,24 @@ export class Harness {
     if (!pending) return;
     this.pendingApprovals.delete(response.id);
 
+    // The turn waits on this answer: it is given first, whatever happens to
+    // the grant's write — a disk error (a rename refused on Windows) left
+    // the turn hanging on a question already answered.
+    pending.resolve(response.granted);
     if (response.granted && response.always) {
       // "Always allow" says what it covers (Q-24, audit C1): the exact line,
       // or every command of a plain-named program — never a first word
       // that happened to start a longer line.
       // Remembered for the project of the conversation that asked, on disk.
-      await this.grants.add(
-        this.activeProject(),
-        alwaysRule(pending.request.tool, pending.request.command, response.always === 'binary' ? 'binary' : 'command'),
-      );
+      try {
+        await this.grants.add(
+          this.activeProject(),
+          alwaysRule(pending.request.tool, pending.request.command, response.always === 'binary' ? 'binary' : 'command'),
+        );
+      } catch (error) {
+        console.error('[permissions] the grant could not be saved:', error instanceof Error ? error.message : error);
+      }
     }
-    pending.resolve(response.granted);
   }
 
   private emit(channel: string, payload: unknown): void {
