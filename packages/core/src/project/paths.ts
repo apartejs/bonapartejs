@@ -7,8 +7,9 @@
  * corrected.
  */
 
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export class PathOutsideProjectError extends Error {
   constructor(
@@ -95,15 +96,66 @@ export function resolveInPerimeter(roots: string[], requested: string): string {
     // both cases are handled at once.
     const home = homedir();
     const absolute = resolve(home, normalized);
-    if (!contains(home, absolute)) throw new PathOutsideHomeError(requested, resolve(home));
+    refuseStreams(requested, absolute);
+    if (!contains(home, absolute) || !contains(realLocation(home), realLocation(absolute))) {
+      throw new PathOutsideHomeError(requested, resolve(home));
+    }
     return absolute;
   }
 
   const absolute = resolve(resolve(roots[0] as string), normalized);
-  if (!roots.some((root) => contains(root, absolute))) {
+  refuseStreams(requested, absolute);
+  // Where the path lands as written, AND where it really lands: a link or
+  // a junction inside the project can lead anywhere.
+  const real = realLocation(absolute);
+  if (!roots.some((root) => contains(root, absolute) && contains(realLocation(resolve(root)), real))) {
     throw new PathOutsidePerimeterError(requested, roots.map((r) => resolve(r)));
   }
   return absolute;
+}
+
+/**
+ * The file a permission is really asked about: links, junctions and 8.3
+ * short names resolved (`PACKAG~1.JSO` is `package.json`). The request as
+ * written when it cannot be resolved — the tool will refuse it anyway.
+ */
+export function permissionPath(roots: string[], requested: string): string {
+  try {
+    return realLocation(resolveInPerimeter(roots, requested));
+  } catch {
+    return requested;
+  }
+}
+
+/** `name:stream` writes beside the file Windows shows — never a path we accept. */
+function refuseStreams(requested: string, absolute: string): void {
+  if (process.platform === 'win32' && absolute.slice(2).includes(':')) throw new InvalidPathError(requested);
+}
+
+/**
+ * The real location of a path — links, junctions and 8.3 short names
+ * resolved — or of its nearest existing ancestor, for a file not written yet.
+ */
+export function realLocation(absolute: string): string {
+  const missing: string[] = [];
+  let current = absolute;
+  for (;;) {
+    try {
+      return join(realpathSync.native(current), ...missing.reverse());
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return absolute;
+      missing.push(basename(current));
+      current = parent;
+    }
+  }
+}
+
+export class InvalidPathError extends Error {
+  constructor(requested: string) {
+    super(`Invalid path: ${requested} (a stream or device name, not a file). Use a plain file path.`);
+    this.name = 'InvalidPathError';
+  }
 }
 
 /**

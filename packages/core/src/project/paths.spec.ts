@@ -1,4 +1,6 @@
-import { homedir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, symlink, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,6 +8,7 @@ import {
   displayPath,
   PathOutsidePerimeterError,
   PathOutsideProjectError,
+  permissionPath,
   resolveInPerimeter,
   resolveInProject,
 } from './paths.js';
@@ -184,5 +187,32 @@ describe('displayInPerimeter', () => {
   it('with no root, returns the absolute path', () => {
     const p = resolve('/tmp/x.txt');
     expect(displayInPerimeter([], p)).toBe(p);
+  });
+});
+
+describe('the real location decides — not the spelling (adversarial review, 2026-09-26)', () => {
+  it.runIf(process.platform === 'win32')('an alternate data stream is refused, not written beside the file', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'bp-ads-'));
+    expect(() => resolveInPerimeter([root], 'package.json::$DATA')).toThrow(/Invalid path/);
+    expect(() => resolveInPerimeter([root], 'notes.txt:hidden')).toThrow(/Invalid path/);
+  });
+
+  it.runIf(process.platform === 'win32')('an 8.3 short name reaches the armed check as the long name it is', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'bp-short-'));
+    await writeFile(join(root, 'package.json'), '{}', 'utf8');
+    const short = execFileSync('cmd', ['/c', 'dir', '/x', root], { encoding: 'utf8' }).match(/(PACKAG~\d\.JSO)/i)?.[1];
+    if (!short) return; // short names disabled on this volume: nothing to alias
+    expect(permissionPath([root], short).toLowerCase()).toMatch(/package\.json$/);
+  });
+
+  it('a link inside the project that points outside is outside', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'bp-link-'));
+    const outside = await mkdtemp(join(tmpdir(), 'bp-outside-'));
+    try {
+      await symlink(outside, join(root, 'escape'), 'junction');
+    } catch {
+      return; // links not allowed here
+    }
+    expect(() => resolveInPerimeter([root], 'escape/evil.txt')).toThrow(PathOutsidePerimeterError);
   });
 });

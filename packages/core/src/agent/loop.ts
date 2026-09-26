@@ -12,6 +12,7 @@
  * with a stable-prefix backend. See the friction journal.
  */
 
+import { permissionPath } from '../project/paths.js';
 import type {
   Backend,
   SamplingParams,
@@ -283,7 +284,10 @@ export class AgentLoop {
 
     const command =
       typeof args['command'] === 'string' ? (args['command'] as string) : undefined;
-    const path = typeof args['path'] === 'string' ? (args['path'] as string) : undefined;
+    // The armed-file check reads the real location, not the spelling: an
+    // 8.3 alias or a link must not reach `package.json` unasked.
+    const rawPath = typeof args['path'] === 'string' ? (args['path'] as string) : undefined;
+    const path = rawPath !== undefined ? permissionPath(this.options.system.roots ?? [], rawPath) : undefined;
     const decision = this.options.permissions.evaluate({
       tool: name,
       effect: registered.def.effect,

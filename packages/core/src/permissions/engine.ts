@@ -12,6 +12,7 @@
  * "allow", but it can never lift a denial coming from the mode.
  */
 
+import { bonaparteDataDir } from '../paths.js';
 import type { ToolEffect } from '../tools/types.js';
 
 export type PlayMode = 'lecture' | 'repetition' | 'plume' | 'impro';
@@ -86,11 +87,30 @@ const ARMED: RegExp[] = [
   /(^|\/)[^/]+\.config\.(js|cjs|mjs|ts|cts|mts)$/,
   /(^|\/)makefile$/,
   /(^|\/)\.env(\.[^/]*)?$/,
+  // Beyond a project — reachable when there is none, whose perimeter is the
+  // home folder (adversarial review, 2026-09-26): what the system runs at
+  // login, what a shell runs when it starts, who may log in by key.
+  /(^|\/)start menu\/programs\/startup\//,
+  /(^|\/)(windows)?powershell\/[^/]*profile\.ps1$/,
+  /(^|\/)\.(bashrc|bash_profile|bash_login|profile|zshrc|zprofile|zshenv|zlogin)$/,
+  /(^|\/)\.config\/fish\/config\.fish$/,
+  /(^|\/)\.config\/autostart\//,
+  /(^|\/)library\/launchagents\//,
+  /(^|\/)\.ssh\//,
+  /(^|\/)\.gitconfig$/,
 ];
 
 export function isArmedPath(path: string): boolean {
-  const normalized = path.replace(/\\/g, '/').toLowerCase();
-  return ARMED.some((pattern) => pattern.test(normalized));
+  const normalized = normalize(path);
+  if (ARMED.some((pattern) => pattern.test(normalized))) return true;
+  // bonaparte's own data: its config, its grants, its MCP servers — each
+  // one a command run later, with bonaparte's rights.
+  const data = normalize(bonaparteDataDir()).replace(/\/+$/, '');
+  return normalized === data || normalized.startsWith(`${data}/`);
+}
+
+function normalize(path: string): string {
+  return path.replace(/\\/g, '/').toLowerCase();
 }
 
 export class PermissionEngine {

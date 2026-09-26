@@ -219,3 +219,37 @@ describe('PermissionEngine — "armed" files ask even when writes do not (Q-25, 
     expect(engine('lecture').evaluate(edit('package.json'))).toBe('deny');
   });
 });
+
+describe('what runs later outside a project — armed wherever it sits (adversarial review, 2026-09-26)', () => {
+  const edit = (path: string) => ({ tool: 'write_file', effect: 'write' as const, path });
+
+  it.each([
+    'C:/Users/me/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/run.cmd',
+    'C:/Users/me/Documents/WindowsPowerShell/Microsoft.PowerShell_profile.ps1',
+    'C:/Users/me/Documents/PowerShell/profile.ps1',
+    '/home/me/.bashrc',
+    '/home/me/.zshrc',
+    '/home/me/.profile',
+    '/home/me/.config/fish/config.fish',
+    '/home/me/.ssh/authorized_keys',
+    '/home/me/.gitconfig',
+    '/home/me/.config/autostart/evil.desktop',
+    '/Users/me/Library/LaunchAgents/evil.plist',
+  ])('Quill asks before writing %s', (path) => {
+    expect(isArmedPath(path)).toBe(true);
+    expect(new PermissionEngine('plume').evaluate(edit(path))).toBe('ask');
+  });
+
+  it("bonaparte's own data — its config, its grants, its MCP servers — is armed", () => {
+    const previous = process.env['BONAPARTE_DATA_DIR'];
+    process.env['BONAPARTE_DATA_DIR'] = String.raw`C:\Users\me\AppData\Roaming\bonaparte`;
+    try {
+      expect(isArmedPath('C:/Users/me/AppData/Roaming/bonaparte/config/mcp-servers.json')).toBe(true);
+      expect(isArmedPath(String.raw`c:\users\me\appdata\roaming\bonaparte\config\grants.json`)).toBe(true);
+      expect(isArmedPath('C:/Users/me/AppData/Roaming/bonaparte-notes/todo.md')).toBe(false);
+    } finally {
+      if (previous === undefined) delete process.env['BONAPARTE_DATA_DIR'];
+      else process.env['BONAPARTE_DATA_DIR'] = previous;
+    }
+  });
+});
