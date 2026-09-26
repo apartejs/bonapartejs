@@ -74,9 +74,9 @@ export const FR: AppTranslations = {
     plume: 'Plume',
     impro: 'Impro',
     descriptions: {
-      lecture: 'Il lit, il n’écrit rien et ne lance rien.',
-      repetition: 'Il demande avant chaque écriture et chaque commande.',
-      plume: 'Il écrit les fichiers librement ; les commandes demandent.',
+      lecture: 'Il lit ; il n’écrit rien, ne lance rien et demande avant d’aller en ligne.',
+      repetition: 'Il demande avant chaque écriture, chaque commande et chaque recherche en ligne.',
+      plume: 'Il écrit les fichiers et cherche en ligne librement ; les commandes demandent.',
       impro: 'Il agit sans rien demander. À réserver à ce que vous surveillez.',
     },
   },

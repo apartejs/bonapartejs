@@ -7,8 +7,9 @@
  * and a public engine, no key, no account — or one of the online APIs once
  * chosen. Reading a page always goes through the hidden browser.
  *
- * Both tools declare the `read` effect: nothing on this machine changes.
- * What leaves it is the query, or the URL — said in the settings.
+ * Both tools declare the `network` effect: nothing on this machine
+ * changes, but the query or the URL leaves it — which Reading and
+ * Rehearsal ask about first (Q-23).
  */
 
 import { definePlugin, type PluginNodeContext } from '@aparte/bonaparte-plugin-sdk';

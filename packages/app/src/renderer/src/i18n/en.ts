@@ -73,9 +73,9 @@ export const EN: AppTranslations = {
     plume: 'Quill',
     impro: 'Improv',
     descriptions: {
-      lecture: 'It reads. It writes nothing and runs nothing.',
-      repetition: 'It asks before every write and every command.',
-      plume: 'It writes files freely; commands still ask.',
+      lecture: 'It reads. It writes nothing, runs nothing, and asks before going online.',
+      repetition: 'It asks before every write, every command and every web lookup.',
+      plume: 'It writes files and looks things up freely; commands still ask.',
       impro: 'It acts without asking. Keep it for what you are watching.',
     },
   },

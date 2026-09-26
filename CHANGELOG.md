@@ -257,6 +257,14 @@ published.
 
 ### Changed
 
+- **Going online asks, in Reading and Rehearsal** (audit C5, Q-23). The
+  web tools declared the `read` effect, so every mode ran them without a
+  word — yet a search query or a fetched URL leaves the machine, and a
+  URL can carry what the model read in a file. A new `network` effect
+  says so: Reading and Rehearsal ask first (an "always allow web_search"
+  per project removes the friction), Quill and Improv allow it. The mode
+  menu's descriptions say it.
+
 - **Quill asks before writing a file that runs later** (audit C6, Q-25).
   Quill lets the agent write without asking — including into
   `.git/hooks/`, `package.json` scripts, `*.config.*`, `.vscode/tasks.json`,

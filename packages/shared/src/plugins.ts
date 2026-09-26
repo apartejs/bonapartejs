@@ -70,7 +70,7 @@ export const agentToolContributionSchema = z.object({
     .regex(/^[a-z][a-z0-9_]*$/, 'tool name: lowercase letters and underscores'),
   description: z.string().min(1).max(400),
   /** Dominant effect — drives the permissions engine. */
-  effect: z.enum(['read', 'write', 'execute']),
+  effect: z.enum(['read', 'write', 'execute', 'network']),
   /**
    * JSON schema of the arguments. It is NOT decorative: the tool-call
    * grammar is derived from it, so a tool without a schema is a tool

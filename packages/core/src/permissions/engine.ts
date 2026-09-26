@@ -1,9 +1,11 @@
 /**
  * Permission engine — the 4 play modes.
  *
- * Reading    : the agent reads and replies, no writes and no commands.
- * Rehearsal  : anything that touches the system asks for agreement (default).
- * Quill      : the agent holds the pen — automatic edits, but no commands.
+ * Reading    : the agent reads and replies, no writes and no commands;
+ *              anything that leaves the machine asks.
+ * Rehearsal  : anything that touches the system or leaves it asks (default).
+ * Quill      : the agent holds the pen — automatic edits and web lookups,
+ *              but commands ask.
  * Improv     : anything goes.
  *
  * The mode is a CEILING: a remembered rule can turn an "ask" into an
@@ -146,10 +148,10 @@ export class PermissionEngine {
 }
 
 const MODE_MATRIX: Record<PlayMode, Record<ToolEffect, PermissionDecision>> = {
-  lecture: { read: 'allow', write: 'deny', execute: 'deny' },
-  repetition: { read: 'allow', write: 'ask', execute: 'ask' },
-  plume: { read: 'allow', write: 'allow', execute: 'ask' },
-  impro: { read: 'allow', write: 'allow', execute: 'allow' },
+  lecture: { read: 'allow', write: 'deny', execute: 'deny', network: 'ask' },
+  repetition: { read: 'allow', write: 'ask', execute: 'ask', network: 'ask' },
+  plume: { read: 'allow', write: 'allow', execute: 'ask', network: 'allow' },
+  impro: { read: 'allow', write: 'allow', execute: 'allow', network: 'allow' },
 };
 
 function sameRule(a: AllowRule, b: AllowRule): boolean {

@@ -4,6 +4,7 @@ import { alwaysRule, commandBinary, isArmedPath, PermissionEngine, type PlayMode
 const read = { tool: 'read_file', effect: 'read' as const };
 const write = { tool: 'write_file', effect: 'write' as const };
 const exec = { tool: 'run_shell', effect: 'execute' as const, command: 'pnpm test' };
+const net = { tool: 'web_search', effect: 'network' as const };
 
 function engine(mode: PlayMode): PermissionEngine {
   return new PermissionEngine(mode);
@@ -11,15 +12,18 @@ function engine(mode: PlayMode): PermissionEngine {
 
 describe('PermissionEngine — mode × effect matrix', () => {
   it.each([
-    ['lecture', 'allow', 'deny', 'deny'],
-    ['repetition', 'allow', 'ask', 'ask'],
-    ['plume', 'allow', 'allow', 'ask'],
-    ['impro', 'allow', 'allow', 'allow'],
-  ] as const)('%s: read=%s, write=%s, execute=%s', (mode, r, w, e) => {
+    ['lecture', 'allow', 'deny', 'deny', 'ask'],
+    ['repetition', 'allow', 'ask', 'ask', 'ask'],
+    ['plume', 'allow', 'allow', 'ask', 'allow'],
+    ['impro', 'allow', 'allow', 'allow', 'allow'],
+  ] as const)('%s: read=%s, write=%s, execute=%s, network=%s', (mode, r, w, e, n) => {
+    // Q-23: what leaves the machine (a web search, a fetched page) is not a
+    // read — Reading and Rehearsal ask before anything goes out.
     const perm = engine(mode);
     expect(perm.evaluate(read)).toBe(r);
     expect(perm.evaluate(write)).toBe(w);
     expect(perm.evaluate(exec)).toBe(e);
+    expect(perm.evaluate(net)).toBe(n);
   });
 
   it('the default mode is Rehearsal', () => {

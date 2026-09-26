@@ -6,8 +6,12 @@
 
 export type ToolSource = 'builtin' | 'plugin' | 'mcp';
 
-/** What the tool does to the system — arbitrated by the permission engine. */
-export type ToolEffect = 'read' | 'write' | 'execute';
+/**
+ * What the tool does — arbitrated by the permission engine. `network`:
+ * something leaves the machine (a search query, a fetched URL), which a
+ * `read` never does (Q-23).
+ */
+export type ToolEffect = 'read' | 'write' | 'execute' | 'network';
 
 export interface ToolDef {
   name: string;
