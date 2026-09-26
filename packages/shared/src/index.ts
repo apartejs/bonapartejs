@@ -62,6 +62,7 @@ export const IPC = {
   pluginsInvoke: 'plugins.invoke',
   pluginsReload: 'plugins.reload',
   pluginsAck: 'plugins.ack',
+  pluginsSetEnabled: 'plugins.setEnabled',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
   kvUsage: 'kv.usage',
@@ -167,6 +168,8 @@ export interface AppConfigDto {
   settings?: Record<string, unknown>;
   /** User's language — drives the UI AND the model's reply language. */
   locale?: BonaparteLocale;
+  /** Plugins switched off in the hub (P3.2): discovered, never activated. */
+  disabledPlugins?: string[];
 }
 
 /** Play modes (theater vocabulary) — see the permissions engine. */
@@ -504,6 +507,8 @@ export interface BonaparteBridge {
    * so without reloading the model. Returns the up-to-date inventory.
    */
   reloadPlugins(): Promise<PluginStatusDto[]>;
+  /** Switches a plugin on or off, live; returns the up-to-date inventory. */
+  setPluginEnabled(pluginId: string, enabled: boolean): Promise<PluginStatusDto[]>;
   /**
    * Subscribes to events PUSHED by a plugin's Node half.
    *

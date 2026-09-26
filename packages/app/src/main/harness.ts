@@ -657,28 +657,54 @@ export class Harness {
    * it disappear without explanation.
    */
   async loadPlugins(): Promise<void> {
+    // Switched off in the hub: discovered and listed, never activated.
+    for (const id of (await this.loadConfig()).disabledPlugins ?? []) this.pluginHost.setEnabled(id, false);
     const found = await this.pluginHost.discover(this.pluginsDir());
-    for (const plugin of found) {
-      if (!plugin.manifest || plugin.error) continue;
-      try {
-        const nodeEntry = plugin.manifest.entry.node;
-        const module: PluginNodeModule = nodeEntry
-          ? ((
-              (await import(
-                `${pathToFileURL(join(plugin.dir, nodeEntry)).href}?v=${this.pluginGeneration}`,
-              )) as {
-                default: PluginNodeModule;
-              }
-            ).default)
-          : { activate: () => undefined };
-        await this.pluginHost.activate(plugin.id, module);
-      } catch (error) {
-        console.error(
-          `[plugins] ${plugin.id} could not be activated:`,
-          error instanceof Error ? error.message : error,
-        );
-      }
+    for (const plugin of found) await this.activatePlugin(plugin.id);
+  }
+
+  /** Imports a discovered plugin's Node half and activates it (a switched-off one stays off). */
+  private async activatePlugin(id: string): Promise<void> {
+    const plugin = this.pluginHost.get(id);
+    if (!plugin?.manifest || plugin.error) return;
+    try {
+      const nodeEntry = plugin.manifest.entry.node;
+      const module: PluginNodeModule = nodeEntry
+        ? ((
+            (await import(
+              `${pathToFileURL(join(plugin.dir, nodeEntry)).href}?v=${this.pluginGeneration}`,
+            )) as {
+              default: PluginNodeModule;
+            }
+          ).default)
+        : { activate: () => undefined };
+      await this.pluginHost.activate(plugin.id, module);
+    } catch (error) {
+      console.error(
+        `[plugins] ${plugin.id} could not be activated:`,
+        error instanceof Error ? error.message : error,
+      );
     }
+  }
+
+  /**
+   * Switches a plugin on or off, live (P3.2): the host is reversible, so
+   * off tears everything it registered down, on activates it again. The
+   * choice is remembered; the conversation learns of its tools by a delta.
+   */
+  async setPluginEnabled(id: string, enabled: boolean): Promise<PluginStatusDto[]> {
+    if (typeof id !== 'string' || !this.pluginHost.get(id)) throw new Error(`Unknown plugin: ${String(id)}`);
+    const config = await this.loadConfig();
+    const disabled = new Set(config.disabledPlugins ?? []);
+    if (enabled) disabled.delete(id);
+    else disabled.add(id);
+    await this.saveConfig({ ...config, disabledPlugins: [...disabled] });
+    this.pluginHost.setEnabled(id, enabled === true);
+    if (enabled) await this.activatePlugin(id);
+    else await this.pluginHost.deactivate(id);
+    this.registerBuiltinTools();
+    void this.conversations.close();
+    return this.listPlugins();
   }
 
   listPlugins(): PluginStatusDto[] {
@@ -1562,6 +1588,7 @@ export class Harness {
     handle(IPC.conversationList, () => this.listConversations());
     handle(IPC.pluginsList, () => this.listPlugins());
     handle(IPC.pluginsReload, () => this.reloadPlugins());
+    handle(IPC.pluginsSetEnabled, (id: string, enabled: boolean) => this.setPluginEnabled(id, enabled === true));
     handle(
       IPC.pluginsAck,
       (pluginId: string, instanceId: string, bytes: number) => {

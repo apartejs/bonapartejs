@@ -178,7 +178,20 @@ export class PluginHost {
   private readonly plugins = new Map<string, DiscoveredPlugin>();
   private readonly activations = new Map<string, ActivationRecord>();
 
+  /** Plugins the user switched off (P3.2): discovered, listed, never activated. */
+  private readonly disabled = new Set<string>();
+
   constructor(private readonly options: PluginHostOptions) {}
+
+  /** Switches a plugin on or off. Off takes effect at the next activation — deactivate it to stop it now. */
+  setEnabled(id: string, enabled: boolean): void {
+    if (enabled) this.disabled.delete(id);
+    else this.disabled.add(id);
+  }
+
+  isEnabled(id: string): boolean {
+    return !this.disabled.has(id);
+  }
 
   /**
    * Scans a plugins folder. Every subfolder containing a `plugin.json` is
@@ -258,6 +271,8 @@ export class PluginHost {
    * testable without loading anything.
    */
   async activate(id: string, module: PluginNodeModule): Promise<void> {
+    // Switched off by the user: nothing of it runs.
+    if (this.disabled.has(id)) return;
     const plugin = this.plugins.get(id);
     if (!plugin?.manifest) throw new Error(`Unknown plugin: ${id}`);
     if (this.activations.has(id)) return;
@@ -440,7 +455,7 @@ export class PluginHost {
       name: plugin.manifest?.name ?? plugin.id,
       version: plugin.manifest?.version ?? '—',
       ...(plugin.manifest?.description ? { description: plugin.manifest.description } : {}),
-      enabled: true,
+      enabled: !this.disabled.has(plugin.id),
       active: plugin.active,
       ...(plugin.error ? { error: plugin.error } : {}),
       views: plugin.active ? (plugin.manifest?.contributes.toolingViews ?? []) : [],

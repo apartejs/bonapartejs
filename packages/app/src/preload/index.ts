@@ -47,6 +47,7 @@ const api: BonaparteBridge = {
   undoTurn: (conversationId, turnId) => ipcRenderer.invoke(IPC.turnUndo, conversationId, turnId),
   listPlugins: () => ipcRenderer.invoke(IPC.pluginsList),
   reloadPlugins: () => ipcRenderer.invoke(IPC.pluginsReload),
+  setPluginEnabled: (pluginId, enabled) => ipcRenderer.invoke(IPC.pluginsSetEnabled, pluginId, enabled),
   onPluginEvent: (listener) => {
     const wrapped = (
       _e: unknown,

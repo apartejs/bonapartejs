@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
   SettingsForm,
+  Switch,
   cn,
 } from '@aparte/bonaparte-plugin-sdk/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,6 +32,8 @@ interface SettingsHubProps {
   onChangeEngine: () => void;
   onToggleTheme: () => void;
   onClose: () => void;
+  /** The plugins changed (switched, reloaded): the tooling panel follows. */
+  onPluginsChange?: (plugins: PluginStatusDto[]) => void;
 }
 
 /**
@@ -46,6 +49,7 @@ export function SettingsHub({
   onChangeEngine,
   onToggleTheme,
   onClose,
+  onPluginsChange,
 }: SettingsHubProps) {
   const { t, locale, setLocale } = useTranslate();
   const [section, setSection] = useState<Section>('general');
@@ -354,7 +358,10 @@ export function SettingsHub({
                     setReloading(true);
                     void window.bonaparte
                       .reloadPlugins()
-                      .then(setPlugins)
+                      .then((next) => {
+                        setPlugins(next);
+                        onPluginsChange?.(next);
+                      })
                       .finally(() => setReloading(false));
                   }}
                 >
@@ -399,11 +406,30 @@ export function SettingsHub({
                           'font-mono text-[11px] font-normal',
                           plugin.error
                             ? 'plugin-state-failed'
-                            : 'plugin-state-active text-emerald-700 dark:text-emerald-300',
+                            : !plugin.enabled
+                              ? 'plugin-state-off'
+                              : 'plugin-state-active text-emerald-700 dark:text-emerald-300',
                         )}
                       >
-                        {plugin.error ? t.settings.pluginFailed : t.settings.pluginActive}
+                        {plugin.error
+                          ? t.settings.pluginFailed
+                          : !plugin.enabled
+                            ? t.settings.pluginOff
+                            : t.settings.pluginActive}
                       </Badge>
+                      {/* On or off, live: the host tears a plugin down whole. */}
+                      <Switch
+                        className="plugin-switch"
+                        checked={plugin.enabled}
+                        aria-label={t.settings.pluginSwitch.replace('{name}', () => localize(plugin.name, locale))}
+                        onCheckedChange={(checked) => {
+                          void window.bonaparte.setPluginEnabled(plugin.id, checked).then(async (next) => {
+                            setPlugins(next);
+                            onPluginsChange?.(next);
+                            setSettings(await window.bonaparte.getSettings('global'));
+                          });
+                        }}
+                      />
                     </div>
                     {plugin.description && (
                       <p className="setting-help text-[11.5px] leading-snug text-muted-foreground">

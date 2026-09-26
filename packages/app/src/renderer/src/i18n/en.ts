@@ -119,6 +119,8 @@ export const EN: AppTranslations = {
     noPlugins: 'No plugin discovered.',
     pluginActive: 'active',
     pluginFailed: 'failed',
+    pluginOff: 'off',
+    pluginSwitch: 'Use {name}',
     conversationScope: 'This conversation',
     pluginReload: 'Reload plugins',
     pluginReloading: 'Reloading…',

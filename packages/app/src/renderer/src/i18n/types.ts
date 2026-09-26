@@ -131,6 +131,9 @@ export interface AppTranslations {
     noPlugins: string;
     pluginActive: string;
     pluginFailed: string;
+    pluginOff: string;
+    /** `{name}`: the plugin. */
+    pluginSwitch: string;
     conversationScope: string;
     pluginReload: string;
     pluginReloading: string;

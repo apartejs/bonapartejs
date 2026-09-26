@@ -132,6 +132,29 @@ describe('PluginHost — reversible activation', () => {
     expect(host.status().find((p) => p.id === 'demo')?.active).toBe(false);
   });
 
+  it('a plugin switched off says so, and is not activated until switched back on (P3.2)', async () => {
+    const root = await makePluginDir('demo', withTool('demo'));
+    const registry = new ToolRegistry();
+    const host = new PluginHost({ registry });
+    await host.discover(root);
+    const module = {
+      activate: (ctx: Parameters<NonNullable<Parameters<PluginHost['activate']>[1]['activate']>>[0]) => {
+        ctx.registerToolHandler('demo_tool', async () => ({ ok: true, content: 'ok' }));
+      },
+    };
+
+    host.setEnabled('demo', false);
+    await host.activate('demo', module);
+
+    expect(host.isEnabled('demo')).toBe(false);
+    expect(host.status().find((p) => p.id === 'demo')).toMatchObject({ enabled: false, active: false });
+    expect(registry.list()).toHaveLength(0);
+
+    host.setEnabled('demo', true);
+    await host.activate('demo', module);
+    expect(host.status().find((p) => p.id === 'demo')).toMatchObject({ enabled: true, active: true });
+  });
+
   it('refuses a handler for a tool not declared in the manifest', async () => {
     // The manifest must remain readable without executing the plugin: a
     // tool that only appeared at activation time would make it a lie.

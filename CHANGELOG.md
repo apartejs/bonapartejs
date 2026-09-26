@@ -15,6 +15,12 @@ published.
 
 ### Added
 
+- **Switch a plugin on or off** (P3.2). Each row of the hub's Plugins
+  section has a switch. Off, the host tears the plugin down whole: its
+  views leave the tooling panel at once, its tools leave the model's list
+  (a delta, never a re-render), anything it started stops. The choice is
+  remembered across launches; on, it activates again, live.
+
 - **Undo a turn's file changes** (06 §1 D, Q-19). The safety net every
   harness has: before a tool writes a file, its original — or its absence
   — is kept in bonaparte's data (never as commits or files in your

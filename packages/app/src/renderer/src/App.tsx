@@ -713,6 +713,7 @@ export function App() {
           }}
           onToggleTheme={toggleTheme}
           onClose={() => setSettingsOpen(false)}
+          onPluginsChange={setPlugins}
         />
       )}
       {compactAsk && (

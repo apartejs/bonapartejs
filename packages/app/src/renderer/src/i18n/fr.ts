@@ -119,6 +119,8 @@ export const FR: AppTranslations = {
     kvWarning: 'Changer ce réglage invalide les états de contexte déjà sauvegardés.',
     noPlugins: 'Aucun plugin découvert.',
     pluginActive: 'actif',
+    pluginOff: 'coupé',
+    pluginSwitch: 'Utiliser {name}',
     pluginFailed: 'en échec',
     conversationScope: 'Cette conversation',
     pluginReload: 'Recharger les plugins',
