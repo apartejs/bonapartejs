@@ -27,6 +27,7 @@ import {
   createSystemDoctorEnv,
   defaultScanRoots,
   EngineSupervisor,
+  enforceRetention,
   estimateLoad,
   estimateSwitch,
   memoryVerdict,
@@ -73,6 +74,7 @@ import {
   type ModelMemoryDto,
   type SwitchEstimateDto,
   type GrantDto,
+  type KvUsageDto,
   type ModelInfoDto,
   type PickFileKind,
   type PlayModeDto,
@@ -222,7 +224,17 @@ export class Harness {
     return engine;
   }
 
-  private readonly kv = new KvStore(kvSlotsDir());
+  /** The saved contexts' disk budget, from the settings (read at every save). */
+  private kvBudgetBytes = 16 * 1024 ** 3;
+  private readonly kv = new KvStore(kvSlotsDir(), {
+    budgetBytes: () => this.kvBudgetBytes,
+    onRetention: (report) =>
+      console.log(
+        `[kv] retention: ${report.evicted.length} state(s) dropped (${report.evicted.join(', ') || 'none'}), ` +
+          `${(report.totalBytes / 1024 ** 3).toFixed(1)} GB of ${(report.budgetBytes / 1024 ** 3).toFixed(1)} GB` +
+          (report.overBudget ? ' — the open conversation alone exceeds the budget' : ''),
+      ),
+  });
   private readonly store = new ConversationStore(
     join(bonaparteDataDir(), 'conversations'),
   );
@@ -314,6 +326,8 @@ export class Harness {
     const resolved = resolveSettings(APP_SETTINGS, await this.settingLayers(), 'global');
     const value = (key: string): unknown => resolved.find((setting) => setting.key === key)?.value;
     this.closeToTrayCached = value('closeToTray') !== false;
+    const budget = value('kvBudgetGb');
+    this.kvBudgetBytes = (typeof budget === 'number' && budget > 0 ? budget : 16) * 1024 ** 3;
     this.localeCached = (await this.loadConfig()).locale === 'en' ? 'en' : 'fr';
     // Re-arming reads the new idle config (it may have just changed).
     if (this.supervisor.loaded) await this.armIdleTimer();
@@ -1167,6 +1181,23 @@ export class Harness {
     return this.conversations.saveState();
   }
 
+  async kvUsage(): Promise<KvUsageDto> {
+    const usage = await this.kv.usage();
+    return {
+      totalBytes: usage.totalBytes,
+      budgetBytes: this.kvBudgetBytes,
+      conversations: usage.entries.filter((entry) => entry.kind === 'conversation').length,
+      seeds: usage.entries.filter((entry) => entry.kind === 'seed').length,
+    };
+  }
+
+  /** Drops every saved context but the open one's — a cache: the conversations are computed again on resume. */
+  async freeKv(): Promise<number> {
+    const keep = this.conversationsEngine?.active;
+    const report = await enforceRetention(kvSlotsDir(), 0, keep ? [keep] : []);
+    return report.evicted.length;
+  }
+
   async shutdown(): Promise<void> {
     // A tool call waiting for consent would hold the turn, and the turn the
     // shutdown: nobody is left to answer, so the answer is no.
@@ -1407,6 +1438,8 @@ export class Harness {
     );
     handle(IPC.agentSend, (text: string) => this.send(text));
     handle(IPC.kvSave, () => this.saveKv());
+    handle(IPC.kvUsage, () => this.kvUsage());
+    handle(IPC.kvFree, () => this.freeKv());
     handle(IPC.agentInFlight, () => this.conversations.inFlight());
     handle(IPC.agentCancel, () => {
       if (this.currentConversationId) this.conversations.cancel(this.currentConversationId);

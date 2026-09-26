@@ -16,9 +16,10 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SlotApi } from '../backend/types.js';
+import { enforceRetention, kvUsage, type KvUsage, type RetentionReport } from './retention.js';
 
 export interface LiveBackendConfig {
   /** Fingerprint of the model file (see fingerprintModelFile). */
@@ -104,8 +105,41 @@ export function canRestore(
   return { ok: true };
 }
 
+export interface KvStoreOptions {
+  /**
+   * Disk budget for the saved states, read at each save (a live setting).
+   * Absent: no retention. After a save, the least recently used other
+   * states are evicted until the folder fits (P2.2, D-20).
+   */
+  budgetBytes?: () => number;
+  /** What a save's retention pass did — for a log line or a status. */
+  onRetention?: (report: RetentionReport) => void;
+}
+
 export class KvStore {
-  constructor(readonly manifestDir: string) {}
+  constructor(
+    readonly manifestDir: string,
+    private readonly options: KvStoreOptions = {},
+  ) {}
+
+  /** What the saved states take on disk. */
+  usage(): Promise<KvUsage> {
+    return kvUsage(this.manifestDir);
+  }
+
+  /** A save or a restore is a use: the slot file's date is what retention sorts on. */
+  private async touch(filename: string): Promise<void> {
+    const now = new Date();
+    await utimes(join(this.manifestDir, filename), now, now).catch(() => undefined);
+  }
+
+  /** Brings the folder under the budget, never touching `keep`. */
+  private async retain(keep: string[]): Promise<void> {
+    const budget = this.options.budgetBytes?.();
+    if (budget === undefined || !(budget > 0)) return;
+    const report = await enforceRetention(this.manifestDir, budget, keep);
+    if (report.evicted.length > 0 || report.overBudget) this.options.onRetention?.(report);
+  }
 
   slotFilename(conversationId: string): string {
     return `${conversationId}.slot`;
@@ -175,6 +209,8 @@ export class KvStore {
       JSON.stringify(manifest, null, 2),
       'utf8',
     );
+    await this.touch(this.slotFilename(conversationId));
+    await this.retain([conversationId]);
     return manifest;
   }
 
@@ -208,6 +244,7 @@ export class KvStore {
     // conversation prefills again. Announced, never fatal.
     try {
       const result = await slots.restore(idSlot, this.slotFilename(conversationId));
+      await this.touch(this.slotFilename(conversationId));
       return { restored: true, manifest, nRestored: result.nRestored };
     } catch {
       return { restored: false, reason: 'refused' };
@@ -254,6 +291,8 @@ export class KvStore {
     };
     await mkdir(join(this.manifestDir, 'seeds'), { recursive: true });
     await writeFile(this.seedManifestPath(key), JSON.stringify(manifest, null, 2), 'utf8');
+    await this.touch(this.seedFilename(key));
+    await this.retain([]);
     return manifest;
   }
 
@@ -279,6 +318,7 @@ export class KvStore {
     if (!verdict.ok) return { restored: false, created: false, reason: verdict.reason };
     try {
       const result = await slots.restore(idSlot, this.seedFilename(key));
+      await this.touch(this.seedFilename(key));
       return { restored: true, nRestored: result.nRestored };
     } catch {
       return { restored: false, created: false, reason: 'refused' };

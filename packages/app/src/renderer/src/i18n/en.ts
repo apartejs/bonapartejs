@@ -121,6 +121,9 @@ export const EN: AppTranslations = {
     grantTool: 'Without asking',
     grantNoProject: 'No project',
     revoke: 'Revoke',
+    kvUsage: 'Saved contexts take {total} of {budget} — {conversations} conversations, {seeds} shared prefixes.',
+    kvFree: 'Free this space',
+    kvFreed: '{count} saved contexts dropped: those conversations will be computed again when resumed.',
   },
   models: {
     pick: 'Choose a model',

@@ -126,6 +126,11 @@ export interface AppTranslations {
     grantTool: string;
     grantNoProject: string;
     revoke: string;
+    /** `{total}` of `{budget}`, `{conversations}` conversations, `{seeds}` prefixes. */
+    kvUsage: string;
+    kvFree: string;
+    /** `{count}`. */
+    kvFreed: string;
   };
   /** Model choice, in the composer. */
   models: {

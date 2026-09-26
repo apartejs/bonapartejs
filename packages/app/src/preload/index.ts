@@ -68,6 +68,8 @@ const api: BonaparteBridge = {
   sendMessage: (text: string): Promise<void> =>
     ipcRenderer.invoke(IPC.agentSend, text),
   saveKv: (): Promise<boolean> => ipcRenderer.invoke(IPC.kvSave),
+  kvUsage: () => ipcRenderer.invoke(IPC.kvUsage),
+  freeKv: () => ipcRenderer.invoke(IPC.kvFree),
   inFlight: (): Promise<InFlightDto | null> => ipcRenderer.invoke(IPC.agentInFlight),
   cancelMessage: (): Promise<void> => ipcRenderer.invoke(IPC.agentCancel),
 

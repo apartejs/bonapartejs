@@ -182,6 +182,20 @@ export const APP_SETTINGS: SettingField[] = [
     step: 1,
     showFor: { idleUnload: ['true'] },
   },
+  {
+    key: 'kvBudgetGb',
+    label: { en: 'Disk space for saved contexts (GB)', fr: 'Place disque des contextes sauvegardés (Go)' },
+    description: {
+      en: 'Saved contexts make resuming instant, and they are large — often gigabytes each. Past this budget, the least recently used are dropped: those conversations are computed again when resumed. Nothing of their messages is lost.',
+      fr: 'Les contextes sauvegardés rendent la reprise instantanée, et ils sont gros — souvent plusieurs Go chacun. Au-delà de ce budget, les moins récemment utilisés sont retirés : ces conversations sont recalculées à la reprise. Aucun de leurs messages n’est perdu.',
+    },
+    type: 'number',
+    scopes: ['global'],
+    default: 16,
+    min: 1,
+    max: 2000,
+    step: 1,
+  },
 ];
 
 export const LAUNCH_SETTINGS: SettingField[] = [

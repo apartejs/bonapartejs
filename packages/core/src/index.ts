@@ -70,6 +70,7 @@ export type {
   RestoreVerdict,
 } from './kv/kv-store.js';
 export { canRestore, KvStore } from './kv/kv-store.js';
+export { enforceRetention, kvUsage, type KvEntry, type KvUsage, type RetentionReport } from './kv/retention.js';
 export { fingerprintModelFile } from './kv/fingerprint.js';
 
 export type { AssistantTurnOptions } from './wire/qwen-template.js';

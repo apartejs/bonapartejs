@@ -60,6 +60,8 @@ export const IPC = {
   pluginsAck: 'plugins.ack',
   settingsGet: 'settings.get',
   settingsSet: 'settings.set',
+  kvUsage: 'kv.usage',
+  kvFree: 'kv.free',
   grantsList: 'grants.list',
   grantsRevoke: 'grants.revoke',
   evApproval: 'ev.approval',
@@ -229,6 +231,14 @@ export interface ResolvedSettingDto {
 }
 
 export type SettingScopeDto = 'global' | 'conversation';
+
+/** What the saved contexts take on disk, against their budget. */
+export interface KvUsageDto {
+  totalBytes: number;
+  budgetBytes: number;
+  conversations: number;
+  seeds: number;
+}
 
 /** A standing "always allow", as the hub lists it. */
 export interface GrantDto {
@@ -483,6 +493,10 @@ export interface BonaparteBridge {
   openConversation(id?: string, modelPath?: string): Promise<ConversationOpenReplyDto>;
   sendMessage(text: string): Promise<void>;
   saveKv(): Promise<boolean>;
+  /** What the saved contexts take on disk. */
+  kvUsage(): Promise<KvUsageDto>;
+  /** Drops every saved context but the open conversation's; returns how many went. */
+  freeKv(): Promise<number>;
   /** The turn streaming right now, if any — to catch up on when a screen mounts. */
   inFlight(): Promise<InFlightDto | null>;
   /** Cuts the turn in flight of the current conversation; what arrived stays. */

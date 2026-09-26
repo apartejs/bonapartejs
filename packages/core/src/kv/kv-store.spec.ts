@@ -259,3 +259,65 @@ describe('KvStore — prefix seeds', () => {
     expect(await store.restoreSeed(slots, 0, key, { ...LIVE, nCtx: 1024 })).toEqual({ restored: false, created: false, reason: 'nCtx' });
   });
 });
+
+describe('KvStore — retention under a disk budget (P2.2)', () => {
+  const MB = 1024 * 1024;
+  let dirs: string[] = [];
+  afterEach(async () => {
+    await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })));
+    dirs = [];
+  });
+
+  /** Slots that write a real file of `mb` MB, like the server does in its --slot-save-path. */
+  function diskSlots(dir: string, mb: number): SlotApi {
+    return {
+      save: async (idSlot, filename) => {
+        await writeFile(join(dir, filename), Buffer.alloc(mb * MB));
+        return { idSlot, filename, nSaved: 100, nWritten: mb * MB, saveMs: 1 };
+      },
+      restore: async (idSlot, filename) => ({ idSlot, filename, nRestored: 100, nRead: mb * MB, restoreMs: 1 }),
+      erase: async () => 0,
+    };
+  }
+
+  it('a save that goes over the budget evicts the least recently used other state — never the one just saved', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-budget-'));
+    dirs.push(dir);
+    const reports: unknown[] = [];
+    const store = new KvStore(dir, { budgetBytes: () => 5 * MB, onRetention: (report) => reports.push(report) });
+    const slots = diskSlots(dir, 3);
+
+    await store.saveState(slots, 0, 'conv-a', LIVE);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await store.saveState(slots, 0, 'conv-b', LIVE);
+
+    expect(await store.has('conv-a')).toBe(false);
+    expect(await store.has('conv-b')).toBe(true);
+    expect(reports).toContainEqual(expect.objectContaining({ evicted: ['conv-a'] }));
+  });
+
+  it('a restore counts as a use: the restored state outlives an older-used one', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-budget-'));
+    dirs.push(dir);
+    const store = new KvStore(dir, { budgetBytes: () => 7 * MB });
+    const slots = diskSlots(dir, 3);
+    await store.saveState(slots, 0, 'conv-a', LIVE);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await store.saveState(slots, 0, 'conv-b', LIVE);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await store.restoreState(slots, 0, 'conv-a', LIVE); // A is now the most recently used
+
+    await store.saveState(slots, 0, 'conv-c', LIVE);
+
+    expect(await store.has('conv-a')).toBe(true);
+    expect(await store.has('conv-b')).toBe(false);
+  });
+
+  it('usage() says what the saved states take', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-budget-'));
+    dirs.push(dir);
+    const store = new KvStore(dir);
+    await store.saveState(diskSlots(dir, 2), 0, 'conv-a', LIVE);
+    expect((await store.usage()).totalBytes).toBe(2 * MB);
+  });
+});

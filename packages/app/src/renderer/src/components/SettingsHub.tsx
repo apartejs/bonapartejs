@@ -2,6 +2,7 @@ import {
   localize,
   type BackendConfigDto,
   type GrantDto,
+  type KvUsageDto,
   type PluginStatusDto,
   type ResolvedSettingDto,
 } from '@aparte/bonaparte-shared';
@@ -19,6 +20,7 @@ import {
 } from '@aparte/bonaparte-plugin-sdk/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { formatBytes } from '../models/format.js';
 
 type Section = 'general' | 'sampling' | 'launch' | 'plugins' | 'permissions';
 
@@ -49,11 +51,14 @@ export function SettingsHub({
   const [plugins, setPlugins] = useState<PluginStatusDto[]>([]);
   const [reloading, setReloading] = useState(false);
   const [grants, setGrants] = useState<GrantDto[]>([]);
+  const [kv, setKv] = useState<KvUsageDto | null>(null);
+  const [freed, setFreed] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     setSettings(await window.bonaparte.getSettings('global'));
     setPlugins(await window.bonaparte.listPlugins());
     setGrants(await window.bonaparte.listGrants());
+    setKv(await window.bonaparte.kvUsage());
   }, []);
 
   const revoke = useCallback(
@@ -103,7 +108,7 @@ export function SettingsHub({
   // Sampling keys are the ones also adjustable per conversation.
   const samplingKeys = new Set(['temperature', 'topP', 'topK', 'minP', 'seed']);
   const sampling = settings.filter((setting) => samplingKeys.has(setting.key));
-  const appKeys = new Set(['closeToTray', 'idleUnload', 'idleUnloadMinutes']);
+  const appKeys = new Set(['closeToTray', 'idleUnload', 'idleUnloadMinutes', 'kvBudgetGb']);
   const appSettings = settings.filter((setting) => appKeys.has(setting.key));
   const launch = settings.filter(
     (setting) =>
@@ -198,6 +203,39 @@ export function SettingsHub({
                   locale={locale}
                   onChange={(key, value) => void change(key, value)}
                 />
+              )}
+              {/* The budget's other half: what the saved contexts take now,
+                  and a way to take it back — they are a cache. */}
+              {kv && (
+                <div className="kv-usage flex flex-col gap-2 border-t pt-4">
+                  <p className="text-[12.5px] leading-snug text-muted-foreground">
+                    {t.settings.kvUsage
+                      .replace('{total}', formatBytes(kv.totalBytes, t.units))
+                      .replace('{budget}', formatBytes(kv.budgetBytes, t.units))
+                      .replace('{conversations}', String(kv.conversations))
+                      .replace('{seeds}', String(kv.seeds))}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="self-start"
+                    disabled={kv.totalBytes === 0}
+                    onClick={() => {
+                      void window.bonaparte.freeKv().then(async (count) => {
+                        setFreed(count);
+                        setKv(await window.bonaparte.kvUsage());
+                      });
+                    }}
+                  >
+                    {t.settings.kvFree}
+                  </Button>
+                  {freed !== null && (
+                    <p className="kv-freed text-[12px] text-muted-foreground" role="status">
+                      {t.settings.kvFreed.replace('{count}', String(freed))}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}

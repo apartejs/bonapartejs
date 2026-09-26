@@ -4,6 +4,8 @@ import type { MemoryVerdictDto, ModelInfoDto } from '@aparte/bonaparte-shared';
 export function formatBytes(bytes: number, units: { gib: string; mib: string }): string {
   const gib = bytes / 1024 ** 3;
   if (gib >= 1) return `${gib.toFixed(1)} ${units.gib}`;
+  // Nothing is nothing; anything else is at least 1 MiB, never "0 MiB".
+  if (bytes <= 0) return `0 ${units.mib}`;
   return `${Math.max(1, Math.round(bytes / 1024 ** 2))} ${units.mib}`;
 }
 

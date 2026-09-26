@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **Saved contexts stay under a disk budget** (P2.2, D-20). A saved
+  context is 100 KB a token and more — a long conversation is gigabytes —
+  and nothing ever removed one. After each save, the least recently used
+  others (a save or a restore is a use) are dropped until the folder fits
+  a budget set in Settings (16 GB by default); the open conversation never
+  goes, and one that alone exceeds the budget is reported, not deleted.
+  The hub says what they take and can free the space. A dropped context
+  costs a re-computation on resume, never a message.
+
 - **A model's cost is said before it is paid** (P1.7, D-03, D-21). The
   model menus show what each model will take in memory at the engine's
   context — read from its GGUF header: the weights, the KV cache (per

@@ -123,6 +123,9 @@ export const FR: AppTranslations = {
     grantTool: 'Sans demander',
     grantNoProject: 'Sans projet',
     revoke: 'Retirer',
+    kvUsage: 'Les contextes sauvegardés occupent {total} sur {budget} — {conversations} conversations, {seeds} préfixes partagés.',
+    kvFree: 'Libérer cette place',
+    kvFreed: '{count} contextes sauvegardés retirés : ces conversations seront recalculées à la reprise.',
   },
   models: {
     pick: 'Choisir un modèle',
