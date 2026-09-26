@@ -15,6 +15,17 @@ published.
 
 ### Added
 
+- **Compaction — the conversation goes on when the context is full**
+  (P2.5, D-19). When a message does not fit, or a reply is cut at the
+  ceiling, a banner offers to compact; the header's menu offers it any
+  time. A confirmation says what happens first. The model reads the
+  conversation once more — from the cache — and writes a summary; the
+  prompt restarts from a freshly frozen system prompt (the current tools,
+  folders and instructions folded in), that summary and the last exchange;
+  the saved context built on the old prompt is dropped. Every message
+  stays on screen, the compaction marked in the thread with the summary
+  behind a disclosure.
+
 - **Keyboard shortcuts for the conversation** — Ctrl+N a new
   conversation, Ctrl+K the search, Ctrl+L the message field, Ctrl+, the
   settings — beside the flanks' Ctrl+B / Ctrl+Alt+B and the tooling's

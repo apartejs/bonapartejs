@@ -81,12 +81,17 @@ export const EN: AppTranslations = {
   },
   chat: {
     branchHere: 'Branch from here',
+    compacted: 'The earlier turns were compacted: the model now works from their summary.',
+    compactedSummary: 'Summary the model keeps',
+    compactOffer: 'The context is full. Compacting summarises the earlier turns so the conversation can go on.',
+    compactAction: 'Compact the conversation',
+    compacting: 'The model is writing the summary…',
     contextOverflow:
-      'The context is full ({used} tokens of {limit}): this message, with room for a reply, does not fit. Nothing was sent. Start a new conversation, or raise the cap in the settings — compaction comes later.',
+      'The context is full ({used} tokens of {limit}): this message, with room for a reply, does not fit. Nothing was sent. Compact the conversation, start a new one, or raise the cap in the settings.',
     contextOverflowUnknown:
-      'The server refuses this message: its context is full, the message does not fit. Nothing was sent. Start a new conversation — compaction comes later.',
+      'The server refuses this message: its context is full, the message does not fit. Nothing was sent. Compact the conversation, or start a new one.',
     replyTruncated:
-      'The reply was cut short: the context is full. It is incomplete. Start a new conversation, or raise the context cap in the settings — compaction comes later.',
+      'The reply was cut short: the context is full. It is incomplete. Compact the conversation, start a new one, or raise the context cap in the settings.',
     missingModel: 'The model “{name}” is no longer on this machine.',
     chooseModel: 'Choose a model',
     placeholder: 'Write to bonaparte…',
@@ -144,6 +149,15 @@ export const EN: AppTranslations = {
     memoryHint: 'About {total} of memory at {ctx} tokens — model {weights}, context {kv}',
     tight: 'Tight for this machine’s memory',
     tooBig: 'Larger than this machine’s memory',
+  },
+  compactDialog: {
+    title: 'Compact this conversation?',
+    reads: 'The model reads it once more and writes a summary — a reply of up to about 1,500 tokens.',
+    restarts:
+      'The next message starts from that summary and the last exchange: the context shrinks, and the saved context is rebuilt from it.',
+    keeps: 'Every message stays on your screen. Branch first if you want to keep the full context too.',
+    cancel: 'Cancel',
+    confirm: 'Compact',
   },
   switchModel: {
     title: 'Switch this conversation to {model}?',
@@ -236,6 +250,7 @@ export const EN: AppTranslations = {
     noRoots: 'No source folder — this project is just a group.',
     defaultRoot: 'default',
     instructions: 'The model follows {files}',
+    compact: 'Compact the conversation…',
     noInstructions:
       'No instructions file: the model reads AGENTS.md, CLAUDE.md or .bonaparte/instructions.md when the project has one.',
     rename: 'Rename conversation',

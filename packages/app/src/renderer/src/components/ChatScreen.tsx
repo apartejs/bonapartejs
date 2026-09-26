@@ -1,7 +1,7 @@
 import { aparteGlobalConfig, requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import { Alert, AlertDescription, Button } from '@aparte/bonaparte-plugin-sdk/ui';
-import { CircleAlert, TriangleAlert, X } from 'lucide-react';
+import { CircleAlert, Layers, TriangleAlert, X } from 'lucide-react';
 import type {
   AgentEventDto,
   ApprovalRequestDto,
@@ -32,6 +32,10 @@ interface ChatScreenProps {
   onPickModel: (modelPath: string) => void;
   /** Starts a new conversation from the end of readable turn `afterTurn`. */
   onBranch: (afterTurn: number) => void;
+  /** A compaction is being written: the screen says so. */
+  compacting: boolean;
+  /** Asks for a compaction (the caller confirms first). */
+  onCompact: () => void;
   /** An opening is in progress: the selector must not relaunch on top of it. */
   busy: boolean;
   /** Temperature is carried by the conversation: it's reread on change. */
@@ -106,6 +110,8 @@ export function ChatScreen({
   modelName,
   onPickModel,
   onBranch,
+  compacting,
+  onCompact,
   busy,
   conversationId,
   missingModel,
@@ -121,6 +127,8 @@ export function ChatScreen({
   // The composer's model menu, raised from the missing-model alert so a
   // recovery never leaves the chat.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
+  /** The context filled up in this screen: a compaction is offered. */
+  const [contextFull, setContextFull] = useState(false);
 
   // A conversation reads back the way it was seen: an assistant turn comes
   // with its segments — reasoning collapsed, tool calls with their outcome,
@@ -131,6 +139,28 @@ export function ChatScreen({
       initialEvents.map((event) => {
         const id = freshId();
         const timestamp = Date.parse(event.at) || Date.now();
+        if (event.type === 'compaction') {
+          // The turns above were summarised for the model: a marked turn,
+          // the summary behind a disclosure — the screen keeps everything.
+          return {
+            id,
+            role: 'assistant',
+            content: '',
+            timestamp,
+            status: 'completed',
+            segments: [
+              { id: `${id}-note`, type: 'text', content: `*${t.chat.compacted}*`, isStreaming: false },
+              {
+                id: `${id}-summary`,
+                type: 'thinking',
+                content: event.text,
+                label: t.chat.compactedSummary,
+                collapsed: true,
+                isStreaming: false,
+              },
+            ],
+          };
+        }
         if (event.type === 'user' || !event.segments) {
           return { id, role: event.type, content: event.text, timestamp };
         }
@@ -160,7 +190,7 @@ export function ChatScreen({
         });
         return { id, role: 'assistant', content: '', timestamp, status: 'completed', segments };
       }),
-    [initialEvents, t.chat.thinking],
+    [initialEvents, t.chat.thinking, t.chat.compacted, t.chat.compactedSummary],
   );
 
   const chat = useAparteChat(initialMessages);
@@ -280,6 +310,7 @@ export function ChatScreen({
         case 'done':
           onStats(event.stats);
           if (event.stats.truncated) {
+            setContextFull(true);
             chatRef.current.addSegment({
               id: `seg-error-${state.seq++}`,
               type: 'error',
@@ -301,7 +332,8 @@ export function ChatScreen({
         case 'context_overflow':
           // Nothing was sent: the message, with room for a reply, does not
           // fit in what the server holds. Said in the thread, where the
-          // user reads; compaction (P2.5) will offer a way out.
+          // user reads — and a compaction is offered above the composer.
+          setContextFull(true);
           chatRef.current.addSegment({
             id: `seg-error-${state.seq++}`,
             type: 'error',
@@ -511,6 +543,19 @@ export function ChatScreen({
             >
               {t.chat.chooseModel}
             </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      {(contextFull || compacting) && (
+        <Alert role="status" className="context-full mt-3 shrink-0">
+          <Layers aria-hidden="true" />
+          <AlertDescription className="flex flex-wrap items-center gap-2">
+            <span className="flex-1">{compacting ? t.chat.compacting : t.chat.compactOffer}</span>
+            {!compacting && (
+              <Button type="button" variant="secondary" size="sm" onClick={onCompact} disabled={busy}>
+                {t.chat.compactAction}
+              </Button>
+            )}
           </AlertDescription>
         </Alert>
       )}

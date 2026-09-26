@@ -82,12 +82,17 @@ export const FR: AppTranslations = {
   },
   chat: {
     branchHere: 'Brancher d’ici',
+    compacted: 'Les tours précédents ont été compactés : le modèle travaille désormais à partir de leur résumé.',
+    compactedSummary: 'Résumé que garde le modèle',
+    compactOffer: 'Le contexte est plein. Compacter résume les tours précédents pour que la conversation continue.',
+    compactAction: 'Compacter la conversation',
+    compacting: 'Le modèle rédige le résumé…',
     contextOverflow:
-      'Le contexte est plein ({used} tokens sur {limit}) : ce message, avec la place d’une réponse, n’y tient pas. Rien n’a été envoyé. Ouvrez une nouvelle conversation, ou relevez le plafond dans les réglages — la compaction viendra plus tard.',
+      'Le contexte est plein ({used} tokens sur {limit}) : ce message, avec la place d’une réponse, n’y tient pas. Rien n’a été envoyé. Compactez la conversation, ouvrez-en une nouvelle, ou relevez le plafond dans les réglages.',
     contextOverflowUnknown:
-      'Le serveur refuse ce message : son contexte est plein, il n’y tient pas. Rien n’a été envoyé. Ouvrez une nouvelle conversation — la compaction viendra plus tard.',
+      'Le serveur refuse ce message : son contexte est plein, il n’y tient pas. Rien n’a été envoyé. Compactez la conversation, ou ouvrez-en une nouvelle.',
     replyTruncated:
-      'La réponse a été coupée : le contexte est plein. Elle est incomplète. Ouvrez une nouvelle conversation, ou relevez le plafond de contexte dans les réglages — la compaction viendra plus tard.',
+      'La réponse a été coupée : le contexte est plein. Elle est incomplète. Compactez la conversation, ouvrez-en une nouvelle, ou relevez le plafond de contexte dans les réglages.',
     missingModel: 'Le modèle « {name} » n’est plus sur cette machine.',
     chooseModel: 'Choisir un modèle',
     placeholder: 'Écrivez à bonaparte…',
@@ -146,6 +151,15 @@ export const FR: AppTranslations = {
     memoryHint: 'Environ {total} de mémoire à {ctx} jetons — modèle {weights}, contexte {kv}',
     tight: 'Juste pour la mémoire de cette machine',
     tooBig: 'Plus grand que la mémoire de cette machine',
+  },
+  compactDialog: {
+    title: 'Compacter cette conversation ?',
+    reads: 'Le modèle la relit une fois et en rédige un résumé — une réponse d’environ 1 500 jetons au plus.',
+    restarts:
+      'Le message suivant repart de ce résumé et du dernier échange : le contexte rétrécit, et le contexte sauvegardé est reconstruit à partir de lui.',
+    keeps: 'Tous les messages restent à l’écran. Branchez d’abord si vous voulez aussi garder le contexte complet.',
+    cancel: 'Annuler',
+    confirm: 'Compacter',
   },
   switchModel: {
     title: 'Passer cette conversation sur {model} ?',
@@ -238,6 +252,7 @@ export const FR: AppTranslations = {
     noRoots: 'Aucun dossier source — ce projet est un simple groupe.',
     defaultRoot: 'défaut',
     instructions: 'Le modèle suit {files}',
+    compact: 'Compacter la conversation…',
     noInstructions:
       'Pas de fichier d’instructions : le modèle lit AGENTS.md, CLAUDE.md ou .bonaparte/instructions.md quand le projet en a un.',
     rename: 'Renommer la conversation',

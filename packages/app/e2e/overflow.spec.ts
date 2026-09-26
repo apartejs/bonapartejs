@@ -65,4 +65,7 @@ test('a prompt the server refuses as too long is announced as a full context', a
   const thread = window.locator('.chat-wrap');
   await expect(thread).toContainText('does not fit', { timeout: 10_000 });
   await expect(thread).not.toContainText('llama-server 400');
+  // And the way out is offered where the next message would be typed.
+  await expect(window.locator('.context-full')).toContainText('The context is full');
+  await expect(window.locator('.context-full').getByRole('button', { name: 'Compact the conversation' })).toBeVisible();
 });

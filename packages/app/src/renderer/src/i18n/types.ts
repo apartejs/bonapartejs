@@ -85,6 +85,13 @@ export interface AppTranslations {
   chat: {
     /** The bubble action that starts a new conversation from this point. */
     branchHere: string;
+    /** The compaction turn, in the thread. */
+    compacted: string;
+    compactedSummary: string;
+    /** The banner after a full context. */
+    compactOffer: string;
+    compactAction: string;
+    compacting: string;
     /** `{used}` tokens in the slot, `{limit}` what the conversation may occupy (the server's size, or its own cap). */
     contextOverflow: string;
     /** Same, when the engine declares no context size (remote). */
@@ -154,6 +161,15 @@ export interface AppTranslations {
     memoryHint: string;
     tight: string;
     tooBig: string;
+  };
+  /** The confirmation before a compaction (D-03: nothing expensive unannounced). */
+  compactDialog: {
+    title: string;
+    reads: string;
+    restarts: string;
+    keeps: string;
+    cancel: string;
+    confirm: string;
   };
   /** The confirmation before a conversation changes model (D-03). */
   switchModel: {
@@ -275,6 +291,7 @@ export interface AppTranslations {
     /** `{files}`: the instruction files the model reads. */
     instructions: string;
     noInstructions: string;
+    compact: string;
     rename: string;
     actions: string;
     moveTo: string;

@@ -551,6 +551,13 @@ export class Harness {
     await this.store.setMarks(id, clean);
   }
 
+  /** Compaction = rebase (P2.5): core summarises, appends the rebase, resets the freeze. */
+  async compactConversation(id: string): Promise<{ compactedTurns: number; keptTurns: number }> {
+    void this.armIdleTimer();
+    const result = await this.conversations.compact(id);
+    return { compactedTurns: result.compactedTurns, keptTurns: result.keptTurns };
+  }
+
   /** A branch (or a duplicate): core copies the frozen prompt, the log up to the turn, and the saved state. */
   async branchConversation(id: string, options: { title: string; afterTurn?: number }): Promise<string> {
     if (typeof options?.title !== 'string' || options.title.length > 300) throw new Error('A branch needs a title');
@@ -1559,6 +1566,7 @@ export class Harness {
     handle(IPC.conversationBranch, (id: string, options: { title: string; afterTurn?: number }) =>
       this.branchConversation(id, options),
     );
+    handle(IPC.conversationCompact, (id: string) => this.compactConversation(id));
     handle(
       IPC.conversationOpen,
       (id?: string, modelPath?: string) => this.openConversation(id, modelPath),
@@ -1569,6 +1577,7 @@ export class Harness {
     handle(IPC.kvFree, () => this.freeKv());
     handle(IPC.agentInFlight, () => this.conversations.inFlight());
     handle(IPC.agentCancel, () => {
+')[2] ?? '');
       if (this.currentConversationId) this.conversations.cancel(this.currentConversationId);
     });
     handle(IPC.setupSuggest, () => this.suggestSetup());

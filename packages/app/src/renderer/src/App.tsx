@@ -22,6 +22,7 @@ import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
 import { DeleteConversationDialog } from './components/DeleteConversationDialog.js';
 import { SwitchModelDialog } from './components/SwitchModelDialog.js';
+import { CompactDialog } from './components/CompactDialog.js';
 import { ProjectDialog } from './components/ProjectDialog.js';
 import { SettingsHub } from './components/SettingsHub.js';
 import { ToolingPanel } from './components/ToolingPanel.js';
@@ -86,6 +87,14 @@ export function App() {
   } | null>(null);
   /** The conversation whose deletion is being confirmed. */
   const [toDelete, setToDelete] = useState<ConversationSummaryDto | null>(null);
+  /** The conversation whose compaction is being confirmed, then carried out. */
+  const [compactAsk, setCompactAsk] = useState<string | null>(null);
+  const [compacting, setCompacting] = useState(false);
+  /**
+   * Bumped when the open conversation's thread changes under it (a
+   * compaction): the chat seeds the library once, at mount, so it remounts.
+   */
+  const [threadRevision, setThreadRevision] = useState(0);
   /** A model switch waiting for its cost to be confirmed. */
   const [switchAsk, setSwitchAsk] = useState<{ conversationId: string; estimate: SwitchEstimateDto } | null>(
     null,
@@ -497,6 +506,28 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [view, busy, createConversation, layout]);
 
+  /**
+   * Compaction (P2.5), once confirmed: the model writes the summary — it can
+   * take a while on a local model, the screen says so — then the
+   * conversation is shown again, its compaction marked.
+   */
+  const compactConversation = useCallback(
+    async (conversationId: string) => {
+      setCompacting(true);
+      setError(null);
+      try {
+        await window.bonaparte.compactConversation(conversationId);
+        await selectConversation(conversationId);
+        setThreadRevision((revision) => revision + 1);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setCompacting(false);
+      }
+    },
+    [selectConversation],
+  );
+
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');
@@ -609,6 +640,7 @@ export function App() {
               }}
               onCreateProject={() => setProjectDialog({ project: null })}
               onMoveToProject={(id) => void moveConversation(id)}
+              onCompact={() => setCompactAsk(opened.conversationId)}
               sidebarCollapsed={!layout.sidebar.visible}
               panelCollapsed={!layout.panel.visible}
               onToggleSidebar={layout.toggleSidebar}
@@ -618,7 +650,7 @@ export function App() {
                 messages ONCE, at mount. Without a remount, switching
                 conversation left the previous thread on screen. */}
             <ChatScreen
-              key={opened.conversationId}
+              key={`${opened.conversationId}:${threadRevision}`}
               initialEvents={opened.events}
               onStats={setLastStats}
               onStreamingChange={setStreaming}
@@ -639,6 +671,8 @@ export function App() {
               approval={approval}
               onApprovalResponse={answerApproval}
               onBranch={(afterTurn) => void branchConversation(opened.conversationId, afterTurn)}
+              compacting={compacting}
+              onCompact={() => setCompactAsk(opened.conversationId)}
             />
           </div>
           ) : null}
@@ -679,6 +713,16 @@ export function App() {
           }}
           onToggleTheme={toggleTheme}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {compactAsk && (
+        <CompactDialog
+          onConfirm={() => {
+            const id = compactAsk;
+            setCompactAsk(null);
+            void compactConversation(id);
+          }}
+          onCancel={() => setCompactAsk(null)}
         />
       )}
       {switchAsk && (

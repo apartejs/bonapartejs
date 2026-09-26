@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Input,
   Popover,
@@ -28,6 +29,8 @@ interface ConversationHeaderProps {
   onEditProject: () => void;
   onCreateProject: () => void;
   onMoveToProject: (projectId: string | null) => void;
+  /** Asks to compact the conversation (the caller confirms first). */
+  onCompact: () => void;
   /**
    * Toggles for both flanks. They live HERE, in a fixed position of the
    * chrome, rather than in the panels they hide: a button placed inside the
@@ -67,6 +70,7 @@ export function ConversationHeader({
   onEditProject,
   onCreateProject,
   onMoveToProject,
+  onCompact,
   sidebarCollapsed,
   panelCollapsed,
   onToggleSidebar,
@@ -258,6 +262,10 @@ export function ConversationHeader({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="conv-popover-right min-w-56">
+          <DropdownMenuItem className="conv-compact" disabled={busy} onSelect={() => onCompact()}>
+            {t.header.compact}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuLabel className={MENU_LABEL}>{t.header.moveTo}</DropdownMenuLabel>
           {projects.map((candidate) => (
             <DropdownMenuItem

@@ -34,6 +34,7 @@ export const IPC = {
   conversationDelete: 'conversation.delete',
   conversationMark: 'conversation.mark',
   conversationBranch: 'conversation.branch',
+  conversationCompact: 'conversation.compact',
   agentSend: 'agent.send',
   agentInFlight: 'agent.inFlight',
   agentCancel: 'agent.cancel',
@@ -357,7 +358,8 @@ export type ConversationSegmentDto =
   | { kind: 'tool'; name: string; args: Record<string, unknown>; ok?: boolean; content?: string };
 
 export interface ConversationEventDto {
-  type: 'user' | 'assistant';
+  /** `compaction`: the turns before it were summarised for the model — `text` is the summary. */
+  type: 'user' | 'assistant' | 'compaction';
   text: string;
   at: string;
   /** An assistant turn, segment by segment — reasoning, tool calls with their outcome, text. */
@@ -478,6 +480,11 @@ export interface BonaparteBridge {
    * Returns the new conversation's id.
    */
   branchConversation(id: string, options: { title: string; afterTurn?: number }): Promise<string>;
+  /**
+   * Compacts a conversation (P2.5): the model summarises it, the prompt
+   * restarts from the summary and the last turns. Resolves once done.
+   */
+  compactConversation(id: string): Promise<{ compactedTurns: number; keptTurns: number }>;
   /** Discovered plugins, with their views and any errors. */
   listPlugins(): Promise<PluginStatusDto[]>;
   /**
