@@ -85,6 +85,14 @@ export { ConversationStore, rebuildTranscript } from './conversation/store.js';
 export type { DiscoveredModel, ModelSource, ScanOptions, ScanRoot } from './models/inventory.js';
 export { defaultScanRoots, scanModels } from './models/inventory.js';
 export {
+  kvBytesPerToken,
+  kvCacheBytes,
+  readGgufInfo,
+  readGgufMetadata,
+  type GgufInfo,
+  type KvCacheTypeName,
+} from './models/gguf.js';
+export {
   isSupportedLlamaBuild,
   MIN_LLAMA_BUILD,
   parseLlamaBuildNumber,
