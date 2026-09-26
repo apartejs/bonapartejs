@@ -65,6 +65,10 @@ export const EN: AppTranslations = {
       'Every {binary} command in this project — never one chained with ; & | or redirected',
     alwaysTool: 'Always allow {tool}',
     alwaysToolHint: 'In this project, without asking again',
+    detailsLabel: 'What changes',
+    failsMissing: 'This edit will fail: {path} does not exist.',
+    failsNotFound: 'This edit will fail: the text to replace is not in {path}.',
+    failsAmbiguous: 'This edit will fail: the text to replace appears {count} times in {path} — it must be unique.',
   },
   modes: {
     hint: 'Play mode: what the agent may do without asking',
@@ -125,6 +129,8 @@ export const EN: AppTranslations = {
     gpuRestartCostUnknown: 'Restarting saves your conversation, then reloads the model.',
     gpuRestartFree: 'No model is loaded: restarting costs nothing.',
     restartNow: 'Restart now',
+    themeLight: 'Light',
+    themeDark: 'Dark',
     mcp: 'MCP servers',
     mcpHint:
       'Tools from the MCP servers you add. They follow your play mode: a tool its server marks read-only asks in Reading and Rehearsal — it still reaches outside bonaparte — and anything else is treated as a command.',

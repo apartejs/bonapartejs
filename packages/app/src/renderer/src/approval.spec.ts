@@ -1,6 +1,7 @@
 import type { ApprovalRequestDto } from '@aparte/bonaparte-shared';
 import { describe, expect, it } from 'vitest';
-import { answerToResponse, approvalMessage, approvalOptions } from './approval.js';
+import { answerToResponse, approvalDetails, approvalMessage, approvalOptions } from './approval.js';
+import { FR } from './i18n/fr.js';
 import { EN } from './i18n/en.js';
 
 const request: ApprovalRequestDto = {
@@ -111,5 +112,24 @@ describe('approval on the library panel', () => {
       id: 'req-1',
       granted: false,
     });
+  });
+});
+
+describe('what the approval shows under its question', () => {
+  const edit: ApprovalRequestDto = { id: 'r', conversationId: 'c', tool: 'edit_file', args: { path: 'a.md' } };
+
+  it('a diff, as is — the change is what is signed', () => {
+    const diff = '--- a.md\n+++ a.md';
+    expect(approvalDetails(EN.approval, { ...edit, preview: { kind: 'diff', diff } })).toBe(diff);
+    expect(approvalDetails(EN.approval, edit)).toBeUndefined();
+  });
+
+  it('an edit that will fail, worded in the language of the screen', () => {
+    expect(approvalDetails(FR.approval, { ...edit, preview: { kind: 'fails', reason: 'not-found', path: 'a.md' } })).toBe(
+      '⚠ Cette modification va échouer : le texte à remplacer n’est pas dans a.md.',
+    );
+    expect(
+      approvalDetails(EN.approval, { ...edit, preview: { kind: 'fails', reason: 'ambiguous', path: '$&.md', occurrences: 3 } }),
+    ).toBe('⚠ This edit will fail: the text to replace appears 3 times in $&.md — it must be unique.');
   });
 });

@@ -65,6 +65,9 @@ export function SettingsHub({
   const [kv, setKv] = useState<KvUsageDto | null>(null);
   const [freed, setFreed] = useState<number | null>(null);
   const [gpu, setGpu] = useState<GpuStatusDto | null>(null);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() =>
+    document.documentElement.getAttribute('data-aparte-theme') === 'dark' ? 'dark' : 'light',
+  );
 
   const refresh = useCallback(async () => {
     setSettings(await window.bonaparte.getSettings('global'));
@@ -118,8 +121,9 @@ export function SettingsHub({
     kvWarning: t.settings.kvWarning,
   };
 
-  // Sampling keys are the ones also adjustable per conversation.
-  const samplingKeys = new Set(['temperature', 'topP', 'topK', 'minP', 'seed']);
+  // Sampling keys are the ones also adjustable per conversation — how the
+  // model generates: reasoning on or off, then the sampler.
+  const samplingKeys = new Set(['thinking', 'temperature', 'topP', 'topK', 'minP', 'seed']);
   const sampling = settings.filter((setting) => samplingKeys.has(setting.key));
   const appKeys = new Set(['closeToTray', 'notifyTurnEnd', 'idleUnload', 'idleUnloadMinutes', 'kvBudgetGb']);
   const appSettings = settings.filter((setting) => appKeys.has(setting.key));
@@ -185,17 +189,25 @@ export function SettingsHub({
                   </SelectContent>
                 </Select>
               </div>
+              {/* The control shows the theme in use, not the name of the action. */}
               <div className="setting-row flex flex-col gap-1.5">
-                <span className="setting-label text-sm font-medium">{t.actions.toggleTheme}</span>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="self-start"
-                  onClick={onToggleTheme}
+                <Label htmlFor="setting-theme">{t.actions.toggleTheme}</Label>
+                <Select
+                  value={theme}
+                  onValueChange={(value) => {
+                    if (value === theme) return;
+                    onToggleTheme();
+                    setTheme(value as 'light' | 'dark');
+                  }}
                 >
-                  {t.actions.toggleTheme}
-                </Button>
+                  <SelectTrigger id="setting-theme" size="sm" className="w-60">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="light">{t.settings.themeLight}</SelectItem>
+                    <SelectItem value="dark">{t.settings.themeDark}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="setting-row flex flex-col gap-1.5">
                 <span className="setting-label text-sm font-medium">{t.settings.launch}</span>

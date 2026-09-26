@@ -115,6 +115,16 @@ function str(args: Record<string, unknown>, key: string): string | undefined {
 }
 
 /**
+ * What an approval shows for a file write: the change as a unified diff, or
+ * — when the edit cannot apply — why, as a reason the screen words in the
+ * user's language (the file is gone, the text to replace is not there, or
+ * is there several times).
+ */
+export type ToolPreview =
+  | { kind: 'diff'; diff: string }
+  | { kind: 'fails'; reason: 'missing' | 'not-found' | 'ambiguous'; path: string; occurrences?: number };
+
+/**
  * The preview of a file tool's call, against the file on disk; undefined
  * for another tool, or a path the tool itself will refuse.
  */
@@ -122,7 +132,7 @@ export async function previewToolCall(
   tool: string,
   args: Record<string, unknown>,
   roots: string[],
-): Promise<string | undefined> {
+): Promise<ToolPreview | undefined> {
   if (tool !== 'edit_file' && tool !== 'write_file') return undefined;
   const requested = str(args, 'path');
   if (!requested) return undefined;
@@ -143,17 +153,18 @@ export async function previewToolCall(
   if (tool === 'write_file') {
     const content = str(args, 'content');
     if (content === undefined) return undefined;
-    return current === undefined
-      ? unifiedDiff('/dev/null', shown, '', content)
-      : unifiedDiff(shown, shown, current, content);
+    return {
+      kind: 'diff',
+      diff: current === undefined ? unifiedDiff('/dev/null', shown, '', content) : unifiedDiff(shown, shown, current, content),
+    };
   }
 
   const oldString = str(args, 'old_string');
   const newString = str(args, 'new_string');
   if (oldString === undefined || newString === undefined) return undefined;
-  if (current === undefined) return `${shown} does not exist — the edit will fail.`;
+  if (current === undefined) return { kind: 'fails', reason: 'missing', path: shown };
   const occurrences = oldString === '' ? 0 : current.split(oldString).length - 1;
-  if (occurrences === 0) return `old_string not found in ${shown} — the edit will fail.`;
-  if (occurrences > 1) return `old_string has ${occurrences} occurrences in ${shown} — the edit will fail.`;
-  return unifiedDiff(shown, shown, current, current.replace(oldString, () => newString));
+  if (occurrences === 0) return { kind: 'fails', reason: 'not-found', path: shown };
+  if (occurrences > 1) return { kind: 'fails', reason: 'ambiguous', path: shown, occurrences };
+  return { kind: 'diff', diff: unifiedDiff(shown, shown, current, current.replace(oldString, () => newString)) };
 }

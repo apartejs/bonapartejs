@@ -291,8 +291,14 @@ export interface ApprovalRequestDto {
    * exact line can be remembered.
    */
   binary?: string;
-  /** For a file write: the change as a unified diff against the file on disk — what is being signed. */
-  preview?: string;
+  /**
+   * For a file write: the change as a unified diff against the file on disk
+   * — what is being signed — or why the edit cannot apply (worded by the
+   * screen, in the user's language).
+   */
+  preview?:
+    | { kind: 'diff'; diff: string }
+    | { kind: 'fails'; reason: 'missing' | 'not-found' | 'ambiguous'; path: string; occurrences?: number };
 }
 
 /** What an "always allow" covers: this exact command, or every command of its program. */

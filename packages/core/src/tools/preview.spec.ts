@@ -8,7 +8,13 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { previewToolCall, unifiedDiff } from './preview.js';
+import { previewToolCall, unifiedDiff, type ToolPreview } from './preview.js';
+
+/** The diff of a preview that is one — anything else fails the test. */
+function diffOf(preview: ToolPreview | undefined): string {
+  if (preview?.kind !== 'diff') throw new Error(`expected a diff, got ${JSON.stringify(preview)}`);
+  return preview.diff;
+}
 
 let dirs: string[] = [];
 afterEach(async () => {
@@ -29,10 +35,8 @@ const lines = (n: number, prefix = 'line'): string =>
 describe('previewToolCall — edit_file', () => {
   it('shows the replaced lines with their context, as a unified hunk', async () => {
     const root = await repo({ 'a.ts': lines(10) });
-    const preview = await previewToolCall(
-      'edit_file',
-      { path: 'a.ts', old_string: 'line 5', new_string: 'LINE FIVE\nextra' },
-      [root],
+    const preview = diffOf(
+      await previewToolCall('edit_file', { path: 'a.ts', old_string: 'line 5', new_string: 'LINE FIVE\nextra' }, [root]),
     );
     expect(preview).toBe(
       [
@@ -52,28 +56,38 @@ describe('previewToolCall — edit_file', () => {
     );
   });
 
-  it('a pattern that is not in the file, or twice: says so rather than inventing a diff', async () => {
+  it('an edit that will fail says why — a reason the screen words, never a made-up diff', async () => {
     const root = await repo({ 'a.ts': 'dup\ndup\n' });
-    expect(await previewToolCall('edit_file', { path: 'a.ts', old_string: 'nope', new_string: 'x' }, [root])).toMatch(
-      /not found/i,
-    );
-    expect(await previewToolCall('edit_file', { path: 'a.ts', old_string: 'dup', new_string: 'x' }, [root])).toMatch(
-      /2 occurrences/,
-    );
+    expect(await previewToolCall('edit_file', { path: 'a.ts', old_string: 'nope', new_string: 'x' }, [root])).toEqual({
+      kind: 'fails',
+      reason: 'not-found',
+      path: 'a.ts',
+    });
+    expect(await previewToolCall('edit_file', { path: 'a.ts', old_string: 'dup', new_string: 'x' }, [root])).toEqual({
+      kind: 'fails',
+      reason: 'ambiguous',
+      path: 'a.ts',
+      occurrences: 2,
+    });
+    expect(await previewToolCall('edit_file', { path: 'gone.ts', old_string: 'a', new_string: 'b' }, [root])).toEqual({
+      kind: 'fails',
+      reason: 'missing',
+      path: 'gone.ts',
+    });
   });
 });
 
 describe('previewToolCall — write_file', () => {
   it('a new file: every line added, under a "new file" header', async () => {
     const root = await repo({});
-    const preview = await previewToolCall('write_file', { path: 'new.ts', content: 'a\nb\n' }, [root]);
+    const preview = diffOf(await previewToolCall('write_file', { path: 'new.ts', content: 'a\nb\n' }, [root]));
     expect(preview).toBe(['--- /dev/null', '+++ new.ts', '@@ -0,0 +1,2 @@', '+a', '+b'].join('\n'));
   });
 
   it('an existing file: only what changes, with context', async () => {
     const root = await repo({ 'c.ts': lines(20) });
     const next = lines(20).replace('line 10\n', 'line ten\n');
-    const preview = await previewToolCall('write_file', { path: 'c.ts', content: next }, [root]);
+    const preview = diffOf(await previewToolCall('write_file', { path: 'c.ts', content: next }, [root]));
     expect(preview).toContain('@@ -7,7 +7,7 @@');
     expect(preview).toContain('-line 10');
     expect(preview).toContain('+line ten');
@@ -82,8 +96,8 @@ describe('previewToolCall — write_file', () => {
 
   it('a huge rewrite is summarised, never dumped', async () => {
     const root = await repo({ 'big.txt': lines(5000, 'old') });
-    const preview = await previewToolCall('write_file', { path: 'big.txt', content: lines(5000, 'new') }, [root]);
-    expect(preview!.length).toBeLessThan(20_000);
+    const preview = diffOf(await previewToolCall('write_file', { path: 'big.txt', content: lines(5000, 'new') }, [root]));
+    expect(preview.length).toBeLessThan(20_000);
     expect(preview).toMatch(/5000 lines/);
   });
 

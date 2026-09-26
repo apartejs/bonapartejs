@@ -64,6 +64,10 @@ export const FR: AppTranslations = {
     alwaysBinaryHint:
       'Toute commande {binary} dans ce projet — jamais enchaînée avec ; & | ni redirigée',
     alwaysTool: 'Toujours autoriser {tool}',
+    detailsLabel: 'Ce qui change',
+    failsMissing: 'Cette modification va échouer : {path} n’existe pas.',
+    failsNotFound: 'Cette modification va échouer : le texte à remplacer n’est pas dans {path}.',
+    failsAmbiguous: 'Cette modification va échouer : le texte à remplacer apparaît {count} fois dans {path} — il doit être unique.',
     alwaysToolHint: 'Dans ce projet, sans redemander',
     refuse: 'Refuser',
   },
@@ -125,6 +129,8 @@ export const FR: AppTranslations = {
     gpuRestartCostUnknown: 'Redémarrer sauvegarde votre conversation, puis recharge le modèle.',
     gpuRestartFree: 'Aucun modèle n’est chargé : redémarrer ne coûte rien.',
     restartNow: 'Redémarrer maintenant',
+    themeLight: 'Clair',
+    themeDark: 'Sombre',
     mcp: 'Serveurs MCP',
     mcpHint:
       'Les outils des serveurs MCP que vous ajoutez. Ils suivent votre mode de jeu : un outil que son serveur dit en lecture seule demande en Lecture et en Répétition — il sort quand même de bonaparte — et tout autre est traité comme une commande.',

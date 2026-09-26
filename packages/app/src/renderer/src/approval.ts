@@ -22,6 +22,11 @@ export interface ApprovalStrings {
   /** `{tool}`: the tool's name. */
   alwaysTool: string;
   alwaysToolHint: string;
+  /** `{path}`: the file an edit targets. */
+  failsMissing: string;
+  failsNotFound: string;
+  /** `{count}`: occurrences of the text to replace. */
+  failsAmbiguous: string;
 }
 
 /**
@@ -57,6 +62,23 @@ export function approvalOptions(t: ApprovalStrings, request: ApprovalRequestDto)
     ...always,
     { value: 'refuse', label: t.refuse, tone: 'deny' },
   ];
+}
+
+/**
+ * What the approval panel shows under its question: the diff of a file
+ * write, or — worded here, in the user's language — why the edit will fail.
+ */
+export function approvalDetails(t: ApprovalStrings, request: ApprovalRequestDto): string | undefined {
+  const preview = request.preview;
+  if (!preview) return undefined;
+  if (preview.kind === 'diff') return preview.diff;
+  const text =
+    preview.reason === 'missing'
+      ? t.failsMissing
+      : preview.reason === 'not-found'
+        ? t.failsNotFound
+        : t.failsAmbiguous.replace('{count}', () => String(preview.occurrences ?? 2));
+  return `⚠ ${text.replace('{path}', () => preview.path)}`;
 }
 
 /** Readable preview of what the agent is about to do. */

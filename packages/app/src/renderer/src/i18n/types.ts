@@ -67,6 +67,13 @@ export interface AppTranslations {
     /** `{tool}`: the tool's name. */
     alwaysTool: string;
     alwaysToolHint: string;
+    /** The label above what an approval shows (a diff, or why the edit will fail). */
+    detailsLabel: string;
+    /** `{path}`: the file an edit targets. */
+    failsMissing: string;
+    failsNotFound: string;
+    /** `{count}`: occurrences of the text to replace. */
+    failsAmbiguous: string;
   };
   modes: {
     hint: string;
@@ -139,6 +146,8 @@ export interface AppTranslations {
     gpuRestartCostUnknown: string;
     gpuRestartFree: string;
     restartNow: string;
+    themeLight: string;
+    themeDark: string;
     /** MCP servers (P4). */
     mcp: string;
     mcpHint: string;

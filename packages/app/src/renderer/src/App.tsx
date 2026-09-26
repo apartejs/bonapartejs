@@ -224,7 +224,10 @@ export function App() {
     // INSTANCE. Same contract, an object instead of a namespace.
     if (locale === 'fr') aparteGlobalConfig.setLocale(aparteFr);
     else aparteGlobalConfig.resetLocale(); // back to default (en)
-  }, [locale]);
+    // The approval panel labels its body "Arguments"; ours is always a
+    // change (a diff) or why it will fail.
+    aparteGlobalConfig.extendLocale({ approvalArgsLabel: t.approval.detailsLabel });
+  }, [locale, t.approval.detailsLabel]);
 
   useEffect(() => window.bonaparte.onBackendStatus(setBackendStatus), []);
   // A notification was clicked: the screen goes to that conversation.

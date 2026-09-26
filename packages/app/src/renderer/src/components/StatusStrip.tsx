@@ -301,7 +301,9 @@ export function StatusStrip({
           )}
         </span>
       )}
-      <div className="status-right flex items-center gap-2.5">
+      {/* Pinned right, and never broken: when the strip wraps, the chips go
+          to the next line — the actions stay where the hand expects them. */}
+      <div className="status-right ms-auto flex shrink-0 items-center gap-2.5">
         {saveState !== 'idle' && (
           <Badge variant="secondary" className={chipClass(saveState === 'saved' ? 'ok' : 'err')}>
             {saveState === 'saved' ? t.status.saved : t.status.saveFailed}

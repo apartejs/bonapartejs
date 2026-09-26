@@ -66,7 +66,7 @@ export function ToolingHome({ tooling, projectRoot }: ToolingHomeProps) {
       <p className="tooling-home-hint text-[12.5px] leading-normal text-muted-foreground">
         {t.tooling.homeHint}
       </p>
-      <div className="tooling-home-views grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
+      <div className="tooling-home-views grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
         {tooling.views.map((view) => (
           <Button
             key={view.pluginId + ':' + view.viewId}

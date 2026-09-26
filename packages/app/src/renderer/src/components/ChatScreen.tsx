@@ -11,7 +11,7 @@ import type {
   ConversationEventDto,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { answerToResponse, approvalMessage, approvalOptions } from '../approval.js';
+import { answerToResponse, approvalDetails, approvalMessage, approvalOptions } from '../approval.js';
 import { UNDO_TURN_EVENT, type ChangesSegment } from '../aparte-bootstrap.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { modelFileName } from '../models/filter.js';
@@ -594,8 +594,8 @@ export function ChatScreen({
       message: approvalMessage(t.approval, approval),
       kind: 'approval',
       options: approvalOptions(t.approval, approval),
-      // A file write shows its diff: the change is what is signed.
-      ...(approval.preview ? { details: approval.preview } : {}),
+      // A file write shows its diff: the change is what is signed — or why it will fail.
+      ...(approvalDetails(t.approval, approval) !== undefined ? { details: approvalDetails(t.approval, approval) } : {}),
       signal: controller.signal,
     })
       .then((result) => onApprovalResponse(answerToResponse(approval.id, result)))
