@@ -41,6 +41,8 @@ const api: BonaparteBridge = {
   renameConversation: (id: string, title: string) =>
     ipcRenderer.invoke(IPC.conversationRename, id, title),
   deleteConversation: (id: string) => ipcRenderer.invoke(IPC.conversationDelete, id),
+  markConversation: (id, marks) => ipcRenderer.invoke(IPC.conversationMark, id, marks),
+  branchConversation: (id, options) => ipcRenderer.invoke(IPC.conversationBranch, id, options),
   listPlugins: () => ipcRenderer.invoke(IPC.pluginsList),
   reloadPlugins: () => ipcRenderer.invoke(IPC.pluginsReload),
   onPluginEvent: (listener) => {

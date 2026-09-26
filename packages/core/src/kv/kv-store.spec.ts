@@ -313,6 +313,22 @@ describe('KvStore — retention under a disk budget (P2.2)', () => {
     expect(await store.has('conv-b')).toBe(false);
   });
 
+  it('copyState gives a branch its parent\'s state, re-addressed; none without a parent state', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-budget-'));
+    dirs.push(dir);
+    const store = new KvStore(dir);
+    expect(await store.copyState('conv-a', 'conv-b')).toBe(false);
+    await store.saveState(diskSlots(dir, 1), 0, 'conv-a', LIVE);
+
+    expect(await store.copyState('conv-a', 'conv-b')).toBe(true);
+
+    expect(await store.has('conv-b')).toBe(true);
+    const manifest = JSON.parse(await readFile(join(dir, 'conv-b.manifest.json'), 'utf8')) as KvManifest;
+    expect(manifest.conversationId).toBe('conv-b');
+    expect(manifest.modelFingerprint).toBe(LIVE.modelFingerprint);
+    expect(await store.has('conv-a')).toBe(true);
+  });
+
   it('usage() says what the saved states take', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-kv-budget-'));
     dirs.push(dir);

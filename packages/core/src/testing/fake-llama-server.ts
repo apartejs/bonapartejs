@@ -10,7 +10,9 @@
  * only the reported figure varies.
  */
 
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { join } from 'node:path';
 
 export interface FakeSlotSnapshot {
   tokens: string[];
@@ -48,6 +50,12 @@ export interface FakeLlamaServerOptions {
    * a process restart with the files surviving.
    */
   files?: Map<string, FakeSlotSnapshot>;
+  /**
+   * A real folder the slot files are ALSO written to, like the real
+   * server's `--slot-save-path`, and read from when the Map has not seen
+   * them — so a file copied on disk (a branch) restores.
+   */
+  slotDir?: string;
 }
 
 export interface FakeLlamaServer {
@@ -226,6 +234,10 @@ export async function startFakeLlamaServer(
       }
       const tokens = slotTokens(idSlot);
       files.set(filename, { tokens });
+      if (options.slotDir) {
+        mkdirSync(options.slotDir, { recursive: true });
+        writeFileSync(join(options.slotDir, filename), JSON.stringify({ tokens }));
+      }
       json(res, 200, {
         id_slot: idSlot,
         filename,
@@ -238,7 +250,14 @@ export async function startFakeLlamaServer(
 
     if (action === 'restore') {
       const filename = String(body['filename'] ?? '');
-      const snapshot = files.get(filename);
+      let snapshot = files.get(filename);
+      if (!snapshot && options.slotDir) {
+        try {
+          snapshot = JSON.parse(readFileSync(join(options.slotDir, filename), 'utf8')) as FakeSlotSnapshot;
+        } catch {
+          snapshot = undefined;
+        }
+      }
       if (!snapshot) {
         json(res, 400, { error: { message: `unknown file: ${filename}` } });
         return;

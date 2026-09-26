@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ConversationStore,
+  cutAfterTurn,
   rebuildTranscript,
+  type ConversationEvent,
 } from './store.js';
 
 let dirs: string[] = [];
@@ -206,5 +208,76 @@ describe('rebuildTranscript', () => {
       { role: 'tool_results', results: [{ name: 't', ok: true, content: 'r' }] },
       { role: 'service', text: '[update]' },
     ]);
+  });
+});
+describe('ConversationStore — pin, archive, branch (P2.7)', () => {
+  it('pin and archive are marks, not activity: they do not move the conversation in time', async () => {
+    const store = await makeStore();
+    await store.create('c');
+    const before = (await store.meta('c')).updatedAt;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await store.setMarks('c', { pinned: true });
+    await store.setMarks('c', { archived: true });
+
+    const meta = await store.meta('c');
+    expect(meta).toMatchObject({ pinned: true, archived: true });
+    expect(meta.updatedAt).toBe(before);
+    await store.setMarks('c', { pinned: false, archived: false });
+    expect(await store.meta('c')).not.toHaveProperty('pinned');
+  });
+
+  it('a branch copies the frozen prompt and the log up to a point, and names its parent', async () => {
+    const store = await makeStore();
+    await store.create('parent', { title: 'Parent', modelPath: 'm.gguf', projectId: 'p' });
+    await store.freezeBackendState('parent', { systemPrompt: 'FROZEN' }, ['read_file']);
+    await store.setFrozenRoots('parent', ['C:\p']);
+    await store.setSetting('parent', 'temperature', 0.3);
+    await store.appendEvent('parent', { type: 'user', text: 'one', at: 't1' });
+    await store.appendEvent('parent', { type: 'service', text: 'svc', at: 't2' });
+    await store.appendEvent('parent', { type: 'user', text: 'two', at: 't3' });
+
+    await store.branch('parent', 'child', { keepEvents: 2, title: 'Parent (branch)' });
+
+    const child = await store.meta('child');
+    expect(child).toMatchObject({
+      title: 'Parent (branch)',
+      modelPath: 'm.gguf',
+      projectId: 'p',
+      backendState: { systemPrompt: 'FROZEN' },
+      toolNames: ['read_file'],
+      frozenRoots: ['C:\p'],
+      settings: { temperature: 0.3 },
+      parentId: 'parent',
+    });
+    expect((await store.loadEvents('child')).map((e) => ('text' in e ? e.text : ''))).toEqual(['one', 'svc']);
+    // The parent is untouched.
+    expect(await store.loadEvents('parent')).toHaveLength(3);
+  });
+
+  it('without a cut, a branch is a duplicate: the whole log', async () => {
+    const store = await makeStore();
+    await store.create('a', { title: 'A' });
+    await store.appendEvent('a', { type: 'user', text: 'x', at: 't' });
+    await store.branch('a', 'b', { title: 'A (copy)' });
+    expect(await store.loadEvents('b')).toHaveLength(1);
+  });
+});
+
+describe('cutAfterTurn — where a branch from a readable turn cuts the log', () => {
+  it('after an assistant turn: just before the next user message, its tool rounds included', () => {
+    const events: ConversationEvent[] = [
+      { type: 'user', text: 'q1', at: 't' },
+      { type: 'assistant', entry: { role: 'assistant', text: 'calling', raw: 'calling', calls: [{ name: 'read_file', arguments: {} }] }, at: 't' },
+      { type: 'tool_results', entry: { role: 'tool_results', results: [{ name: 'read_file', ok: true, content: 'c' }] }, at: 't' },
+      { type: 'assistant', entry: { role: 'assistant', text: 'a1', raw: 'a1' }, at: 't' },
+      { type: 'user', text: 'q2', at: 't' },
+      { type: 'assistant', entry: { role: 'assistant', text: 'a2', raw: 'a2' }, at: 't' },
+    ];
+    // Readable turns: 0 user q1, 1 assistant (3 raw events), 2 user q2, 3 assistant a2.
+    expect(cutAfterTurn(events, 1)).toBe(4);
+    expect(cutAfterTurn(events, 0)).toBe(1);
+    expect(cutAfterTurn(events, 3)).toBe(6);
+    expect(cutAfterTurn(events, 9)).toBe(6);
   });
 });

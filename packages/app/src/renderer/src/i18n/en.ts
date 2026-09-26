@@ -80,6 +80,7 @@ export const EN: AppTranslations = {
     },
   },
   chat: {
+    branchHere: 'Branch from here',
     contextOverflow:
       'The context is full ({used} tokens of {limit}): this message, with room for a reply, does not fit. Nothing was sent. Start a new conversation, or raise the cap in the settings — compaction comes later.',
     contextOverflowUnknown:
@@ -201,6 +202,19 @@ export const EN: AppTranslations = {
       '“{title}” and its saved context will be erased from this computer. This cannot be undone.',
     deleteConfirm: 'Delete',
     cancel: 'Cancel',
+    pin: 'Pin',
+    unpin: 'Unpin',
+    archive: 'Archive',
+    unarchive: 'Restore from archive',
+    duplicate: 'Duplicate',
+    pinned: 'Pinned',
+    archived: 'archived',
+    showArchived: 'Show archived ({count})',
+    search: 'Search conversations',
+    noMatch: 'No conversation matches.',
+    copySuffix: ' (copy)',
+    branchSuffix: ' (branch)',
+    branchOf: 'Branched from “{title}”',
   },
   header: {
     noProject: 'No project',

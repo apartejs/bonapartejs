@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs';
 import type { AgentEvent, ApprovalResolver } from '../agent/loop.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
 import type { SamplingParams } from '../backend/types.js';
-import type { ConversationEvent, ConversationStore } from '../conversation/store.js';
+import { cutAfterTurn, type ConversationEvent, type ConversationStore } from '../conversation/store.js';
 import type { KvStore } from '../kv/kv-store.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import { ChatSession, type OpenResult } from '../session/chat-session.js';
@@ -459,6 +459,30 @@ export class ConversationEngine {
     this.turn?.controller.abort();
     await this.settle();
     await this.release();
+  }
+
+  /**
+   * A new conversation that starts as `sourceId` did (D-44): the same frozen
+   * prompt, the log up to readable turn `afterTurn` (all of it: a
+   * duplicate), and the parent's saved state — so its first turn reads the
+   * shared prefix from the cache instead of computing it again. The parent,
+   * if open, saves first, so the copy is its latest. Between turns only.
+   */
+  async branch(
+    sourceId: string,
+    newId: string,
+    options: { title: string; afterTurn?: number },
+  ): Promise<{ inheritedState: boolean }> {
+    await this.settle();
+    if (this.activeId === sourceId) await this.saveState();
+    const { store, kv } = this.options;
+    const keepEvents =
+      options.afterTurn === undefined ? undefined : cutAfterTurn(await store.loadEvents(sourceId), options.afterTurn);
+    await store.branch(sourceId, newId, {
+      title: options.title,
+      ...(keepEvents !== undefined ? { keepEvents } : {}),
+    });
+    return { inheritedState: await kv.copyState(sourceId, newId) };
   }
 
   /**

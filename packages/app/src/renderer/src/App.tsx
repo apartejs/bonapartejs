@@ -426,6 +426,40 @@ export function App() {
     [tryOpen],
   );
 
+  /** Pin / archive: marks — the list moves, the conversation does not. */
+  const markConversation = useCallback(
+    async (conversation: ConversationSummaryDto, marks: { pinned?: boolean; archived?: boolean }) => {
+      await window.bonaparte.markConversation(conversation.id, marks);
+      await refreshConversations();
+    },
+    [refreshConversations],
+  );
+
+  /**
+   * A branch — from a turn, or the whole conversation (a duplicate): a new
+   * conversation that starts where this one was, its saved context
+   * inherited so the first turn is served from the cache. The screen moves
+   * to it.
+   */
+  const branchConversation = useCallback(
+    async (conversationId: string, afterTurn?: number) => {
+      const source = conversations.find((c) => c.id === conversationId);
+      const base = source?.title || t.conversations.untitled;
+      const suffix = afterTurn === undefined ? t.conversations.copySuffix : t.conversations.branchSuffix;
+      try {
+        const newId = await window.bonaparte.branchConversation(conversationId, {
+          title: `${base}${suffix}`,
+          ...(afterTurn !== undefined ? { afterTurn } : {}),
+        });
+        await refreshConversations();
+        await selectConversation(newId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [conversations, t.conversations, refreshConversations, selectConversation],
+  );
+
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');
@@ -485,6 +519,8 @@ export function App() {
                   onGroupingChange={changeGrouping}
                   onSortChange={changeSort}
                   onDelete={setToDelete}
+                  onMark={(conversation, marks) => void markConversation(conversation, marks)}
+                  onDuplicate={(conversation) => void branchConversation(conversation.id)}
                 />
                 {layout.sidebar.mode === 'docked' && (
                   <ResizeHandle
@@ -565,6 +601,7 @@ export function App() {
               onAutoSent={clearPendingText}
               approval={approval}
               onApprovalResponse={answerApproval}
+              onBranch={(afterTurn) => void branchConversation(opened.conversationId, afterTurn)}
             />
           </div>
           ) : null}

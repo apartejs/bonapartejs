@@ -32,6 +32,8 @@ export const IPC = {
   conversationCreate: 'conversation.create',
   conversationRename: 'conversation.rename',
   conversationDelete: 'conversation.delete',
+  conversationMark: 'conversation.mark',
+  conversationBranch: 'conversation.branch',
   agentSend: 'agent.send',
   agentInFlight: 'agent.inFlight',
   agentCancel: 'agent.cancel',
@@ -199,6 +201,13 @@ export interface ConversationSummaryDto {
   modelName?: string;
   /** A KV state exists on disk: resuming will be instant. */
   hasKvState: boolean;
+  /** Kept at the top of the list. */
+  pinned?: boolean;
+  /** Out of the list until asked for. */
+  archived?: boolean;
+  /** Branched or duplicated from this conversation (a mark, never sent to the model). */
+  parentId?: string;
+  parentTitle?: string;
 }
 
 /** How the side menu is organized — preference persisted globally. */
@@ -456,6 +465,14 @@ export interface BonaparteBridge {
    * state. A turn in flight there is cut first.
    */
   deleteConversation(id: string): Promise<void>;
+  /** Pins / unpins, archives / restores — marks that do not move the conversation in time. */
+  markConversation(id: string, marks: { pinned?: boolean; archived?: boolean }): Promise<void>;
+  /**
+   * A new conversation that starts as this one did, up to readable turn
+   * `afterTurn` (all of it: a duplicate), inheriting its saved context.
+   * Returns the new conversation's id.
+   */
+  branchConversation(id: string, options: { title: string; afterTurn?: number }): Promise<string>;
   /** Discovered plugins, with their views and any errors. */
   listPlugins(): Promise<PluginStatusDto[]>;
   /**

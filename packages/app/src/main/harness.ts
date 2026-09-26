@@ -447,6 +447,7 @@ export class Harness {
 
   async listConversations(): Promise<ConversationSummaryDto[]> {
     const metas = await this.store.listMeta();
+    const titles = new Map(metas.map((meta) => [meta.id, meta.title]));
     return Promise.all(
       metas.map(async (meta) => ({
         id: meta.id,
@@ -457,8 +458,35 @@ export class Harness {
         ...(meta.modelPath ? { modelName: modelDisplayName(meta.modelPath) } : {}),
         // An instant resume is only promised on the evidence: the state must exist.
         hasKvState: await this.kv.has(meta.id),
+        ...(meta.pinned ? { pinned: true } : {}),
+        ...(meta.archived ? { archived: true } : {}),
+        ...(meta.parentId
+          ? { parentId: meta.parentId, ...(titles.has(meta.parentId) ? { parentTitle: titles.get(meta.parentId) as string } : {}) }
+          : {}),
       })),
     );
+  }
+
+  async markConversation(id: string, marks: { pinned?: boolean; archived?: boolean }): Promise<void> {
+    const clean: { pinned?: boolean; archived?: boolean } = {};
+    if (typeof marks?.pinned === 'boolean') clean.pinned = marks.pinned;
+    if (typeof marks?.archived === 'boolean') clean.archived = marks.archived;
+    await this.store.setMarks(id, clean);
+  }
+
+  /** A branch (or a duplicate): core copies the frozen prompt, the log up to the turn, and the saved state. */
+  async branchConversation(id: string, options: { title: string; afterTurn?: number }): Promise<string> {
+    if (typeof options?.title !== 'string' || options.title.length > 300) throw new Error('A branch needs a title');
+    const afterTurn = options.afterTurn;
+    if (afterTurn !== undefined && !(Number.isInteger(afterTurn) && afterTurn >= 0)) {
+      throw new Error(`Not a turn: ${String(afterTurn)}`);
+    }
+    const newId = newConversationId();
+    await this.conversations.branch(id, newId, {
+      title: options.title,
+      ...(afterTurn !== undefined ? { afterTurn } : {}),
+    });
+    return newId;
   }
 
   async createConversation(projectRoot?: string): Promise<string> {
@@ -1432,6 +1460,12 @@ export class Harness {
       this.renameConversation(id, title),
     );
     handle(IPC.conversationDelete, (id: string) => this.deleteConversation(id));
+    handle(IPC.conversationMark, (id: string, marks: { pinned?: boolean; archived?: boolean }) =>
+      this.markConversation(id, marks),
+    );
+    handle(IPC.conversationBranch, (id: string, options: { title: string; afterTurn?: number }) =>
+      this.branchConversation(id, options),
+    );
     handle(
       IPC.conversationOpen,
       (id?: string, modelPath?: string) => this.openConversation(id, modelPath),

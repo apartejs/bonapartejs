@@ -81,6 +81,7 @@ export const FR: AppTranslations = {
     },
   },
   chat: {
+    branchHere: 'Brancher d’ici',
     contextOverflow:
       'Le contexte est plein ({used} tokens sur {limit}) : ce message, avec la place d’une réponse, n’y tient pas. Rien n’a été envoyé. Ouvrez une nouvelle conversation, ou relevez le plafond dans les réglages — la compaction viendra plus tard.',
     contextOverflowUnknown:
@@ -203,6 +204,19 @@ export const FR: AppTranslations = {
       '« {title} » et son contexte sauvegardé seront effacés de cet ordinateur. C’est définitif.',
     deleteConfirm: 'Supprimer',
     cancel: 'Annuler',
+    pin: 'Épingler',
+    unpin: 'Désépingler',
+    archive: 'Archiver',
+    unarchive: 'Sortir des archives',
+    duplicate: 'Dupliquer',
+    pinned: 'Épinglées',
+    archived: 'archivée',
+    showArchived: 'Afficher les archives ({count})',
+    search: 'Chercher une conversation',
+    noMatch: 'Aucune conversation ne correspond.',
+    copySuffix: ' (copie)',
+    branchSuffix: ' (branche)',
+    branchOf: 'Branchée depuis « {title} »',
   },
   header: {
     noProject: 'Sans projet',

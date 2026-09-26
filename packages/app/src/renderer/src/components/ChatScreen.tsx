@@ -1,4 +1,4 @@
-import { requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
+import { aparteGlobalConfig, requestUserInput, type AparteMessage, type AparteSegment } from '@aparte/core';
 import { AparteChat, useAparteChat } from '@aparte/react';
 import { Alert, AlertDescription, Button } from '@aparte/bonaparte-plugin-sdk/ui';
 import { CircleAlert, TriangleAlert, X } from 'lucide-react';
@@ -30,6 +30,8 @@ interface ChatScreenProps {
   modelName: string | null;
   /** Open the conversation with a different model. */
   onPickModel: (modelPath: string) => void;
+  /** Starts a new conversation from the end of readable turn `afterTurn`. */
+  onBranch: (afterTurn: number) => void;
   /** An opening is in progress: the selector must not relaunch on top of it. */
   busy: boolean;
   /** Temperature is carried by the conversation: it's reread on change. */
@@ -53,6 +55,11 @@ interface ChatScreenProps {
 
 let nextId = 0;
 const freshId = (): string => `msg-${Date.now()}-${nextId++}`;
+
+const BRANCH_ACTION = 'bp-branch';
+/** Lucide's git-branch, drawn at the bubble toolbar's size. */
+const BRANCH_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>';
 
 /**
  * The composer only knows a reply is in flight — and only offers Stop —
@@ -98,6 +105,7 @@ export function ChatScreen({
   onModeChange,
   modelName,
   onPickModel,
+  onBranch,
   busy,
   conversationId,
   missingModel,
@@ -414,6 +422,32 @@ export function ChatScreen({
     handleSent({ content: autoSend });
     onAutoSent();
   });
+
+  // "Branch from here" on an assistant bubble: a new conversation that stops
+  // at this turn. A bubble's place in the transcript is its turn — history
+  // and live messages alike are one bubble per readable turn.
+  useEffect(() => {
+    aparteGlobalConfig.registerAction({
+      id: BRANCH_ACTION,
+      icon: BRANCH_ICON,
+      label: t.chat.branchHere,
+      zones: ['bubble'],
+      bubble: { roles: ['assistant'] },
+      order: 50,
+    });
+    return () => aparteGlobalConfig.unregisterAction(BRANCH_ACTION);
+  }, [t.chat.branchHere]);
+
+  useEffect(() => {
+    const onAction = (event: Event): void => {
+      const detail = (event as CustomEvent<{ actionId?: string; messageId?: string }>).detail;
+      if (detail?.actionId !== BRANCH_ACTION || !detail.messageId || turn.current) return;
+      const index = chatRef.current.getMessages().findIndex((message) => message.id === detail.messageId);
+      if (index >= 0) onBranch(index);
+    };
+    window.addEventListener('aparte-action', onAction);
+    return () => window.removeEventListener('aparte-action', onAction);
+  }, [onBranch]);
 
   // The composer's Stop. The library announces it on `window` as
   // `aparte-abort` (not bubbling from the composer): the engine cuts the

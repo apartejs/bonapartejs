@@ -15,6 +15,17 @@ published.
 
 ### Added
 
+- **Pin, archive, search, duplicate, branch** (P2.7, D-43/D-44). Each
+  sidebar row's menu pins (pinned conversations lead the list, whatever
+  the grouping), archives (out of the list until "Show archived" in the
+  Organise menu), duplicates or deletes. A search field filters titles,
+  projects and models as you type. **Duplicate** — or **Branch from here**
+  on any answer — creates a conversation that starts where its parent was:
+  the same frozen system prompt, the log up to that turn, and a copy of
+  the parent's saved context, so it resumes from the cache instead of
+  computing everything again. A branch shows its parent as a mark (never
+  sent to the model); the parent is untouched.
+
 - **Saved contexts stay under a disk budget** (P2.2, D-20). A saved
   context is 100 KB a token and more — a long conversation is gigabytes —
   and nothing ever removed one. After each save, the least recently used

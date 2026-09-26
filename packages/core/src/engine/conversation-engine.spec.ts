@@ -81,7 +81,10 @@ async function makeRig(
   let turn = 0;
   const replies = options.replies ?? ['ok'];
   const disk = new Map<string, FakeSlotSnapshot>();
+  const dir = await mkdtemp(join(tmpdir(), 'bp-conv-engine-'));
+  dirs.push(dir);
   const server = await startFakeLlamaServer({
+    slotDir: join(dir, 'kv-slots'),
     msPerToken: options.msPerToken ?? 2,
     ...(options.paceMs !== undefined ? { paceMs: options.paceMs } : {}),
     ...(options.serverNCtx !== undefined ? { nCtx: options.serverNCtx } : {}),
@@ -90,9 +93,6 @@ async function makeRig(
     files: disk,
   });
   servers.push(server);
-
-  const dir = await mkdtemp(join(tmpdir(), 'bp-conv-engine-'));
-  dirs.push(dir);
 
   const supervisor = new EngineSupervisor({
     slotsDir: join(dir, 'kv-slots'),
@@ -332,6 +332,43 @@ describe('ConversationEngine — what this machine measured', () => {
     expect(engine.prefillRate(MODEL)).toBeCloseTo(500, -1);
     expect(engine.contextTokensOf('conv-a')).toBeGreaterThan(0);
     expect(engine.contextTokensOf('conv-b')).toBeUndefined();
+  });
+});
+
+describe('ConversationEngine — branches and duplicates (D-44)', () => {
+  it('a duplicate inherits the saved state: its first turn is served from the cache', async () => {
+    const { engine, store, kv, events } = await makeRig({ replies: ['first answer', 'second', 'third'] });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'a question long enough to fill a few fake tokens');
+
+    const outcome = await engine.branch('conv-a', 'conv-b', { title: 'A (copy)' });
+
+    expect(outcome.inheritedState).toBe(true);
+    expect(await kv.has('conv-b')).toBe(true);
+    expect((await store.meta('conv-b')).parentId).toBe('conv-a');
+    const opened = await engine.open('conv-b', MODEL);
+    expect('needsModel' in opened ? null : opened.restore.restored).toBe(true);
+
+    await engine.send('conv-b', 'and a follow-up');
+    const end = events.filter((e) => e.conversationId === 'conv-b' && e.event.type === 'turn_end').at(-1)?.event;
+    expect(end?.type === 'turn_end' && end.cachedTokens > 0).toBe(true);
+  });
+
+  it('a branch after a turn keeps the log up to it, and the parent keeps everything', async () => {
+    const { engine, store } = await makeRig({ replies: ['one', 'two'] });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'first');
+    await engine.send('conv-a', 'second');
+
+    await engine.branch('conv-a', 'conv-c', { title: 'A (branch)', afterTurn: 1 });
+
+    const branch = await engine.history('conv-c');
+    expect(branch.events.map((e) => [e.type, e.text])).toEqual([
+      ['user', 'first'],
+      ['assistant', 'one'],
+    ]);
+    expect((await engine.history('conv-a')).events).toHaveLength(4);
+    expect((await store.meta('conv-c')).title).toBe('A (branch)');
   });
 });
 

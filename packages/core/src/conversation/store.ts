@@ -46,6 +46,46 @@ export interface ConversationMeta {
    * parameters go into the KV manifest and remain global).
    */
   settings?: Record<string, unknown>;
+  /** Kept at the top of the list. A mark, not activity. */
+  pinned?: boolean;
+  /** Out of the list until asked for. A mark, not activity. */
+  archived?: boolean;
+  /**
+   * The conversation this one was branched (or duplicated) from — shown as
+   * a mark, never sent to the model (D-44).
+   */
+  parentId?: string;
+}
+
+/** Options of a branch: where the log is cut, and the branch's title. */
+export interface BranchOptions {
+  /** Raw log events kept from the start; absent = all (a duplicate). */
+  keepEvents?: number;
+  title: string;
+}
+
+/**
+ * Where a branch "from this turn" cuts the log: right after readable turn
+ * `turn` (as `readableEvents` counts them — a user message, or an assistant
+ * turn with its tool rounds), that is before the next one starts.
+ */
+export function cutAfterTurn(events: ConversationEvent[], turn: number): number {
+  let readable = -1;
+  let inAssistantTurn = false;
+  for (let i = 0; i < events.length; i++) {
+    const event = events[i] as ConversationEvent;
+    if (event.type === 'user') {
+      inAssistantTurn = false;
+      if (event.text.trim() === '') continue;
+      readable += 1;
+      if (readable === turn + 1) return i;
+    } else if (event.type === 'assistant' && event.entry && !inAssistantTurn) {
+      inAssistantTurn = true;
+      readable += 1;
+      if (readable === turn + 1) return i;
+    }
+  }
+  return events.length;
 }
 
 export interface CreateConversationOptions {
@@ -138,6 +178,52 @@ export class ConversationStore {
     meta.settings = settings;
     meta.updatedAt = new Date().toISOString();
     await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+  }
+
+  /**
+   * Pins or archives. Marks, not activity: `updatedAt` does not move, so the
+   * conversation keeps its place in time.
+   */
+  async setMarks(id: string, marks: { pinned?: boolean; archived?: boolean }): Promise<void> {
+    const meta = await this.meta(id);
+    for (const key of ['pinned', 'archived'] as const) {
+      const value = marks[key];
+      if (value === undefined) continue;
+      if (value) meta[key] = true;
+      else delete meta[key];
+    }
+    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+  }
+
+  /**
+   * A new conversation that starts as `sourceId` did: the same frozen system
+   * prompt, inventory, scope, model and settings — byte for byte, so the
+   * parent's saved state can serve as its prefix — and the log up to a point
+   * (all of it: a duplicate). The parent is untouched.
+   */
+  async branch(sourceId: string, newId: string, options: BranchOptions): Promise<ConversationMeta> {
+    const source = await this.meta(sourceId);
+    const events = await this.loadEvents(sourceId);
+    const kept = options.keepEvents === undefined ? events : events.slice(0, Math.max(0, options.keepEvents));
+    const now = new Date().toISOString();
+    const meta: ConversationMeta = {
+      id: newId,
+      title: options.title,
+      createdAt: now,
+      updatedAt: now,
+      ...(source.modelPath !== undefined ? { modelPath: source.modelPath } : {}),
+      ...(source.nCtx !== undefined ? { nCtx: source.nCtx } : {}),
+      ...(source.backendState !== undefined ? { backendState: source.backendState } : {}),
+      ...(source.toolNames !== undefined ? { toolNames: [...source.toolNames] } : {}),
+      ...(source.projectId !== undefined ? { projectId: source.projectId } : {}),
+      ...(source.frozenRoots !== undefined ? { frozenRoots: [...source.frozenRoots] } : {}),
+      ...(source.settings !== undefined ? { settings: { ...source.settings } } : {}),
+      parentId: sourceId,
+    };
+    await mkdir(this.convDir(newId), { recursive: true });
+    await writeFile(this.metaPath(newId), JSON.stringify(meta, null, 2), 'utf8');
+    await writeFile(this.logPath(newId), kept.map((event) => `${JSON.stringify(event)}\n`).join(''), 'utf8');
+    return meta;
   }
 
   /** Renames the conversation (the rest of the meta is preserved). */

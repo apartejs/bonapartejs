@@ -16,7 +16,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { copyFile, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SlotApi } from '../backend/types.js';
 import { enforceRetention, kvUsage, type KvUsage, type RetentionReport } from './retention.js';
@@ -161,6 +162,36 @@ export class KvStore {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Gives a branch its parent's saved state (D-44): the slot file copied —
+   * a reflink where the filesystem can, a copy otherwise — and the manifest
+   * re-addressed. The branch's prompt starts with the parent's byte for
+   * byte, so the state serves as its prefix: the server keeps the common
+   * part and drops the rest. False when the parent has no state.
+   */
+  async copyState(fromId: string, toId: string): Promise<boolean> {
+    let manifest: KvManifest;
+    try {
+      manifest = JSON.parse(await readFile(this.manifestPath(fromId), 'utf8')) as KvManifest;
+    } catch {
+      return false;
+    }
+    try {
+      await copyFile(
+        join(this.manifestDir, this.slotFilename(fromId)),
+        join(this.manifestDir, this.slotFilename(toId)),
+        constants.COPYFILE_FICLONE,
+      );
+    } catch {
+      return false;
+    }
+    const copied: KvManifest = { ...manifest, conversationId: toId, savedAt: new Date().toISOString() };
+    await writeFile(this.manifestPath(toId), JSON.stringify(copied, null, 2), 'utf8');
+    await this.touch(this.slotFilename(toId));
+    await this.retain([toId, fromId]);
+    return true;
   }
 
   /** Tokens a conversation's saved state holds — what re-prefilling it would cost; undefined without one. */

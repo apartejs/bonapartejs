@@ -83,6 +83,8 @@ export interface AppTranslations {
     };
   };
   chat: {
+    /** The bubble action that starts a new conversation from this point. */
+    branchHere: string;
     /** `{used}` tokens in the slot, `{limit}` what the conversation may occupy (the server's size, or its own cap). */
     contextOverflow: string;
     /** Same, when the engine declares no context size (remote). */
@@ -233,6 +235,23 @@ export interface AppTranslations {
     deleteBody: string;
     deleteConfirm: string;
     cancel: string;
+    pin: string;
+    unpin: string;
+    archive: string;
+    unarchive: string;
+    duplicate: string;
+    pinned: string;
+    archived: string;
+    /** `{count}`: archived conversations. */
+    showArchived: string;
+    search: string;
+    noMatch: string;
+    /** Appended to a duplicate's title. */
+    copySuffix: string;
+    /** Appended to a branch's title. */
+    branchSuffix: string;
+    /** `{title}`: the parent conversation. */
+    branchOf: string;
   };
   header: {
     noProject: string;
