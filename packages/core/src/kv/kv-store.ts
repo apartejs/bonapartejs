@@ -15,6 +15,7 @@
  * on which the answer is an announced re-prefill, never a crash.
  */
 
+import { assertConversationId } from '../conversation/ids.js';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { copyFile, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
@@ -144,11 +145,11 @@ export class KvStore {
   }
 
   slotFilename(conversationId: string): string {
-    return `${conversationId}.slot`;
+    return `${assertConversationId(conversationId)}.slot`;
   }
 
   private manifestPath(conversationId: string): string {
-    return join(this.manifestDir, `${conversationId}.manifest.json`);
+    return join(this.manifestDir, `${assertConversationId(conversationId)}.manifest.json`);
   }
 
   /**

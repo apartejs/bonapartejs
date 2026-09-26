@@ -55,8 +55,8 @@ async function readBytes(path: string): Promise<Buffer | undefined> {
   }
 }
 
-/** A path segment safe as a folder name (ids are ours, but never trust a separator). */
-const segment = (value: string): string => value.replace(/[^\w.-]/g, '_');
+/** A path segment safe as a folder name (ids are ours, but never trust a separator — nor a `..`). */
+const segment = (value: string): string => value.replace(/[^\w-]/g, '_') || '_';
 
 export class CheckpointStore {
   constructor(readonly dir: string) {}

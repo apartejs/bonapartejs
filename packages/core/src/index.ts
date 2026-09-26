@@ -217,6 +217,7 @@ export { wantsGpuAcceleration, type GpuAccelerationChoice } from './settings/gpu
 export { EngineSupervisor } from './engine/supervisor.js';
 export { MeasureStore, type ModelMeasures } from './engine/measures.js';
 export { KeyedQueue, readJsonFile, writeJsonFile } from './fs/json-file.js';
+export { assertConversationId, isConversationId } from './conversation/ids.js';
 
 // ── MCP client (P4) ───────────────────────────────────────────────────────
 export {

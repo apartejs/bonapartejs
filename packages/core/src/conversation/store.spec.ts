@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -386,5 +386,26 @@ describe('meta under concurrent use — a turn, the sidebar and a pin at once', 
     expect(meta.pinned).toBe(true);
     expect(meta.title).toBe('Renamed');
     expect(await store.loadEvents('conv-a')).toHaveLength(2);
+  });
+});
+
+describe('an id is a name, never a path (adversarial review, 2026-09-26)', () => {
+  it('remove, create and read refuse an id that would leave the folder', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'bp-ids-'));
+    dirs.push(root);
+    await mkdir(join(root, 'victim'), { recursive: true });
+    await writeFile(join(root, 'victim', 'precious.txt'), 'data', 'utf8');
+    const store = new ConversationStore(join(root, 'conversations'));
+
+    for (const id of ['../victim', '..', '.', 'a/b', 'a\b', '', 'C:x']) {
+      await expect(store.remove(id)).rejects.toThrow(/Invalid conversation id/);
+      await expect(store.create(id)).rejects.toThrow(/Invalid conversation id/);
+      expect(await store.exists(id)).toBe(false);
+    }
+    expect(await readFile(join(root, 'victim', 'precious.txt'), 'utf8')).toBe('data');
+    // What the app generates, and what the specs use, is fine.
+    await store.create('mfk2x9-1a2b3c4d');
+    await store.create('conv-a');
+    expect((await store.listMeta()).map((meta) => meta.id).sort()).toEqual(['conv-a', 'mfk2x9-1a2b3c4d']);
   });
 });

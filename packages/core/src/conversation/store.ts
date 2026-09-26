@@ -4,6 +4,7 @@
  * byte-identical PromptLog (including the thinking flag of each turn).
  */
 
+import { assertConversationId } from './ids.js';
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
 import { join } from 'node:path';
@@ -191,7 +192,7 @@ export class ConversationStore {
   constructor(readonly dir: string) {}
 
   private convDir(id: string): string {
-    return join(this.dir, id);
+    return join(this.dir, assertConversationId(id));
   }
 
   /** One change of a meta at a time, per conversation. */
