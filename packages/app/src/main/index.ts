@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage } from 'electron';
+import { pathToFileURL } from 'node:url';
+import { BrowserWindow, Menu, Tray, app, ipcMain, nativeImage, shell } from 'electron';
 import { Harness } from './harness.js';
 
 // An isolated data directory isolates EVERYTHING: the renderer's localStorage
@@ -60,6 +61,50 @@ function iconPath(): string {
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
+
+const rendererFile = join(import.meta.dirname, '../renderer/index.html');
+const devUrl = process.env['ELECTRON_RENDERER_URL'];
+
+/** The app's own page — the one place the main window may be. */
+function isAppUrl(url: string): boolean {
+  const bare = url.split(/[?#]/)[0] ?? '';
+  if (devUrl) return bare.startsWith(devUrl);
+  return bare.toLowerCase() === pathToFileURL(rendererFile).href.toLowerCase();
+}
+
+/**
+ * A link out of the app — a reply's link, a doc page — goes to the system
+ * browser, and only an http(s) one: `file:`, a custom protocol or a
+ * `javascript:` URL is dropped. E2E records instead of opening a browser.
+ */
+function openLink(url: string): void {
+  if (!/^https?:\/\//i.test(url)) return;
+  if (process.env['BONAPARTE_E2E']) {
+    const scope = globalThis as { __bonaparteOpenedLinks?: string[] };
+    (scope.__bonaparteOpenedLinks ??= []).push(url);
+    return;
+  }
+  void shell.openExternal(url);
+}
+
+/**
+ * The main window carries the preload — the whole bridge to the harness —
+ * so it never leaves the app's page (audit 07, finding 1): a navigation is
+ * refused, a new window becomes a system-browser tab. The plugins' web
+ * views are other web contents, with their own rules.
+ */
+function lockToApp(win: BrowserWindow): void {
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isAppUrl(url)) event.preventDefault();
+  });
+  win.webContents.on('will-redirect', (event, url) => {
+    if (!isAppUrl(url)) event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    openLink(url);
+    return { action: 'deny' };
+  });
+}
 
 function showWindow(): void {
   const win = mainWindow;
@@ -128,6 +173,7 @@ function createWindow(): void {
     },
   });
   mainWindow = win;
+  lockToApp(win);
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
   });
@@ -158,11 +204,10 @@ function createWindow(): void {
     void shutdownOnce().finally(() => win.destroy());
   });
 
-  const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (devUrl) {
     void win.loadURL(devUrl);
   } else {
-    void win.loadFile(join(import.meta.dirname, '../renderer/index.html'));
+    void win.loadFile(rendererFile);
   }
 }
 

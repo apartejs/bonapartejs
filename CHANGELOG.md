@@ -15,6 +15,19 @@ published.
 
 ### Added
 
+- **The window is the app and nothing else** (security audit, finding 1).
+  The main window carries the whole bridge to the harness, and it could
+  be navigated anywhere — a link, a script that got in. It now refuses
+  any navigation away from its own page; a link that opens a window
+  (a reply's link) goes to the system browser, http(s) only — `file:`,
+  `javascript:` and custom protocols are dropped.
+- **A Content-Security-Policy on the packaged renderer** (finding 4 — the
+  comment in `index.html` claimed one that did not exist). Scripts come
+  from the app's files only: no inline script, no inline handler, no
+  eval. Nothing is fetched from the network — which also means a remote
+  image in a reply is not loaded, closing the classic exfiltration by
+  image URL. The anti-flash theme script moved to a file to allow it.
+
 - **A conversation can be deleted.** Each row of the sidebar has its own
   ⋯ menu (shown on hover or focus); "Delete…" asks first, naming the
   conversation and saying that its saved context goes with it and that
