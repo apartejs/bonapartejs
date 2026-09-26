@@ -311,6 +311,20 @@ describe('AgentLoop — permissions', () => {
     expect(result?.ok ?? false).toBe(false);
   });
 
+  it('Quill mode: a write to an armed file (package.json) asks, a plain one does not', async () => {
+    const approve = vi.fn<ApprovalResolver>(async () => true);
+    const { loop, transcript, calls } = await rig({
+      replies: [toolCall('write_file', { path: 'package.json' }) + toolCall('write_file', { path: 'src/a.ts' }), 'done'],
+      tools: [{ def: def('write_file', 'write') }],
+      mode: 'plume',
+      approve,
+    });
+    await collect(loop.run(transcript, 'x', new AbortController().signal));
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(approve.mock.calls[0]![0]).toMatchObject({ tool: 'write_file', args: { path: 'package.json' } });
+    expect(calls).toHaveLength(2);
+  });
+
   it('Rehearsal mode: a user refusal executes nothing', async () => {
     const { loop, transcript, calls } = await rig({
       replies: [toolCall('write_file'), 'compris'],

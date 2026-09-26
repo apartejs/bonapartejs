@@ -265,10 +265,12 @@ export class AgentLoop {
 
     const command =
       typeof args['command'] === 'string' ? (args['command'] as string) : undefined;
+    const path = typeof args['path'] === 'string' ? (args['path'] as string) : undefined;
     const decision = this.options.permissions.evaluate({
       tool: name,
       effect: registered.def.effect,
       ...(command !== undefined ? { command } : {}),
+      ...(path !== undefined ? { path } : {}),
     });
 
     if (decision === 'deny') {

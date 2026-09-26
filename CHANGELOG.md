@@ -257,6 +257,14 @@ published.
 
 ### Changed
 
+- **Quill asks before writing a file that runs later** (audit C6, Q-25).
+  Quill lets the agent write without asking — including into
+  `.git/hooks/`, `package.json` scripts, `*.config.*`, `.vscode/tasks.json`,
+  CI workflows, `.husky/`, a `Makefile` or `.env`: deferred commands, or
+  secrets. A write there now asks, in Quill and in Rehearsal, and a
+  tool-wide "always allow edit_file" does not answer for it. Improv still
+  allows it; Reading still refuses it.
+
 - **Without a project, the tools stay in your home folder** (audit C4,
   Q-26). "No project" meant no perimeter at all — `read_file` could read
   any path on the machine, `write_file` write one. The file tools now

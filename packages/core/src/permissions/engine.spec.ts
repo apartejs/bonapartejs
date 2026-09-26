@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alwaysRule, commandBinary, PermissionEngine, type PlayMode } from './engine.js';
+import { alwaysRule, commandBinary, isArmedPath, PermissionEngine, type PlayMode } from './engine.js';
 
 const read = { tool: 'read_file', effect: 'read' as const };
 const write = { tool: 'write_file', effect: 'write' as const };
@@ -173,5 +173,45 @@ describe('PermissionEngine — "always allow" says what it covers (Q-24, audit C
       tool: 'run_shell',
       exactCommand: 'FOO=1 node x.js',
     });
+  });
+});
+
+describe('PermissionEngine — "armed" files ask even when writes do not (Q-25, audit C6)', () => {
+  const edit = (path: string) => ({ tool: 'edit_file', effect: 'write' as const, path });
+
+  it.each([
+    '.git/hooks/pre-commit',
+    'sub/.git/config',
+    'package.json',
+    'apps/web/package.json',
+    '.npmrc',
+    'vite.config.ts',
+    'eslint.config.mjs',
+    '.vscode/tasks.json',
+    '.github/workflows/ci.yml',
+    '.husky/pre-push',
+    'Makefile',
+    '.env',
+    '.env.local',
+    'C:\\repo\\.git\\hooks\\post-checkout',
+  ])('Quill asks before writing %s', (path) => {
+    expect(isArmedPath(path)).toBe(true);
+    expect(engine('plume').evaluate(edit(path))).toBe('ask');
+  });
+
+  it.each(['src/index.ts', 'README.md', 'docs/config.md', 'src/package.ts', 'configure.ts'])(
+    'Quill writes %s without asking, as before',
+    (path) => {
+      expect(isArmedPath(path)).toBe(false);
+      expect(engine('plume').evaluate(edit(path))).toBe('allow');
+    },
+  );
+
+  it('a tool-wide "always allow" does not reach an armed file; Improv still allows it; Reading still denies it', () => {
+    const perm = new PermissionEngine('repetition', [{ tool: 'edit_file' }]);
+    expect(perm.evaluate(edit('src/a.ts'))).toBe('allow');
+    expect(perm.evaluate(edit('package.json'))).toBe('ask');
+    expect(engine('impro').evaluate(edit('package.json'))).toBe('allow');
+    expect(engine('lecture').evaluate(edit('package.json'))).toBe('deny');
   });
 });

@@ -63,6 +63,32 @@ export interface PermissionQuery {
   effect: ToolEffect;
   /** Full command, for execution tools. */
   command?: string;
+  /** Target path, for file tools — an "armed" file asks even when writes do not. */
+  path?: string;
+}
+
+/**
+ * Files whose content RUNS later — git hooks, npm scripts, tool configs,
+ * editor tasks, CI workflows, make targets — or holds secrets (Q-25, audit
+ * C6). Quill lets the agent write without asking, but a write here is a
+ * deferred command: it asks, like one. Matched on the path's shape.
+ */
+const ARMED: RegExp[] = [
+  /(^|\/)\.git(\/|$)/,
+  /(^|\/)\.husky\//,
+  /(^|\/)\.vscode\//,
+  /(^|\/)\.github\/workflows\//,
+  /(^|\/)package\.json$/,
+  /(^|\/)\.npmrc$/,
+  /(^|\/)\.yarnrc(\.yml)?$/,
+  /(^|\/)[^/]+\.config\.(js|cjs|mjs|ts|cts|mts)$/,
+  /(^|\/)makefile$/,
+  /(^|\/)\.env(\.[^/]*)?$/,
+];
+
+export function isArmedPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/').toLowerCase();
+  return ARMED.some((pattern) => pattern.test(normalized));
 }
 
 export class PermissionEngine {
@@ -107,6 +133,12 @@ export class PermissionEngine {
 
   evaluate(query: PermissionQuery): PermissionDecision {
     const ceiling = MODE_MATRIX[this.mode][query.effect];
+    // A write to an armed file is a deferred command: it asks in Quill,
+    // and no tool-wide grant answers for it. Improv still allows it,
+    // Reading still denies it.
+    if (query.effect === 'write' && query.path !== undefined && isArmedPath(query.path)) {
+      return ceiling === 'deny' || this.mode === 'impro' ? ceiling : 'ask';
+    }
     // The mode is a ceiling: a rule can only loosen an "ask".
     if (ceiling !== 'ask') return ceiling;
     return this.currentRules().some((rule) => matches(rule, query)) ? 'allow' : 'ask';
