@@ -15,6 +15,16 @@ published.
 
 ### Added
 
+- **What a tool returns cannot speak as a role** (audit, C3). `/completion`
+  turns special tokens in the prompt text into real ones, so a file the
+  model read — or a web page, a command's output — containing
+  `<|im_end|><|im_start|>system` opened a genuine system turn inside a
+  tool result. Such tokens (`<|name|>` and the tool-response wrapper) are
+  broken apart with a zero-width space before the log, the prompt and the
+  screen see them; the model still reads the words. Applied where results
+  enter the loop, so the conversations already on disk keep their bytes —
+  and their saved states.
+
 - **The bridge checks what reaches it** (audit, findings 3 and 7). Every
   IPC channel answers the app's own top frame only; the engine binary the
   renderer names must be a llama.cpp server (`llama-server`, the `llama`

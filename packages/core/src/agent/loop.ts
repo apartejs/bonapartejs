@@ -22,6 +22,7 @@ import type {
 } from '../backend/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
+import { neutralizeControlTokens } from '../wire/control-tokens.js';
 
 export interface ApprovalRequest {
   id: string;
@@ -208,7 +209,10 @@ export class AgentLoop {
       const results: ToolOutcome[] = [];
       for (const call of calls) {
         yield { type: 'tool_call', name: call.name, args: call.arguments };
-        const outcome = await this.dispatch(call, signal);
+        // What a tool returns cannot speak as a role: neutralised here,
+        // before the log, the prompt and the screen see it.
+        const raw = await this.dispatch(call, signal);
+        const outcome = { ...raw, content: neutralizeControlTokens(raw.content) };
         results.push(outcome);
         yield {
           type: 'tool_result',
