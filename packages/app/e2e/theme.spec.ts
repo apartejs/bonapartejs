@@ -84,3 +84,26 @@ test('the palette is React blue on react.dev greys, in both themes', async () =>
   expect(await token(window, '--aparte-text')).toBe('#f6f7f9');
   expect(await primaryButtonBackground(window)).toBe('rgb(88, 196, 220)');
 });
+
+test('an OS in dark mode does not bring the kit palette back', async () => {
+  // Since apartéJS 0.16.7 the kit also answers `prefers-color-scheme: dark`,
+  // under `:root:not([data-aparte-theme=light])` — a selector that outranks
+  // a bare `[data-aparte-theme="dark"]`. On a dark Windows that turned the
+  // chat back to brass and plum while the shell stayed blue.
+  const window = await app.firstWindow();
+  await window.locator('.app-shell').waitFor();
+  await window.emulateMedia({ colorScheme: 'dark' });
+  try {
+    await setTheme(window, 'dark');
+    expect(await token(window, '--aparte-primary')).toBe('#58c4dc');
+    expect(await token(window, '--aparte-bg')).toBe('#16181d');
+    expect(await token(window, '--aparte-text')).toBe('#f6f7f9');
+    expect(await primaryButtonBackground(window)).toBe('rgb(88, 196, 220)');
+
+    await setTheme(window, 'light');
+    expect(await token(window, '--aparte-primary')).toBe('#087ea4');
+    expect(await token(window, '--aparte-bg')).toBe('#f6f7f9');
+  } finally {
+    await window.emulateMedia({ colorScheme: 'light' });
+  }
+});

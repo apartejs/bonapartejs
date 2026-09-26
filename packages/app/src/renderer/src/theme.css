@@ -11,8 +11,12 @@
  * primary, muted, ring…), then bridged to the kit's `--aparte-*` masters so
  * the chat, the composer and the elicitation panel wear the same palette;
  * the kit derives its inks and scales from those. Light on `:root`, dark on
- * `[data-aparte-theme="dark"]`, the attribute the app sets on <html>. This
- * sheet loads right after the kit's, so equal specificity resolves by order.
+ * `:root[data-aparte-theme="dark"]`, the attribute the app sets on <html>.
+ * This sheet loads right after the kit's, so equal specificity resolves by
+ * order — and the dark block needs the `:root`: since 0.16.7 the kit also
+ * declares its dark palette under `prefers-color-scheme: dark` as
+ * `:root:not([data-aparte-theme=light])`, which a bare attribute selector
+ * loses to on a dark OS (the chat went back to brass on a blue shell).
  *
  * Beyond the kit's documented eight-line rebrand: the user bubble, the
  * inverse text and the third surface are literals there, not derived — left
@@ -62,7 +66,7 @@
   --aparte-message-content-bg-user: var(--accent);
 }
 
-[data-aparte-theme="dark"] {
+:root[data-aparte-theme="dark"] {
   /* react.dev dark: wash gray-90, card gray-80, text gray-5, tertiary gray-30 */
   --background: #16181d;
   --foreground: #f6f7f9;

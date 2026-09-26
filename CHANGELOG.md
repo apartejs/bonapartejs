@@ -10,7 +10,7 @@ changesets take over at 0.1.0.
 
 ## [Unreleased]
 
-Everything below was built between 2026-08-18 and 2026-08-28 and has not been
+Everything below was built between 2026-08-18 and 2026-09-26 and has not been
 published.
 
 ### Added
@@ -193,6 +193,15 @@ published.
 
 ### Changed
 
+- **apartéJS bumped to 0.17.2** (from 0.16.2, in lockstep — twelve releases,
+  changelogs read line by line). The 0.17 breaking changes miss us: we
+  build no `AparteChatMessage[]` (the tool roles), register no composer
+  action, use neither `<aparte-conversation-list>` nor `AparteFilePart`,
+  and none of the removed CSS classes. What changes: the React wrapper now
+  renders `<aparte-elicitation>` itself, so our hand-mounted presenter is
+  gone; and the kit follows the OS colour scheme since 0.16.7, which broke
+  our dark palette on a dark OS (below, and apartejs/aparte#95).
+
 - **apartéJS bumped to 0.16.2** (from 0.16.1, in lockstep). No code change
   on our side, and the headline fix lands right where our responsive shell
   needed it: moving `<aparte-chat>` in the DOM no longer disconnects the
@@ -309,6 +318,13 @@ published.
   running past its edge.
 
 ### Fixed
+
+- **The dark theme stays React's on a dark OS.** Since apartéJS 0.16.7 the
+  kit declares its own dark palette under `prefers-color-scheme: dark` as
+  `:root:not([data-aparte-theme=light])`, which outranks a bare
+  `[data-aparte-theme="dark"]`: on a Windows in dark mode the chat went
+  back to brass and plum while the shell stayed blue. The dark block is
+  now `:root[data-aparte-theme="dark"]`; an E2E emulates the dark OS.
 
 - **A reply cut at the context ceiling now says so.** On a resumed, deep
   conversation the model "kept stopping before the end": the server cuts
