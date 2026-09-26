@@ -216,6 +216,7 @@ export { wantsGpuAcceleration, type GpuAccelerationChoice } from './settings/gpu
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────
 export { EngineSupervisor } from './engine/supervisor.js';
 export { MeasureStore, type ModelMeasures } from './engine/measures.js';
+export { KeyedQueue, readJsonFile, writeJsonFile } from './fs/json-file.js';
 
 // ── MCP client (P4) ───────────────────────────────────────────────────────
 export {

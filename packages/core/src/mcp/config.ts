@@ -53,6 +53,13 @@ const MESSAGES: Record<McpConfigErrorCode, string> = {
 /** Server names become part of tool names (`mcp__<name>__<tool>`): kept to what a grammar and a model read well. */
 export const MCP_SERVER_ID = /^[A-Za-z0-9_-]{1,32}$/;
 
+/** Names an object keeps for itself: never keys we write or read back. */
+const RESERVED_IDS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isServerId(id: string): boolean {
+  return MCP_SERVER_ID.test(id) && !RESERVED_IDS.has(id);
+}
+
 export function parseMcpConfig(raw: unknown): { servers: McpServerConfig[]; errors: McpConfigError[] } {
   const servers: McpServerConfig[] = [];
   const errors: McpConfigError[] = [];
@@ -75,7 +82,7 @@ export function serializeMcpConfig(servers: McpServerConfig[]): { mcpServers: Re
 }
 
 function parseEntry(id: string, entry: unknown): McpServerConfig | McpConfigErrorCode {
-  if (!MCP_SERVER_ID.test(id)) return 'name';
+  if (!isServerId(id)) return 'name';
   if (!isRecord(entry)) return 'object';
   const disabled = entry['disabled'] === true;
   const command = entry['command'];
@@ -143,7 +150,7 @@ export function splitCommandLine(line: string): string[] {
  */
 export function mcpServerFromForm(name: string, target: string): McpServerConfig | { error: 'name' | 'target' } {
   const id = name.trim();
-  if (!MCP_SERVER_ID.test(id)) return { error: 'name' };
+  if (!isServerId(id)) return { error: 'name' };
   const value = target.trim();
   if (/^https?:\/\//i.test(value)) return { id, transport: 'http', url: value, disabled: false };
   const [command, ...args] = splitCommandLine(value);

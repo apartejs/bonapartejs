@@ -131,4 +131,12 @@ describe('mcpServerFromForm', () => {
     expect(mcpServerFromForm('bad name', 'npx x')).toEqual({ error: 'name' });
     expect(mcpServerFromForm('ok', '   ')).toEqual({ error: 'target' });
   });
+
+  it('refuses the names an object keeps for itself', () => {
+    for (const name of ['__proto__', 'constructor', 'prototype']) {
+      expect(mcpServerFromForm(name, 'npx x')).toEqual({ error: 'name' });
+    }
+    const raw = JSON.parse('{"mcpServers": {"__proto__": {"command": "node"}, "constructor": {"command": "node"}}}');
+    expect(parseMcpConfig(raw).servers).toEqual([]);
+  });
 });

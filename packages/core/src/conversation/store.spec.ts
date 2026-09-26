@@ -347,3 +347,44 @@ describe('attachments — files joined to a message (06 §1 B)', () => {
     expect(rebuildTranscript([{ type: 'user', text: 'plain', at: 't' }])).toEqual([{ role: 'user', text: 'plain' }]);
   });
 });
+
+describe('meta under concurrent use — a turn, the sidebar and a pin at once', () => {
+  it('a listing never loses a conversation while its meta is being rewritten', async () => {
+    const store = await makeStore();
+    await store.create('conv-a', { title: 'Alpha' });
+    const at = new Date().toISOString();
+    const writes = Array.from({ length: 40 }, (_, index) =>
+      store.appendEvent('conv-a', { type: 'user', text: `message ${index}`, at }),
+    );
+    const listings: number[] = [];
+    let writing = true;
+    const reading = (async () => {
+      while (writing) listings.push((await store.listMeta()).length);
+    })();
+
+    await Promise.all(writes);
+    writing = false;
+    await reading;
+
+    expect(listings.length).toBeGreaterThan(0);
+    expect(listings.every((count) => count === 1)).toBe(true);
+  });
+
+  it('two updates of one meta at the same time both land', async () => {
+    const store = await makeStore();
+    await store.create('conv-a', { title: 'Alpha' });
+    const at = new Date().toISOString();
+
+    await Promise.all([
+      store.appendEvent('conv-a', { type: 'user', text: 'hello', at }),
+      store.setMarks('conv-a', { pinned: true }),
+      store.appendEvent('conv-a', { type: 'user', text: 'again', at }),
+      store.setTitle('conv-a', 'Renamed'),
+    ]);
+
+    const meta = await store.meta('conv-a');
+    expect(meta.pinned).toBe(true);
+    expect(meta.title).toBe('Renamed');
+    expect(await store.loadEvents('conv-a')).toHaveLength(2);
+  });
+});

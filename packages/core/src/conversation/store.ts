@@ -5,6 +5,7 @@
  */
 
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
 import { join } from 'node:path';
 import type { TranscriptEntry } from '../backend/types.js';
 import { neutralizeControlTokens } from '../wire/control-tokens.js';
@@ -193,6 +194,9 @@ export class ConversationStore {
     return join(this.dir, id);
   }
 
+  /** One change of a meta at a time, per conversation. */
+  private readonly metaQueue = new KeyedQueue();
+
   private metaPath(id: string): string {
     return join(this.convDir(id), 'meta.json');
   }
@@ -218,7 +222,7 @@ export class ConversationStore {
       ...(options.projectId ? { projectId: options.projectId } : {}),
     };
     await mkdir(this.convDir(id), { recursive: true });
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await this.writeMetaFile(meta);
     await writeFile(this.logPath(id), '', 'utf8');
     return meta;
   }
@@ -233,22 +237,20 @@ export class ConversationStore {
 
   /** Attaches the conversation to a project, or detaches it with `undefined`. */
   async setProjectId(id: string, projectId: string | undefined): Promise<void> {
-    const meta = await this.meta(id);
-    if (projectId === undefined) delete meta.projectId;
-    else meta.projectId = projectId;
-    meta.updatedAt = new Date().toISOString();
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await this.updateMeta(id, (meta) => {
+      if (projectId === undefined) delete meta.projectId;
+      else meta.projectId = projectId;
+    });
   }
 
   /** Sets (or removes, with `undefined`) a settings override. */
   async setSetting(id: string, key: string, value: unknown): Promise<void> {
-    const meta = await this.meta(id);
-    const settings = { ...(meta.settings ?? {}) };
-    if (value === undefined) delete settings[key];
-    else settings[key] = value;
-    meta.settings = settings;
-    meta.updatedAt = new Date().toISOString();
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await this.updateMeta(id, (meta) => {
+      const settings = { ...(meta.settings ?? {}) };
+      if (value === undefined) delete settings[key];
+      else settings[key] = value;
+      meta.settings = settings;
+    });
   }
 
   /**
@@ -256,14 +258,18 @@ export class ConversationStore {
    * conversation keeps its place in time.
    */
   async setMarks(id: string, marks: { pinned?: boolean; archived?: boolean }): Promise<void> {
-    const meta = await this.meta(id);
-    for (const key of ['pinned', 'archived'] as const) {
-      const value = marks[key];
-      if (value === undefined) continue;
-      if (value) meta[key] = true;
-      else delete meta[key];
-    }
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await this.updateMeta(
+      id,
+      (meta) => {
+        for (const key of ['pinned', 'archived'] as const) {
+          const value = marks[key];
+          if (value === undefined) continue;
+          if (value) meta[key] = true;
+          else delete meta[key];
+        }
+      },
+      { touch: false },
+    );
   }
 
   /**
@@ -292,24 +298,23 @@ export class ConversationStore {
       parentId: sourceId,
     };
     await mkdir(this.convDir(newId), { recursive: true });
-    await writeFile(this.metaPath(newId), JSON.stringify(meta, null, 2), 'utf8');
+    await this.writeMetaFile(meta);
     await writeFile(this.logPath(newId), kept.map((event) => `${JSON.stringify(event)}\n`).join(''), 'utf8');
     return meta;
   }
 
   /** Renames the conversation (the rest of the meta is preserved). */
   async setTitle(id: string, title: string): Promise<void> {
-    const meta = await this.meta(id);
-    meta.title = title;
-    meta.updatedAt = new Date().toISOString();
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await this.updateMeta(id, (meta) => {
+      meta.title = title;
+    });
   }
 
   async setModel(id: string, modelPath: string, nCtx?: number): Promise<void> {
-    const meta = await this.meta(id);
-    meta.modelPath = modelPath;
-    if (nCtx !== undefined) meta.nCtx = nCtx;
-    await this.writeMeta(meta);
+    await this.updateMeta(id, (meta) => {
+      meta.modelPath = modelPath;
+      if (nCtx !== undefined) meta.nCtx = nCtx;
+    });
   }
 
   /** Freezes the backend state and the tool inventory of the conversation. */
@@ -318,17 +323,17 @@ export class ConversationStore {
     backendState: unknown,
     toolNames: string[],
   ): Promise<void> {
-    const meta = await this.meta(id);
-    meta.backendState = backendState;
-    meta.toolNames = [...toolNames];
-    await this.writeMeta(meta);
+    await this.updateMeta(id, (meta) => {
+      meta.backendState = backendState;
+      meta.toolNames = [...toolNames];
+    });
   }
 
   /** Remembers the project in effect at freeze time (or after announcing the delta). */
   async setFrozenRoots(id: string, roots: string[]): Promise<void> {
-    const meta = await this.meta(id);
-    meta.frozenRoots = roots;
-    await this.writeMeta(meta);
+    await this.updateMeta(id, (meta) => {
+      meta.frozenRoots = roots;
+    });
   }
 
   /**
@@ -337,32 +342,52 @@ export class ConversationStore {
    * next open freezes them anew — the deltas folded in.
    */
   async resetFrozen(id: string): Promise<void> {
-    const meta = await this.meta(id);
-    delete meta.backendState;
-    delete meta.toolNames;
-    delete meta.frozenRoots;
-    delete meta.instructionsHash;
-    await this.writeMeta(meta);
+    await this.updateMeta(id, (meta) => {
+      delete meta.backendState;
+      delete meta.toolNames;
+      delete meta.frozenRoots;
+      delete meta.instructionsHash;
+    });
   }
 
   /** Remembers the instructions in effect (frozen, or last announced); undefined when there are none. */
   async setInstructionsHash(id: string, hash: string | undefined): Promise<void> {
-    const meta = await this.meta(id);
-    if (hash === undefined) delete meta.instructionsHash;
-    else meta.instructionsHash = hash;
-    await this.writeMeta(meta);
+    await this.updateMeta(id, (meta) => {
+      if (hash === undefined) delete meta.instructionsHash;
+      else meta.instructionsHash = hash;
+    });
   }
 
   /** Updates the reference inventory after announcing a delta. */
   async setFrozenTools(id: string, toolNames: string[]): Promise<void> {
-    const meta = await this.meta(id);
-    meta.toolNames = [...toolNames];
-    await this.writeMeta(meta);
+    await this.updateMeta(id, (meta) => {
+      meta.toolNames = [...toolNames];
+    });
   }
 
-  private async writeMeta(meta: ConversationMeta): Promise<void> {
-    meta.updatedAt = new Date().toISOString();
-    await writeFile(this.metaPath(meta.id), JSON.stringify(meta, null, 2), 'utf8');
+  /**
+   * Every change of a meta goes through here: a turn, the sidebar and a
+   * click can touch one conversation at once. Per conversation, one change
+   * at a time — a read-modify-write never loses another's — and the file is
+   * replaced whole, so a reader never sees it half written (a listing used
+   * to drop the conversation, and a turn to fail on "Unexpected end of JSON
+   * input", while its meta was being rewritten).
+   */
+  private async updateMeta(
+    id: string,
+    mutate: (meta: ConversationMeta) => void,
+    options: { touch?: boolean } = {},
+  ): Promise<void> {
+    await this.metaQueue.run(id, async () => {
+      const meta = await this.meta(id);
+      mutate(meta);
+      if (options.touch !== false) meta.updatedAt = new Date().toISOString();
+      await this.writeMetaFile(meta);
+    });
+  }
+
+  private async writeMetaFile(meta: ConversationMeta): Promise<void> {
+    await writeJsonFile(this.metaPath(meta.id), meta);
   }
 
   async exists(id: string): Promise<boolean> {
@@ -375,14 +400,12 @@ export class ConversationStore {
   }
 
   private async readMeta(id: string): Promise<ConversationMeta> {
-    return JSON.parse(await readFile(this.metaPath(id), 'utf8')) as ConversationMeta;
+    return (await readJsonFile(this.metaPath(id))) as ConversationMeta;
   }
 
   async appendEvent(id: string, event: ConversationEvent): Promise<void> {
     await appendFile(this.logPath(id), `${JSON.stringify(event)}\n`, 'utf8');
-    const meta = await this.readMeta(id);
-    meta.updatedAt = new Date().toISOString();
-    await writeFile(this.metaPath(id), JSON.stringify(meta, null, 2), 'utf8');
+    await this.updateMeta(id, () => undefined);
   }
 
   async loadEvents(id: string): Promise<ConversationEvent[]> {

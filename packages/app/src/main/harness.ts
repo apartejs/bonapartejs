@@ -7,7 +7,7 @@
  * lives in core — here, only wiring.
  */
 
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
 import { totalmem } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -18,6 +18,9 @@ import {
   builtinTools,
   wantsGpuAcceleration,
   MeasureStore,
+  KeyedQueue,
+  readJsonFile,
+  writeJsonFile,
   McpClientManager,
   mcpServerFromForm,
   parseMcpConfig,
@@ -543,8 +546,7 @@ export class Harness {
     this.currentConversationId = id;
     this.roots = await this.rootsOf(id);
     this.registerBuiltinTools();
-    const config = await this.loadConfig();
-    await this.saveConfig({ ...config, currentConversationId: id });
+    await this.updateConfig((config) => ({ ...config, currentConversationId: id }));
   }
 
   async listConversations(): Promise<ConversationSummaryDto[]> {
@@ -622,8 +624,7 @@ export class Harness {
     if (this.currentConversationId === id) {
       this.currentConversationId = null;
       this.roots = [];
-      const { currentConversationId: _dropped, ...config } = await this.loadConfig();
-      await this.saveConfig(config);
+      await this.updateConfig(({ currentConversationId: _dropped, ...config }) => config);
     }
   }
 
@@ -724,11 +725,13 @@ export class Harness {
     clientVersion: app.getVersion(),
   });
   private mcpErrors: McpConfigError[] = [];
+  /** One read-modify-write at a time per file (the config, the MCP servers). */
+  private readonly fileQueue = new KeyedQueue();
 
   /** The file as it is — entries we cannot read stay in it, untouched. */
   private async readMcpFile(): Promise<{ mcpServers: Record<string, unknown> }> {
     try {
-      const raw = JSON.parse(await readFile(this.mcpConfigPath, 'utf8')) as { mcpServers?: unknown };
+      const raw = (await readJsonFile(this.mcpConfigPath)) as { mcpServers?: unknown };
       const servers = raw.mcpServers;
       return {
         ...raw,
@@ -741,7 +744,17 @@ export class Harness {
 
   private async writeMcpFile(content: { mcpServers: Record<string, unknown> }): Promise<void> {
     await mkdir(dirname(this.mcpConfigPath), { recursive: true });
-    await writeFile(this.mcpConfigPath, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
+    await writeJsonFile(this.mcpConfigPath, content);
+  }
+
+  /** A change of `mcp-servers.json`, alone on the file — two clicks in the hub never lose one. */
+  private async updateMcpFile(
+    change: (file: { mcpServers: Record<string, unknown> }) => { mcpServers: Record<string, unknown> } | null,
+  ): Promise<void> {
+    await this.fileQueue.run(this.mcpConfigPath, async () => {
+      const next = change(await this.readMcpFile());
+      if (next) await this.writeMcpFile(next);
+    });
   }
 
   /** Reads the file and brings the clients to it: new servers start, failed ones retry. */
@@ -767,30 +780,35 @@ export class Harness {
   ): Promise<McpOverviewDto | { error: 'name' | 'target' | 'exists' }> {
     const server = mcpServerFromForm(String(name ?? ''), String(target ?? ''));
     if ('error' in server) return server;
-    const file = await this.readMcpFile();
-    if (server.id in file.mcpServers) return { error: 'exists' };
-    const entry = serializeMcpConfig([server]).mcpServers[server.id];
-    await this.writeMcpFile({ ...file, mcpServers: { ...file.mcpServers, [server.id]: entry } });
+    let exists = false;
+    await this.updateMcpFile((file) => {
+      if (Object.hasOwn(file.mcpServers, server.id)) {
+        exists = true;
+        return null;
+      }
+      const entry = serializeMcpConfig([server]).mcpServers[server.id];
+      return { ...file, mcpServers: { ...file.mcpServers, [server.id]: entry } };
+    });
+    if (exists) return { error: 'exists' };
     return this.reloadMcpServers();
   }
 
   async setMcpServerEnabled(id: string, enabled: boolean): Promise<McpOverviewDto> {
-    const file = await this.readMcpFile();
-    const entry = file.mcpServers[id];
-    if (typeof entry !== 'object' || entry === null) return this.mcpOverview();
-    const { disabled: _disabled, ...rest } = entry as Record<string, unknown>;
-    await this.writeMcpFile({
-      ...file,
-      mcpServers: { ...file.mcpServers, [id]: enabled ? rest : { ...rest, disabled: true } },
+    await this.updateMcpFile((file) => {
+      const entry = Object.hasOwn(file.mcpServers, id) ? file.mcpServers[id] : undefined;
+      if (typeof entry !== 'object' || entry === null) return null;
+      const { disabled: _disabled, ...rest } = entry as Record<string, unknown>;
+      return { ...file, mcpServers: { ...file.mcpServers, [id]: enabled ? rest : { ...rest, disabled: true } } };
     });
     return this.reloadMcpServers();
   }
 
   async removeMcpServer(id: string): Promise<McpOverviewDto> {
-    const file = await this.readMcpFile();
-    if (!(id in file.mcpServers)) return this.mcpOverview();
-    const { [id]: _removed, ...rest } = file.mcpServers;
-    await this.writeMcpFile({ ...file, mcpServers: rest });
+    await this.updateMcpFile((file) => {
+      if (!Object.hasOwn(file.mcpServers, id)) return null;
+      const { [id]: _removed, ...rest } = file.mcpServers;
+      return { ...file, mcpServers: rest };
+    });
     return this.reloadMcpServers();
   }
 
@@ -830,11 +848,12 @@ export class Harness {
 
   async setPluginEnabled(id: string, enabled: boolean): Promise<PluginStatusDto[]> {
     if (typeof id !== 'string' || !this.pluginHost.get(id)) throw new Error(`Unknown plugin: ${String(id)}`);
-    const config = await this.loadConfig();
-    const disabled = new Set(config.disabledPlugins ?? []);
-    if (enabled) disabled.delete(id);
-    else disabled.add(id);
-    await this.saveConfig({ ...config, disabledPlugins: [...disabled] });
+    await this.updateConfig((config) => {
+      const disabled = new Set(config.disabledPlugins ?? []);
+      if (enabled) disabled.delete(id);
+      else disabled.add(id);
+      return { ...config, disabledPlugins: [...disabled] };
+    });
     this.pluginHost.setEnabled(id, enabled === true);
     if (enabled) await this.activatePlugin(id);
     else await this.pluginHost.deactivate(id);
@@ -941,11 +960,14 @@ export class Harness {
       void this.conversations.close();
       return;
     }
+    let settings: Record<string, unknown> = {};
+    await this.updateConfig((config) => {
+      settings = { ...(config.settings ?? {}) };
+      if (value === undefined) delete settings[key];
+      else settings[key] = value;
+      return { ...config, settings };
+    });
     const config = await this.loadConfig();
-    const settings = { ...(config.settings ?? {}) };
-    if (value === undefined) delete settings[key];
-    else settings[key] = value;
-    await this.saveConfig({ ...config, settings });
     this.syncPluginConfig(settings);
     await this.refreshAppBehaviour();
     if (LAUNCH_KEYS.has(key) && config.backend) {
@@ -1162,10 +1184,11 @@ export class Harness {
     void this.conversations.close();
     this.registerBuiltinTools();
 
-    const config = await this.loadConfig();
-    const recents = [picked, ...(config.recentProjects ?? []).filter((p) => p !== picked)]
-      .slice(0, 8);
-    await this.saveConfig({ ...config, recentProjects: recents });
+    let recents: string[] = [];
+    await this.updateConfig((config) => {
+      recents = [picked, ...(config.recentProjects ?? []).filter((p) => p !== picked)].slice(0, 8);
+      return { ...config, recentProjects: recents };
+    });
     return this.project(recents);
   }
 
@@ -1195,8 +1218,7 @@ export class Harness {
 
   async setMode(mode: PlayModeDto): Promise<void> {
     this.permissions.setMode(mode as PlayMode);
-    const config = await this.loadConfig();
-    await this.saveConfig({ ...config, mode });
+    await this.updateConfig((config) => ({ ...config, mode }));
   }
 
   /**
@@ -1268,7 +1290,7 @@ export class Harness {
 
   async loadConfig(): Promise<AppConfigDto> {
     try {
-      const raw = JSON.parse(await readFile(this.configPath, 'utf8')) as {
+      const raw = (await readJsonFile(this.configPath)) as {
         backend?: BackendConfigDto & { modelPath?: string; nCtx?: number };
       };
       // Migration: old configs carried modelPath/nCtx on the engine — they
@@ -1278,14 +1300,24 @@ export class Harness {
         delete raw.backend.nCtx;
       }
       return raw as AppConfigDto;
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') console.error('[config] unreadable:', error);
       return {};
     }
   }
 
-  async saveConfig(config: AppConfigDto): Promise<void> {
-    await mkdir(dirname(this.configPath), { recursive: true });
-    await writeFile(this.configPath, JSON.stringify(config, null, 2), 'utf8');
+  /**
+   * Every change of the config: read, changed, written — alone. Two at once
+   * (a setting and a click in the sidebar) used to lose one of them, and a
+   * read caught mid-write came back empty and was saved back over it all.
+   */
+  private async updateConfig(change: (config: AppConfigDto) => AppConfigDto | null): Promise<void> {
+    await this.fileQueue.run(this.configPath, async () => {
+      const next = change(await this.loadConfig());
+      if (next === null) return;
+      await mkdir(dirname(this.configPath), { recursive: true });
+      await writeJsonFile(this.configPath, next);
+    });
   }
 
   status(): BackendStatusDto {
@@ -1311,8 +1343,7 @@ export class Harness {
   async startEngine(config: BackendConfigDto): Promise<BackendStatusDto> {
     await this.registerEngine(config);
     if (config.mode === 'remote') await this.supervisor.connect();
-    const saved = await this.loadConfig();
-    await this.saveConfig({ ...saved, backend: config });
+    await this.updateConfig((saved) => ({ ...saved, backend: config }));
     return this.status();
   }
 
@@ -1321,16 +1352,14 @@ export class Harness {
     if (typeof modelPath !== 'string' || !/\.gguf$/i.test(modelPath)) {
       throw new Error(`Not a GGUF model: ${String(modelPath)}`);
     }
-    const config = await this.loadConfig();
-    await this.saveConfig({ ...config, defaultModel: { path: modelPath } });
+    await this.updateConfig((config) => ({ ...config, defaultModel: { path: modelPath } }));
   }
 
   /** The UI language — and with it the language the model replies in. */
   async setLocale(locale: BonaparteLocale): Promise<void> {
     if (locale !== 'fr' && locale !== 'en') throw new Error(`Unknown locale: ${String(locale)}`);
-    const config = await this.loadConfig();
-    if (config.locale === locale) return;
-    await this.saveConfig({ ...config, locale });
+    if ((await this.loadConfig()).locale === locale) return;
+    await this.updateConfig((config) => ({ ...config, locale }));
     // The tray menu reads it; the next session opens with the new reply language.
     await this.refreshAppBehaviour();
     void this.conversations.close();
