@@ -14,6 +14,7 @@
  * cache prefix drops and the differentiator along with it.
  */
 
+import { neutralizeControlTokens } from './control-tokens.js';
 import type { ToolOutcome } from '../backend/types.js';
 import type { ToolDef, ToolInventoryDelta } from '../tools/types.js';
 
@@ -30,8 +31,12 @@ export interface SystemPromptOptions {
   projectInstructions?: string;
 }
 
+/**
+ * A tool's line. Its description and schema may come from elsewhere — an
+ * MCP server writes its own — so they cannot open a role (audit C3).
+ */
 function renderToolLine(tool: ToolDef): string {
-  return `- ${tool.name}: ${tool.description}\n  arguments: ${JSON.stringify(tool.inputSchema)}`;
+  return neutralizeControlTokens(`- ${tool.name}: ${tool.description}\n  arguments: ${JSON.stringify(tool.inputSchema)}`);
 }
 
 export function renderToolInventory(tools: ToolDef[]): string {
@@ -117,7 +122,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     blocks.push(`Write your replies to the user in ${options.replyLanguage}.`);
   }
   if (options.projectInstructions) {
-    blocks.push(`Project instructions:\n${options.projectInstructions}`);
+    // Anyone who can commit to the project writes this file.
+    blocks.push(`Project instructions:\n${neutralizeControlTokens(options.projectInstructions)}`);
   }
 
   return blocks.join('\n\n');
@@ -180,7 +186,7 @@ export function renderInstructionsDelta(current: string | undefined): string {
   if (!current) {
     return '[project update]\nThe project instructions no longer exist: disregard the ones in the system prompt.';
   }
-  return `[project update]\nThe project instructions changed. They now read:\n${current}`;
+  return `[project update]\nThe project instructions changed. They now read:\n${neutralizeControlTokens(current)}`;
 }
 
 /** Message appended when the tooling changes mid-conversation. */

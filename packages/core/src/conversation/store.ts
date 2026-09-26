@@ -25,7 +25,8 @@ export interface MessageAttachment {
 export function renderUserMessage(text: string, attachments?: MessageAttachment[]): string {
   if (!attachments || attachments.length === 0) return text;
   const files = attachments.map(
-    (file) => `[attached file: ${file.name}]\n\`\`\`\n${neutralizeControlTokens(file.content)}\n\`\`\``,
+    (file) =>
+      `[attached file: ${neutralizeControlTokens(file.name)}]\n\`\`\`\n${neutralizeControlTokens(file.content)}\n\`\`\``,
   );
   return [text, ...files].join('\n\n');
 }
