@@ -34,6 +34,7 @@ import {
   readGgufInfo,
   readProjectInstructions,
   previewToolCall,
+  CheckpointStore,
   GrantStore,
   HARNESS_SETTINGS,
   APP_SETTINGS,
@@ -234,12 +235,15 @@ export class Harness {
       }),
       approve: this.approve,
       logger: (line) => console.log(line),
+      checkpoints: this.checkpoints,
     });
     engine.onEvent((event) => this.forwardAgentEvent(event));
     this.conversationsEngine = engine;
     return engine;
   }
 
+  /** What each turn wrote, kept to be undone (06 §1 D) — in the app's data, never in the repository. */
+  private readonly checkpoints = new CheckpointStore(join(bonaparteDataDir(), 'checkpoints'));
   /** The saved contexts' disk budget, from the settings (read at every save). */
   private kvBudgetBytes = 16 * 1024 ** 3;
   private readonly kv = new KvStore(kvSlotsDir(), {
@@ -1309,6 +1313,9 @@ export class Harness {
           },
         };
         break;
+      case 'files_changed':
+        body = { type: 'files_changed', turnId: event.turnId, files: event.files };
+        break;
       case 'context_overflow':
         body = { type: 'context_overflow', used: event.used, nCtx: event.nCtx, limit: event.limit, needed: event.needed };
         break;
@@ -1584,6 +1591,9 @@ export class Harness {
       this.branchConversation(id, options),
     );
     handle(IPC.conversationCompact, (id: string) => this.compactConversation(id));
+    handle(IPC.turnUndo, (conversationId: string, turnId: string) =>
+      this.conversations.undoTurn(String(conversationId), String(turnId)),
+    );
     handle(
       IPC.conversationOpen,
       (id?: string, modelPath?: string) => this.openConversation(id, modelPath),

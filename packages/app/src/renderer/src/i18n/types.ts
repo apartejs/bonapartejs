@@ -87,6 +87,13 @@ export interface AppTranslations {
     branchHere: string;
     /** `{files}`: files that could not be joined. */
     attachSkipped: string;
+    /** `{count}` files, `{files}` their names. */
+    changedOne: string;
+    changedMany: string;
+    undoChanges: string;
+    undone: string;
+    /** `{files}`: changed again since, left as they are. */
+    undoConflicts: string;
     /** The compaction turn, in the thread. */
     compacted: string;
     compactedSummary: string;

@@ -12,6 +12,7 @@ import type {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { answerToResponse, approvalMessage, approvalOptions } from '../approval.js';
+import { UNDO_TURN_EVENT, type ChangesSegment } from '../aparte-bootstrap.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { modelFileName } from '../models/filter.js';
 import { ModeSelector } from './ModeSelector.js';
@@ -110,6 +111,27 @@ interface TurnState {
   seq: number;
 }
 
+/** The segment a turn that wrote files ends with — see aparte-bootstrap's renderer. */
+function useChangesSegment(): (id: string, turnId: string, files: string[], undone: boolean) => AparteSegment {
+  const { t } = useTranslate();
+  return (id, turnId, files, undone) => {
+    const names = files.join(', ');
+    const summary = undone
+      ? t.chat.undone
+      : files.length === 1
+        ? t.chat.changedOne.replace('{files}', () => names)
+        : t.chat.changedMany.replace('{count}', String(files.length)).replace('{files}', () => names);
+    const segment: ChangesSegment = {
+      id,
+      type: 'bp-changes',
+      turnId,
+      summary,
+      ...(undone ? {} : { action: t.chat.undoChanges }),
+    };
+    return segment as unknown as AparteSegment;
+  };
+}
+
 export function ChatScreen({
   initialEvents,
   onStats,
@@ -133,6 +155,7 @@ export function ChatScreen({
   onApprovalResponse,
 }: ChatScreenProps) {
   const { t } = useTranslate();
+  const changesSegment = useChangesSegment();
   // The composer's model menu, raised from the missing-model alert so a
   // recovery never leaves the chat.
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
@@ -215,6 +238,8 @@ export function ChatScreen({
           }
           return { id: segmentId, type: 'text', content: segment.text, isStreaming: false };
         });
+        // A turn that wrote files ends with them, and with the way back.
+        if (event.changes) segments.push(changesSegment(`${id}-changes`, event.changes.turnId, event.changes.files, event.changes.undone));
         return { id, role: 'assistant', content: '', timestamp, status: 'completed', segments };
       }),
     [initialEvents, t.chat.thinking, t.chat.compacted, t.chat.compactedSummary],
@@ -354,6 +379,10 @@ export function ChatScreen({
             content: `${t.chat.errorPrefix} : ${event.message}`,
           });
           finish(state, 'error');
+          break;
+
+        case 'files_changed':
+          chatRef.current.addSegment(changesSegment(`seg-changes-${state.seq++}`, event.turnId, event.files, false));
           break;
 
         case 'context_overflow':
@@ -519,6 +548,28 @@ export function ChatScreen({
     window.addEventListener('aparte-action', onAction);
     return () => window.removeEventListener('aparte-action', onAction);
   }, [onBranch]);
+
+  // "Undo these changes": the harness puts the turn's files back and tells
+  // the model; the segment says what happened.
+  useEffect(() => {
+    const onUndo = (event: Event): void => {
+      const detail = (event as CustomEvent<{ turnId?: string; segmentId?: string }>).detail;
+      if (!detail?.turnId || !detail.segmentId || !conversationId) return;
+      const { turnId, segmentId } = detail;
+      void window.bonaparte.undoTurn(conversationId, turnId).then(
+        (result) => {
+          const summary =
+            result.conflicts.length > 0
+              ? t.chat.undoConflicts.replace('{files}', () => result.conflicts.join(', '))
+              : t.chat.undone;
+          chatRef.current.updateSegment(segmentId, { summary, action: undefined } as unknown as Partial<AparteSegment>);
+        },
+        () => chatRef.current.updateSegment(segmentId, {}),
+      );
+    };
+    window.addEventListener(UNDO_TURN_EVENT, onUndo);
+    return () => window.removeEventListener(UNDO_TURN_EVENT, onUndo);
+  }, [conversationId, t.chat.undone, t.chat.undoConflicts]);
 
   // The composer's Stop. The library announces it on `window` as
   // `aparte-abort` (not bubbling from the composer): the engine cuts the

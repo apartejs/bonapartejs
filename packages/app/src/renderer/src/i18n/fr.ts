@@ -83,6 +83,11 @@ export const FR: AppTranslations = {
   chat: {
     branchHere: 'Brancher d’ici',
     attachSkipped: 'Non joint : {files} — le modèle lit les fichiers texte de 200 Ko au plus.',
+    changedOne: 'A modifié {files}',
+    changedMany: 'A modifié {count} fichiers : {files}',
+    undoChanges: 'Annuler ces changements',
+    undone: 'Changements annulés — le modèle le sait.',
+    undoConflicts: 'Annulés, sauf {files} : modifiés depuis, laissés tels quels.',
     compacted: 'Les tours précédents ont été compactés : le modèle travaille désormais à partir de leur résumé.',
     compactedSummary: 'Résumé que garde le modèle',
     compactOffer: 'Le contexte est plein. Compacter résume les tours précédents pour que la conversation continue.',

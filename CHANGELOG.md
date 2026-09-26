@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **Undo a turn's file changes** (06 §1 D, Q-19). The safety net every
+  harness has: before a tool writes a file, its original — or its absence
+  — is kept in bonaparte's data (never as commits or files in your
+  repository). A turn that wrote files ends with them listed and an "Undo
+  these changes" button: the originals go back, a file the turn created is
+  removed, a file changed again since is left as it is and named; the
+  model is told, or it would believe its edits are still there. A reload
+  shows the turn as undone; a deleted conversation takes its checkpoints.
+
 - **Files joined to a message** (06 §1 B). A text file dropped on the
   composer — or picked with its paperclip — travels with the message: the
   model reads its content (in a fenced block, control tokens neutralised

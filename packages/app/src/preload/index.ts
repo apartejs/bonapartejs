@@ -44,6 +44,7 @@ const api: BonaparteBridge = {
   markConversation: (id, marks) => ipcRenderer.invoke(IPC.conversationMark, id, marks),
   branchConversation: (id, options) => ipcRenderer.invoke(IPC.conversationBranch, id, options),
   compactConversation: (id) => ipcRenderer.invoke(IPC.conversationCompact, id),
+  undoTurn: (conversationId, turnId) => ipcRenderer.invoke(IPC.turnUndo, conversationId, turnId),
   listPlugins: () => ipcRenderer.invoke(IPC.pluginsList),
   reloadPlugins: () => ipcRenderer.invoke(IPC.pluginsReload),
   onPluginEvent: (listener) => {

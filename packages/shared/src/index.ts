@@ -35,6 +35,7 @@ export const IPC = {
   conversationMark: 'conversation.mark',
   conversationBranch: 'conversation.branch',
   conversationCompact: 'conversation.compact',
+  turnUndo: 'turn.undo',
   agentSend: 'agent.send',
   agentInFlight: 'agent.inFlight',
   agentCancel: 'agent.cancel',
@@ -326,6 +327,8 @@ export type AgentEventBodyDto =
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
   | { type: 'tool_result'; name: string; ok: boolean; content: string }
+  /** The files the turn wrote — shown with an undo, before the turn's end. */
+  | { type: 'files_changed'; turnId: string; files: string[] }
   | { type: 'done'; stats: CompletionStatsDto }
   | { type: 'error'; message: string }
   /**
@@ -364,6 +367,8 @@ export interface ConversationEventDto {
   at: string;
   /** Files joined to a user message, by name. */
   attachments?: string[];
+  /** An assistant turn that wrote files: which, and whether they were undone. */
+  changes?: { turnId: string; files: string[]; undone: boolean };
   /** An assistant turn, segment by segment — reasoning, tool calls with their outcome, text. */
   segments?: ConversationSegmentDto[];
 }
@@ -487,6 +492,11 @@ export interface BonaparteBridge {
    * restarts from the summary and the last turns. Resolves once done.
    */
   compactConversation(id: string): Promise<{ compactedTurns: number; keptTurns: number }>;
+  /**
+   * Puts back the files a turn wrote (a file changed again since stays as
+   * it is, and is named); the model is told.
+   */
+  undoTurn(conversationId: string, turnId: string): Promise<{ restored: string[]; conflicts: string[] }>;
   /** Discovered plugins, with their views and any errors. */
   listPlugins(): Promise<PluginStatusDto[]>;
   /**

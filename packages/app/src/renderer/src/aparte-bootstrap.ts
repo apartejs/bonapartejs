@@ -1,4 +1,4 @@
-import { aparteGlobalConfig, registerDefaultRenderers } from '@aparte/core';
+import { aparteGlobalConfig, registerDefaultRenderers, registerSegmentRenderer, type AparteSegmentBase } from '@aparte/core';
 import { setupMarkedProvider } from '@aparte/plugin-marked';
 import {
   setupShikiProviderFromHighlighter,
@@ -30,7 +30,65 @@ export function bootstrapAparte(): void {
   setupMarkedProvider({ gfm: true, breaks: true });
   setupStreamingMarkdownProvider();
   registerToolSummaries();
+  registerSegmentRenderer(changesRenderer);
 }
+
+/**
+ * What a turn wrote, at the end of its bubble, with a way back (06 §1 D).
+ * The strings come with the segment (the renderer has no locale of its
+ * own); the button asks the screen, which asks the harness.
+ */
+export interface ChangesSegment extends AparteSegmentBase {
+  type: 'bp-changes';
+  turnId: string;
+  /** The line saying what changed — or what the undo did. */
+  summary: string;
+  /** The button's label; absent once undone. */
+  action?: string;
+}
+
+export const UNDO_TURN_EVENT = 'bp-undo-turn';
+
+const changesRenderer = {
+  type: 'bp-changes',
+  render(segment: ChangesSegment): HTMLElement {
+    const root = document.createElement('div');
+    root.className = 'bp-changes mt-2 flex flex-wrap items-center gap-2 text-[12.5px] text-muted-foreground';
+    root.dataset['segmentId'] = segment.id;
+    const text = document.createElement('span');
+    text.className = 'bp-changes-summary min-w-0 flex-1';
+    text.textContent = segment.summary;
+    root.append(text);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className =
+      'bp-changes-undo inline-flex h-7 items-center rounded-md border px-2.5 text-xs text-foreground hover:bg-muted';
+    button.textContent = segment.action ?? '';
+    button.hidden = !segment.action;
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      root.dispatchEvent(
+        new CustomEvent(UNDO_TURN_EVENT, {
+          bubbles: true,
+          composed: true,
+          detail: { turnId: segment.turnId, segmentId: segment.id },
+        }),
+      );
+    });
+    root.append(button);
+    return root;
+  },
+  update(element: HTMLElement, segment: ChangesSegment): void {
+    const text = element.querySelector('.bp-changes-summary');
+    if (text) text.textContent = segment.summary;
+    const button = element.querySelector<HTMLButtonElement>('.bp-changes-undo');
+    if (button) {
+      button.textContent = segment.action ?? '';
+      button.hidden = !segment.action;
+      button.disabled = false;
+    }
+  },
+};
 
 /**
  * What each tool call targets, after its name in the row — `read_file
