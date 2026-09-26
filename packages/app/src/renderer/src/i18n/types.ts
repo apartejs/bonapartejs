@@ -371,6 +371,10 @@ export interface AppTranslations {
     insteadOf: string;
     /** `{rate}`: generated tokens per second. */
     tokensPerSecond: string;
+    /** The prefill: `{done}` of `{total}` prompt tokens read. */
+    reading: string;
+    /** `{time}`: about how long the prefill still takes. */
+    timeLeft: string;
     notRestored: string;
     /** The conversation had no state of its own, but its prefix was shared: what it started from. */
     seeded: string;

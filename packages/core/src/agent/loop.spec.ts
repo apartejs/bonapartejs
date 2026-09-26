@@ -138,6 +138,16 @@ describe('AgentLoop — simple turn', () => {
     expect(typeof (end as { promptMs: number }).promptMs).toBe('number');
   });
 
+  it('passes the prefill progress on, before the reply', async () => {
+    const { loop, transcript } = await rig({ replies: ['ok'] });
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
+    const steps = all.filter((e) => e.type === 'prefill');
+    expect(steps.length).toBeGreaterThan(0);
+    const last = steps.at(-1) as { total: number; processed: number };
+    expect(last.processed).toBe(last.total);
+    expect(all.findIndex((e) => e.type === 'prefill')).toBeLessThan(all.findIndex((e) => e.type === 'token'));
+  });
+
   it('carries the generation time too — the speed of the reply, for an honest gauge (P2.8)', async () => {
     const { loop, transcript } = await rig({ replies: ['a reply of several words'] });
     const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));

@@ -78,6 +78,8 @@ export interface CompletionStats {
 
 export type CompletionEvent =
   | { type: 'token'; text: string }
+  /** The prompt is being read: how far, as the server reports after each batch. */
+  | { type: 'progress'; progress: PromptProgress }
   | { type: 'done'; stats: CompletionStats };
 
 export interface SlotSaveResult {
@@ -204,6 +206,8 @@ export interface ToolDefLike {
  * the loop groups them until `done`.
  */
 export type ProviderEvent =
+  /** The prompt is being read (the prefill): how far. */
+  | { type: 'prefill'; progress: PromptProgress }
   | { type: 'text'; delta: string }
   | { type: 'thinking'; delta: string }
   | { type: 'tool_use'; call: ToolCall }

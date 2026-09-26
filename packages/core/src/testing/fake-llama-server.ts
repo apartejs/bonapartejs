@@ -32,6 +32,14 @@ export interface FakeLlamaServerOptions {
    * with the 400 the real server sends when context shift is off.
    */
   nCtx?: number;
+  /**
+   * Prompt tokens per progress step (default: the whole prompt — one event
+   * at the start, one at the end, as a short prompt gets). The real server
+   * reports after each batch it decodes: a long prompt, several steps.
+   */
+  prefillBatch?: number;
+  /** A REAL delay after each progress step (default 0) — a prefill a test can watch. */
+  prefillPaceMs?: number;
   /** When true, the final event carries truncated:true — the context ceiling, mid-generation. */
   truncate?: boolean;
   /** Text generated for a given prompt (default: 'ok'). */
@@ -170,16 +178,22 @@ export async function startFakeLlamaServer(
     // after generation — and `tokens_evaluated`. A fake that put the
     // progress on the final event hid a client that read it only there.
     if (returnProgress) {
-      for (const processed of [cached, tokens.length]) {
+      const batch = Math.max(1, options.prefillBatch ?? Math.max(1, uncached));
+      const steps = [cached];
+      for (let processed = cached + batch; processed < tokens.length; processed += batch) steps.push(processed);
+      steps.push(tokens.length);
+      for (const processed of steps) {
+        if (res.destroyed) return;
         const progress = {
           total: tokens.length,
           cache: cached,
           processed,
-          time_ms: processed === tokens.length ? promptMs : 0,
+          time_ms: (processed - cached) * msPerToken,
         };
         res.write(
           `data: ${JSON.stringify({ content: '', stop: false, prompt_progress: progress })}\n\n`,
         );
+        if (options.prefillPaceMs) await new Promise((resolve) => setTimeout(resolve, options.prefillPaceMs));
       }
     }
 

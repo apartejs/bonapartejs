@@ -155,6 +155,16 @@ export class LlamaCppHttpClient {
       const progress = event['prompt_progress'];
       if (progress && typeof progress === 'object') {
         lastProgress = progress as Record<string, unknown>;
+        const total = Number(lastProgress['total'] ?? 0);
+        yield {
+          type: 'progress',
+          progress: {
+            total,
+            cache: Number(lastProgress['cache'] ?? 0),
+            processed: Number(lastProgress['processed'] ?? 0),
+            timeMs: Number(lastProgress['time_ms'] ?? 0),
+          },
+        };
       }
       if (event['stop'] === true) {
         const timings = (event['timings'] ?? {}) as Record<string, unknown>;

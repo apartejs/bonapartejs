@@ -343,6 +343,8 @@ export interface CompletionStatsDto {
 /** Agent stream event, serialized over the IPC. */
 /** What a turn produces, without the conversation it belongs to. */
 export type AgentEventBodyDto =
+  /** The prompt is being read (the prefill): how far — the server reports after each batch. */
+  | { type: 'prefill'; progress: PromptProgressDto }
   | { type: 'token'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }

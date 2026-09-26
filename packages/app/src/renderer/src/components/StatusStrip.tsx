@@ -2,6 +2,7 @@ import type {
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
+  PromptProgressDto,
   ResourceSampleDto,
   RestoreDto,
   SeedDto,
@@ -10,6 +11,7 @@ import { Badge, Button, Progress, cn } from '@aparte/bonaparte-plugin-sdk/ui';
 import { Mascotte } from '../mascotte/Mascotte.js';
 import type { MascotteState } from '../mascotte/mascotte-states.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import { formatDuration, prefillRemainingMs } from '../gauge.js';
 import type { AppTranslations } from '../i18n/types.js';
 
 interface StatusStripProps {
@@ -25,6 +27,8 @@ interface StatusStripProps {
   /** The shared prefix at open — shown when it was restored, the conversation having no state of its own. */
   seed: SeedDto | null;
   lastStats: CompletionStatsDto | null;
+  /** The prompt being read, while it is — how far, and about how long is left. */
+  prefill: PromptProgressDto | null;
   /** The machine, sampled every few seconds — null until the first sample. */
   resources: ResourceSampleDto | null;
   saveState: 'idle' | 'saved' | 'failed';
@@ -66,9 +70,9 @@ const OK = 'text-emerald-700 dark:text-emerald-300';
 function restoredText(t: AppTranslations, restore: Extract<RestoreDto, { restored: true }>): string {
   let text = `${t.status.restored} · ${restore.nRestored} tokens`;
   if (restore.restoreMs !== undefined) {
-    text += ` ${t.status.restoredIn.replace('{time}', () => formatMs(restore.restoreMs ?? 0))}`;
+    text += ` ${t.status.restoredIn.replace('{time}', () => formatDuration(restore.restoreMs ?? 0))}`;
     if (restore.prefillEstimateMs !== undefined) {
-      text += ` — ${t.status.insteadOf.replace('{time}', () => formatMs(restore.prefillEstimateMs ?? 0))}`;
+      text += ` — ${t.status.insteadOf.replace('{time}', () => formatDuration(restore.prefillEstimateMs ?? 0))}`;
     }
   }
   return text;
@@ -99,6 +103,33 @@ function chipClass(kind: 'ok' | 'dim' | 'err'): string {
   );
 }
 
+/**
+ * The prompt being read (P2.8): a long prefill on a local model can take
+ * minutes, and a silent wait reads as a hang. How far, and — once this
+ * prefill's own speed is measurable — about how long is left.
+ */
+function PrefillChip({
+  progress,
+  t,
+  locale,
+}: {
+  progress: PromptProgressDto;
+  t: AppTranslations;
+  locale: string;
+}) {
+  const remaining = prefillRemainingMs(progress);
+  const pct = Math.round((progress.processed / progress.total) * 100);
+  return (
+    <Badge variant="secondary" className={cn(chipClass('dim'), 'prefill-chip gap-1.5 tabular-nums')} role="status">
+      <Progress value={pct} className="h-[4px] w-10 bg-input" aria-hidden="true" />
+      {t.status.reading
+        .replace('{done}', () => progress.processed.toLocaleString(locale))
+        .replace('{total}', () => progress.total.toLocaleString(locale))}
+      {remaining !== null && ` · ${t.status.timeLeft.replace('{time}', () => formatDuration(remaining))}`}
+    </Badge>
+  );
+}
+
 export function StatusStrip({
   backendStatus,
   engine,
@@ -109,12 +140,13 @@ export function StatusStrip({
   restore,
   seed,
   lastStats,
+  prefill,
   resources,
   saveState,
   onSave,
   onOpenSettings,
 }: StatusStripProps) {
-  const { t } = useTranslate();
+  const { t, locale } = useTranslate();
 
   const cachePct =
     lastStats?.progress && lastStats.progress.total > 0
@@ -215,7 +247,10 @@ export function StatusStrip({
               : `${t.status.notRestored} · ${t.status.reasons[restore.reason] ?? restore.reason}`}
           </Badge>
         ) : null}
-        {lastStats && lastStats.promptMs > 0 && (
+        {prefill ? (
+          <PrefillChip progress={prefill} t={t} locale={locale} />
+        ) : null}
+        {!prefill && lastStats && lastStats.promptMs > 0 && (
           <Badge variant="secondary" className={chipClass('dim')}>
             {t.status.prefill} {formatMs(lastStats.promptMs)}
             {cachePct !== null && ` · ${t.status.cacheShare} ${cachePct}%`}

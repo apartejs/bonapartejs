@@ -22,7 +22,10 @@ published.
   measured for that model, and left out until one was measured. The load
   times and prefill speeds behind every announced cost are now kept across
   launches (`measures.json` in bonaparte's data), so the first switch after
-  a restart is announced with figures too.
+  a restart is announced with figures too. And a long prompt is no
+  longer a silent wait: while the server reads it, the strip shows
+  "reading 4 096 / 20 480 tokens · ~35 s left", the time extrapolated from
+  this prefill's own speed once it can be measured.
 
 - **Graphics acceleration, a setting** (P3.1, D-23). The interface still
   starts without the GPU by default — all video memory is left to the

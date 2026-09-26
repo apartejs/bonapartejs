@@ -233,6 +233,8 @@ abstract class BaseBackend implements Backend {
               ? { type: 'text', delta: out.delta }
               : { type: 'thinking', delta: out.delta };
           }
+        } else if (event.type === 'progress') {
+          yield { type: 'prefill', progress: event.progress };
         } else {
           stats = event.stats;
         }

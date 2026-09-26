@@ -319,6 +319,8 @@ export const EN: AppTranslations = {
     restoredIn: 'in {time}',
     insteadOf: 'instead of ~{time}',
     tokensPerSecond: '{rate} tok/s',
+    reading: 'reading {done} / {total} tokens',
+    timeLeft: '~{time} left',
     notRestored: 'cold start',
     seeded: 'prefix shared',
     reasons: {

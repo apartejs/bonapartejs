@@ -16,8 +16,14 @@ let app: ElectronApplication;
 let server: FakeLlamaServer;
 
 test.beforeAll(async () => {
-  // 2 ms per uncached prompt token: the machine "prefills" 500 tokens a second.
-  server = await startFakeLlamaServer({ msPerToken: 2, responder: () => 'a short answer' });
+  // 2 ms per uncached prompt token: the machine "prefills" 500 tokens a
+  // second; the prefill reports every 48 tokens, and takes real time to.
+  server = await startFakeLlamaServer({
+    msPerToken: 2,
+    prefillBatch: 48,
+    prefillPaceMs: 250,
+    responder: () => 'a short answer',
+  });
   const dataDir = await mkdtemp(join(tmpdir(), 'bonaparte-e2e-gauge-'));
   await mkdir(join(dataDir, 'config'), { recursive: true });
   await writeFile(
@@ -61,7 +67,12 @@ test('a turn shows its speed; resumed, a conversation says what its restore save
   await expect(chip('engine not connected')).toBeVisible();
 
   await send(`please read this ${'long '.repeat(120)}message`);
+  // The prompt being read, live — then, once its speed is known, the time left.
+  const reading = strip.locator('.prefill-chip');
+  await expect(reading).toContainText(/reading [\d,]+ \/ [\d,]+ tokens/, { timeout: 10_000 });
+  await expect(reading).toContainText(/~\d+ m?s left/);
   await expect(strip).toContainText(/\d+ tok\/s/, { timeout: 10_000 });
+  await expect(reading).toHaveCount(0);
   await expect(chip('engine not connected')).toHaveCount(0);
 
   // Bravo takes the slot; Alpha waits on disk, and the strip says it resumes on send.

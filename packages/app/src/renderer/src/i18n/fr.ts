@@ -321,6 +321,8 @@ export const FR: AppTranslations = {
     restoredIn: 'en {time}',
     insteadOf: 'au lieu de ~{time}',
     tokensPerSecond: '{rate} tok/s',
+    reading: 'lecture {done} / {total} tokens',
+    timeLeft: 'encore ~{time}',
     notRestored: 'reprise à froid',
     seeded: 'préfixe partagé',
     reasons: {

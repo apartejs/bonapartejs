@@ -8,6 +8,7 @@ import type {
   BackendConfigDto,
   BackendStatusDto,
   CompletionStatsDto,
+  PromptProgressDto,
   ConversationOpenResultDto,
   ConversationSummaryDto,
   PluginStatusDto,
@@ -55,6 +56,8 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastStats, setLastStats] = useState<CompletionStatsDto | null>(null);
+  /** The prompt being read, while it is (P2.8). */
+  const [prefill, setPrefill] = useState<PromptProgressDto | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saved' | 'failed'>('idle');
   const [config, setConfig] = useState<BackendConfigDto | undefined>(undefined);
@@ -260,10 +263,17 @@ export function App() {
   useEffect(
     () =>
       window.bonaparte.onAgentEvent((event) => {
-        if (event.type !== 'session_opened') return;
-        setOpened((current) =>
-          current && current.conversationId === event.conversationId ? { ...current, ...event.open } : current,
-        );
+        if (event.conversationId !== openedRef.current?.conversationId) return;
+        if (event.type === 'session_opened') {
+          setOpened((current) =>
+            current && current.conversationId === event.conversationId ? { ...current, ...event.open } : current,
+          );
+        } else if (event.type === 'prefill') {
+          // The prompt being read: shown until the reply starts.
+          setPrefill(event.progress.processed < event.progress.total ? event.progress : null);
+        } else {
+          setPrefill(null);
+        }
       }),
     [],
   );
@@ -777,6 +787,7 @@ export function App() {
         restore={view === 'chat' ? (opened?.restore ?? null) : null}
         seed={view === 'chat' ? (opened?.seed ?? null) : null}
         lastStats={lastStats}
+        prefill={view === 'chat' && prefill?.total ? prefill : null}
         resources={resources}
         saveState={saveState}
         onSave={() => void handleSave()}

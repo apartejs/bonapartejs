@@ -1392,6 +1392,12 @@ export class Harness {
       case 'files_changed':
         body = { type: 'files_changed', turnId: event.turnId, files: event.files };
         break;
+      case 'prefill':
+        body = {
+          type: 'prefill',
+          progress: { total: event.total, cache: event.cache, processed: event.processed, timeMs: event.timeMs },
+        };
+        break;
       case 'session_opened': {
         const { conversationId: _id, events: _events, ...open } = this.openedDto({ ...event.opened, events: [] });
         body = { type: 'session_opened', open };

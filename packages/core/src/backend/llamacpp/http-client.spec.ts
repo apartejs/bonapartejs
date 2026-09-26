@@ -28,7 +28,7 @@ async function collect(
   let stats: CompletionStats | null = null;
   for await (const event of events) {
     if (event.type === 'token') text += event.text;
-    else stats = event.stats;
+    else if (event.type === 'done') stats = event.stats;
   }
   if (!stats) throw new Error('no "done" event');
   return { text, stats };
@@ -93,6 +93,18 @@ describe('LlamaCppHttpClient', () => {
       processed: 12,
       timeMs: stats.promptMs,
     });
+  });
+
+  it('complete() yields the prefill progress as it goes — a long prompt is not a silent wait (P2.8)', async () => {
+    const { client } = await startServer({ responder: () => 'ok', prefillBatch: 4 });
+    const progress: { processed: number; total: number; cache: number; timeMs: number }[] = [];
+    for await (const event of client.complete({ prompt: 'x'.repeat(40), idSlot: 0, returnProgress: true })) {
+      if (event.type === 'progress') progress.push(event.progress);
+    }
+    // One step per batch of 4, from nothing processed to the whole prompt.
+    expect(progress.map((step) => step.processed)).toEqual([0, 4, 8, 10]);
+    expect(progress.every((step) => step.total === 10 && step.cache === 0)).toBe(true);
+    expect(progress.at(-1)?.timeMs).toBeGreaterThan(0);
   });
 
   it('complete() reports the cached prompt tokens even without return_progress', async () => {

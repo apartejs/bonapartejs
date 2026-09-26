@@ -52,6 +52,8 @@ export interface AgentLoopOptions {
 }
 
 export type AgentEvent =
+  /** The prompt is being read: tokens done out of the total, the cached share, the time so far. */
+  | { type: 'prefill'; total: number; cache: number; processed: number; timeMs: number }
   | { type: 'token'; text: string }
   | { type: 'thinking'; text: string }
   | { type: 'tool_call'; name: string; args: Record<string, unknown> }
@@ -159,6 +161,9 @@ export class AgentLoop {
           ...(this.options.thinking !== undefined ? { thinking: this.options.thinking } : {}),
         })) {
           switch (event.type) {
+            case 'prefill':
+              yield { type: 'prefill', ...event.progress };
+              break;
             case 'text':
               text += event.delta;
               yield { type: 'token', text: event.delta };
