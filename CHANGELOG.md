@@ -15,6 +15,11 @@ published.
 
 ### Added
 
+- **A tool row says what the call targets** — `read_file src/a.ts`,
+  `run_shell pnpm test`, `web_search llama.cpp slots` — after the tool's
+  name, with the row's states and disclosure kept (apartéJS 0.17.1's
+  `registerToolSummary`).
+
 - **An approval shows the change, not just the path** (06 §2, must-have).
   Approving `edit_file src/a.ts` meant signing without seeing the edit.
   A file write now comes with its unified diff against the file on disk —

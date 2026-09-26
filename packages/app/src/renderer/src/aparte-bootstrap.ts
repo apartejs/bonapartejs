@@ -1,4 +1,4 @@
-import { registerDefaultRenderers } from '@aparte/core';
+import { aparteGlobalConfig, registerDefaultRenderers } from '@aparte/core';
 import { setupMarkedProvider } from '@aparte/plugin-marked';
 import {
   setupShikiProviderFromHighlighter,
@@ -29,6 +29,34 @@ export function bootstrapAparte(): void {
   registerDefaultRenderers();
   setupMarkedProvider({ gfm: true, breaks: true });
   setupStreamingMarkdownProvider();
+  registerToolSummaries();
+}
+
+/**
+ * What each tool call targets, after its name in the row — `read_file
+ * src/a.ts`, `run_shell pnpm test` — with the row's states, spinner and
+ * disclosure kept (apartéJS 0.17.1). Which argument names the target, per
+ * tool; nothing to name shows nothing.
+ */
+const TOOL_TARGETS: Record<string, string> = {
+  read_file: 'path',
+  write_file: 'path',
+  edit_file: 'path',
+  list_dir: 'path',
+  grep_files: 'pattern',
+  run_shell: 'command',
+  web_search: 'query',
+  web_fetch: 'url',
+  browser_open: 'url',
+};
+
+function registerToolSummaries(): void {
+  for (const [tool, argument] of Object.entries(TOOL_TARGETS)) {
+    aparteGlobalConfig.registerToolSummary(tool, (segment) => {
+      const value = segment.toolCall.input[argument];
+      return typeof value === 'string' ? value : '';
+    });
+  }
 }
 
 /**

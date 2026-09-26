@@ -25,6 +25,25 @@ describe('aparté bootstrap', () => {
     }
   });
 
+  it('a tool row says what the call targets — the path, the command, the query (apartéJS 0.17.1)', () => {
+    bootstrapAparte();
+    const summary = (tool: string, input: Record<string, unknown>): string | undefined =>
+      aparteGlobalConfig.getToolSummary(tool)?.({
+        id: 's',
+        type: 'tool_call',
+        toolCall: { id: 'c', name: tool, input },
+      } as AparteSegment & { type: 'tool_call' });
+
+    expect(summary('read_file', { path: 'src/a.ts' })).toBe('src/a.ts');
+    expect(summary('edit_file', { path: 'b.ts', old_string: 'x', new_string: 'y' })).toBe('b.ts');
+    expect(summary('run_shell', { command: 'pnpm test' })).toBe('pnpm test');
+    expect(summary('grep_files', { pattern: 'TODO' })).toBe('TODO');
+    expect(summary('web_search', { query: 'llama.cpp slots' })).toBe('llama.cpp slots');
+    expect(summary('web_fetch', { url: 'https://example.com' })).toBe('https://example.com');
+    // Nothing to name: nothing shown, never "undefined".
+    expect(summary('read_file', {})).toBe('');
+  });
+
   it('installs a Markdown rendering engine', () => {
     // Without a provider, `renderMarkdown` returns the string UNCHANGED: the
     // model displays its asterisks and hashes as plain text. A coding agent
