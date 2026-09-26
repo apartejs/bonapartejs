@@ -33,7 +33,11 @@ describe('ResourceMonitor', () => {
     monitor.onSample((sample) => seen.push(sample));
 
     monitor.start();
-    await tick(80);
+    // Until three samples, not a fixed 80 ms: under a loaded machine (the
+    // E2E suite beside it) the clock's third tick came late, and the test
+    // said the monitor was broken.
+    const deadline = Date.now() + 2_000;
+    while (seen.length < 3 && Date.now() < deadline) await tick(10);
     monitor.stop();
     const countAtStop = seen.length;
     await tick(60);
