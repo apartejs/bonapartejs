@@ -55,6 +55,17 @@ export class PathOutsidePerimeterError extends Error {
   }
 }
 
+/** Without a project, the perimeter is the home folder — and a path outside it is refused (Q-26). */
+export class PathOutsideHomeError extends PathOutsidePerimeterError {
+  constructor(requested: string, home: string) {
+    super(requested, [home]);
+    this.message =
+      `Path outside the home folder: ${requested}. No project is open, so tools stay in ${home}. ` +
+      'Ask the user to open a project that includes that folder.';
+    this.name = 'PathOutsideHomeError';
+  }
+}
+
 /** Does the path land inside this root (true descendance, not a prefix)? */
 function contains(root: string, absolute: string): boolean {
   const rel = relative(resolve(root), absolute);
@@ -71,9 +82,9 @@ function contains(root: string, absolute: string): boolean {
  * the path ends up, not by which detour: a `..` that lands back in
  * another root of the same project is legitimate.
  *
- * With no root, nothing is confined: the project is the tools' PERIMETER,
- * not their condition of existence. A relative then starts from the home
- * folder.
+ * With no root, the tools still work — the project is their PERIMETER,
+ * not their condition of existence — confined to the home folder (Q-26):
+ * "no project" is not the whole machine. A relative starts from home.
  */
 export function resolveInPerimeter(roots: string[], requested: string): string {
   // Models write POSIX or Windows separators interchangeably.
@@ -82,7 +93,10 @@ export function resolveInPerimeter(roots: string[], requested: string): string {
   if (roots.length === 0) {
     // `resolve` ignores the base when the argument is already absolute:
     // both cases are handled at once.
-    return resolve(homedir(), normalized);
+    const home = homedir();
+    const absolute = resolve(home, normalized);
+    if (!contains(home, absolute)) throw new PathOutsideHomeError(requested, resolve(home));
+    return absolute;
   }
 
   const absolute = resolve(resolve(roots[0] as string), normalized);

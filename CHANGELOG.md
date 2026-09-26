@@ -257,6 +257,13 @@ published.
 
 ### Changed
 
+- **Without a project, the tools stay in your home folder** (audit C4,
+  Q-26). "No project" meant no perimeter at all — `read_file` could read
+  any path on the machine, `write_file` write one. The file tools now
+  work inside the home folder (relative paths start there) and refuse
+  what lands outside it, telling the model to ask for a project that
+  includes the folder. The system prompt of new conversations says so.
+
 - **"Always allow" says what it covers** (audit C1, Q-24). It remembered
   the first word of a command: a grant for `pnpm test` covered
   `pnpm exec rm -rf .`. The approval panel now offers two scopes, each

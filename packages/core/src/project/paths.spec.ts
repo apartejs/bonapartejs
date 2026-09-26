@@ -94,9 +94,15 @@ describe('resolveInPerimeter', () => {
       expect(got).toBe(resolve(homedir(), 'notes.txt'));
     });
 
-    it('lets any absolute path through: nothing is confined', () => {
-      const ailleurs = resolve('/tmp/ailleurs/x.txt');
-      expect(resolveInPerimeter([], ailleurs)).toBe(ailleurs);
+    it('lets an absolute path under the home folder through', () => {
+      const inside = resolve(homedir(), 'code', 'x.txt');
+      expect(resolveInPerimeter([], inside)).toBe(inside);
+    });
+
+    it('refuses what lands outside the home folder (Q-26: no project is not the whole machine)', () => {
+      const outside = resolve(homedir(), '..', 'someone-else', 'x.txt');
+      expect(() => resolveInPerimeter([], outside)).toThrow(PathOutsidePerimeterError);
+      expect(() => resolveInPerimeter([], '../../etc/passwd')).toThrow(/home folder/);
     });
   });
 

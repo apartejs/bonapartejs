@@ -272,20 +272,30 @@ describe('run_shell', () => {
 });
 
 describe('with no project open', () => {
-  it('the tools still exist and can read an absolute path', async () => {
+  it('the tools still exist, confined to the home folder (Q-26)', async () => {
     // The project is the tools' PERIMETER, not their condition of
     // existence: discussing with no folder must not deprive the agent of
-    // the ability to read.
-    const dir = await project({ 'note.txt': 'content outside the project' });
-    const file = join(dir, 'note.txt');
+    // the ability to read — but "no project" is not the whole machine.
+    const home = await project({ 'note.txt': 'content in the home folder' });
+    const saved = { HOME: process.env['HOME'], USERPROFILE: process.env['USERPROFILE'] };
+    process.env['HOME'] = home;
+    process.env['USERPROFILE'] = home;
+    try {
+      const read = builtinTools().find((t) => t.def.name === 'read_file')!;
+      const ctx = { roots: [], signal: new AbortController().signal };
 
-    const read = builtinTools().find((t) => t.def.name === 'read_file')!;
-    const result = await read.handler(
-      { path: file },
-      { roots: [], signal: new AbortController().signal },
-    );
+      const inside = await read.handler({ path: join(home, 'note.txt') }, ctx);
+      expect(inside.ok).toBe(true);
+      expect(inside.content).toContain('content in the home folder');
 
-    expect(result.ok).toBe(true);
-    expect(result.content).toContain('content outside the project');
+      const outside = await read.handler({ path: join(home, '..', 'elsewhere.txt') }, ctx);
+      expect(outside.ok).toBe(false);
+      expect(outside.content).toMatch(/home folder/);
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 });

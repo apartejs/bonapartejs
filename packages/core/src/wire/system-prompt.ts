@@ -54,10 +54,9 @@ function renderPerimeter(roots: string[]): string {
   // demand a folder, nor believe it can't read anything.
   if (roots.length === 0) {
     return (
-      'No project folder is open. Your tools still work: use absolute paths, ' +
-      'or relative ones, which resolve from the user home directory. ' +
-      'Nothing confines them to a folder, so name the exact path you are ' +
-      'about to touch when it matters.'
+      'No project folder is open. Your tools still work inside the user home ' +
+      'directory: relative paths resolve from it, and a path outside it is ' +
+      'refused. Name the exact path you are about to touch when it matters.'
     );
   }
 
@@ -147,9 +146,9 @@ export function renderPerimeterDelta(
   if (current.length === 0) {
     return (
       '[project update]\n' +
-      'The project folders were closed. Your tools still work, but nothing ' +
-      'confines them any more: relative paths resolve from the user home ' +
-      'directory. Name the exact path you are about to touch.'
+      'The project folders were closed. Your tools still work, confined to ' +
+      'the user home directory: relative paths resolve from it. Name the ' +
+      'exact path you are about to touch.'
     );
   }
 

@@ -23,8 +23,8 @@ export interface ToolContext {
    * relative paths, and the allowed perimeter is their UNION.
    *
    * EMPTY is a normal case: the tools still exist, the project is not
-   * their condition of existence but their PERIMETER. With no root,
-   * relative paths start from the home folder and nothing is confined.
+   * their condition of existence but their PERIMETER. With no root, the
+   * perimeter is the home folder, and relative paths start from it.
    */
   roots: string[];
   signal: AbortSignal;

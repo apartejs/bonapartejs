@@ -58,9 +58,18 @@ export interface FakeLlamaServer {
   close(): Promise<void>;
 }
 
-/** Deterministic fake tokenizer: 1 token = 4 characters. */
+/**
+ * Deterministic fake tokenizer: a special token (`<|im_end|>`…) is one
+ * token, the text between them goes 4 characters to a token. Like a real
+ * tokenizer, the special tokens are clean boundaries: a prefix that ends
+ * on `<|im_end|>
+` tokenizes the same inside a longer prompt — without
+ * that, the seed's last token depended on its length modulo 4.
+ */
 export function fakeTokenize(prompt: string): string[] {
-  return prompt.match(/.{1,4}/gs) ?? [];
+  return prompt
+    .split(/(<\|[a-z_]+\|>)/)
+    .flatMap((part) => (/^<\|[a-z_]+\|>$/.test(part) ? [part] : (part.match(/.{1,4}/gs) ?? [])));
 }
 
 /** Simulated bytes per token of saved state (realistic order of magnitude). */
