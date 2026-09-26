@@ -9,7 +9,7 @@
     }
     document.documentElement.setAttribute('data-aparte-theme', t);
     document.documentElement.style.colorScheme = t;
-  } catch (e) {
+  } catch {
     /* default theme */
   }
 })();
