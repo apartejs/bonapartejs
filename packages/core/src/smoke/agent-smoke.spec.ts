@@ -41,6 +41,7 @@ import { SUMMARY_QUESTION } from '../engine/conversation-engine.js';
 import { ChatSession, type ChatSessionOptions } from '../session/chat-session.js';
 import { builtinTools } from '../tools/builtin/index.js';
 import { ToolRegistry } from '../tools/registry.js';
+import { McpClientManager } from '../mcp/manager.js';
 
 const MODEL = process.env['BONAPARTE_SMOKE_MODEL'];
 const LLAMA = process.env['BONAPARTE_SMOKE_LLAMA'] ?? 'llama';
@@ -158,11 +159,12 @@ function turnEnd(events: AgentEvent[]): Extract<AgentEvent, { type: 'turn_end' }
 
 describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
   let backend: Backend;
+  let projectRoot: string;
   let base: Omit<ChatSessionOptions, 'live'> & { live: LiveBackendConfig };
 
   beforeAll(async () => {
     const root = await mkdtemp(join(tmpdir(), 'bonaparte-smoke-'));
-    const projectRoot = join(root, 'project');
+    projectRoot = join(root, 'project');
     const slotDir = join(root, 'slots');
     await mkdir(projectRoot, { recursive: true });
     await mkdir(slotDir, { recursive: true });
@@ -470,6 +472,56 @@ describe.skipIf(!MODEL)('REAL SMOKE — agentic path', () => {
       // The server samples one token on n_predict 0 and the prefix match
       // drops it: everything up to it must come from the cache.
       expect(stats?.cachedTokens ?? 0).toBeGreaterThanOrEqual(seeded - 1);
+    },
+    TURN_TIMEOUT_MS,
+  );
+  it(
+    'calls a tool of a real MCP server — the official filesystem server, over stdio (P4.4)',
+    async () => {
+      // The server the MCP guides start with, as a user would declare it:
+      // through npx, confined to the project folder.
+      const registry = new ToolRegistry();
+      const mcp = new McpClientManager({ registry, clientVersion: 'smoke' });
+      try {
+        await mcp.apply([
+          {
+            id: 'fs',
+            transport: 'stdio',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem', projectRoot],
+            disabled: false,
+          },
+        ]);
+        const status = mcp.status()[0];
+        console.log(
+          `[smoke] MCP filesystem server: ${status?.state}, ${status?.tools.length} tools` +
+            (status?.error ? ` — ${status.error}` : ''),
+        );
+        expect(status?.state).toBe('connected');
+        const read = status?.tools.includes('read_text_file') ? 'read_text_file' : 'read_file';
+        const tool = `mcp__fs__${read}`;
+
+        const { session } = await ChatSession.open({ ...base, registry }, 'smoke-mcp');
+        // Forward slashes: a path the model writes into JSON without escapes.
+        const path = join(projectRoot, 'notes.txt').replace(/\\/g, '/');
+        const out = await collect(
+          session.send(
+            `Use the ${tool} tool with the path ${path} and tell me the password it contains. ` +
+              'Answer with the password itself.',
+          ),
+        );
+
+        for (const event of out.events) {
+          if (event.type === 'tool_call') console.log(`[smoke] call: ${event.name} ${JSON.stringify(event.args)}`);
+          if (event.type === 'tool_result') console.log(`[smoke] result (${event.ok ? 'ok' : 'failed'}): ${event.content.slice(0, 200)}`);
+        }
+        console.log(`[smoke] response: ${out.text.trim().slice(0, 200)}`);
+        expect(out.calls).toContain(tool);
+        expect(out.results.some((result) => result.name === tool && result.ok)).toBe(true);
+        expect(out.text).toContain(SECRET);
+      } finally {
+        await mcp.stopAll();
+      }
     },
     TURN_TIMEOUT_MS,
   );

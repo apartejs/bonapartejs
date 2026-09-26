@@ -167,6 +167,18 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
   the outcome of each case.
+  - **2026-09-26 (evening) — 9/9 green.** Same model and build. New case:
+    **a real MCP server** — the official filesystem server started through
+    `npx`, over stdio, confined to the project folder: connected with 14
+    tools, the model called `mcp__fs__read_text_file` and answered with the
+    secret. The run also carries the live prefill progress and the
+    generation time now read from the stream (1 770 tokens served from the
+    cache after a tool round-trip, a restore of 960 tokens in 26 ms). One
+    earlier full run was 8/9: the model wrote a path to a file that did not
+    exist, the server said so, and the answer repeated it — the prompt holds
+    a random temp folder name, so each run is a new draw for a 1.7B model;
+    the next run passed unchanged. The harness path (call → MCP server →
+    result → answer) is what the case judges.
   - **2026-09-26 (later) — 8/8 green**, same model and build. New case:
     **compaction is the rebase** — the model's summary, asked beside the
     conversation, kept the secret read from a file ("…contained the
