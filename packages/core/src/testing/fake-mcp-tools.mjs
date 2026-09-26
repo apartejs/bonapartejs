@@ -8,7 +8,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-export function createFakeMcpServer() {
+/** `options.endlessPages`: every page of tools announces another — a server that never ends its list. */
+export function createFakeMcpServer(options = {}) {
   const text = { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] };
 
   const tools = [
@@ -36,7 +37,12 @@ export function createFakeMcpServer() {
     { capabilities: { tools: { listChanged: true } } },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+  let page = 0;
+  server.setRequestHandler(ListToolsRequestSchema, async () =>
+    options.endlessPages
+      ? { tools: [{ name: `page_${++page}`, description: 'x', inputSchema: { type: 'object', properties: {} } }], nextCursor: 'again' }
+      : { tools },
+  );
 
   server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     const args = request.params.arguments ?? {};

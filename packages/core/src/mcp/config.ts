@@ -57,7 +57,9 @@ export const MCP_SERVER_ID = /^[A-Za-z0-9_-]{1,32}$/;
 const RESERVED_IDS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function isServerId(id: string): boolean {
-  return MCP_SERVER_ID.test(id) && !RESERVED_IDS.has(id);
+  // No `__`: tool names are `mcp__<server>__<tool>`, and a server `a__b`
+  // would share names with a server `a` offering `b__…` tools.
+  return MCP_SERVER_ID.test(id) && !RESERVED_IDS.has(id) && !id.includes('__');
 }
 
 export function parseMcpConfig(raw: unknown): { servers: McpServerConfig[]; errors: McpConfigError[] } {

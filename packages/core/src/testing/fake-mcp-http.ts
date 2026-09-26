@@ -15,7 +15,9 @@ export interface FakeMcpHttpServer {
   close(): Promise<void>;
 }
 
-export async function startFakeMcpHttpServer(options: { token?: string } = {}): Promise<FakeMcpHttpServer> {
+export async function startFakeMcpHttpServer(
+  options: { token?: string; endlessPages?: boolean } = {},
+): Promise<FakeMcpHttpServer> {
   const sessions = new Map<string, StreamableHTTPServerTransport>();
   const http = createServer((req, res) => {
     void (async () => {
@@ -35,7 +37,7 @@ export async function startFakeMcpHttpServer(options: { token?: string } = {}): 
             sessions.set(id, created);
           },
         });
-        await createFakeMcpServer().connect(created);
+        await createFakeMcpServer({ endlessPages: options.endlessPages === true }).connect(created);
         transport = created;
       }
       await transport.handleRequest(req, res, body);

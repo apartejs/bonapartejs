@@ -132,6 +132,11 @@ describe('mcpServerFromForm', () => {
     expect(mcpServerFromForm('ok', '   ')).toEqual({ error: 'target' });
   });
 
+  it('refuses a double underscore — it would blur where a tool name ends and its server begins', () => {
+    expect(mcpServerFromForm('a__b', 'npx x')).toEqual({ error: 'name' });
+    expect(mcpServerFromForm('a_b', 'npx x')).not.toHaveProperty('error');
+  });
+
   it('refuses the names an object keeps for itself', () => {
     for (const name of ['__proto__', 'constructor', 'prototype']) {
       expect(mcpServerFromForm(name, 'npx x')).toEqual({ error: 'name' });

@@ -57,6 +57,9 @@ export function mcpToolName(serverId: string, toolName: string): string {
 
 /** A server's description, bounded: every tool's description is in every prompt. */
 const MAX_DESCRIPTION_CHARS = 1_024;
+/** A server's tool list, bounded: pages, and tools in all. */
+const MAX_TOOL_PAGES = 50;
+const MAX_TOOLS = 1_000;
 /** The last words a server wrote on stderr, kept to explain a failure. */
 const STDERR_TAIL_CHARS = 2_000;
 
@@ -67,8 +70,12 @@ interface Connection {
   state: McpServerState;
   error?: string;
   client?: Client;
-  /** The stdio server's process — the root of the tree a stop brings down. */
-  pid?: number;
+  /**
+   * The transport, kept to read its process id LIVE: set from the spawn
+   * (a stop while connecting still finds it), gone once the process exited
+   * (a pid Windows may have given to another program is never killed).
+   */
+  transport?: StdioClientTransport | StreamableHTTPClientTransport;
   /** Registered names, server name → registry name. */
   registered: Map<string, string>;
   stderr: string;
@@ -153,6 +160,7 @@ export class McpClientManager {
           : new StreamableHTTPClientTransport(new URL(config.url), {
               ...(config.headers ? { requestInit: { headers: config.headers } } : {}),
             });
+      connection.transport = transport;
       if (transport instanceof StdioClientTransport) {
         transport.stderr?.on('data', (chunk: Buffer) => {
           connection.stderr = (connection.stderr + chunk.toString('utf8')).slice(-STDERR_TAIL_CHARS);
@@ -166,12 +174,12 @@ export class McpClientManager {
         if (connection.state === 'connected') await this.refreshTools(connection).catch(() => undefined);
       });
       await client.connect(transport, { timeout: this.options.connectTimeoutMs ?? 60_000 });
-      if (transport instanceof StdioClientTransport && transport.pid !== null) connection.pid = transport.pid;
       await this.refreshTools(connection);
       connection.state = 'connected';
     } catch (error) {
       this.fail(connection, describe(error));
       connection.closing = true;
+      killTree(connection);
       await client.close().catch(() => undefined);
     }
   }
@@ -186,14 +194,7 @@ export class McpClientManager {
   private async stop(connection: Connection): Promise<void> {
     connection.closing = true;
     this.unregisterAll(connection);
-    // On Windows a server started through a wrapper (`npx` is `npx.cmd`)
-    // runs as a grandchild: the SDK's close ends only the wrapper, and a
-    // server that ignores its stdin closing would outlive us. The tree
-    // goes down first, while the wrapper still links it — synchronously,
-    // as the engine's server does at shutdown.
-    if (process.platform === 'win32' && connection.pid !== undefined) {
-      spawnSync('taskkill', ['/pid', String(connection.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-    }
+    killTree(connection);
     await connection.client?.close().catch(() => undefined);
   }
 
@@ -202,11 +203,18 @@ export class McpClientManager {
     const client = connection.client;
     if (!client) return;
     const tools: Awaited<ReturnType<Client['listTools']>>['tools'] = [];
+    const seen = new Set<string>();
     let cursor: string | undefined;
     do {
       const page = await client.listTools(cursor ? { cursor } : undefined);
       tools.push(...page.tools);
       cursor = page.nextCursor;
+      // A list that never ends (a cursor said twice, pages without end)
+      // would hold every other server: refused, and said.
+      if (cursor !== undefined && (seen.has(cursor) || seen.size >= MAX_TOOL_PAGES || tools.length > MAX_TOOLS)) {
+        throw new Error('The server lists its tools without end.');
+      }
+      if (cursor !== undefined) seen.add(cursor);
     } while (cursor);
 
     const { registry } = this.options;
@@ -269,6 +277,22 @@ export class McpClientManager {
     for (const name of connection.registered.values()) this.options.registry.unregister(name);
     connection.registered.clear();
     this.options.onChange?.();
+  }
+}
+
+/**
+ * On Windows a server started through a wrapper (`npx` is `npx.cmd`) runs
+ * as a grandchild: the SDK's close ends only the wrapper, and a server that
+ * ignores its stdin closing would outlive us. Its tree goes down first,
+ * while the wrapper still links it — synchronously, as the engine's server
+ * does at shutdown. The pid is read live: a process that already exited
+ * has none, and nothing is killed in its name.
+ */
+function killTree(connection: Connection): void {
+  const transport = connection.transport;
+  const pid = transport instanceof StdioClientTransport ? transport.pid : null;
+  if (process.platform === 'win32' && pid !== null) {
+    spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
   }
 }
 
