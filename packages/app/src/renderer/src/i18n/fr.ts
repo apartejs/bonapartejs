@@ -158,6 +158,13 @@ export const FR: AppTranslations = {
     newProject: 'Nouveau projet',
     editProject: 'Modifier le projet',
     groupEmpty: 'Aucune conversation dans ce projet.',
+    rowMenu: 'Actions de la conversation',
+    delete: 'Supprimer…',
+    deleteTitle: 'Supprimer cette conversation ?',
+    deleteBody:
+      '« {title} » et son contexte sauvegardé seront effacés de cet ordinateur. C’est définitif.',
+    deleteConfirm: 'Supprimer',
+    cancel: 'Annuler',
   },
   header: {
     noProject: 'Sans projet',

@@ -30,6 +30,7 @@ export const IPC = {
   conversationList: 'conversation.list',
   conversationCreate: 'conversation.create',
   conversationRename: 'conversation.rename',
+  conversationDelete: 'conversation.delete',
   agentSend: 'agent.send',
   agentInFlight: 'agent.inFlight',
   agentCancel: 'agent.cancel',
@@ -371,6 +372,11 @@ export interface BonaparteBridge {
    */
   createConversation(projectRoot?: string): Promise<string>;
   renameConversation(id: string, title: string): Promise<void>;
+  /**
+   * Erases a conversation for good — its log, its meta, its saved KV
+   * state. A turn in flight there is cut first.
+   */
+  deleteConversation(id: string): Promise<void>;
   /** Discovered plugins, with their views and any errors. */
   listPlugins(): Promise<PluginStatusDto[]>;
   /**

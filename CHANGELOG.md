@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **A conversation can be deleted.** Each row of the sidebar has its own
+  ⋯ menu (shown on hover or focus); "Delete…" asks first, naming the
+  conversation and saying that its saved context goes with it and that
+  nothing brings it back — Cancel holds the focus. The log, the meta and
+  the KV state leave the disk (the audit's H2: a privacy matter, not
+  tidying up). A turn streaming there is cut first; the open conversation
+  lets go of the slot without saving what is being erased; deleting the
+  one on screen moves to another (a fresh one when none is left).
+
 - **One bonaparte at a time.** A second launch — a double click on the
   shortcut, the command typed twice — no longer starts a second process
   that fights the first for the server's port and writes the same

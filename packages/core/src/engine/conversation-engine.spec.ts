@@ -320,6 +320,55 @@ describe('ConversationEngine — state', () => {
   });
 });
 
+describe('ConversationEngine — deleting a conversation', () => {
+  it('erases the log, the meta and the saved state', async () => {
+    const { engine, store, kv } = await makeRig();
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'secret');
+    await engine.open('conv-b', MODEL); // conv-a leaves the slot: its state is saved
+    expect(await kv.has('conv-a')).toBe(true);
+
+    await engine.remove('conv-a');
+
+    expect(await store.exists('conv-a')).toBe(false);
+    expect(await kv.has('conv-a')).toBe(false);
+    expect(engine.active).toBe('conv-b');
+  });
+
+  it('the open conversation lets go of the slot WITHOUT saving what it is about to erase', async () => {
+    const { engine, store, kv } = await makeRig();
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'secret');
+
+    await engine.remove('conv-a');
+
+    expect(engine.active).toBeNull();
+    expect(await kv.has('conv-a')).toBe(false);
+    expect(await store.exists('conv-a')).toBe(false);
+  });
+
+  it('a turn in flight in that conversation is cut first — nothing is written after the erase', async () => {
+    const { engine, store, events } = await makeRig({
+      replies: ['one two three four five six seven eight nine ten'],
+      paceMs: 20,
+    });
+    await engine.open('conv-a', MODEL);
+    const turn = engine.send('conv-a', 'count');
+    await until(() => assistantText(events, 'conv-a').length > 0);
+
+    await engine.remove('conv-a');
+    await turn;
+
+    expect(engine.inFlight()).toBeNull();
+    expect(await store.exists('conv-a')).toBe(false);
+  });
+
+  it('removing a conversation that does not exist is a no-op', async () => {
+    const { engine } = await makeRig();
+    await expect(engine.remove('never')).resolves.toBeUndefined();
+  });
+});
+
 describe('ConversationEngine — the model of a conversation', () => {
   it('an explicit model replaces the pin: the composer can switch a conversation to another model', async () => {
     // Until now the pinned model always won over the one passed in, so the

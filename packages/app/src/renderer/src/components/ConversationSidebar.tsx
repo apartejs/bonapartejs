@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger,
   cn,
 } from '@aparte/bonaparte-plugin-sdk/ui';
-import { Ellipsis, Folder, Plus } from 'lucide-react';
+import { Ellipsis, Folder, Plus, Trash2 } from 'lucide-react';
 import { useMemo, type ReactElement } from 'react';
 import { useTranslate } from '../i18n/LocaleProvider.js';
 import { MENU_LABEL } from './menu-styles.js';
@@ -36,6 +36,8 @@ interface ConversationSidebarProps {
   onEditProject: (projectId: string) => void;
   onGroupingChange: (grouping: SidebarGroupingDto) => void;
   onSortChange: (sort: SidebarSortDto) => void;
+  /** Asks to delete a conversation — the caller confirms before anything goes. */
+  onDelete: (conversation: ConversationSummaryDto) => void;
 }
 
 /** "3 min ago", "yesterday"… — a rough marker, never a clock. */
@@ -75,6 +77,7 @@ export function ConversationSidebar({
   onEditProject,
   onGroupingChange,
   onSortChange,
+  onDelete,
 }: ConversationSidebarProps) {
   const { t, locale } = useTranslate();
 
@@ -102,7 +105,7 @@ export function ConversationSidebar({
   const row = (conversation: ConversationSummaryDto): ReactElement => {
     const active = conversation.id === currentId;
     return (
-      <li key={conversation.id}>
+      <li key={conversation.id} className="conv-row group relative">
         {/* A row: the title on its line, the rest muted underneath. No
             frame — the chosen row is told by a tint and a bar on the start
             edge, the hovered one by a surface. */}
@@ -158,6 +161,29 @@ export function ConversationSidebar({
             </span>
           </span>
         </button>
+        {/* The row's own actions: a ⋯ that shows on hover or focus, over the
+            end of the row — its surface covers the date beneath it. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="conv-row-menu absolute end-1.5 top-1.5 size-6 bg-card text-muted-foreground opacity-0 shadow-sm group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+              disabled={busy}
+              title={t.conversations.rowMenu}
+              aria-label={t.conversations.rowMenu}
+            >
+              <Ellipsis />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuItem variant="destructive" onSelect={() => onDelete(conversation)}>
+              <Trash2 />
+              {t.conversations.delete}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </li>
     );
   };

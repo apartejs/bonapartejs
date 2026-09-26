@@ -157,6 +157,13 @@ export const EN: AppTranslations = {
     newProject: 'New project',
     editProject: 'Edit project',
     groupEmpty: 'No conversation in this project.',
+    rowMenu: 'Conversation actions',
+    delete: 'Delete…',
+    deleteTitle: 'Delete this conversation?',
+    deleteBody:
+      '“{title}” and its saved context will be erased from this computer. This cannot be undone.',
+    deleteConfirm: 'Delete',
+    cancel: 'Cancel',
   },
   header: {
     noProject: 'No project',

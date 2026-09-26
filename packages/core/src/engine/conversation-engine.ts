@@ -445,6 +445,27 @@ export class ConversationEngine {
     await this.release();
   }
 
+  /**
+   * Erases a conversation for good: its log, its meta, its saved state. A
+   * turn in flight there is cut and allowed to finish writing FIRST, so
+   * nothing lands after the erase; the open conversation lets go of the
+   * slot without saving — writing the state of what is being deleted would
+   * leave exactly what the user asked to remove.
+   */
+  async remove(conversationId: string): Promise<void> {
+    if (this.turn?.conversationId === conversationId) {
+      this.turn.controller.abort();
+      await this.settle();
+    }
+    if (this.activeId === conversationId) {
+      this.session = null;
+      this.activeId = null;
+      this.contextUsed = 0;
+    }
+    await this.options.store.remove(conversationId);
+    await this.options.kv.forget(conversationId);
+  }
+
   private async release(): Promise<void> {
     await this.saveState();
     this.session = null;

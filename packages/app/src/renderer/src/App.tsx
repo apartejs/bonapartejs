@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChatScreen } from './components/ChatScreen.js';
 import { ConversationHeader } from './components/ConversationHeader.js';
 import { ConversationSidebar } from './components/ConversationSidebar.js';
+import { DeleteConversationDialog } from './components/DeleteConversationDialog.js';
 import { ProjectDialog } from './components/ProjectDialog.js';
 import { SettingsHub } from './components/SettingsHub.js';
 import { ToolingPanel } from './components/ToolingPanel.js';
@@ -81,6 +82,8 @@ export function App() {
   const [projectDialog, setProjectDialog] = useState<{
     project: ProjectSummaryDto | null;
   } | null>(null);
+  /** The conversation whose deletion is being confirmed. */
+  const [toDelete, setToDelete] = useState<ConversationSummaryDto | null>(null);
   // Menu organization: pure display preference, hence local — lifting it up
   // to the main process would restart the app for a cosmetic setting.
   const [grouping, setGrouping] = useState<SidebarGroupingDto>(
@@ -376,6 +379,25 @@ export function App() {
     [projects, refreshConversations, selectConversation],
   );
 
+  /**
+   * Deletes the confirmed conversation. The open one leaves the screen: the
+   * history is asked for again, and lands on another conversation (a fresh
+   * one when none is left).
+   */
+  const confirmDelete = useCallback(async () => {
+    const target = toDelete;
+    if (!target) return;
+    setToDelete(null);
+    try {
+      await window.bonaparte.deleteConversation(target.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (openedRef.current?.conversationId === target.id) await selectConversation();
+    else await refreshConversations();
+  }, [toDelete, selectConversation, refreshConversations]);
+
   const handleSave = useCallback(async () => {
     const ok = await window.bonaparte.saveKv();
     setSaveState(ok ? 'saved' : 'failed');
@@ -434,6 +456,7 @@ export function App() {
                   }}
                   onGroupingChange={changeGrouping}
                   onSortChange={changeSort}
+                  onDelete={setToDelete}
                 />
                 {layout.sidebar.mode === 'docked' && (
                   <ResizeHandle
@@ -557,6 +580,13 @@ export function App() {
           }}
           onToggleTheme={toggleTheme}
           onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {toDelete && (
+        <DeleteConversationDialog
+          title={toDelete.title}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setToDelete(null)}
         />
       )}
       {projectDialog && (

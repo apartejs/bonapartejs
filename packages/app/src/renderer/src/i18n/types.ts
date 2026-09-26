@@ -176,6 +176,14 @@ export interface AppTranslations {
     newProject: string;
     editProject: string;
     groupEmpty: string;
+    /** The row's own menu (⋯). */
+    rowMenu: string;
+    delete: string;
+    deleteTitle: string;
+    /** `{title}` is the conversation's title. */
+    deleteBody: string;
+    deleteConfirm: string;
+    cancel: string;
   };
   header: {
     noProject: string;

@@ -431,6 +431,21 @@ export class Harness {
     await this.store.setTitle(id, title);
   }
 
+  /**
+   * Erases a conversation — log, meta, saved state (core cuts a turn in
+   * flight there first). The open one is forgotten as current: the screen
+   * asks for the history again and lands on another conversation.
+   */
+  async deleteConversation(id: string): Promise<void> {
+    await this.conversations.remove(id);
+    if (this.currentConversationId === id) {
+      this.currentConversationId = null;
+      this.roots = [];
+      const { currentConversationId: _dropped, ...config } = await this.loadConfig();
+      await this.saveConfig(config);
+    }
+  }
+
   // ── Plugins ────────────────────────────────────────────────────────────
 
   /** Plugins folder — see `resolvePluginsDir` for the three layouts. */
@@ -1167,6 +1182,7 @@ export class Harness {
     ipcMain.handle(IPC.conversationRename, (_e, id: string, title: string) =>
       this.renameConversation(id, title),
     );
+    ipcMain.handle(IPC.conversationDelete, (_e, id: string) => this.deleteConversation(id));
     ipcMain.handle(
       IPC.conversationOpen,
       (_e, id?: string, modelPath?: string) => this.openConversation(id, modelPath),
