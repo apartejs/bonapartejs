@@ -25,6 +25,10 @@ test.beforeAll(async () => {
   // A user message asks for the command; a tool result gets a word back —
   // which says whether the command was refused or ran.
   server = await startFakeLlamaServer({
+    // A real model never lands a whole reply in one burst; without a pace,
+    // the fake server's instant replies raced the chat's rendering of the
+    // tool row and the last token (flaky, 2026-09-26).
+    paceMs: 5,
     responder: (prompt) => {
       const lastUser = prompt.slice(prompt.lastIndexOf('<|im_start|>user'));
       if (!lastUser.includes('[tool result:')) return TOOL_CALL;
