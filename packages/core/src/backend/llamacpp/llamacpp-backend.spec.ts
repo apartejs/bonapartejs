@@ -27,14 +27,14 @@ afterEach(async () => {
 
 interface FakeSpawn {
   spawnFn: SpawnFn;
-  calls: { binPath: string; args: string[] }[];
+  calls: { binPath: string; args: string[]; env?: Record<string, string> }[];
   killCount: number;
   triggerExit(code: number | null): void;
 }
 
 function makeFakeSpawn(): FakeSpawn {
   const state = {
-    calls: [] as { binPath: string; args: string[] }[],
+    calls: [] as { binPath: string; args: string[]; env?: Record<string, string> }[],
     killCount: 0,
     exitCb: null as ((code: number | null) => void) | null,
   };
@@ -43,8 +43,8 @@ function makeFakeSpawn(): FakeSpawn {
     get killCount() {
       return state.killCount;
     },
-    spawnFn: (binPath, args) => {
-      state.calls.push({ binPath, args });
+    spawnFn: (binPath, args, env) => {
+      state.calls.push({ binPath, args, ...(env ? { env } : {}) });
       const handle: ProcessHandle = {
         onExit: (cb) => {
           state.exitCb = cb;
@@ -75,13 +75,15 @@ function managed(
     slotSavePath: string;
     maxRestarts: number;
     baseUrl: string;
+    verifyModel: boolean;
+    modelPath: string;
   }> = {},
 ): Backend {
   return createLlamaCppBackend({
     mode: 'managed',
     binPath: 'C:\\bin\\llama-server.exe',
     launch: {
-      modelPath: 'D:\\models\\qwen3.gguf',
+      modelPath: overrides.modelPath ?? 'D:\\models\\qwen3.gguf',
       port: server.port,
       ...(overrides.slotSavePath ? { slotSavePath: overrides.slotSavePath } : {}),
     },
@@ -90,6 +92,7 @@ function managed(
     healthIntervalMs: 5,
     healthTimeoutMs: 300,
     maxRestarts: overrides.maxRestarts ?? 2,
+    ...(overrides.verifyModel !== undefined ? { verifyModel: overrides.verifyModel } : {}),
   });
 }
 
@@ -170,6 +173,64 @@ describe('createLlamaCppBackend — managed', () => {
     expect(withSlots.capabilities.kvPersistence).toBe(true);
     expect(withoutSlots.slots).toBeUndefined();
     expect(withoutSlots.capabilities.kvPersistence).toBe(false);
+  });
+});
+
+describe('createLlamaCppBackend — the managed server answers to us alone (audit 07, C1/C2)', () => {
+  it('launches with a random API key in its environment — never on the command line — and every request carries it', async () => {
+    let key: string | undefined;
+    const server = await fakeServer({ apiKey: () => key });
+    const spawn = makeFakeSpawn();
+    const original = spawn.spawnFn;
+    spawn.spawnFn = (binPath, args, env) => {
+      key = env?.['LLAMA_API_KEY'];
+      return original(binPath, args, env);
+    };
+    const backend = managed(server, spawn);
+
+    await backend.start();
+
+    expect(key).toMatch(/^[\w-]{32,}$/);
+    expect(spawn.calls[0]!.args.join(' ')).not.toContain(key!);
+    await expect(backend.props()).resolves.toBeDefined();
+    // Anyone else — a web page, another process — is refused.
+    expect((await fetch(`${server.url}/props`)).status).toBe(401);
+  });
+
+  it('two launches get two different keys', async () => {
+    const server = await fakeServer();
+    const a = makeFakeSpawn();
+    const b = makeFakeSpawn();
+    await managed(server, a).start();
+    await managed(server, b).start();
+    expect(a.calls[0]!.env?.['LLAMA_API_KEY']).not.toBe(b.calls[0]!.env?.['LLAMA_API_KEY']);
+  });
+
+  it('the web UI is off', async () => {
+    const server = await fakeServer();
+    const spawn = makeFakeSpawn();
+    await managed(server, spawn).start();
+    expect(spawn.calls[0]!.args).toContain('--no-webui');
+  });
+
+  it('a server on the port that serves another model is not ours: refused, killed, crashed', async () => {
+    const server = await fakeServer({ modelPath: 'C:\\elsewhere\\other.gguf' });
+    const spawn = makeFakeSpawn();
+    const backend = managed(server, spawn, { verifyModel: true });
+
+    await expect(backend.start()).rejects.toThrow(/other\.gguf/);
+    expect(backend.status()).toBe('crashed');
+    expect(spawn.killCount).toBe(1);
+  });
+
+  it('the same model is recognised through case and separator differences', async () => {
+    const server = await fakeServer({ modelPath: 'd:/Models/QWEN3.gguf' });
+    const backend = managed(server, makeFakeSpawn(), {
+      verifyModel: true,
+      modelPath: 'D:\\models\\qwen3.gguf',
+    });
+    await backend.start();
+    expect(backend.status()).toBe('ready');
   });
 });
 

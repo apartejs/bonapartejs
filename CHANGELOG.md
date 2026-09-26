@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **The managed server answers to bonaparte alone** (audit, C1/C2). It
+  listened on localhost with CORS open: any web page in a browser, any
+  local process could drive it — read a conversation's slot, run a
+  completion. Each launch now gets a random API key, passed in the
+  server's environment (never on its command line, which any process can
+  list) and sent on every request; the web UI is off. And once healthy,
+  the server must say it serves the model we asked for (`/props`): a
+  foreign llama-server squatting the port is refused, not talked to.
+
 - **The window is the app and nothing else** (security audit, finding 1).
   The main window carries the whole bridge to the harness, and it could
   be navigated anywhere — a link, a script that got in. It now refuses

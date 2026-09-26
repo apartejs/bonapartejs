@@ -273,8 +273,8 @@ export class EngineSupervisor {
   }
 
   /** The configured spawn, plus the pid trace written when the process starts and erased when it exits. */
-  private readonly tracedSpawn: SpawnFn = (binPath, args) => {
-    const handle = this.spawn(binPath, args);
+  private readonly tracedSpawn: SpawnFn = (binPath, args, env) => {
+    const handle = this.spawn(binPath, args, env);
     this.spawnedPid = handle.pid ?? null;
     if (handle.pid !== undefined) void this.rememberPid(handle.pid);
     const traced: ProcessHandle = {

@@ -38,6 +38,12 @@ export interface FakeLlamaServerOptions {
   totalSlots?: number;
   modelPath?: string;
   /**
+   * API key the server demands (`--api-key` / `LLAMA_API_KEY`): every
+   * endpoint but /health answers 401 without `Authorization: Bearer <key>`.
+   * A function is read per request — a test can learn the key at spawn.
+   */
+  apiKey?: string | (() => string | undefined);
+  /**
    * State files "disk": passing the same Map to a new instance simulates
    * a process restart with the files surviving.
    */
@@ -252,6 +258,16 @@ export async function startFakeLlamaServer(
   const server: Server = createServer((req, res) => {
     void (async () => {
       const url = new URL(req.url ?? '/', 'http://localhost');
+      const key = typeof options.apiKey === 'function' ? options.apiKey() : options.apiKey;
+      if (key !== undefined && url.pathname !== '/health') {
+        if (req.headers['authorization'] !== `Bearer ${key}`) {
+          // Shape of llama-server's refusal (tools/server, validate_api_key).
+          json(res, 401, {
+            error: { code: 401, message: 'Invalid API Key', type: 'authentication_error' },
+          });
+          return;
+        }
+      }
 
       if (req.method === 'GET' && url.pathname === '/health') {
         json(res, 200, { status: 'ok' });

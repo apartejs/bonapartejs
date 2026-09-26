@@ -22,6 +22,7 @@ import type {
   ToolDefLike,
   TurnRequest,
 } from '../types.js';
+import { randomBytes } from 'node:crypto';
 import { buildLlamaServerArgs, type LlamaCppLaunchConfig } from './args.js';
 import { LlamaCppHttpClient } from './http-client.js';
 import { TranscriptRenderer } from './turn-renderer.js';
@@ -33,7 +34,11 @@ export interface ProcessHandle {
   kill(): void;
 }
 
-export type SpawnFn = (binPath: string, args: string[]) => ProcessHandle;
+/**
+ * Starts the server process. `env` is added to the parent's environment —
+ * the channel for what must not show in a process listing (the API key).
+ */
+export type SpawnFn = (binPath: string, args: string[], env?: Record<string, string>) => ProcessHandle;
 
 export interface ManagedOptions {
   mode: 'managed';
@@ -51,6 +56,13 @@ export interface ManagedOptions {
    * See detectServeCommandPrefix().
    */
   commandPrefix?: string[];
+  /**
+   * Check, once healthy, that the server on the port serves THIS model
+   * (`/props.model_path`) — a foreign llama-server squatting the port is
+   * refused rather than talked to. Default: on, except behind the `baseUrl`
+   * test seam, where the fake server serves whatever it was given.
+   */
+  verifyModel?: boolean;
 }
 
 export interface RemoteOptions {
@@ -282,12 +294,23 @@ class ManagedLlamaCppBackend extends BaseBackend {
   private readonly healthTimeoutMs: number;
   private readonly maxRestarts: number;
 
+  /**
+   * A fresh random key per backend: the server answers to us alone — not to
+   * a web page on localhost (CORS is open by default), not to another
+   * process. It travels in the child's environment, never on its command
+   * line, which any process can list.
+   */
+  private readonly apiKey: string;
+
   constructor(private readonly options: ManagedOptions) {
+    const apiKey = randomBytes(24).toString('base64url');
     super(
       new LlamaCppHttpClient(
         options.baseUrl ?? `http://127.0.0.1:${options.launch.port}`,
+        apiKey,
       ),
     );
+    this.apiKey = apiKey;
     this.id = `llamacpp:managed:${options.launch.port}`;
     this.healthIntervalMs = options.healthIntervalMs ?? 500;
     this.healthTimeoutMs = options.healthTimeoutMs ?? 120_000;
@@ -311,13 +334,14 @@ class ManagedLlamaCppBackend extends BaseBackend {
       ...(this.options.commandPrefix ?? []),
       ...buildLlamaServerArgs(this.options.launch),
     ];
-    const handle = this.options.spawnFn(this.options.binPath, args);
+    const handle = this.options.spawnFn(this.options.binPath, args, { LLAMA_API_KEY: this.apiKey });
     this.handle = handle;
     handle.onExit((code) => this.onProcessExit(handle, code));
 
     const deadline = Date.now() + this.healthTimeoutMs;
     while (Date.now() < deadline) {
       if (await this.client.health()) {
+        await this.verifyServedModel(handle);
         this.setStatus('ready');
         return;
       }
@@ -329,6 +353,34 @@ class ManagedLlamaCppBackend extends BaseBackend {
     throw new Error(
       `llama-server is not responding after ${this.healthTimeoutMs} ms (${this.client.baseUrl})`,
     );
+  }
+
+  /**
+   * Health only says SOMETHING answers on the port. `/props` says what: a
+   * server that refuses our key, or serves another model, is not the one we
+   * launched — a leftover, another program's — and is not talked to.
+   */
+  private async verifyServedModel(handle: ProcessHandle): Promise<void> {
+    if (!(this.options.verifyModel ?? this.options.baseUrl === undefined)) return;
+    let served: string;
+    try {
+      served = (await this.client.props()).modelPath;
+    } catch (error) {
+      handle.kill();
+      this.setStatus('crashed');
+      throw new Error(
+        `The server on port ${this.options.launch.port} is not the one bonaparte launched: ` +
+          `it refuses our key (${error instanceof Error ? error.message : String(error)}).`,
+      );
+    }
+    if (served && !sameModelPath(served, this.options.launch.modelPath)) {
+      handle.kill();
+      this.setStatus('crashed');
+      throw new Error(
+        `The server on port ${this.options.launch.port} serves ${served}, not ${this.options.launch.modelPath}: ` +
+          'another llama-server holds the port.',
+      );
+    }
   }
 
   private onProcessExit(handle: ProcessHandle, _code: number | null): void {
@@ -357,6 +409,12 @@ class ManagedLlamaCppBackend extends BaseBackend {
     this.handle = null;
     this.setStatus('stopped');
   }
+}
+
+/** Two spellings of one file: case and separators do not tell models apart on Windows. */
+function sameModelPath(a: string, b: string): boolean {
+  const norm = (p: string): string => p.replace(/\\/g, '/').toLowerCase();
+  return norm(a) === norm(b);
 }
 
 export function createLlamaCppBackend(options: LlamaCppBackendOptions): Backend {

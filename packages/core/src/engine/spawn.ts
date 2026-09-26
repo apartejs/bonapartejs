@@ -8,8 +8,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import type { ProcessHandle, SpawnFn } from '../backend/llamacpp/llamacpp-backend.js';
 
 export function createServerSpawner(log: (line: string) => void): SpawnFn {
-  return (binPath, args): ProcessHandle => {
+  return (binPath, args, env): ProcessHandle => {
     const child = spawn(binPath, args, {
+      ...(env ? { env: { ...process.env, ...env } } : {}),
       stdio: ['ignore', 'ignore', 'pipe'],
       windowsHide: true,
       // POSIX: the server becomes the leader of its own process group, so we

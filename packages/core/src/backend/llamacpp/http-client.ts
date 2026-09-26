@@ -94,11 +94,19 @@ function toCompletionBody(request: CompletionRequest): Record<string, unknown> {
 }
 
 export class LlamaCppHttpClient {
-  constructor(readonly baseUrl: string) {}
+  /** `apiKey`: sent as `Authorization: Bearer` on every request (the managed server demands it). */
+  constructor(
+    readonly baseUrl: string,
+    private readonly apiKey?: string,
+  ) {}
+
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    return this.apiKey ? { ...extra, authorization: `Bearer ${this.apiKey}` } : extra;
+  }
 
   async health(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/health`);
+      const res = await fetch(`${this.baseUrl}/health`, { headers: this.headers() });
       return res.ok;
     } catch {
       return false;
@@ -107,7 +115,7 @@ export class LlamaCppHttpClient {
 
   async props(): Promise<ServerProps> {
     const raw = await expectJson<Record<string, unknown>>(
-      await fetch(`${this.baseUrl}/props`),
+      await fetch(`${this.baseUrl}/props`, { headers: this.headers() }),
     );
     return {
       modelPath: String(raw['model_path'] ?? ''),
@@ -119,7 +127,7 @@ export class LlamaCppHttpClient {
   async *complete(request: CompletionRequest): AsyncIterable<CompletionEvent> {
     const res = await fetch(`${this.baseUrl}/completion`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: this.headers({ 'content-type': 'application/json' }),
       body: JSON.stringify(toCompletionBody(request)),
       signal: request.signal ?? null,
     });
@@ -189,7 +197,7 @@ export class LlamaCppHttpClient {
   ): Promise<T> {
     const res = await fetch(`${this.baseUrl}/slots/${idSlot}?action=${action}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: this.headers({ 'content-type': 'application/json' }),
       body: JSON.stringify(body ?? {}),
     });
     return expectJson<T>(res);
