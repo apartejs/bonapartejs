@@ -33,6 +33,7 @@ import {
   type TaggedEvent,
 } from './conversation-engine.js';
 import { EngineSupervisor } from './supervisor.js';
+import { MeasureStore } from './measures.js';
 
 let servers: FakeLlamaServer[] = [];
 let dirs: string[] = [];
@@ -80,6 +81,8 @@ async function makeRig(
     /** Answers by prompt instead of by turn (replaces `replies`). */
     responder?: (prompt: string) => string;
     modelExists?: boolean;
+    /** What the machine measured — shared by the supervisor and the engine, as in the app. */
+    measures?: MeasureStore;
     engine?: Partial<ConversationEngineOptions>;
   } = {},
 ): Promise<Rig> {
@@ -116,6 +119,7 @@ async function makeRig(
     healthIntervalMs: 5,
     healthTimeoutMs: 300,
     logger: () => undefined,
+    ...(options.measures ? { measures: options.measures } : {}),
   });
   await supervisor.configure({ mode: 'managed', binPath: 'llama', nCtx: options.nCtx ?? 4096 });
 
@@ -129,6 +133,7 @@ async function makeRig(
     supervisor,
     modelExists: () => options.modelExists ?? true,
     context: async () => ({ replyLanguage: 'English' }),
+    ...(options.measures ? { measures: options.measures } : {}),
     ...options.engine,
   });
   engines.push(engine);
@@ -342,6 +347,73 @@ describe('ConversationEngine — what this machine measured', () => {
     expect(engine.prefillRate(MODEL)).toBeCloseTo(500, -1);
     expect(engine.contextTokensOf('conv-a')).toBeGreaterThan(0);
     expect(engine.contextTokensOf('conv-b')).toBeUndefined();
+  });
+
+  it('keeps the speed in the measures it is given — the next launch knows it', async () => {
+    const measures = new MeasureStore();
+    measures.record(MODEL, { prefillTokensPerSecond: 1000 });
+    const { engine } = await makeRig({ msPerToken: 2, measures });
+    expect(engine.prefillRate(MODEL)).toBe(1000);
+    await engine.open('conv-a', MODEL);
+
+    await engine.send('conv-a', 'a message long enough to be measured '.repeat(20));
+
+    // A running average of what it knew (1000) and what it saw (500).
+    expect(measures.get(MODEL)?.prefillTokensPerSecond).toBeCloseTo(750, -1);
+  });
+
+  it('a restore says how long it took, and what computing it again would have cost (P2.8)', async () => {
+    const measures = new MeasureStore();
+    const { engine } = await makeRig({ msPerToken: 2, measures });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'a message long enough to be measured '.repeat(20));
+    await engine.close();
+
+    const opened = await engine.open('conv-a', MODEL);
+
+    if ('needsModel' in opened || !opened.restore.restored) throw new Error('expected a restore');
+    expect(opened.restore.restoreMs).toBeGreaterThanOrEqual(0);
+    // The restored tokens at the measured ~500 tokens per second: ~2 ms each.
+    const ratio = (opened.restore.prefillEstimateMs ?? 0) / (opened.restore.nRestored * 2);
+    expect(ratio).toBeGreaterThan(0.8);
+    expect(ratio).toBeLessThan(1.25);
+  });
+
+  it('a send that opens the conversation says what the open found — browsing only read the log', async () => {
+    const { engine, events } = await makeRig({ msPerToken: 2, replies: ['one', 'two', 'three'] });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'a first message long enough to be measured '.repeat(10));
+    // Opened explicitly: the send opened nothing.
+    expect(events.some((e) => e.event.type === 'session_opened')).toBe(false);
+    await engine.close();
+    events.length = 0;
+
+    await engine.send('conv-a', 'and again');
+
+    const opened = events.find((e) => e.conversationId === 'conv-a' && e.event.type === 'session_opened')?.event;
+    if (opened?.type !== 'session_opened' || !opened.opened.restore.restored) throw new Error('expected a restore');
+    expect(opened.opened.restore.restoreMs).toBeGreaterThanOrEqual(0);
+    expect(opened.opened.restore.prefillEstimateMs).toBeGreaterThan(0);
+    expect(opened.opened.contextTokens).toBe(opened.opened.restore.nRestored);
+    // Before the turn's own events: the strip knows before the first token.
+    expect(events.findIndex((e) => e.event.type === 'session_opened')).toBe(0);
+    // A send on the conversation already open opens nothing.
+    events.length = 0;
+    await engine.send('conv-a', 'once more');
+    expect(events.some((e) => e.event.type === 'session_opened')).toBe(false);
+  });
+
+  it('without a measured speed, a restore claims no comparison', async () => {
+    const { engine } = await makeRig({ replies: ['ok'] });
+    await engine.open('conv-a', MODEL);
+    await engine.send('conv-a', 'hi');
+    await engine.close();
+
+    const opened = await engine.open('conv-a', MODEL);
+
+    if ('needsModel' in opened || !opened.restore.restored) throw new Error('expected a restore');
+    expect(opened.restore.restoreMs).toBeGreaterThanOrEqual(0);
+    expect(opened.restore.prefillEstimateMs).toBeUndefined();
   });
 });
 

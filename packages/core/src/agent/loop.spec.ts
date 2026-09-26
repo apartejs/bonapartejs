@@ -137,6 +137,14 @@ describe('AgentLoop — simple turn', () => {
     expect(end).toBeDefined();
     expect(typeof (end as { promptMs: number }).promptMs).toBe('number');
   });
+
+  it('carries the generation time too — the speed of the reply, for an honest gauge (P2.8)', async () => {
+    const { loop, transcript } = await rig({ replies: ['a reply of several words'] });
+    const { all } = await collect(loop.run(transcript, 'x', new AbortController().signal));
+    const end = all.find((e) => e.type === 'turn_end') as { predictedTokens: number; predictedMs: number };
+    expect(end.predictedTokens).toBeGreaterThan(0);
+    expect(end.predictedMs).toBeGreaterThan(0);
+  });
 });
 
 describe('AgentLoop — tools', () => {

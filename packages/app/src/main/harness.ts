@@ -17,6 +17,7 @@ import {
   bonaparteDataDir,
   builtinTools,
   wantsGpuAcceleration,
+  MeasureStore,
   validateSettingValue,
   alwaysRule,
   commandBinary,
@@ -74,6 +75,7 @@ import {
   type BackendStatusDto,
   type ConversationSummaryDto,
   type ConversationOpenReplyDto,
+  type ConversationOpenResultDto,
   type EndpointProbeDto,
   type ModelMemoryDto,
   type SwitchEstimateDto,
@@ -128,7 +130,10 @@ export class Harness {
    * switch saves the open conversation's state while its server is still
    * alive, and the session goes with the server it was bound to.
    */
+  /** What this machine measured per model — load time, prefill speed — kept across launches (P2.8). */
+  private readonly measures = new MeasureStore(join(bonaparteDataDir(), 'measures.json'));
   private readonly supervisor = new EngineSupervisor({
+    measures: this.measures,
     slotsDir: kvSlotsDir(),
     pidFile: join(bonaparteDataDir(), 'managed-server.pid'),
     beforeUnload: () => this.conversations.saveState().then(() => undefined),
@@ -223,6 +228,7 @@ export class Harness {
       registry: this.registry,
       permissions: this.permissions,
       supervisor: this.supervisor,
+      measures: this.measures,
       defaultModel: async () => (await this.loadConfig()).defaultModel?.path,
       rootsOf: (id) => this.rootsOf(id),
       context: async (conversationId) => ({
@@ -1241,7 +1247,7 @@ export class Harness {
     return this.openedDto(outcome);
   }
 
-  private openedDto(opened: Opened): ConversationOpenReplyDto {
+  private openedDto(opened: Opened): ConversationOpenResultDto {
     return {
       conversationId: opened.conversationId,
       modelPath: opened.modelPath,
@@ -1263,7 +1269,14 @@ export class Harness {
           }
         : {}),
       restore: opened.restore.restored
-        ? { restored: true, nRestored: opened.restore.nRestored }
+        ? {
+            restored: true,
+            nRestored: opened.restore.nRestored,
+            restoreMs: Math.round(opened.restore.restoreMs),
+            ...(opened.restore.prefillEstimateMs !== undefined
+              ? { prefillEstimateMs: Math.round(opened.restore.prefillEstimateMs) }
+              : {}),
+          }
         : { restored: false, reason: opened.restore.reason },
     };
   }
@@ -1291,8 +1304,15 @@ export class Harness {
       id = await this.ensureConversationId();
     }
     const history = await this.conversations.history(id);
+    // What the strip can say without touching the engine: the slot still
+    // holds this conversation (its figures are known), the engine runs and
+    // the next message resumes it, or there is no engine yet.
+    const held = this.conversations.active === id ? this.conversations.contextTokensOf(id) : undefined;
+    const reason = held !== undefined ? 'held' : this.supervisor.status() === 'ready' ? 'deferred' : 'not-connected';
+    const nCtx = this.supervisor.live?.nCtx;
     return {
       conversationId: id,
+      ...(held !== undefined ? { contextTokens: held, ...(nCtx ? { nCtx } : {}) } : {}),
       ...(history.modelPath
         ? {
             modelPath: history.modelPath,
@@ -1301,7 +1321,7 @@ export class Harness {
           }
         : {}),
       events: history.events,
-      restore: { restored: false, reason: 'not-connected' },
+      restore: { restored: false, reason },
     };
   }
 
@@ -1357,7 +1377,7 @@ export class Harness {
             promptMs: event.promptMs,
             promptUncachedTokens: Math.max(0, event.promptTokens - event.cachedTokens),
             predictedTokens: event.predictedTokens,
-            predictedMs: 0,
+            predictedMs: event.predictedMs,
             ...(event.truncated ? { truncated: true } : {}),
             progress: {
               total: event.promptTokens,
@@ -1372,6 +1392,11 @@ export class Harness {
       case 'files_changed':
         body = { type: 'files_changed', turnId: event.turnId, files: event.files };
         break;
+      case 'session_opened': {
+        const { conversationId: _id, events: _events, ...open } = this.openedDto({ ...event.opened, events: [] });
+        body = { type: 'session_opened', open };
+        break;
+      }
       case 'context_overflow':
         body = { type: 'context_overflow', used: event.used, nCtx: event.nCtx, limit: event.limit, needed: event.needed };
         break;

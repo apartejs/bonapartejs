@@ -15,6 +15,15 @@ published.
 
 ### Added
 
+- **An honest gauge** (P2.8). The status strip shows how fast a reply came
+  (tokens per second, the server's clock). A resumed conversation says what
+  its restore saved: "context restored · 1 032 tokens in 180 ms — instead
+  of ~2.1 s", the comparison drawn from the prefill speed this machine
+  measured for that model, and left out until one was measured. The load
+  times and prefill speeds behind every announced cost are now kept across
+  launches (`measures.json` in bonaparte's data), so the first switch after
+  a restart is announced with figures too.
+
 - **Graphics acceleration, a setting** (P3.1, D-23). The interface still
   starts without the GPU by default — all video memory is left to the
   model — and "Engine and model" now offers Off, On, or Auto (on while the
@@ -526,6 +535,13 @@ published.
   running past its edge.
 
 ### Fixed
+
+- **The strip said "engine not connected" while the engine ran.** Browsing
+  a conversation reads its log without touching the engine, and the chip
+  kept that status after the first message opened it. The open now reports
+  what it found (restore, cold start or shared prefix); a browsed
+  conversation reads "resumes on send" while the engine runs, and "context
+  kept", with its gauge, when the slot still holds it.
 
 - **`edit_file` writes `new_string` literally.** It used
   `String.replace(old, new)`, which expands `$&`, `` $` ``, `$'` and `$$`

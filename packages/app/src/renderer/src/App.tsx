@@ -254,6 +254,20 @@ export function App() {
   );
   const clearPendingText = useCallback(() => setPendingText(null), []);
 
+  // Browsing reads only the log; the first message opens the conversation
+  // on the engine. What that open found — a restore and what it saved, or a
+  // cold start — replaces the "engine not connected" the strip showed.
+  useEffect(
+    () =>
+      window.bonaparte.onAgentEvent((event) => {
+        if (event.type !== 'session_opened') return;
+        setOpened((current) =>
+          current && current.conversationId === event.conversationId ? { ...current, ...event.open } : current,
+        );
+      }),
+    [],
+  );
+
   const tryOpen = useCallback(
     async (id?: string, modelPath?: string) => {
       setBusy(true);

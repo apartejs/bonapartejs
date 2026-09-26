@@ -358,7 +358,12 @@ export type AgentEventBodyDto =
    */
   | { type: 'needs_model'; missingModel?: string }
   /** The message cannot fit in the server's context, with room for a reply (D-22). */
-  | { type: 'context_overflow'; used: number; nCtx: number; limit: number; needed: number };
+  | { type: 'context_overflow'; used: number; nCtx: number; limit: number; needed: number }
+  /**
+   * A send opened the conversation (browsing reads only the log): what the
+   * open found — the restore and what it saved, the seed, the gauge's figures.
+   */
+  | { type: 'session_opened'; open: Omit<ConversationOpenResultDto, 'conversationId' | 'events'> };
 
 /**
  * Every event names its conversation: a reply keeps streaming while the
@@ -394,7 +399,14 @@ export interface ConversationEventDto {
 }
 
 export type RestoreDto =
-  | { restored: true; nRestored: number }
+  | {
+      restored: true;
+      nRestored: number;
+      /** What the restore took, as waited for. */
+      restoreMs?: number;
+      /** What computing those tokens again would have taken — once this model's speed was measured here. */
+      prefillEstimateMs?: number;
+    }
   | { restored: false; reason: string };
 
 /** What the shared prefix did at open, when nothing of the conversation's own was restored. */

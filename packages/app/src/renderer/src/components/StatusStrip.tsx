@@ -10,6 +10,7 @@ import { Badge, Button, Progress, cn } from '@aparte/bonaparte-plugin-sdk/ui';
 import { Mascotte } from '../mascotte/Mascotte.js';
 import type { MascotteState } from '../mascotte/mascotte-states.js';
 import { useTranslate } from '../i18n/LocaleProvider.js';
+import type { AppTranslations } from '../i18n/types.js';
 
 interface StatusStripProps {
   backendStatus: BackendStatusDto;
@@ -57,6 +58,22 @@ function formatMs(ms: number): string {
 
 const OK = 'text-emerald-700 dark:text-emerald-300';
 
+/**
+ * The resume, said honestly (P2.8): the tokens brought back, the time it
+ * took, and what computing them again would have cost — that last figure
+ * only once this model's prefill speed was measured on this machine.
+ */
+function restoredText(t: AppTranslations, restore: Extract<RestoreDto, { restored: true }>): string {
+  let text = `${t.status.restored} · ${restore.nRestored} tokens`;
+  if (restore.restoreMs !== undefined) {
+    text += ` ${t.status.restoredIn.replace('{time}', () => formatMs(restore.restoreMs ?? 0))}`;
+    if (restore.prefillEstimateMs !== undefined) {
+      text += ` — ${t.status.insteadOf.replace('{time}', () => formatMs(restore.prefillEstimateMs ?? 0))}`;
+    }
+  }
+  return text;
+}
+
 /** The engine pill: an outline, coloured by what the engine is doing. */
 function pillClass(status: BackendStatusDto): string {
   switch (status) {
@@ -102,6 +119,11 @@ export function StatusStrip({
   const cachePct =
     lastStats?.progress && lastStats.progress.total > 0
       ? Math.round((lastStats.progress.cache / lastStats.progress.total) * 100)
+      : null;
+  // How fast the reply came, measured by the server over the generation alone.
+  const tokensPerSecond =
+    lastStats && lastStats.predictedMs > 0 && lastStats.predictedTokens > 0
+      ? lastStats.predictedTokens / (lastStats.predictedMs / 1000)
       : null;
 
   // Context gauge: what the last prompt occupied out of what we can hold.
@@ -170,6 +192,14 @@ export function StatusStrip({
           <Badge variant="secondary" className={chipClass('dim')}>
             {t.status.notConnected}
           </Badge>
+        ) : restore && restore.restored === false && restore.reason === 'deferred' ? (
+          <Badge variant="secondary" className={chipClass('dim')}>
+            {t.status.deferred}
+          </Badge>
+        ) : restore && restore.restored === false && restore.reason === 'held' ? (
+          <Badge variant="secondary" className={chipClass('ok')}>
+            {t.status.held}
+          </Badge>
         ) : restore ? (
           <Badge
             variant="secondary"
@@ -181,7 +211,7 @@ export function StatusStrip({
             }
           >
             {restore.restored
-              ? `${t.status.restored} · ${restore.nRestored} tokens`
+              ? restoredText(t, restore)
               : `${t.status.notRestored} · ${t.status.reasons[restore.reason] ?? restore.reason}`}
           </Badge>
         ) : null}
@@ -189,6 +219,8 @@ export function StatusStrip({
           <Badge variant="secondary" className={chipClass('dim')}>
             {t.status.prefill} {formatMs(lastStats.promptMs)}
             {cachePct !== null && ` · ${t.status.cacheShare} ${cachePct}%`}
+            {tokensPerSecond !== null &&
+              ` · ${t.status.tokensPerSecond.replace('{rate}', () => tokensPerSecond.toFixed(tokensPerSecond < 10 ? 1 : 0))}`}
           </Badge>
         )}
       </div>

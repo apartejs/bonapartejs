@@ -57,7 +57,8 @@ export type RestoreVerdict =
   | { ok: false; reason: RestoreRefusalReason };
 
 export type RestoreOutcome =
-  | { restored: true; manifest: KvManifest; nRestored: number }
+  /** `restoreMs`: what the user waited for it — the server's read, the round trip. */
+  | { restored: true; manifest: KvManifest; nRestored: number; restoreMs: number }
   | { restored: false; reason: RestoreRefusalReason };
 
 /**
@@ -274,9 +275,11 @@ export class KvStore {
     // gone from its directory — it refuses, clears the slot, and the
     // conversation prefills again. Announced, never fatal.
     try {
+      const started = performance.now();
       const result = await slots.restore(idSlot, this.slotFilename(conversationId));
+      const restoreMs = performance.now() - started;
       await this.touch(this.slotFilename(conversationId));
-      return { restored: true, manifest, nRestored: result.nRestored };
+      return { restored: true, manifest, nRestored: result.nRestored, restoreMs };
     } catch {
       return { restored: false, reason: 'refused' };
     }

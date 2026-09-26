@@ -313,7 +313,12 @@ export const EN: AppTranslations = {
     crashed: 'crashed',
     restarting: 'restarting…',
     notConnected: 'engine not connected',
+    held: 'context kept',
+    deferred: 'resumes on send',
     restored: 'context restored',
+    restoredIn: 'in {time}',
+    insteadOf: 'instead of ~{time}',
+    tokensPerSecond: '{rate} tok/s',
     notRestored: 'cold start',
     seeded: 'prefix shared',
     reasons: {

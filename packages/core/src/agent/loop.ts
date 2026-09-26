@@ -65,6 +65,8 @@ export type AgentEvent =
       /** Prompt tokens of the last completion of the turn. */
       promptTokens: number;
       predictedTokens: number;
+      /** What generating them took, by the server's clock — the reply's speed. */
+      predictedMs: number;
       /** What the slot holds after the turn — prompt and reply. */
       contextTokens: number;
       /** The last completion of the turn was cut at the context ceiling. */
@@ -140,6 +142,7 @@ export class AgentLoop {
       let cachedTokens = 0;
       let promptTokens = 0;
       let predictedTokens = 0;
+      let predictedMs = 0;
       let contextTokens = 0;
       let truncated = false;
       let raw: string | undefined;
@@ -172,6 +175,7 @@ export class AgentLoop {
               cachedTokens = event.stats.progress?.cache ?? 0;
               promptTokens = event.stats.progress?.total ?? 0;
               predictedTokens = event.stats.predictedTokens;
+              predictedMs = event.stats.predictedMs;
               contextTokens = event.stats.contextTokens ?? 0;
               truncated = event.stats.truncated ?? false;
               raw = event.raw;
@@ -207,6 +211,7 @@ export class AgentLoop {
           cachedTokens,
           promptTokens,
           predictedTokens,
+          predictedMs,
           contextTokens,
           truncated,
         };
@@ -240,6 +245,7 @@ export class AgentLoop {
           cachedTokens,
           promptTokens,
           predictedTokens,
+          predictedMs,
           contextTokens,
           truncated,
         };

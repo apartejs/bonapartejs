@@ -315,7 +315,12 @@ export const FR: AppTranslations = {
     crashed: 'en panne',
     restarting: 'redémarrage…',
     notConnected: 'moteur non connecté',
+    held: 'contexte conservé',
+    deferred: 'reprise à l’envoi',
     restored: 'contexte restauré',
+    restoredIn: 'en {time}',
+    insteadOf: 'au lieu de ~{time}',
+    tokensPerSecond: '{rate} tok/s',
     notRestored: 'reprise à froid',
     seeded: 'préfixe partagé',
     reasons: {

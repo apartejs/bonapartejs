@@ -21,6 +21,7 @@ import {
   type FakeLlamaServer,
 } from '../testing/fake-llama-server.js';
 import { EngineSupervisor, type EngineSupervisorOptions } from './supervisor.js';
+import { MeasureStore } from './measures.js';
 
 let servers: FakeLlamaServer[] = [];
 let dirs: string[] = [];
@@ -162,6 +163,21 @@ describe('EngineSupervisor — managed engine', () => {
 
     expect(supervisor.loadSeconds(MODEL_A)).toBeGreaterThanOrEqual(0);
     expect(supervisor.loadSeconds(MODEL_B)).toBeUndefined();
+  });
+
+  it('load times go through the measures it is given: a model measured at the last launch is known at once', async () => {
+    const server = await fakeServer();
+    const spawn = makeFakeSpawn();
+    const measures = new MeasureStore();
+    measures.record(MODEL_B, { loadSeconds: 42 });
+    const { supervisor } = await makeSupervisor(server, spawn, { measures });
+    expect(supervisor.loadSeconds(MODEL_B)).toBe(42);
+
+    await supervisor.configure(MANAGED);
+    await supervisor.ensureLoaded(MODEL_A);
+
+    expect(measures.get(MODEL_A)?.loadSeconds).toBeGreaterThanOrEqual(0);
+    expect(supervisor.loadSeconds(MODEL_A)).toBe(measures.get(MODEL_A)?.loadSeconds);
   });
 
   it('the same model does not relaunch — two conversations on one model share the server', async () => {

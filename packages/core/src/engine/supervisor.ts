@@ -15,6 +15,7 @@
  * the fake server with none of it.
  */
 
+import { MeasureStore } from './measures.js';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
@@ -53,6 +54,8 @@ export interface LoadedModel {
 export interface EngineSupervisorOptions {
   /** `--slot-save-path` of the managed server (KV states). */
   slotsDir: string;
+  /** What this machine measured, kept across launches (default: for this process only). */
+  measures?: MeasureStore;
   /** Trace of the spawned process, read at the next start to kill an orphan. */
   pidFile: string;
   spawnFn?: SpawnFn;
@@ -86,7 +89,7 @@ export class EngineSupervisor {
   /** Pid of the managed server, while it runs — for whoever watches its footprint. */
   private spawnedPid: number | null = null;
   /** Seconds each model took to become ready, last time — what a switch to it will cost. */
-  private readonly loadTimes = new Map<string, number>();
+  private readonly measures: MeasureStore;
   private readonly listeners = new Set<(status: BackendStatus) => void>();
   private readonly spawn: SpawnFn;
   private readonly probe: ProcessProbe;
@@ -96,6 +99,7 @@ export class EngineSupervisor {
     this.log = options.logger ?? ((line) => console.log(line));
     this.spawn = options.spawnFn ?? createServerSpawner(this.log);
     this.probe = options.processProbe ?? defaultProcessProbe;
+    this.measures = options.measures ?? new MeasureStore();
   }
 
   /** The backend in use, if one is running. */
@@ -122,7 +126,7 @@ export class EngineSupervisor {
 
   /** How long this model took to load on this machine, last time; undefined if never measured. */
   loadSeconds(modelPath: string): number | undefined {
-    return this.loadTimes.get(modelPath);
+    return this.measures.get(modelPath)?.loadSeconds;
   }
 
   status(): BackendStatus {
@@ -220,7 +224,7 @@ export class EngineSupervisor {
     await mkdir(this.options.slotsDir, { recursive: true });
     const started = Date.now();
     await backend.start();
-    this.loadTimes.set(modelPath, (Date.now() - started) / 1000);
+    this.measures.record(modelPath, { loadSeconds: (Date.now() - started) / 1000 });
 
     this.loadedModel = { modelPath, nCtx: engine.nCtx };
     this.liveConfig = {

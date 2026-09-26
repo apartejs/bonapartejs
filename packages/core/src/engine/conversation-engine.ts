@@ -15,6 +15,7 @@
  *   wait for the turn in flight; a state is never saved mid-generation.
  */
 
+import { MeasureStore } from './measures.js';
 import { existsSync } from 'node:fs';
 import type { AgentEvent, ApprovalResolver } from '../agent/loop.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
@@ -54,6 +55,8 @@ export interface ConversationEngineOptions {
   registry: ToolRegistry;
   permissions: PermissionEngine;
   supervisor: EngineSupervisor;
+  /** What this machine measured, kept across launches (default: for this process only). */
+  measures?: MeasureStore;
   /** Is the model file still there? Injected for tests; `existsSync` otherwise. */
   modelExists?: (modelPath: string) => boolean;
   /** Model of the Settings, for a conversation that pins none. */
@@ -107,7 +110,13 @@ export interface Opened {
   nCtx?: number;
   /** Tokens already in the slot after the restore — the gauge's numerator at open. */
   contextTokens: number;
-  restore: OpenResult['restore'];
+  /**
+   * A restore carries what computing its tokens again would have taken
+   * (`prefillEstimateMs`), once this model's prefill speed was measured.
+   */
+  restore:
+    | (Extract<OpenResult['restore'], { restored: true }> & { prefillEstimateMs?: number })
+    | Extract<OpenResult['restore'], { restored: false }>;
   /** What the shared prefix did when nothing of the conversation's own was restored. */
   seed?: OpenResult['seed'];
   events: ReadableEvent[];
@@ -123,9 +132,19 @@ export interface History {
   events: ReadableEvent[];
 }
 
+/**
+ * A send opened the conversation — browsing reads only the log, so this is
+ * where the restore (or the cold start) actually happens: what it found,
+ * before the turn's first event, for the strip to say it (P2.8).
+ */
+export interface SessionOpenedEvent {
+  type: 'session_opened';
+  opened: Omit<Opened, 'events'>;
+}
+
 export interface TaggedEvent {
   conversationId: string;
-  event: AgentEvent;
+  event: AgentEvent | SessionOpenedEvent;
 }
 
 /** The turn in flight, as far as it got: what a screen coming back can catch up on. */
@@ -264,12 +283,13 @@ export class ConversationEngine {
   /** Model of the active session. */
   private activeModel: string | null = null;
   /** Prefill speed measured per model on this machine, tokens per second (a running average). */
-  private readonly prefillRates = new Map<string, number>();
+  private readonly measures: MeasureStore;
   private readonly listeners = new Set<(event: TaggedEvent) => void>();
   private readonly modelExists: (modelPath: string) => boolean;
 
   constructor(private readonly options: ConversationEngineOptions) {
     this.modelExists = options.modelExists ?? existsSync;
+    this.measures = options.measures ?? new MeasureStore();
   }
 
   /** The conversation holding the slot, if any. */
@@ -284,7 +304,7 @@ export class ConversationEngine {
 
   /** Tokens per second this machine prefills with this model, once measured. */
   prefillRate(modelPath: string): number | undefined {
-    return this.prefillRates.get(modelPath);
+    return this.measures.get(modelPath)?.prefillTokensPerSecond;
   }
 
   /** Tokens the slot holds for this conversation, when it is the open one. */
@@ -402,12 +422,19 @@ export class ConversationEngine {
           ? seed.nTokens
           : 0;
 
+    // What the restore saved, said honestly (P2.8): the time it took, and
+    // what computing those tokens again would have cost — only once this
+    // model's prefill speed was measured here; never a guess.
+    const rate = this.prefillRate(model);
     return {
       conversationId,
       modelPath: model,
       ...(live.nCtx > 0 ? { nCtx: live.nCtx } : {}),
       contextTokens: this.contextUsed,
-      restore,
+      restore:
+        restore.restored && rate !== undefined
+          ? { ...restore, prefillEstimateMs: (restore.nRestored / rate) * 1000 }
+          : restore,
       ...(seed ? { seed } : {}),
       events: readableEvents(await store.loadEvents(conversationId)),
     };
@@ -427,6 +454,8 @@ export class ConversationEngine {
     if (this.activeId !== conversationId || !this.session) {
       const outcome = await this.open(conversationId);
       if ('needsModel' in outcome) return outcome;
+      const { events: _events, ...opened } = outcome;
+      this.emit({ conversationId, event: { type: 'session_opened', opened } });
     }
     await this.settle();
     const session = this.session;
@@ -657,8 +686,10 @@ export class ConversationEngine {
   private measurePrefill(uncached: number, ms: number): void {
     if (!this.activeModel || uncached < 64 || !(ms > 0)) return;
     const rate = uncached / (ms / 1000);
-    const previous = this.prefillRates.get(this.activeModel);
-    this.prefillRates.set(this.activeModel, previous === undefined ? rate : previous * 0.5 + rate * 0.5);
+    const previous = this.prefillRate(this.activeModel);
+    this.measures.record(this.activeModel, {
+      prefillTokensPerSecond: previous === undefined ? rate : previous * 0.5 + rate * 0.5,
+    });
   }
 
   private emit(event: TaggedEvent): void {

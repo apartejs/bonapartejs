@@ -360,7 +360,17 @@ export interface AppTranslations {
     crashed: string;
     restarting: string;
     notConnected: string;
+    /** The slot still holds the conversation shown. */
+    held: string;
+    /** The engine runs; the next message resumes this conversation. */
+    deferred: string;
     restored: string;
+    /** `{time}`: what the restore took. */
+    restoredIn: string;
+    /** `{time}`: what computing the restored tokens again would have taken. */
+    insteadOf: string;
+    /** `{rate}`: generated tokens per second. */
+    tokensPerSecond: string;
     notRestored: string;
     /** The conversation had no state of its own, but its prefix was shared: what it started from. */
     seeded: string;

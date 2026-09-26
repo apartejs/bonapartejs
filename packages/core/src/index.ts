@@ -215,6 +215,7 @@ export { wantsGpuAcceleration, type GpuAccelerationChoice } from './settings/gpu
 
 // ── Engine life cycle (Phase 1) ───────────────────────────────────────────
 export { EngineSupervisor } from './engine/supervisor.js';
+export { MeasureStore, type ModelMeasures } from './engine/measures.js';
 export { assertLlamaBinary, validateSettingValue } from './engine/validate.js';
 export type {
   EngineConfig,
