@@ -9,6 +9,15 @@ persistence** through llama-server's slots. The full design notes are private,
 in `docs/superpowers/` (git-ignored — **never** remove that line from
 `.gitignore`; the repository is public).
 
+## Status — restarted from zero (2026-11-13)
+
+The first implementation (v0) is archived on the local branch `archive/v0`,
+uncommitted fixes included; `main` starts over from a design made first (a
+private mock-up canvas, and `docs/superpowers/`). The invariants and the way
+we work below still hold. The sections that name files, commands or
+milestones (Commands, Landmarks, and paths such as `packages/core`) describe
+v0: they stay as its lessons until the new code replaces them.
+
 ## apartéJS friction journal — MANDATORY
 
 bonaparte is also the proving ground of the apartéJS library (`@aparte/*`).
@@ -59,7 +68,9 @@ When a library release fixes an entry, mark it resolved (never delete it).
   is driven over IPC. Consequence: **we** call `registerDefaultRenderers()` at
   renderer startup (the library only does it in `AparteClient`'s constructor),
   otherwise every segment renders as "[Unknown segment type]" — covered by
-  `aparte-bootstrap.spec.ts`.
+  `aparte-bootstrap.spec.ts`. Under review for the restart: in aparté 1.6,
+  an `AparteClient` driven by `createAgentStreamRunner` is a pipe that runs
+  no tool loop, so the chat may reach the core through it.
 - **A plugin never undoes its registrations by hand.** Everything goes through
   its context, which the host tears down as one. A failed activation leaves
   nothing behind, and nothing a plugin starts survives its teardown (dev
@@ -83,32 +94,18 @@ When a library release fixes an entry, mark it resolved (never delete it).
 - **English is the language of everything visible in the repository** —
   code, comments, commit messages, docs, plugin manifests. French is allowed
   only in the private notes (`docs/superpowers/`, `.claude/`).
-- **shadcn/ui on Tailwind for our own controls; aparté for the chat.** The
-  chat, the composer, the elicitation panel and the segment renderers come
-  from `@aparte/*` — bonaparte exists to prove that library, they are never
-  rewritten. Everything else we draw (sidebar, hub, panel, plugin views)
-  uses the primitives in `@aparte/bonaparte-plugin-sdk/ui` (shadcn/ui,
-  style new-york-v4, Radix, materialised as source — add one from the
-  public registry `https://ui.shadcn.com/r/styles/new-york-v4/<name>.json`,
-  imports rewritten to relative) and Tailwind utilities; no kit classes
-  (`.aparte-btn`…) on our elements, no new hand-rolled CSS. Element-level
-  defaults live in the `base` layer and skip `[data-slot]` controls.
+- **aparté for every control, no second UI library** (decided 2026-11-13).
+  The chat, the composer, the approvals and the segment renderers, and also
+  the app shell, the sidebar, the panes, tabs, menus, dialogs and fields,
+  come from aparté 1.6: its components and its kit of classes. bonaparte
+  exists to prove that library, so what it lacks is added to aparté (an
+  issue on apartejs/aparte), never worked around with another library.
   Semantic hook classes (`.conv-item`, `.setting-row`…) stay on elements,
-  unstyled: the E2E and a host's rules read them. The app's stylesheets are
-  four and small: `theme.css` (the palette, ours and the kit's), `index.css`
-  (Tailwind's entry: sources, the dark variant, the theme mapping, the
-  `base` layer with the element defaults and the shell's scrollbars),
-  `layout.css` (the resizable flanks, which become overlay drawers when
-  the window is narrow) and `terminal.css` (xterm's height
-  chain). There is no `app.css` to add a rule to — a new look is a
-  utility on the element, or a primitive.
-- **The palette is React's, not the kit's.** react.dev's tokens (blue-50 /
-  blue-30 accent, their gray scale), declared on the `--aparte-*` masters in
-  `packages/app/src/renderer/src/theme.css` for light and dark; the kit
-  derives inks and scales from them. The same palette is declared as shadcn's
-  semantic variables (`--background`, `--primary`, `--muted`…) and Tailwind
-  reads them (`bg-primary`, `text-muted-foreground`). Never hard-code a
-  colour: read a token (`theme.spec.ts` E2E pins the palette in the DOM).
+  unstyled: the E2E and a host's rules read them.
+- **The palette is React's.** react.dev's tokens (blue-50 `#087EA4` accent,
+  their gray scale), declared on the `--aparte-*` masters for light and
+  dark; the kit derives inks and scales from them. Never hard-code a colour:
+  read a token.
 - **Professional UI finish from the first draft** — an unfinished screen is
   not shown. For layout changes, a validated mock-up comes before code.
 - **What the fake server cannot prove is replayed for real** — grammars, slots,
