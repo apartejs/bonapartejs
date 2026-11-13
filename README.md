@@ -13,7 +13,7 @@ every conversation.
 
 ## Why
 
-Every coding agent out there is cloud-first. That is fine against an API that
+Most coding agents are built for cloud APIs. That is fine against an API that
 caches prompts server-side; it is a tax on a local model. Resuming a long
 conversation means re-processing its entire context, every time you come back.
 
