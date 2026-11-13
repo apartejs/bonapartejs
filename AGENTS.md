@@ -102,6 +102,14 @@ When a library release fixes an entry, mark it resolved (never delete it).
   issue on apartejs/aparte), never worked around with another library.
   Semantic hook classes (`.conv-item`, `.setting-row`…) stay on elements,
   unstyled: the E2E and a host's rules read them.
+- **React 19, through `@aparte/react`** (decided 2026-11-14). The app is
+  written in React and reaches aparté through its React wrappers wherever
+  one exists: bonaparte is the proving ground of `@aparte/react`, so a
+  friction with a wrapper is an issue like any other. A plugin view is a
+  custom element: built-in plugins are built with the app and share its
+  React; a third-party plugin renders with whatever it brings inside its
+  element (its own React included), and its Node half runs in its own
+  process.
 - **The palette is React's.** react.dev's tokens (blue-50 `#087EA4` accent,
   their gray scale), declared on the `--aparte-*` masters for light and
   dark; the kit derives inks and scales from them. Never hard-code a colour:
