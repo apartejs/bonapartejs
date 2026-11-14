@@ -20,3 +20,6 @@ export { agentBodySchema } from './agent/body.js';
 export type { AgentBody } from './agent/body.js';
 export { encodeEvent } from './agent/run-events.js';
 export type { RunEvent, WireLine } from './agent/run-events.js';
+export { ConversationStore } from './conversation/store.js';
+export type { ConversationMeta } from './conversation/store.js';
+export { ConversationEngine, ContextFullError, EngineFailedError, NoEngineError } from './conversation/engine.js';

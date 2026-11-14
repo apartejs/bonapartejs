@@ -31,3 +31,13 @@ export type {
   LlamaInstallResult,
   ModelChoiceView,
 } from './ipc/engine.js';
+export {
+  conversationDocumentSchema,
+  conversationMemorySchema,
+  conversationsDelete,
+  conversationsLoadAll,
+  conversationsLoadFull,
+  conversationsMemory,
+  conversationsSave,
+} from './ipc/conversations.js';
+export type { ConversationDocument, ConversationMemoryView } from './ipc/conversations.js';

@@ -10,6 +10,7 @@ import { bonaparteDataDir, createAgentHandler, createCore } from '@aparte/bonapa
 import { appInfo, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
 import { e2eEngineDeps } from './e2e-engine.js';
+import { registerConversationChannels } from './ipc/conversations.js';
 import { registerEngineChannels } from './ipc/engine.js';
 import { createIpcRegistry } from './ipc/register.js';
 import { stopEngineBeforeQuit } from './quit.js';
@@ -29,7 +30,12 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
 
   await app.whenReady();
 
-  const core = createCore({ dataDir: bonaparteDataDir(), ...e2eEngineDeps(process.env, options.e2e) });
+  const core = createCore({
+    dataDir: bonaparteDataDir(),
+    // The answers are written in the language of the interface.
+    replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
+    ...e2eEngineDeps(process.env, options.e2e),
+  });
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),
@@ -39,6 +45,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   ipc.handle(appInfo, () => ({ version: app.getVersion(), locale: interfaceLocale() }));
   registerEngineChannels(ipc, core);
+  registerConversationChannels(ipc, core);
 
   createMainWindow({ devServerUrl, e2e: options.e2e });
 
