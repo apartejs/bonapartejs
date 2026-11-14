@@ -43,6 +43,12 @@ export interface FamilyLayer {
   /** What ends an answer. */
   readonly stop: readonly string[];
   renderSystem(text: string): string;
+  /**
+   * A system turn later in the conversation — a delta: what changed since the
+   * system prompt was frozen. No reasoning switch; its text disarmed (a tool
+   * description or a project file may have written it).
+   */
+  renderSystemNote(text: string): string;
   /** The person's turn; control tokens in it are disarmed. */
   renderUser(text: string): string;
   /** Tool results, as the turn that answers the calls; their content is disarmed. */
@@ -56,6 +62,11 @@ export interface FamilyLayer {
   endAssistant(raw: string): string;
   /** How to call a tool, said in the system prompt. Sent to the model: English. */
   renderToolConvention(): string;
+  /**
+   * The tools, as they follow the system text directly in the same turn —
+   * where the family's template puts them (Gemma: its declarations close the
+   * system turn). Sent to the model: English.
+   */
   renderToolInventory(tools: readonly ToolDef[]): string;
   /** The lazy grammar of a call; null without tools. */
   toolGrammar(tools: readonly ToolDef[]): GrammarConstraint | null;

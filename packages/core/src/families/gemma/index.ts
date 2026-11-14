@@ -88,6 +88,9 @@ export const gemmaLayer: FamilyLayer = {
   stop: [TURN_CLOSE, TOOL_RESPONSE_OPEN],
 
   renderSystem,
+  renderSystemNote: (text) => `${TURN_OPEN}system
+${disarm(text).trim()}${TURN_CLOSE}
+`,
   renderUser: (text) => renderUser(disarm(text)),
   renderToolResults: (results) => results.map(renderToolResult).join(''),
   beginAssistant: ({ thinking, continuing }) => (continuing ? '' : thinking ? MODEL_HEADER : MODEL_HEADER + EMPTY_THOUGHT),

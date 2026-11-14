@@ -33,6 +33,7 @@ import { AGENT_ENDPOINT, createAgentHandler } from '../agent/handler.js';
 import { createCore, type Core, type Engine } from '../api.js';
 import type { DemuxEvent } from '../families/types.js';
 import { PromptLog } from '../prompt/prompt-log.js';
+import { buildSystemPrompt } from '../prompt/system-prompt.js';
 import type { ToolDef } from '../tools/types.js';
 
 const MODEL = process.env['BONAPARTE_SMOKE_MODEL'];
@@ -62,19 +63,13 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
   let core: Core;
   let engine: Engine;
 
-  /** A system prompt that declares the tools, in the family's convention. */
-  function systemWithTools(tools: readonly ToolDef[]): string {
-    return [
-      'You are bonaparte, a coding agent. Answer briefly.',
-      engine.family.renderToolConvention(),
-      engine.family.renderToolInventory(tools),
-    ].join('\n\n');
-  }
-
   /** One answer under the lazy tool grammar, read by the family's demux. */
   async function answer(user: string, tools: readonly ToolDef[]): Promise<{ text: string; events: DemuxEvent[] }> {
+    // The system prompt the app sends: its two turns, the tools in the first.
+    const system = buildSystemPrompt({ kind: 'code', family: engine.family, tools, perimeter: [], replyLanguage: 'English' });
     const log = new PromptLog(engine.family);
-    log.appendSystem(systemWithTools(tools));
+    log.appendSystem(system.stable);
+    log.appendSystemNote(system.project);
     log.appendUser(user);
     const prompt = log.beginAssistantTurn({ thinking: false });
     const demux = engine.family.createDemux();

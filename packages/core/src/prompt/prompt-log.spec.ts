@@ -178,3 +178,19 @@ describe('PromptLog — what an open turn may not change', () => {
     expect(() => log.rewind('something else')).toThrow(/prefix/);
   });
 });
+
+describe('PromptLog — deltas', () => {
+  it('appends a change as a note after the frozen text, which never moves', () => {
+    const log = new PromptLog(familyLayer('qwen'));
+    log.appendSystem('System.');
+    log.appendUser('Hello');
+    log.beginAssistantTurn({ thinking: false });
+    log.completeAssistantTurn('Hi.');
+    const before = log.frozen;
+    log.appendDelta({ kind: 'reply-language', text: '[preferences update]\nWrite your replies in English.' });
+    expect(log.frozen.startsWith(before)).toBe(true);
+    expect(log.frozen.slice(before.length)).toBe(
+      '<|im_start|>system\n[preferences update]\nWrite your replies in English.<|im_end|>\n',
+    );
+  });
+});

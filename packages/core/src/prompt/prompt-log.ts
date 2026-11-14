@@ -16,6 +16,7 @@
  */
 
 import type { FamilyLayer } from '../families/types.js';
+import type { Delta } from '../journal/types.js';
 import type { ToolResult } from '../tools/types.js';
 
 export interface AssistantTurnOptions {
@@ -47,6 +48,18 @@ export class PromptLog {
     this.closedTurn('appendSystem');
     this.history += this.family.renderSystem(text);
     this.continuing = false;
+  }
+
+  /** A later system turn: the conversation's decor, or a delta. */
+  appendSystemNote(text: string): void {
+    this.closedTurn('appendSystemNote');
+    this.history += this.family.renderSystemNote(text);
+    this.continuing = false;
+  }
+
+  /** What changed since the system prompt was frozen: a note appended, never a re-render. */
+  appendDelta(delta: Delta): void {
+    this.appendSystemNote(delta.text);
   }
 
   appendUser(text: string): void {

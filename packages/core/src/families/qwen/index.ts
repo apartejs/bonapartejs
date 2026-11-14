@@ -43,6 +43,7 @@ export const qwenLayer: FamilyLayer = {
   stop: [IM_END, '<|endoftext|>'],
 
   renderSystem,
+  renderSystemNote: (text) => renderSystem(disarm(text)),
   renderUser: (text) => renderUser(disarm(text)),
   // The results answer the calls in a turn of the person, as in v0.
   renderToolResults: (results) => renderUser(results.map(renderToolResult).join('\n\n')),
@@ -54,7 +55,8 @@ export const qwenLayer: FamilyLayer = {
     '<tool_call>{"name": "tool_name", "arguments": {…}}</tool_call>\n' +
     'One call per block; emit several blocks for several calls. ' +
     'Results are returned to you on the next turn.',
-  renderToolInventory: (tools) => (tools.length === 0 ? 'No tools available.' : tools.map(renderToolLine).join('\n')),
+  renderToolInventory: (tools) =>
+    tools.length === 0 ? '\n\nNo tools available.' : `\n\nAvailable tools:\n${tools.map(renderToolLine).join('\n')}`,
   toolGrammar: (tools) => buildGrammarConstraint(tools),
   createDemux: () => new HermesStreamDemux(),
 };
