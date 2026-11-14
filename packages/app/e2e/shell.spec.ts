@@ -21,6 +21,23 @@ test('the window speaks English when the app does', async ({ launch }) => {
   await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
 });
 
+test('the line of an empty conversation sits above the composer, on its axis', async ({ launch }) => {
+  const { page } = await launch();
+  const ui = chat(page);
+  await expect(ui.composer(PLACEHOLDER_FR)).toBeVisible();
+  const composer = (await ui.composerBox.boundingBox())!;
+  // The text itself, not its paragraph: a paragraph as wide as the window is
+  // centred whatever its text does.
+  const text = await page.evaluate(() => {
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelector('.bonaparte-empty')!);
+    const box = range.getBoundingClientRect();
+    return { left: box.left, width: box.width, bottom: box.bottom };
+  });
+  expect(Math.abs(text.left + text.width / 2 - (composer.x + composer.width / 2))).toBeLessThanOrEqual(2);
+  expect(text.bottom).toBeLessThanOrEqual(composer.y);
+});
+
 test('launching the app asks nothing of the engine', async ({ launch }) => {
   let calls = 0;
   const { page, server } = await launch({

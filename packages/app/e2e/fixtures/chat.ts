@@ -18,6 +18,8 @@ export interface ChatDriver {
   /** The field the person types in, by its accessible name: the placeholder. */
   composer(name: string): Locator;
   editor: Locator;
+  /** The box the composer draws: the axis the rest of the column follows. */
+  composerBox: Locator;
   /** One button, two jobs: it sends, and it stops while a reply streams. */
   sendButton: Locator;
   stopButton: Locator;
@@ -37,6 +39,7 @@ export function chat(page: Page): ChatDriver {
   return {
     composer: (name) => page.getByRole('textbox', { name }),
     editor,
+    composerBox: page.locator('aparte-composer .aparte-composer-shell'),
     sendButton,
     stopButton: page.locator('aparte-composer-send button[data-act="stop"]'),
     userMessages: page.locator('aparte-chat-bubble[data-role="user"]'),

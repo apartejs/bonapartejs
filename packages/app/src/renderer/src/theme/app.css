@@ -27,6 +27,10 @@ body {
   min-height: 0;
 }
 
+/* The line of an empty conversation sits above the composer, on its axis. */
 .bonaparte-empty {
+  margin: 0 auto;
+  max-width: var(--aparte-message-max-width, 800px);
+  text-align: center;
   color: var(--aparte-text-muted);
 }
