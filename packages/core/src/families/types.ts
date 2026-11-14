@@ -47,8 +47,13 @@ export interface FamilyLayer {
   renderUser(text: string): string;
   /** Tool results, as the turn that answers the calls; their content is disarmed. */
   renderToolResults(results: readonly ToolResult[]): string;
-  beginAssistant(options: { thinking: boolean }): string;
-  endAssistant(): string;
+  /**
+   * What opens the model's answer. `continuing`: the answer follows tool
+   * results inside the same turn (Gemma) — Qwen opens a new turn anyway.
+   */
+  beginAssistant(options: { thinking: boolean; continuing?: boolean }): string;
+  /** What closes what the model wrote: an answer that ended on a tool call may leave its turn open. */
+  endAssistant(raw: string): string;
   /** How to call a tool, said in the system prompt. Sent to the model: English. */
   renderToolConvention(): string;
   renderToolInventory(tools: readonly ToolDef[]): string;

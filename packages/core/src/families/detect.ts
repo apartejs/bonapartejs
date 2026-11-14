@@ -10,7 +10,8 @@ import type { FamilyId } from './types.js';
 const MARKS: readonly (readonly [FamilyId, string])[] = [
   ['gpt-oss', '<|channel|>'],
   ['llama', '<|start_header_id|>'],
-  ['gemma', '<start_of_turn>'],
+  // Gemma 4. Gemma 2 and 3 (`<start_of_turn>`) speak another format: not this layer's.
+  ['gemma', '<|turn>'],
   ['mistral', '[INST]'],
   ['qwen', '<|im_start|>'],
 ];

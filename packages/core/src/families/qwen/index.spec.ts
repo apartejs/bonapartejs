@@ -29,7 +29,7 @@ describe('the Qwen layer — turns', () => {
   it('renders the system, the person and the end of an answer in ChatML', () => {
     expect(qwen.renderSystem('SYS')).toBe('<|im_start|>system\nSYS<|im_end|>\n');
     expect(qwen.renderUser('Salut !')).toBe('<|im_start|>user\nSalut !<|im_end|>\n');
-    expect(qwen.endAssistant()).toBe('<|im_end|>\n');
+    expect(qwen.endAssistant('Bonjour.')).toBe('<|im_end|>\n');
   });
 
   it('opens an answer with reasoning, or with an empty reasoning block', () => {

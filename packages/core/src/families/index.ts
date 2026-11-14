@@ -1,11 +1,12 @@
 /**
- * The families of models the built-in engine speaks. Qwen is the first; the
- * four others arrive with task 9.4. Until then, a model of another family —
- * or one without a chat template — is refused clearly, with the way out: a
- * service that speaks it.
+ * The families of models the built-in engine speaks: Gemma (the default of
+ * the product) and Qwen; the three others arrive with task 9.4. Until then,
+ * a model of another family — or one without a chat template — is refused
+ * clearly, with the way out: a service that speaks it.
  */
 
 import { detectFamily, UnsupportedFamilyError } from './detect.js';
+import { gemmaLayer } from './gemma/index.js';
 import { qwenLayer } from './qwen/index.js';
 import type { FamilyId, FamilyLayer } from './types.js';
 
@@ -14,6 +15,7 @@ export { neutralizeControlTokens } from './control-tokens.js';
 export { detectFamily, UnsupportedFamilyError } from './detect.js';
 
 const LAYERS: Partial<Record<FamilyId, FamilyLayer>> = {
+  gemma: gemmaLayer,
   qwen: qwenLayer,
 };
 

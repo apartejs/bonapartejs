@@ -13,11 +13,16 @@ import { detectFamily, familyLayer, layerForModel, UnsupportedFamilyError } from
 
 const TEMPLATES = {
   qwen: "{%- for message in messages %}{{- '<|im_start|>' + message.role + '\\n' + message.content + '<|im_end|>' }}{%- endfor %}",
-  gemma: "{{ bos_token }}{% for message in messages %}{{ '<start_of_turn>' + role + '\\n' + message['content'] | trim + '<end_of_turn>\\n' }}{% endfor %}",
+  // Gemma 4: the turns of its official template.
+  gemma: "{{- bos_token -}}{%- for message in messages -%}{{- '<|turn>' + role + '\\n' -}}{{- message['content'] | trim -}}{{- '<turn|>\\n' -}}{%- endfor -%}",
   llama: "{{- '<|start_header_id|>' + message['role'] + '<|end_header_id|>\\n\\n' + message['content'] | trim + '<|eot_id|>' }}",
   mistral: "{%- for message in messages %}{%- if message['role'] == 'user' %}{{- '[INST] ' + message['content'] + '[/INST]' }}{%- endif %}{%- endfor %}",
   'gpt-oss': "{{- '<|start|>assistant<|channel|>analysis<|message|>' + message.thinking + '<|end|>' }}",
 } as const;
+
+/** Gemma 2 and 3: `<start_of_turn>`, no native tool calls — not the format of Gemma 4. */
+const OLDER_GEMMA =
+  "{{ bos_token }}{% for message in messages %}{{ '<start_of_turn>' + role + '\\n' + message['content'] | trim + '<end_of_turn>\\n' }}{% endfor %}";
 
 describe('detectFamily', () => {
   for (const [family, template] of Object.entries(TEMPLATES)) {
@@ -30,6 +35,10 @@ describe('detectFamily', () => {
     expect(detectFamily('{% for m in messages %}### {{ m.role }}: {{ m.content }}{% endfor %}')).toBeNull();
   });
 
+  it('does not take an older Gemma (2, 3) for Gemma 4: another format', () => {
+    expect(detectFamily(OLDER_GEMMA)).toBeNull();
+  });
+
   it('has nothing to say without a template', () => {
     expect(detectFamily(undefined)).toBeNull();
     expect(detectFamily('')).toBeNull();
@@ -39,6 +48,7 @@ describe('detectFamily', () => {
 describe('layerForModel', () => {
   it('gives the layer of the family the model speaks', () => {
     expect(layerForModel({ chatTemplate: TEMPLATES.qwen }).id).toBe('qwen');
+    expect(layerForModel({ chatTemplate: TEMPLATES.gemma }).id).toBe('gemma');
   });
 
   it('refuses a model without a chat template, and says a service can run it', () => {
@@ -53,7 +63,7 @@ describe('layerForModel', () => {
   });
 
   it('refuses a family the built-in engine does not speak yet, and a template it does not know', () => {
-    for (const template of [TEMPLATES.gemma, TEMPLATES.llama, TEMPLATES.mistral, TEMPLATES['gpt-oss'], '### {{ m }}']) {
+    for (const template of [OLDER_GEMMA, TEMPLATES.llama, TEMPLATES.mistral, TEMPLATES['gpt-oss'], '### {{ m }}']) {
       expect(() => layerForModel({ chatTemplate: template })).toThrow(UnsupportedFamilyError);
       try {
         layerForModel({ chatTemplate: template });
@@ -64,7 +74,7 @@ describe('layerForModel', () => {
   });
 
   it('familyLayer refuses the same way a family without its layer', () => {
-    expect(() => familyLayer('gemma')).toThrow(UnsupportedFamilyError);
+    expect(() => familyLayer('llama')).toThrow(UnsupportedFamilyError);
   });
 });
 

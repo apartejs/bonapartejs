@@ -10,39 +10,13 @@
 
 import type { DemuxEvent, StreamDemux } from '../types.js';
 import { IM_END, parseToolCall, THINK_CLOSE, THINK_OPEN, TOOL_CALL_CLOSE, TOOL_CALL_OPEN } from './parser.js';
+import { firstMarker, heldBackLength } from '../markers.js';
 
 export type { DemuxEvent } from '../types.js';
 
 type DemuxMode = 'text' | 'think' | 'call' | 'done';
 
 const TEXT_MARKERS = [THINK_OPEN, TOOL_CALL_OPEN, IM_END];
-
-function firstMarker(
-  buffer: string,
-  markers: string[],
-): { index: number; marker: string } | null {
-  let best: { index: number; marker: string } | null = null;
-  for (const marker of markers) {
-    const index = buffer.indexOf(marker);
-    if (index !== -1 && (best === null || index < best.index)) {
-      best = { index, marker };
-    }
-  }
-  return best;
-}
-
-/** Length of the longest suffix that could be the start of a marker. */
-function heldBackLength(buffer: string, markers: string[]): number {
-  const longest = Math.max(...markers.map((m) => m.length)) - 1;
-  const start = Math.max(0, buffer.length - longest);
-  for (let i = start; i < buffer.length; i++) {
-    const suffix = buffer.slice(i);
-    if (markers.some((marker) => marker.startsWith(suffix))) {
-      return buffer.length - i;
-    }
-  }
-  return 0;
-}
 
 export class HermesStreamDemux implements StreamDemux {
   private mode: DemuxMode = 'text';
