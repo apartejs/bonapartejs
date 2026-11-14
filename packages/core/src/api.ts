@@ -10,6 +10,7 @@
  * joined instead, and spoken to in the family its template says.
  */
 
+import { statfs } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
@@ -28,6 +29,10 @@ import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
 import { defaultScanRoots, scanModels, type ModelSource, type ScanRoot } from './models/inventory.js';
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
+import { ConversationEngine, type EngineView } from './conversation/engine.js';
+import { ConversationStore } from './conversation/store.js';
+import { KvStore } from './kv/kv-store.js';
+import { defaultBudgetBytes } from './kv/retention.js';
 
 export interface CoreDeps {
   /** The folder bonaparte keeps everything in (see `bonaparteDataDir`). */
@@ -45,6 +50,8 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
+  /** The language the answers are written in, in plain words (« French »): the interface's. */
+  replyLanguage?: () => string;
   /** Where llama.cpp's releases are read (default: GitHub's API); null: never asked (tests). */
   llamaReleases?: string | null;
 }
@@ -91,6 +98,9 @@ export interface Core {
   llamaCpp(options?: { checkLatest?: boolean }): Promise<LlamaCppState>;
   /** Downloads the newest build, verifies it, and keeps it. Only when the person asks. */
   installLlamaCpp(): Promise<LlamaCppState>;
+  /** The conversations: their cards, their journals, their turns on the engine. */
+  readonly conversations: ConversationEngine;
+  readonly conversationStore: ConversationStore;
 }
 
 interface LlamaFound {
@@ -140,10 +150,13 @@ export function createCore(deps: CoreDeps): Core {
   const env = deps.env ?? process.env;
   const configFile = join(deps.dataDir, 'config', 'global.json');
   const engineDir = join(deps.dataDir, 'engine');
+  // The KV states live where the managed server saves its slots.
+  const kvDir = join(deps.dataDir, 'kv-slots');
+  const measures = new MeasureStore(join(engineDir, 'measures.json'));
   const supervisor = new EngineSupervisor({
-    slotsDir: join(deps.dataDir, 'kv-slots'),
+    slotsDir: kvDir,
     pidFile: join(engineDir, 'managed-server.pid'),
-    measures: new MeasureStore(join(engineDir, 'measures.json')),
+    measures,
     // Unloading after a while without work waits for the reload it implies to be
     // announced (« Charger et envoyer », plan task 7.4): until then a model unloaded
     // behind the person's back would leave every next message without an engine.
@@ -408,8 +421,33 @@ export function createCore(deps: CoreDeps): Core {
     );
   }
 
-  return {
-    async engine() {
+  // ── The conversations ──
+  // The disk budget of the KV states: 20 GiB, never more than a quarter of the free space (read once).
+  let kvBudget = defaultBudgetBytes(Number.MAX_SAFE_INTEGER);
+  void statfs(deps.dataDir)
+    .then((disk) => (kvBudget = defaultBudgetBytes(disk.bavail * disk.bsize)))
+    .catch(() => undefined);
+  const kv = new KvStore(resolve(kvDir), { budgetBytes: () => kvBudget });
+  const conversationStore = new ConversationStore(join(deps.dataDir, 'conversations'));
+  const conversations = new ConversationEngine({
+    store: conversationStore,
+    kv,
+    measures,
+    engine: async (): Promise<EngineView | undefined> => {
+      const engine = await currentEngine();
+      if (!engine) return undefined;
+      const live = (await mode()) === 'managed' ? supervisor.live : null;
+      return {
+        ...engine,
+        live,
+        modelPath: supervisor.loaded?.modelPath ?? '',
+        kvBytesPerToken: loaded && live ? kvBytesPerToken(loaded.info, live.cacheTypeK) : null,
+      };
+    },
+    prompt: (meta) => ({ kind: meta.kind, tools: [], perimeter: [], replyLanguage: deps.replyLanguage?.() ?? 'English' }),
+  });
+
+  async function currentEngine(): Promise<Engine | undefined> {
       if ((await mode()) === 'remote') {
         await configuredRemote();
         if (supervisor.status() !== 'ready') {
@@ -424,8 +462,10 @@ export function createCore(deps: CoreDeps): Core {
       const client = supervisor.client();
       if (!client || !loaded || supervisor.loaded?.modelPath !== loaded.path) return undefined;
       return { client, family: loaded.layer };
-    },
+  }
 
+  return {
+    engine: currentEngine,
     engineState,
     models,
 
@@ -447,7 +487,13 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     hold: () => supervisor.hold(),
-    stop: () => supervisor.stop(),
+    // The conversation in the slot is saved before the engine stops: its memory survives the restart.
+    async stop() {
+      await conversations.flush().catch((error: unknown) => deps.logger?.(`[bonaparte] a memory was not saved: ${String(error)}`));
+      await supervisor.stop();
+    },
+    conversations,
+    conversationStore,
     llamaCpp,
     installLlamaCpp,
   };
