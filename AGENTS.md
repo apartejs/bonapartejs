@@ -18,37 +18,21 @@ we work below still hold. The sections that name files, commands or
 milestones (Commands, Landmarks, and paths such as `packages/core`) describe
 v0: they stay as its lessons until the new code replaces them.
 
-## apartéJS friction journal — MANDATORY
+## apartéJS frictions — MANDATORY
 
 bonaparte is also the proving ground of the apartéJS library (`@aparte/*`).
 **Every friction met with the library is filed immediately**, the moment it
 happens — never at the end of a session — as an issue on
 https://github.com/apartejs/aparte/issues (in English: the repository is
-public). Paul uses them to ship fixes and improvements to the library. The
-private journal `docs/superpowers/aparte-frictions.md` keeps the history
-of what was filed and the "Ça, c'était bien" section; it no longer receives
-new frictions.
+public). Paul uses them to ship fixes and improvements to the library.
 
 Counts as friction: a missing or awkward API, surprising behaviour, an
 undocumented trap, documentation so absent you had to read the source, a
 workaround you needed, a useless error message, an inconsistency between
-packages. Notable good surprises go in the "Ça, c'était bien" section — so
-nobody breaks what works.
-
-The journal is private and written in French. One entry per friction, in this
-shape:
-
-```md
-## AAAA-MM-JJ — titre court
-- **Paquet** : @aparte/xxx@version
-- **Contexte** : ce qu'on essayait de faire
-- **Friction** : le problème précis
-- **Contournement** : ce qu'on a fait dans bonaparte
-- **Piste lib** : le correctif/l'amélioration suggérée côté apartéJS
-- **Statut** : ouverte | résolue en x.y.z
-```
-
-When a library release fixes an entry, mark it resolved (never delete it).
+packages. An issue gives the package and its version, what we were trying to
+do, the friction, the workaround used in bonaparte, and the fix suggested on
+the library side. A notable good surprise is pinned by a contract test in
+bonaparte instead, so nobody breaks what works.
 
 ## Invariants — never violate
 
@@ -136,11 +120,11 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
 
 ## Landmarks
 
-- Design notes (private): v1 plan `docs/superpowers/specs/2026-08-18-bonaparte-v1-design.md`,
-  consolidation `2026-08-19-bonaparte-consolidation.md` (amends the plan: single
-  engine, layered prefix, one slot, retention budget), projects/conversations
-  design `2026-08-20-projets-conversations-design.md`. The action plan to v1 is
-  in `.claude/audit/03-plan-v1.md` (private).
+- Design notes (private): the restart's design
+  `docs/superpowers/specs/2026-11-14-bonaparte-v1-refonte-design.md`, the
+  engine chapters (3 to 9 bis) of `2026-08-19-bonaparte-consolidation.md`, and
+  a copy of the design canvas in `docs/superpowers/canvas/`. The v0 notes and
+  audit were removed on 2026-11-14; their lessons are in the design.
 - Paul's machine has the **unified `llama` CLI** (WindowsApps): server =
   `llama serve`, same flags as llama-server (`detectServeCommandPrefix()`).
 - **Milestones.** J1 foundations + KV ✅ (validated for real by Paul on
@@ -167,7 +151,7 @@ node packages/cli/dist/cli.js doctor            # machine diagnostic
   to what llama.cpp cannot check itself — the model file and the K/V types
   — n_ctx only has to hold the saved tokens and a build change no longer
   re-prefills (D-73); a per-conversation context cap (D-74); a security
-  audit (private `.claude/audit/07`) with three findings fixed; a tray icon
+  audit with three findings fixed; a tray icon
   with close-to-tray (D-76) and an idle model unload (D-77) · J4 MCP · J5
   npx distribution.
 - **Real-model smoke results.** Record here: date, model, llama.cpp build, and
