@@ -14,6 +14,20 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { join } from 'node:path';
 
+// No local import here: Node runs this file as it is, for fake-llama-bin.mjs.
+
+/**
+ * A chat template that reads as Gemma 4 (`<|turn>`): the family of the
+ * product, and the default of the tests.
+ */
+export const FAKE_GEMMA_TEMPLATE =
+  "{{- bos_token -}}{%- for message in messages -%}{{- '<|turn>' + message['role'] + '\\n' + message['content'] | trim + '<turn|>\\n' -}}{%- endfor -%}";
+
+/** One that reads as Qwen (`<|im_start|>`). */
+export const FAKE_QWEN_TEMPLATE =
+  "{%- for message in messages %}{{- '<|im_start|>' + message.role + '\\n' + message.content + '<|im_end|>\\n' }}{%- endfor %}";
+
+
 export interface FakeSlotSnapshot {
   tokens: string[];
 }
@@ -60,6 +74,8 @@ export interface FakeLlamaServerOptions {
   responder?: (prompt: string) => string;
   /** Number of slots (default 1). */
   totalSlots?: number;
+  /** The chat template /props reports: what the family is read from (default: a Gemma 4 one). */
+  chatTemplate?: string;
   /**
    * The port to listen on (default: any free one). A managed server listens
    * where its supervisor told it to.
@@ -373,7 +389,7 @@ export async function startFakeLlamaServer(
         json(res, 200, {
           model_path: modelPath,
           total_slots: totalSlots,
-          chat_template: '',
+          chat_template: options.chatTemplate ?? FAKE_GEMMA_TEMPLATE,
           default_generation_settings: { n_ctx: nCtx ?? 4096 },
         });
         return;
