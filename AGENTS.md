@@ -28,9 +28,13 @@ test. The design came first (a private canvas, then a design document), and the
 implementation follows a plan of fourteen phases, started on 2026-11-14.
 
 Phase 0 is done: this file, the Claude Code configuration under `.claude/`, and
-the project files. Phase 1 is under way: the workspace, the first modules of
-the core (the llama.cpp client and its fake server, the Qwen template, the
-agent handler) and the Electron shell with one chat. A section below that
+the project files. Phase 1 is done too: the workspace, the first modules of the
+core (the llama.cpp client and its fake server, the Qwen template, the agent
+handler) and the Electron shell with one chat. A first thread runs end to end:
+the window posts a turn to `bonaparte://app/agent`, the core asks a llama.cpp
+server — a fake one in the tests, a real one named by `BONAPARTE_LLAMA_URL` —
+and the reply streams back; Stop cuts the generation on the engine. The app
+does not launch llama.cpp itself yet: that is phase 2. A section below that
 names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
@@ -86,7 +90,11 @@ An issue can stay open after its fix has shipped.
 
 - **Test first, always.** Red test, then the minimal implementation. The fake
   llama-server is the fixture for everything that touches the engine — no GPU
-  in CI, ever.
+  in CI, ever. An end-to-end test is seen red in a built app: before the fix
+  when the app can show the defect; otherwise by breaking, on purpose, the
+  behaviour it checks, and putting it back. A test nobody saw fail has caught
+  nothing yet: one of the first thirteen passed with the answer delivered in
+  one block.
 - **Localise from the first string.** One file per language (`types.ts` +
   `fr.ts` + `en.ts`; a spec checks key parity). **Localisation is for the UI.
   Everything sent to the model is English** — system prompt, tool descriptions,
@@ -200,7 +208,7 @@ pnpm lint                                      # ESLint: the module boundaries, 
 pnpm typecheck                                 # every package, the end-to-end tests included
 pnpm test                                      # unit tests (Vitest), against the fake llama-server
 pnpm build                                     # every package; the app goes to packages/app/out
-pnpm --filter @aparte/bonaparte-app test:e2e   # end-to-end (Playwright), on the built app
+pnpm --filter @aparte/bonaparte-app test:e2e   # end-to-end (Playwright); it builds first
 pnpm dev                                       # the app, with reload — this one opens a window
 node --test ".claude/hooks/*.test.mjs"         # the guard hooks and the agent and skill definitions
 ```
@@ -212,8 +220,11 @@ pnpm --filter @aparte/bonaparte-core exec vitest run src/agent/handler.spec.ts
 pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 ```
 
-- The end-to-end tests launch Electron. Build first, and read the `run-app`
-  skill before the first launch of a session.
+- The end-to-end tests launch Electron: read the `run-app` skill before the
+  first launch of a session. `test:e2e` builds first; `exec playwright test`
+  does not, and runs whatever `packages/app/out` holds.
+- `BONAPARTE_SCREENS=<folder>` makes `e2e/screens.spec.ts` take the pictures
+  of the screens (light and dark, French and English) into that folder.
 - `BONAPARTE_LLAMA_URL` points the app at a llama.cpp server that is already
   running; `BONAPARTE_DATA_DIR` keeps its data out of the real profile;
   `BONAPARTE_LOCALE` (`fr` or `en`) forces the language of the interface.
@@ -243,6 +254,12 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   place that launches the app, and `fixtures/chat.ts` holds every selector
   into aparté's chat, which documents none: a release that moves one breaks
   that file, not twenty specs.
+- **The window is one page**, and it never loads another document. A link in
+  a reply is refused twice: by the page, which answers no to aparté's
+  `aparte-link-click` (`renderer/src/aparte/links.ts`), and by the main
+  process, which refuses every address but the window's own (`isOwnPage`).
+  Opening a file in its pane and a site in the system browser arrive with the
+  panes and with the list of allowed addresses.
 - **The four approval modes** keep aparté's French names in the product:
   Lecture (reads only, and plans), Répétition (asks before every change),
   Plume (edits pass, commands ask), Impro (asks only what is always asked).
@@ -302,6 +319,29 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   early and output is lost.
 - **The built-in web search worked without a key** (a hidden browser and a
   public engine); online providers stayed optional, their key in the vault.
+
+## Lessons from the restart
+
+- **Stop crosses `protocol.handle`** (Electron 45). When the page aborts its
+  request, the handler's signal fires and the engine is cut within a second:
+  no IPC channel is needed for Stop. Pinned by `e2e/stop.spec.ts`.
+- **A failure of llama-server once the stream has begun is an event of the
+  stream** (`data: {"error": …}`), not a status. Read past it, and the reply
+  looks like one the person stopped.
+- **aparté reveals a text gradually, whatever its arrival.** Watching a reply
+  grow in the page proves nothing about streaming; an end-to-end test reads
+  instead that the engine has not finished (`server.finished`) while the first
+  words are shown.
+- **After a navigation the app refused, Playwright believes one is pending**:
+  it never hears of the refusal, and every later `expect(locator)` waits for
+  it. Ask the page with `evaluate`, or keep the browser from trying.
+- **`will-navigate` is not raised for `about:blank`.** Only a script of the
+  page can go there; no link of a reply can (aparté drops the scheme).
+- **A relative link in a reply is a navigation.** aparté keeps
+  `[package.json](package.json)` as it is; in a window that is one page, that
+  click replaced the conversation.
+- **The colour guard reads comments too**: write an issue as `owner/repo#123`,
+  never as a bare `#123`.
 
 ## Real-model smoke results
 

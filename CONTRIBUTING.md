@@ -48,8 +48,8 @@ pnpm --filter @aparte/bonaparte-app test:e2e   # end-to-end, on the built app
 ```
 
 The whole list, with how to run one file and the environment variables the app
-reads, is in [AGENTS.md](./AGENTS.md#commands). The end-to-end tests launch
-Electron on the app you just built, with its window kept off your screen; they
+reads, is in [AGENTS.md](./AGENTS.md#commands). The end-to-end tests build
+the app, then launch Electron on it with its window kept off your screen; they
 never run on an app that is not built. CI runs the same commands on Ubuntu and
 on Windows.
 

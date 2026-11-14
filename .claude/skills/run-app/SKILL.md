@@ -49,9 +49,9 @@ taskbar, deaf to the mouse, shown without being activated. A test run also
 leaves the graphics card alone. `e2e/shell.spec.ts` checks all of it.
 
 ```sh
+pnpm --filter @aparte/bonaparte-app test:e2e                                  # builds first
 pnpm build
-pnpm --filter @aparte/bonaparte-app test:e2e
-pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
+pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts   # runs what was built
 ```
 
 - Launch through the `launch` fixture of `e2e/fixtures/app.ts`, never
@@ -65,6 +65,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `packages/app/test-results/`. Read them rather than guessing.
 - After a run, check that no `electron` process of this project is left.
 - A selector into aparté's chat goes in `e2e/fixtures/chat.ts`, nowhere else.
+- A new end-to-end test must be seen red. Write it before the fix when the app
+  can show the defect. Otherwise break the behaviour it checks, build, watch it
+  fail for that reason, and put the code back. Never break the refusal of new
+  windows outside a test run: the window would be a real one.
+- After a navigation the app refused, Playwright still believes one is
+  pending, and every `expect(locator)` waits for it: ask the page with
+  `page.evaluate`, or read `launched.navigations()`.
 
 ## Launching the app by hand
 
@@ -88,4 +95,11 @@ Stop it by ending the background task. Then check that nothing is left: no
 
 Screens meant for Paul go to `docs/superpowers/screens/phase-NN/`, in light
 and dark, in French and in English. The `screen` skill says how to compare
-them with the canvas.
+them with the canvas. `e2e/screens.spec.ts` takes them when asked:
+
+```sh
+BONAPARTE_SCREENS=<folder> pnpm --filter @aparte/bonaparte-app exec playwright test e2e/screens.spec.ts
+```
+
+Look at each picture before showing it: the first ones had the line of the
+empty conversation stuck to the left edge of the window.
