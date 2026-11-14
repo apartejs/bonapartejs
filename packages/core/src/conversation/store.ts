@@ -89,7 +89,7 @@ export class ConversationStore {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  private change(id: string, apply: (meta: ConversationMeta) => ConversationMeta): Promise<ConversationMeta> {
+  private async change(id: string, apply: (meta: ConversationMeta) => ConversationMeta): Promise<ConversationMeta> {
     return this.writes.run(idOf(id), async () => {
       const meta = await this.get(id);
       if (!meta) throw new Error(`There is no conversation ${id}.`);
