@@ -50,6 +50,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@aparte/core": "1.7.0",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "tsup": "catalog:",

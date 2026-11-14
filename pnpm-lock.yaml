@@ -52,11 +52,14 @@ importers:
         version: link:../shared
       '@aparte/engine':
         specifier: 1.7.0
-        version: 1.7.0
+        version: 1.7.0(@aparte/core@1.7.0)
       zod:
         specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
+      '@aparte/core':
+        specifier: 1.7.0
+        version: 1.7.0
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
@@ -90,6 +93,10 @@ importers:
         version: 5.1.0(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(yaml@2.9.0))
 
 packages:
+
+  '@aparte/core@1.7.0':
+    resolution: {integrity: sha512-6VnW2iI/gnl3nUqEzjp+W6u6ZwBDLm2uCuHMzBPstKdxP0luZm6ZgmerPNNBEH4Co/svvwMJVQeCwBoulQO4pA==}
+    engines: {node: '>=18'}
 
   '@aparte/engine@1.7.0':
     resolution: {integrity: sha512-6GgSH2Ca20p+MaiXOlVxFgG8QGCA0Fn/Db88gEUZkhwMlmF7z1IUbtIMJaaGlLMtymMOYNP2KQPKdc1QyKx8Aw==}
@@ -2565,7 +2572,13 @@ packages:
 
 snapshots:
 
-  '@aparte/engine@1.7.0': {}
+  '@aparte/core@1.7.0':
+    dependencies:
+      '@aparte/engine': 1.7.0(@aparte/core@1.7.0)
+
+  '@aparte/engine@1.7.0(@aparte/core@1.7.0)':
+    optionalDependencies:
+      '@aparte/core': 1.7.0
 
   '@babel/code-frame@7.29.7':
     dependencies:
