@@ -32,6 +32,12 @@ async function serve(options: { ranges?: boolean } = {}) {
     const match = /^bytes=(\d+)-$/.exec(req.headers.range ?? '');
     if (match && options.ranges !== false) {
       const from = Number(match[1]);
+      // What a real server answers for a range past the end.
+      if (from >= CONTENT.length) {
+        res.writeHead(416, { 'content-range': `bytes */${CONTENT.length}` });
+        res.end();
+        return;
+      }
       res.writeHead(206, { 'content-length': CONTENT.length - from });
       res.end(CONTENT.subarray(from));
       return;
@@ -103,5 +109,21 @@ describe('downloadFile', () => {
     await expect(download).rejects.toThrow();
     await expect(stat(dest)).rejects.toThrow();
     expect((await stat(`${dest}.part`)).size).toBeGreaterThan(0);
+  });
+
+  it('a download cut after its last byte, before it was verified, is finished at the next try — never stuck', async () => {
+    const { url } = await serve();
+    const dest = join(await folder(), 'llama.zip');
+    await writeFile(`${dest}.part`, CONTENT);
+    await downloadFile({ url, dest, sha256: SHA256 });
+    expect(await readFile(dest)).toEqual(CONTENT);
+  });
+
+  it('a whole file that is not the one announced is thrown away, and downloaded again', async () => {
+    const { url } = await serve();
+    const dest = join(await folder(), 'llama.zip');
+    await writeFile(`${dest}.part`, Buffer.alloc(CONTENT.length + 10, 1));
+    await downloadFile({ url, dest, sha256: SHA256 });
+    expect(await readFile(dest)).toEqual(CONTENT);
   });
 });

@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCore, type Core, type CoreDeps } from './api.js';
 import { UnsupportedFamilyError } from './families/index.js';
 import { spawnHidden, type SpawnedProcess, type SpawnFn } from './process/spawn.js';
@@ -293,3 +293,37 @@ describe('createCore — the llama.cpp it runs', () => {
   });
 });
 
+
+describe('createCore — what the review of phase 2 found', () => {
+  let releases: FakeLlamaReleases[] = [];
+  afterEach(async () => {
+    await Promise.all(releases.map((one) => one.close()));
+    releases = [];
+  });
+
+  it('a loaded model stays loaded however long nothing happens: its unloading comes with the announced reload (7.4)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    // The quiet starts when the last turn ends.
+    const release = core.hold();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      release();
+      vi.advanceTimersByTime(60 * 60_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect((await core.engineState()).status).toBe('ready');
+    expect(await core.engine()).toBeDefined();
+  });
+
+  it('refuses to replace llama.cpp under a model that loads or runs', async () => {
+    const github = await startFakeLlamaReleases();
+    releases.push(github);
+    const { core, gemma } = await setup({ llamaReleases: github.url });
+    await core.loadModel(gemma);
+    await expect(core.installLlamaCpp()).rejects.toThrow(/model is loaded/);
+    expect(github.downloads).toBe(0);
+  });
+});

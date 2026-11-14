@@ -105,6 +105,17 @@ describe('installLlama', () => {
     expect((await readdir(dir)).filter((name) => /^b\d+$/.test(name))).toEqual(['b200']);
   });
 
+  it('refuses a build or a file name that would leave its folder, before it touches anything', async () => {
+    const dir = await folder();
+    const asset = await serve(await makePackage({ [`llama-server${EXE}`]: 'x' }));
+    const outside = join(dir, '..', 'keep-me');
+    await mkdir(outside, { recursive: true });
+    dirs.push(outside);
+    await expect(installLlama({ dir, asset: { ...asset, build: '../keep-me' } })).rejects.toThrow(/not a llama.cpp build/);
+    await expect(installLlama({ dir, asset: { ...asset, name: '../escape.zip' } })).rejects.toThrow(/not a llama.cpp package/);
+    expect(await readdir(join(dir, '..'))).toContain('keep-me');
+  });
+
   it('forgets an install whose server is gone (removed by hand, or by an antivirus)', async () => {
     const dir = await folder();
     const installed = await installLlama({ dir, asset: await serve(await makePackage({ [`llama-server${EXE}`]: 'x' })) });

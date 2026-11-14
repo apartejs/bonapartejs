@@ -36,6 +36,8 @@ interface LlamaStatusProps {
   text: Messages['engineSetup']['llama'];
   style: NumberStyle;
   downloading: boolean;
+  /** A model is loading: llama.cpp is not replaced under it. */
+  busy: boolean;
   failure: InstallFailure | null;
   onDownload(): void;
 }
@@ -45,7 +47,7 @@ interface LlamaStatusProps {
  * the one published and its size — said before the click — the download's
  * progress, and why it failed.
  */
-function LlamaStatus({ llama, text, style, downloading, failure, onDownload }: LlamaStatusProps) {
+function LlamaStatus({ llama, text, style, downloading, busy, failure, onDownload }: LlamaStatusProps) {
   const { current, latest } = llama;
   const build = current?.build ?? '';
   const line = !current
@@ -80,7 +82,7 @@ function LlamaStatus({ llama, text, style, downloading, failure, onDownload }: L
           {hint ? <p className="aparte-field-hint">{hint}</p> : null}
         </div>
         {upToDate ? <span className="aparte-badge aparte-badge--success">{text.upToDate}</span> : null}
-        {action && !downloading ? (
+        {action && !downloading && !busy ? (
           <button
             type="button"
             className={`aparte-btn ${current ? 'aparte-btn--surface' : 'aparte-btn--primary aparte-btn--solid'}`}
@@ -263,6 +265,7 @@ export function EngineSetup({ messages, locale, onReady }: EngineSetupProps) {
               text={text.llama}
               style={style}
               downloading={downloading}
+              busy={loading}
               failure={installFailure}
               onDownload={() => void download()}
             />

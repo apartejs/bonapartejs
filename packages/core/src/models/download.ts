@@ -38,10 +38,24 @@ export async function downloadFile(options: DownloadOptions): Promise<void> {
     (found) => found.size,
     () => 0,
   );
-  const response = await (options.fetch ?? fetch)(options.url, {
-    headers: { 'user-agent': 'bonaparte', ...(have > 0 ? { range: `bytes=${have}-` } : {}) },
-    ...(options.signal ? { signal: options.signal } : {}),
-  });
+  const ask = (from: number): Promise<Response> =>
+    (options.fetch ?? fetch)(options.url, {
+      headers: { 'user-agent': 'bonaparte', ...(from > 0 ? { range: `bytes=${from}-` } : {}) },
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  let response = await ask(have);
+  if (response.status === 416 && have > 0) {
+    // Nothing left to ask for: the download was cut after its last byte, before it was verified.
+    // Kept if it is the file announced; otherwise thrown away and downloaded again.
+    await response.body?.cancel();
+    if ((await sha256Of(part)) === options.sha256.toLowerCase()) {
+      await rename(part, options.dest);
+      return;
+    }
+    await rm(part, { force: true });
+    have = 0;
+    response = await ask(0);
+  }
   if (!response.ok || !response.body) throw new Error(`The download failed: HTTP ${response.status} (${options.url}).`);
   // A server that ignores the range sends the whole file again: start over.
   if (response.status !== 206) have = 0;

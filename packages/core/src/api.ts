@@ -144,6 +144,10 @@ export function createCore(deps: CoreDeps): Core {
     slotsDir: join(deps.dataDir, 'kv-slots'),
     pidFile: join(engineDir, 'managed-server.pid'),
     measures: new MeasureStore(join(engineDir, 'measures.json')),
+    // Unloading after a while without work waits for the reload it implies to be
+    // announced (« Charger et envoyer », plan task 7.4): until then a model unloaded
+    // behind the person's back would leave every next message without an engine.
+    idleUnloadMinutes: 0,
     ...(deps.port !== undefined ? { port: deps.port } : {}),
     ...(deps.llamaCommand ? { llamaCommand: deps.llamaCommand } : {}),
     ...(deps.spawn ? { spawn: deps.spawn } : {}),
@@ -300,6 +304,10 @@ export function createCore(deps: CoreDeps): Core {
 
   function installLlamaCpp(): Promise<LlamaCppState> {
     install ??= (async () => {
+      // The build a server runs is not replaced under it: a relaunch would find it gone.
+      if (supervisor.loaded || supervisor.status() !== 'stopped') {
+        throw new Error('A model is loaded, or loading: llama.cpp is updated once it is stopped.');
+      }
       if (!latest || latest === 'failed' || !latest.asset) await checkLatest();
       const asset = latest && latest !== 'failed' ? latest.asset : null;
       if (!asset) throw new Error('No llama.cpp build is published for this machine, or GitHub could not be reached.');

@@ -63,6 +63,12 @@ describe('pickAsset', () => {
     expect(pickAsset(release('b12383', ['llama-b12383-bin-win-vulkan-x64.zip'], { digest: false }), 'win32', 'x64')).toBeNull();
   });
 
+  it('offers nothing from a release whose tag is not a build: the tag names a folder', () => {
+    const odd = release('../../../Documents', ['llama-../../../Documents-bin-win-vulkan-x64.zip']);
+    expect(pickAsset(odd, 'win32', 'x64')).toBeNull();
+    expect(pickAsset(release('b1.*', ['llama-b1x-bin-win-vulkan-x64.zip']), 'win32', 'x64')).toBeNull();
+  });
+
   it('offers nothing when the release has no package for this machine', () => {
     expect(pickAsset(release('b12383', ['llama-b12383-bin-win-cpu-x64.zip']), 'win32', 'x64')).toBeNull();
   });
@@ -102,6 +108,13 @@ describe('latestLlamaAsset', () => {
     elsewhere.assets[0]!.browser_download_url = 'https://example.com/llama.zip';
     const { fetch } = answering([elsewhere]);
     expect(await latestLlamaAsset({ fetch, platform: 'win32', arch: 'x64' })).toBeNull();
+  });
+
+  it("refuses an address that climbs out of llama.cpp's releases once it is normalised", async () => {
+    const climbing = release('b12383', ['llama-b12383-bin-win-vulkan-x64.zip']);
+    climbing.assets[0]!.browser_download_url =
+      'https://github.com/ggml-org/llama.cpp/releases/download/%2e%2e/%2e%2e/%2e%2e/%2e%2e/someone/else/releases/download/b1/x.zip';
+    expect(await latestLlamaAsset({ fetch: answering([climbing]).fetch, platform: 'win32', arch: 'x64' })).toBeNull();
   });
 
   it('says it does not know when GitHub does not answer, or answers wrong', async () => {

@@ -33,9 +33,12 @@ export function packageSlug(platform: NodeJS.Platform, arch: string): string | n
   return null;
 }
 
+/** What a build's tag must be: it names the folder the build is unpacked to. */
+export const BUILD_TAG = /^b\d+$/;
+
 export function pickAsset(release: GithubRelease, platform: NodeJS.Platform, arch: string): LlamaAsset | null {
   const slug = packageSlug(platform, arch);
-  if (!slug) return null;
+  if (!slug || !BUILD_TAG.test(release.tag_name)) return null;
   const wanted = new RegExp(`^llama-${release.tag_name}-bin-${slug}\\.(zip|tar\\.gz)$`);
   const asset = release.assets.find((candidate) => wanted.test(candidate.name));
   const sha256 = /^sha256:([0-9a-f]{64})$/.exec(asset?.digest ?? '')?.[1];
@@ -75,7 +78,16 @@ export async function latestLlamaAsset(options: LatestOptions = {}): Promise<Lla
   if (!Array.isArray(list)) throw new Error("llama.cpp's releases could not be read: not a list");
   for (const release of list) {
     const asset = pickAsset(release, options.platform ?? process.platform, options.arch ?? process.arch);
-    if (asset) return asset.url.startsWith(allowed) ? asset : null;
+    if (asset) return within(asset.url, allowed) ? asset : null;
   }
   return null;
+}
+
+/** Is this address under that one once normalised — as fetch will read it (`%2e%2e` is a `..`)? */
+function within(url: string, allowed: string): boolean {
+  try {
+    return new URL(url).href.startsWith(allowed);
+  } catch {
+    return false;
+  }
 }

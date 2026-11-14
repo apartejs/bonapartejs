@@ -10,7 +10,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import { join, relative } from 'node:path';
 import { downloadFile } from '../models/download.js';
 import type { SpawnFn } from '../process/spawn.js';
-import type { LlamaAsset } from './llama-release.js';
+import { BUILD_TAG, type LlamaAsset } from './llama-release.js';
 import { runShort } from './process-probe.js';
 
 export interface InstalledLlama {
@@ -73,6 +73,11 @@ export interface InstallOptions {
 
 export async function installLlama(options: InstallOptions): Promise<InstalledLlama> {
   const { dir, asset } = options;
+  // Both become paths under `dir`: checked here too, whatever the release said.
+  if (!BUILD_TAG.test(asset.build)) throw new Error(`This is not a llama.cpp build: ${asset.build}`);
+  if (!/^[\w.-]+\.(zip|tar\.gz)$/.test(asset.name) || asset.name.includes('..')) {
+    throw new Error(`This is not a llama.cpp package: ${asset.name}`);
+  }
   const downloads = join(dir, 'downloads');
   await mkdir(downloads, { recursive: true });
   const archive = join(downloads, asset.name);
