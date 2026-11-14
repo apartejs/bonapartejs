@@ -105,7 +105,7 @@ describe('announceOpen', () => {
       estimated: false,
     });
     // 610 MiB on disk.
-    expect(Math.round(announcement!.kind === 'restore' ? announcement.bytes / MiB : 0)).toBe(610);
+    expect(Math.round(announcement?.kind === 'restore' ? announcement.bytes / MiB : 0)).toBe(610);
   });
 
   it('a memory let go is a re-read, with its time: 22 100 tokens at 130 a second, 170 s', () => {
