@@ -42,17 +42,29 @@ app"), and whenever its main process fails to load. So:
 ## Prefer the end-to-end tests
 
 They are the usual way to see a change: they launch the built app against the
-fake llama-server, with `BONAPARTE_E2E=1`, so that its window never comes to
-the foreground.
+fake llama-server, with `BONAPARTE_E2E=1`. The window of a test run is a real
+one (a window that is never shown paints no frame, and every click then waits
+for one), kept where nobody sees it: off the screen, transparent, out of the
+taskbar, deaf to the mouse, shown without being activated. A test run also
+leaves the graphics card alone. `e2e/shell.spec.ts` checks all of it.
 
 ```sh
 pnpm build
 pnpm --filter @aparte/bonaparte-app test:e2e
-pnpm --filter @aparte/bonaparte-app test:e2e -- e2e/stream.spec.ts
+pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 ```
 
-Screenshots and traces of a failing spec are in
-`packages/app/test-results/`. Read the screenshot rather than guessing.
+- Launch through the `launch` fixture of `e2e/fixtures/app.ts`, never
+  otherwise: it refuses an app that is not built, gives the app a data folder
+  of its own, and closes it, killing it if it does not leave.
+- The first launch of a session runs one test, not the suite:
+  `... exec playwright test e2e/shell.spec.ts -g "off the screen"`. Go on only
+  when it is green.
+- When a test fails, the fixture prints what the app wrote to its console
+  (main process and window) and attaches a picture of the window. They are in
+  `packages/app/test-results/`. Read them rather than guessing.
+- After a run, check that no `electron` process of this project is left.
+- A selector into aparté's chat goes in `e2e/fixtures/chat.ts`, nowhere else.
 
 ## Launching the app by hand
 
