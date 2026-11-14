@@ -42,6 +42,17 @@ export interface FakeLlamaServerOptions {
   prefillPaceMs?: number;
   /** When true, the final event carries truncated:true — the context ceiling, mid-generation. */
   truncate?: boolean;
+  /**
+   * After this many content chunks, the server reports a failure in the
+   * stream — `data: {"error": …}`, as llama-server does when it cannot go on
+   * (tools/server/server-context.cpp) — and ends the stream there.
+   */
+  failAfter?: number;
+  /**
+   * After this many content chunks, the stream just ends, without its final
+   * event: a server that went away in the middle of its answer.
+   */
+  dropAfter?: number;
   /** Text generated for a given prompt (default: 'ok'). */
   responder?: (prompt: string) => string;
   /** Number of slots (default 1). */
@@ -76,6 +87,11 @@ export interface FakeLlamaServer {
    * of Stop reads to know the generation really ended on the server.
    */
   readonly aborted: number;
+  /**
+   * How many completions ran to their final event: what a test reads to know
+   * whether the engine was still writing when something else happened.
+   */
+  readonly finished: number;
   close(): Promise<void>;
 }
 
@@ -136,6 +152,7 @@ export async function startFakeLlamaServer(
   const slotTokens = (id: number): string[] => fakeTokenize(slotText(id));
 
   let aborted = 0;
+  let finished = 0;
 
   async function handleCompletion(
     body: Record<string, unknown>,
@@ -214,9 +231,22 @@ export async function startFakeLlamaServer(
     // pace, a client that goes away mid-stream (cancel) ends the stream
     // where it stood, as llama-server does when the connection drops.
     const pieces = text.split(/(?<= )/);
+    let written = 0;
     for (const piece of pieces) {
       if (gone()) return;
+      if (written === options.failAfter) {
+        // Shape of llama-server's error inside a stream (format_error_response).
+        const error = { code: 500, message: 'failed to decode the batch', type: 'server_error' };
+        res.write(`data: ${JSON.stringify({ error })}\n\n`);
+        res.end();
+        return;
+      }
+      if (written === options.dropAfter) {
+        res.end();
+        return;
+      }
       res.write(`data: ${JSON.stringify({ content: piece, stop: false })}\n\n`);
+      written += 1;
       if (paceMs > 0) await new Promise((resolve) => setTimeout(resolve, paceMs));
     }
     if (gone()) return;
@@ -239,6 +269,7 @@ export async function startFakeLlamaServer(
       },
     };
     res.write(`data: ${JSON.stringify(final)}\n\n`);
+    finished += 1;
     res.end();
   }
 
@@ -381,6 +412,9 @@ export async function startFakeLlamaServer(
     getSlotTokens: (idSlot) => [...slotTokens(idSlot)],
     get aborted() {
       return aborted;
+    },
+    get finished() {
+      return finished;
     },
     // Idempotent: closing an already-closed server again is a no-op (fixture).
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),

@@ -232,3 +232,60 @@ describe('a completion the client cut short', () => {
     expect(server.aborted).toBe(0);
   });
 });
+
+/** The raw events of a stream, whatever its last one is. */
+async function eventsOf(server: FakeLlamaServer, signal?: AbortSignal): Promise<Record<string, any>[]> {
+  const res = await fetch(`${server.url}/completion`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ stream: true, prompt: 'hello' }),
+    ...(signal ? { signal } : {}),
+  });
+  const text = await res.text();
+  return text
+    .split('\n\n')
+    .map((block) => block.trim())
+    .filter((block) => block.startsWith('data: '))
+    .map((block) => JSON.parse(block.slice('data: '.length)));
+}
+
+describe('a completion that runs to its final event', () => {
+  it('is counted as finished, once it has written that event', async () => {
+    const server = await start({ responder: () => 'one two three' });
+    expect(server.finished).toBe(0);
+    await complete(server, { prompt: 'hello' });
+    expect(server.finished).toBe(1);
+  });
+
+  it('is not counted as finished when the client cut it', async () => {
+    const server = await start({ paceMs: 20, responder: () => 'one two three four five six seven eight' });
+    const controller = new AbortController();
+    const reading = eventsOf(server, controller.signal).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    controller.abort();
+    await reading;
+    await expect.poll(() => server.aborted, { timeout: 2_000 }).toBe(1);
+    expect(server.finished).toBe(0);
+  });
+});
+
+describe('a failure in the middle of a stream', () => {
+  it('is reported as llama-server reports it: an error event, then the end', async () => {
+    const server = await start({ responder: () => 'one two three four', failAfter: 2 });
+    const events = await eventsOf(server);
+    expect(events.map((event) => event.content ?? '').join('')).toBe('one two ');
+    expect(events.at(-1)).toEqual({
+      error: { code: 500, message: expect.stringContaining('failed to decode'), type: 'server_error' },
+    });
+    expect(events.some((event) => event.stop === true)).toBe(false);
+    expect(server.finished).toBe(0);
+  });
+
+  it('can also be a stream that just ends, without its final event', async () => {
+    const server = await start({ responder: () => 'one two three four', dropAfter: 2 });
+    const events = await eventsOf(server);
+    expect(events.map((event) => event.content ?? '').join('')).toBe('one two ');
+    expect(events.some((event) => event.stop === true || event.error !== undefined)).toBe(false);
+    expect(server.finished).toBe(0);
+  });
+});

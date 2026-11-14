@@ -3,6 +3,11 @@
  * they are (the types come from `@aparte/engine`, never redeclared here), plus
  * the one line a server adds — `run-error`, when a run fails after its stream
  * began.
+ *
+ * No test checks that our events are aparté's: `RunEvent` IS aparté's type,
+ * and the handler can only write a `WireLine`. The compiler holds it. What a
+ * test can check is that aparté's real runner reads what we write: see
+ * `contract.spec.ts`.
  */
 
 import type { StreamRunEvent } from '@aparte/engine';

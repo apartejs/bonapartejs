@@ -175,4 +175,22 @@ describe('LlamaCppHttpClient', () => {
       collect(client.complete({ prompt: 'x', signal: controller.signal })),
     ).rejects.toThrow();
   });
+
+  it('complete() throws the failure the server reports in the middle of a stream', async () => {
+    // llama-server sends it as an event of the stream (`data: {"error": …}`),
+    // then ends the stream: tools/server/server-context.cpp.
+    const { client } = await startServer({ responder: () => 'one two three four', failAfter: 2 });
+    let text = '';
+    const reading = (async () => {
+      for await (const event of client.complete({ prompt: 'hello' })) {
+        if (event.type === 'token') text += event.text;
+      }
+    })();
+    await expect(reading).rejects.toSatisfy(
+      (err: unknown) =>
+        err instanceof LlamaCppHttpError && err.status === 500 && err.message.includes('failed to decode'),
+    );
+    // What was generated before the failure was delivered first.
+    expect(text).toBe('one two ');
+  });
 });

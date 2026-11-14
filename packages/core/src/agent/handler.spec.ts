@@ -208,4 +208,26 @@ describe('the agent handler, streaming a turn', () => {
     expect(lines.at(-1)!['message']).toEqual(expect.any(String));
     expect(lines.map((line) => line.type)).not.toContain('run-done');
   });
+
+  it('ends with run-error when the engine fails in the middle of its answer, after what it wrote', async () => {
+    const { handler } = await setup({ responder: () => 'un deux trois quatre', failAfter: 2 });
+    const lines = await linesOf(await handler(post(turn(user('Compte')))));
+    expect(joined(lines, 'text-delta')).toBe('un deux ');
+    expect(lines.at(-1)!.type).toBe('run-error');
+    expect(lines.at(-1)!['message']).toContain('failed to decode');
+    const types = lines.map((line) => line.type);
+    expect(types).not.toContain('run-done');
+    // A failure is not a stop: the window must not show it as one.
+    expect(types).not.toContain('run-aborted');
+  });
+
+  it('ends with run-error, not with a stop, when the answer ends without its final event', async () => {
+    const { handler } = await setup({ responder: () => 'un deux trois quatre', dropAfter: 2 });
+    const lines = await linesOf(await handler(post(turn(user('Compte')))));
+    expect(joined(lines, 'text-delta')).toBe('un deux ');
+    expect(lines.at(-1)!.type).toBe('run-error');
+    const types = lines.map((line) => line.type);
+    expect(types).not.toContain('run-done');
+    expect(types).not.toContain('run-aborted');
+  });
 });

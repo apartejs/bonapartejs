@@ -126,10 +126,16 @@ function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSi
           else if (event.type === 'done') stats = event.stats;
         }
         demux.flush().forEach((piece) => write(toRunEvent(piece)));
-        if (stop.signal.aborted || !stats) {
-          // A stop ends the run cleanly: aparté marks the reply stopped, not failed.
+        if (stop.signal.aborted) {
+          // A stop ends the run cleanly: the reply is over, not failed.
           write({ type: 'run-aborted' });
           write({ type: 'run-done' });
+          return;
+        }
+        if (!stats) {
+          // The engine went away in the middle of its answer. Nobody stopped
+          // it: saying so is the difference between a cut reply and a failure.
+          write({ type: 'run-error', message: 'The engine ended its answer before finishing it.' });
           return;
         }
         const inputTokens = stats.progress?.total ?? stats.promptUncachedTokens;

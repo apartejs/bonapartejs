@@ -148,6 +148,19 @@ export class LlamaCppHttpClient {
     // reported zero cached tokens.
     let lastProgress: Record<string, unknown> | undefined;
     for await (const event of sseEvents(res.body)) {
+      // A failure once the stream has begun is an event of the stream, not a
+      // status: llama-server writes `data: {"error": {code, message, type}}`
+      // and ends there (tools/server/server-context.cpp). Left unread, the
+      // answer looked like one that had simply stopped.
+      const failure = event['error'];
+      if (failure !== undefined && failure !== null) {
+        const detail = typeof failure === 'object' ? (failure as Record<string, unknown>) : { message: failure };
+        const code = Number(detail['code']);
+        throw new LlamaCppHttpError(
+          `llama-server failed while answering: ${String(detail['message'] ?? 'no message').slice(0, 300)}`,
+          Number.isInteger(code) ? code : 500,
+        );
+      }
       const content = event['content'];
       if (typeof content === 'string' && content.length > 0) {
         yield { type: 'token', text: content };

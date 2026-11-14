@@ -19,7 +19,6 @@ import {
   type FakeLlamaServerOptions,
 } from '../testing/fake-llama-server.js';
 import { AGENT_ENDPOINT, createAgentHandler } from './handler.js';
-import type { RunEvent } from './run-events.js';
 
 let servers: FakeLlamaServer[] = [];
 
@@ -105,15 +104,5 @@ describe("aparté's stock runner drives our handler", () => {
   it('turns a refusal before the stream into an error that carries our message', async () => {
     const { runner } = await setup('no engine');
     await expect(runner(turnOf('Bonjour', []))).rejects.toThrow(/No engine is configured/);
-  });
-});
-
-describe('the events we write', () => {
-  it("are aparté's run events, not a copy of them", () => {
-    // Checked by the compiler: this file does not type-check if the two drift apart.
-    const ours: RunEvent[] = [];
-    const theirs: StreamRunEvent[] = ours;
-    const back: RunEvent[] = theirs;
-    expect(back).toBe(ours);
   });
 });
