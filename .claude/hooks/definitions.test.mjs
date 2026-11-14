@@ -1,6 +1,7 @@
-// The project's sub-agents are plain Markdown with a YAML header. Claude Code
-// ignores a header field it does not know, without a word: a typo in `tools`
-// would silently hand an agent every tool. These tests read the headers.
+// The project's sub-agents and skills are plain Markdown with a YAML header.
+// Claude Code ignores a header field it does not know, without a word: a typo
+// in `tools` would silently hand an agent every tool. These tests read the
+// headers.
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -77,4 +78,34 @@ test('every agent is read-only and uses only header fields Claude Code knows', (
       );
     }
   }
+});
+
+const skillsDir = join(claudeDir, 'skills');
+const skillFields = new Set(['name', 'description', 'when_to_use', 'argument-hint', 'allowed-tools', 'user-invocable']);
+
+/** The procedures the plan names. */
+const skills = ['phase-gate', 'screen', 'friction', 'smoke', 'run-app'];
+
+for (const name of skills) {
+  test(`the ${name} skill has a header Claude Code can list`, () => {
+    const { header, body } = readHeader(join(skillsDir, name, 'SKILL.md'));
+    assert.equal(header.name, name);
+    for (const field of Object.keys(header)) {
+      assert.ok(skillFields.has(field), `${name}: unknown header field "${field}"`);
+    }
+    // The listing cuts a description at 1,536 characters: the trigger comes first.
+    assert.ok(header.description.length >= 40 && header.description.length <= 1536);
+    assert.ok(body.trim().length >= 200, 'the skill says what to do');
+  });
+}
+
+test('the phase gate never pushes', () => {
+  const { body } = readHeader(join(skillsDir, 'phase-gate', 'SKILL.md'));
+  assert.match(body, /never push/i);
+});
+
+test('a friction is filed on the library repository, with nothing private in it', () => {
+  const { body } = readHeader(join(skillsDir, 'friction', 'SKILL.md'));
+  assert.match(body, /apartejs\/aparte/);
+  assert.match(body, /private/i);
 });
