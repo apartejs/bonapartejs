@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { GgufInfo } from '../models/gguf.js';
-import { announceLoad, suggestOffload, type LoadModel } from './announce.js';
+import { announceContext, announceLoad, announceOpen, suggestOffload, type LoadModel } from './announce.js';
 
 const GiB = 1024 ** 3;
 
@@ -80,5 +80,69 @@ describe('suggestOffload', () => {
     expect(suggestOffload(model, settings, { totalBytes: 0.4 * GiB })).toBeNull();
     expect(suggestOffload(model, settings, { totalBytes: 32 * GiB })).toBeNull();
     expect(suggestOffload(model, settings, { totalBytes: null })).toBeNull();
+  });
+});
+
+describe('announceOpen', () => {
+  const MiB = 1024 ** 2;
+  const saved = { promptTokenCount: 31_240, slotFileBytes: 31_240 * 20_480, savedAt: '2026-11-14T13:40:00.000Z' };
+
+  it('a state that can be restored: its time, the re-read it spares, its size on disk and its date', () => {
+    const announcement = announceOpen({
+      resident: false,
+      promptTokens: 31_240,
+      saved,
+      refusal: null,
+      measures: { prefillTokensPerSecond: 130, restoreBytesPerSecond: 2 * 1024 * MiB },
+    });
+    expect(announcement).toEqual({
+      kind: 'restore',
+      tokens: 31_240,
+      seconds: (31_240 * 20_480) / (2 * 1024 * MiB),
+      insteadOfSeconds: 31_240 / 130,
+      bytes: 31_240 * 20_480,
+      savedAt: '2026-11-14T13:40:00.000Z',
+      estimated: false,
+    });
+    // 610 MiB on disk.
+    expect(Math.round(announcement!.kind === 'restore' ? announcement.bytes / MiB : 0)).toBe(610);
+  });
+
+  it('a memory let go is a re-read, with its time: 22 100 tokens at 130 a second, 170 s', () => {
+    expect(
+      announceOpen({ resident: false, promptTokens: 22_100, saved: null, refusal: 'missing', measures: { prefillTokensPerSecond: 130 } }),
+    ).toEqual({ kind: 'reread', tokens: 22_100, seconds: 170, reason: 'evicted', estimated: false });
+  });
+
+  it('says why a state cannot serve, in the words of the manifest', () => {
+    for (const refusal of ['other-model', 'cache-types', 'context-too-small', 'engine-died'] as const) {
+      expect(announceOpen({ resident: false, promptTokens: 100, saved: null, refusal, measures: {} })).toMatchObject({
+        kind: 'reread',
+        reason: refusal,
+      });
+    }
+  });
+
+  it('before anything was measured, takes default speeds, and says the figures are estimates', () => {
+    expect(announceOpen({ resident: false, promptTokens: 1000, saved, refusal: null, measures: {} })).toMatchObject({
+      kind: 'restore',
+      estimated: true,
+    });
+    expect(announceOpen({ resident: false, promptTokens: 1000, saved: null, refusal: 'missing', measures: {} })).toMatchObject({
+      kind: 'reread',
+      estimated: true,
+    });
+  });
+
+  it('announces nothing for a conversation already in the slot, or one with nothing to read', () => {
+    expect(announceOpen({ resident: true, promptTokens: 22_100, saved: null, refusal: 'missing', measures: {} })).toBeNull();
+    expect(announceOpen({ resident: false, promptTokens: 0, saved: null, refusal: 'missing', measures: {} })).toBeNull();
+  });
+});
+
+describe('announceContext', () => {
+  it('speaks from 90 % of the window, with the time a compaction would take', () => {
+    expect(announceContext(7_000, 8_192, 12)).toBeNull();
+    expect(announceContext(7_400, 8_192, 12)).toEqual({ kind: 'context-full', used: 7_400, window: 8_192, compactSeconds: 12 });
   });
 });

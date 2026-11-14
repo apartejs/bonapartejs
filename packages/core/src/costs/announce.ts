@@ -12,14 +12,8 @@ import { estimateLoad, memoryVerdict, type MemoryVerdict } from '../models/cost.
 import type { GgufInfo, KvCacheTypeName } from '../models/gguf.js';
 
 export type Announcement =
-  | { kind: 'restore'; tokens: number; seconds: number; insteadOfSeconds: number; bytes: number; savedAt: string }
-  | {
-      kind: 'reread';
-      tokens: number;
-      seconds: number;
-      reason: 'evicted' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died';
-      compactSeconds?: number;
-    }
+  | RestoreAnnouncement
+  | RereadAnnouncement
   | {
       kind: 'model-switch';
       reloadSeconds: number;
@@ -33,6 +27,29 @@ export type Announcement =
   | { kind: 'restart'; setting: string }
   | { kind: 'download'; what: 'model' | 'llama.cpp'; bytes: number; seconds?: number }
   | { kind: 'parallel-slots'; slots: number; vramBytesEach: number };
+
+/** `estimated`: no measure on this machine yet — the window says the figures are estimates. */
+export interface RestoreAnnouncement {
+  kind: 'restore';
+  tokens: number;
+  seconds: number;
+  /** What re-reading the conversation would have taken instead. */
+  insteadOfSeconds: number;
+  bytes: number;
+  savedAt: string;
+  estimated: boolean;
+}
+
+export type RereadReason = 'evicted' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died';
+
+export interface RereadAnnouncement {
+  kind: 'reread';
+  tokens: number;
+  seconds: number;
+  reason: RereadReason;
+  compactSeconds?: number;
+  estimated: boolean;
+}
 
 export interface EngineLoadAnnouncement {
   kind: 'engine-load';
@@ -111,3 +128,55 @@ export function suggestOffload(model: LoadModel, settings: LoadSettings, gpu: Gp
   const layers = Math.floor((total - load.overheadBytes) / perLayer);
   return layers >= 1 ? { gpuLayers: Math.min(layers, blocks - 1) } : null;
 }
+
+// ── Opening a conversation: its memory restored, or re-read (task 3.6) ──
+
+/** Until this machine measured them: a modest card's prefill, an SSD's read. Said to be estimates. */
+export const DEFAULT_PREFILL_TOKENS_PER_SECOND = 200;
+export const DEFAULT_RESTORE_BYTES_PER_SECOND = 1024 ** 3;
+
+export interface OpenFacts {
+  /** The conversation already sits in the slot: nothing to pay. */
+  resident: boolean;
+  /** The tokens of its prompt: what a re-read reads. */
+  promptTokens: number;
+  /** Its saved state, when one can be restored. */
+  saved: { promptTokenCount: number; slotFileBytes: number; savedAt: string } | null;
+  /** Why it cannot be (the KV store's reason), or the engine died under it. */
+  refusal: 'missing' | 'refused' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died' | null;
+  measures: { prefillTokensPerSecond?: number; restoreBytesPerSecond?: number };
+}
+
+/** What opening a conversation will cost — said before the slot is touched. */
+export function announceOpen(facts: OpenFacts): RestoreAnnouncement | RereadAnnouncement | null {
+  if (facts.resident || facts.promptTokens <= 0) return null;
+  const prefill = facts.measures.prefillTokensPerSecond ?? DEFAULT_PREFILL_TOKENS_PER_SECOND;
+  if (facts.saved && !facts.refusal) {
+    const restore = facts.measures.restoreBytesPerSecond ?? DEFAULT_RESTORE_BYTES_PER_SECOND;
+    return {
+      kind: 'restore',
+      tokens: facts.saved.promptTokenCount,
+      seconds: facts.saved.slotFileBytes / restore,
+      insteadOfSeconds: facts.saved.promptTokenCount / prefill,
+      bytes: facts.saved.slotFileBytes,
+      savedAt: facts.saved.savedAt,
+      estimated: facts.measures.prefillTokensPerSecond === undefined || facts.measures.restoreBytesPerSecond === undefined,
+    };
+  }
+  // A state absent, or one the server could not read: the memory was let go.
+  const reason: RereadReason = facts.refusal === null || facts.refusal === 'missing' || facts.refusal === 'refused' ? 'evicted' : facts.refusal;
+  return {
+    kind: 'reread',
+    tokens: facts.promptTokens,
+    seconds: facts.promptTokens / prefill,
+    reason,
+    estimated: facts.measures.prefillTokensPerSecond === undefined,
+  };
+}
+
+/** From 90 % of the window, the person is offered a compaction before the next message. */
+export function announceContext(used: number, window: number, compactSeconds: number): Announcement | null {
+  if (window <= 0 || used < window * 0.9) return null;
+  return { kind: 'context-full', used, window, compactSeconds };
+}
+
