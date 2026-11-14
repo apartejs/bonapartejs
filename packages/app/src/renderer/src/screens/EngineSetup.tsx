@@ -9,10 +9,14 @@
  */
 
 import {
+  engineLlama,
+  engineLlamaInstall,
   engineLoad,
   engineModels,
   type EngineLoadResult,
   type EngineStateView,
+  type LlamaCppStateView,
+  type LlamaInstallResult,
   type Locale,
   type ModelChoiceView,
 } from '@aparte/bonaparte-shared';
@@ -22,6 +26,107 @@ import { formatBytes, formatSeconds, type NumberStyle } from '../format';
 import type { Messages } from '../i18n/index';
 
 type Failure = Extract<EngineLoadResult, { ok: false }>['error'];
+type InstallFailure = Extract<LlamaInstallResult, { ok: false }>['error'];
+
+/** How often the screen reads a download's progress while it runs. */
+const PROGRESS_EVERY_MS = 250;
+
+interface LlamaStatusProps {
+  llama: LlamaCppStateView;
+  text: Messages['engineSetup']['llama'];
+  style: NumberStyle;
+  downloading: boolean;
+  failure: InstallFailure | null;
+  onDownload(): void;
+}
+
+/**
+ * The llama.cpp a load runs, and keeping it up to date: the build there is,
+ * the one published and its size — said before the click — the download's
+ * progress, and why it failed.
+ */
+function LlamaStatus({ llama, text, style, downloading, failure, onDownload }: LlamaStatusProps) {
+  const { current, latest } = llama;
+  const build = current?.build ?? '';
+  const line = !current
+    ? text.none
+    : current.source === 'managed'
+      ? text.installed(build)
+      : current.source === 'configured'
+        ? text.configured(current.build)
+        : text.found(build);
+  const offer = llama.updateAvailable && latest ? latest : null;
+  const hint = [
+    offer ? text.published(offer.build) : null,
+    offer && current?.source === 'path' ? text.keptUpToDate : null,
+    llama.check === 'failed' ? text.checkFailed : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' ');
+  const action = offer
+    ? current?.source === 'managed'
+      ? text.update(formatBytes(offer.bytes, style))
+      : text.download(offer.build, formatBytes(offer.bytes, style))
+    : null;
+  const upToDate = current !== null && current.source !== 'configured' && llama.check === 'done' && !llama.updateAvailable;
+  const progress = downloading ? llama.installing : null;
+  const percent = progress?.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : null;
+
+  return (
+    <div className="llama-status">
+      <div className="llama-status__row">
+        <div className="llama-status__text">
+          <p className="llama-status__line">{line}</p>
+          {hint ? <p className="aparte-field-hint">{hint}</p> : null}
+        </div>
+        {upToDate ? <span className="aparte-badge aparte-badge--success">{text.upToDate}</span> : null}
+        {action && !downloading ? (
+          <button
+            type="button"
+            className={`aparte-btn ${current ? 'aparte-btn--surface' : 'aparte-btn--primary aparte-btn--solid'}`}
+            onClick={onDownload}
+          >
+            {action}
+          </button>
+        ) : null}
+      </div>
+
+      {downloading ? (
+        <div className="llama-status__progress">
+          <div
+            className={`aparte-progress${percent === null ? ' aparte-progress--indeterminate' : ''}`}
+            role="progressbar"
+            aria-label={text.progressLabel}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            {...(percent !== null ? { 'aria-valuenow': percent } : {})}
+          >
+            <div className="aparte-progress__bar" style={percent === null ? undefined : { width: `${percent}%` }} />
+          </div>
+          {progress && offer ? (
+            <p className="aparte-field-hint">
+              {text.downloading(
+                offer.build,
+                formatBytes(progress.done, style),
+                formatBytes(progress.total ?? offer.bytes, style),
+              )}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {failure ? (
+        <div className="aparte-alert aparte-alert--danger" role="alert">
+          <div className="aparte-alert__body">
+            <p className="aparte-alert__title">{text.failed.title}</p>
+            <p className="aparte-alert__message">{failure.code === 'digest' ? text.failed.digest : text.failed.failed}</p>
+            {failure.code === 'failed' && failure.detail ? <pre className="engine-setup__log">{failure.detail}</pre> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 type Verdict = NonNullable<ModelChoiceView['announcement']>['verdict'];
 
 const TONE: Record<Verdict, string> = {
@@ -62,6 +167,16 @@ export function EngineSetup({ messages, locale, onReady }: EngineSetupProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  const [llama, setLlama] = useState<LlamaCppStateView | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [installFailure, setInstallFailure] = useState<InstallFailure | null>(null);
+
+  function listModels(): Promise<void> {
+    return bridge.invoke(engineModels, undefined).then((found) => {
+      setModels(inOrder(found));
+      setSelected((chosen) => (chosen && found.some((model) => model.path === chosen) ? chosen : firstChoice(found)));
+    });
+  }
 
   useEffect(() => {
     let current = true;
@@ -70,10 +185,37 @@ export function EngineSetup({ messages, locale, onReady }: EngineSetupProps) {
       setModels(inOrder(found));
       setSelected(firstChoice(found));
     });
+    // Which llama.cpp would run, and what is published: asked when the screen opens.
+    void bridge.invoke(engineLlama, { checkLatest: true }).then((state) => {
+      if (current) setLlama(state);
+    });
     return () => {
       current = false;
     };
   }, []);
+
+  async function download(): Promise<void> {
+    setInstallFailure(null);
+    setDownloading(true);
+    const timer = setInterval(() => {
+      void bridge.invoke(engineLlama, {}).then(setLlama);
+    }, PROGRESS_EVERY_MS);
+    try {
+      const result = await bridge.invoke(engineLlamaInstall, undefined);
+      if (result.ok) {
+        setLlama(result.state);
+        // The new build says what it can use: the costs are read again.
+        await listModels();
+      } else {
+        setInstallFailure(result.error);
+      }
+    } catch (error) {
+      setInstallFailure({ code: 'failed', detail: error instanceof Error ? error.message : String(error) });
+    } finally {
+      clearInterval(timer);
+      setDownloading(false);
+    }
+  }
 
   const chosen = models?.find((model) => model.path === selected) ?? null;
   const cost = chosen?.announcement ?? null;
@@ -115,6 +257,17 @@ export function EngineSetup({ messages, locale, onReady }: EngineSetupProps) {
         </header>
 
         <div className="aparte-card__body engine-setup__body">
+          {llama ? (
+            <LlamaStatus
+              llama={llama}
+              text={text.llama}
+              style={style}
+              downloading={downloading}
+              failure={installFailure}
+              onDownload={() => void download()}
+            />
+          ) : null}
+
           {models === null ? (
             <p className="engine-setup__searching" role="status">
               <span className="aparte-spinner aparte-spinner--sm" aria-hidden="true" />
@@ -180,7 +333,8 @@ export function EngineSetup({ messages, locale, onReady }: EngineSetupProps) {
           <button
             type="button"
             className="aparte-btn aparte-btn--primary aparte-btn--solid"
-            disabled={!chosen || !loadable(chosen) || loading}
+            // Nothing to run without llama.cpp, nor while a build is being installed.
+            disabled={!chosen || !loadable(chosen) || loading || downloading || (llama !== null && llama.current === null)}
             aria-busy={loading}
             onClick={() => void start()}
           >

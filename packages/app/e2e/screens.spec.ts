@@ -78,9 +78,10 @@ for (const locale of ['fr', 'en'] as const) {
       await mkdir(into, { recursive: true });
       const start = locale === 'fr' ? 'Démarrer' : 'Start';
 
-      const listed = await launch({ locale, managed: { models: MODELS, gpuBytes: CARD } });
+      const listed = await launch({ locale, managed: { models: MODELS, gpuBytes: CARD, releases: true } });
       await listed.page.emulateMedia({ colorScheme: scheme });
       await expect(listed.page.getByRole('button', { name: start })).toBeEnabled();
+      await expect(listed.page.locator('.llama-status .aparte-btn')).toBeVisible();
       // Transitions finished: a picture never catches a button half-way to its colour.
       await listed.page.screenshot({ path: join(into, `setup-${locale}-${scheme}.png`), animations: 'disabled' });
       await listed.close();
@@ -96,9 +97,10 @@ for (const locale of ['fr', 'en'] as const) {
       await failing.page.screenshot({ path: join(into, `setup-failed-${locale}-${scheme}.png`), animations: 'disabled' });
       await failing.close();
 
-      const empty = await launch({ locale, managed: { models: {} } });
+      const empty = await launch({ locale, managed: { models: {}, releases: true, llama: 'missing' } });
       await empty.page.emulateMedia({ colorScheme: scheme });
       await expect(empty.page.locator('.engine-setup__empty')).toBeVisible();
+      await expect(empty.page.locator('.llama-status .aparte-btn')).toBeVisible();
       await empty.page.screenshot({ path: join(into, `setup-empty-${locale}-${scheme}.png`), animations: 'disabled' });
     });
   }

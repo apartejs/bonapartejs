@@ -4,8 +4,22 @@
  * words, and keeps the engine's own lines for whoever opens them.
  */
 
-import { EngineStoppedError, ModelNotListedError, UnsupportedFamilyError, type Core } from '@aparte/bonaparte-core';
-import { engineLoad, engineModels, engineState, type EngineLoadResult } from '@aparte/bonaparte-shared';
+import {
+  DigestMismatchError,
+  EngineStoppedError,
+  ModelNotListedError,
+  UnsupportedFamilyError,
+  type Core,
+} from '@aparte/bonaparte-core';
+import {
+  engineLlama,
+  engineLlamaInstall,
+  engineLoad,
+  engineModels,
+  engineState,
+  type EngineLoadResult,
+  type LlamaInstallResult,
+} from '@aparte/bonaparte-shared';
 import type { IpcRegistry } from './register.js';
 
 function loadError(error: unknown): EngineLoadResult {
@@ -17,7 +31,10 @@ function loadError(error: unknown): EngineLoadResult {
   return { ok: false, error: { code: 'failed', detail } };
 }
 
-export function registerEngineChannels(ipc: IpcRegistry, core: Pick<Core, 'engineState' | 'models' | 'loadModel'>): void {
+export function registerEngineChannels(
+  ipc: IpcRegistry,
+  core: Pick<Core, 'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp'>,
+): void {
   ipc.handle(engineState, () => core.engineState());
   ipc.handle(engineModels, () => core.models());
   ipc.handle(engineLoad, async ({ path }) => {
@@ -25,6 +42,15 @@ export function registerEngineChannels(ipc: IpcRegistry, core: Pick<Core, 'engin
       return { ok: true, state: await core.loadModel(path) };
     } catch (error) {
       return loadError(error);
+    }
+  });
+  ipc.handle(engineLlama, ({ checkLatest }) => core.llamaCpp({ checkLatest: checkLatest === true }));
+  ipc.handle(engineLlamaInstall, async (): Promise<LlamaInstallResult> => {
+    try {
+      return { ok: true, state: await core.installLlamaCpp() };
+    } catch (error) {
+      const detail = (error instanceof Error ? error.message : String(error)).slice(-4000);
+      return { ok: false, error: { code: error instanceof DigestMismatchError ? 'digest' : 'failed', detail } };
     }
   });
 }

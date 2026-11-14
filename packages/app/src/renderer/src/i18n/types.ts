@@ -51,5 +51,22 @@ export interface Messages {
       title: string;
       reason: Record<'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
     };
+    /** The llama.cpp a load runs, and keeping it up to date. */
+    llama: {
+      found(build: string): string;
+      installed(build: string): string;
+      configured(build: string | null): string;
+      none: string;
+      upToDate: string;
+      published(build: string): string;
+      /** Under a build found on the machine, older than the one published. */
+      keptUpToDate: string;
+      download(build: string, size: string): string;
+      update(size: string): string;
+      downloading(build: string, done: string, total: string): string;
+      progressLabel: string;
+      checkFailed: string;
+      failed: { title: string; digest: string; failed: string };
+    };
   };
 }

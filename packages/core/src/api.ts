@@ -18,6 +18,8 @@ import { announceLoad, type EngineLoadAnnouncement } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
 import { readGpuMemoryBytes, readLlamaDeviceMemory } from './engine/gpu-memory.js';
 import { MeasureStore } from './engine/measures.js';
+import { installedLlama, installLlama } from './engine/llama-install.js';
+import { buildNumber, latestLlamaAsset, type LlamaAsset } from './engine/llama-release.js';
 import { readBuildTag } from './engine/process-probe.js';
 import { EngineSupervisor, type EngineConfig, type KvCacheType } from './engine/supervisor.js';
 import { layerForModel, UnsupportedFamilyError, type FamilyId, type FamilyLayer } from './families/index.js';
@@ -43,6 +45,8 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
+  /** Where llama.cpp's releases are read (default: GitHub's API); null: never asked (tests). */
+  llamaReleases?: string | null;
 }
 
 export interface EngineState {
@@ -83,6 +87,27 @@ export interface Core {
   /** A turn in progress: the model is not unloaded while one is held. */
   hold(): () => void;
   stop(): Promise<void>;
+  /** The llama.cpp a load runs, and — when asked — whether a newer build is published (GitHub). */
+  llamaCpp(options?: { checkLatest?: boolean }): Promise<LlamaCppState>;
+  /** Downloads the newest build, verifies it, and keeps it. Only when the person asks. */
+  installLlamaCpp(): Promise<LlamaCppState>;
+}
+
+interface LlamaFound {
+  source: 'configured' | 'managed' | 'path';
+  path: string;
+  build: string | null;
+}
+
+export interface LlamaCppState {
+  /** The llama.cpp a load runs: configured by the person, installed by bonaparte, or found on the PATH. */
+  current: { source: LlamaFound['source']; build: string | null } | null;
+  /** The newest build published for this machine, once asked. */
+  latest: { build: string; bytes: number } | null;
+  check: 'not-asked' | 'done' | 'failed';
+  updateAvailable: boolean;
+  /** A download in progress. */
+  installing: { done: number; total: number | null } | null;
 }
 
 const engineSettingsSchema = z
@@ -180,30 +205,121 @@ export function createCore(deps: CoreDeps): Core {
    * nothing.
    */
   async function configuredManaged(): Promise<EngineConfig> {
-    if (supervisor.engine) return supervisor.engine;
-    await supervisor.configure({ mode: 'managed', binPath: await llamaBinary(), ...(await launchSettings()) });
+    const binPath = await llamaBinary();
+    const current = supervisor.engine;
+    // A build installed since: taken at the next load, never under a model that runs.
+    if (current?.mode === 'managed' && (current.binPath === binPath || supervisor.loaded)) return current;
+    await supervisor.configure({ mode: 'managed', binPath, ...(await launchSettings()) });
     return supervisor.engine!;
   }
 
-  /** The llama.cpp binary: the configured one, else the first found on the PATH — looked for once. */
-  let binary: Promise<string> | undefined;
-  function llamaBinary(): Promise<string> {
-    binary ??= (async () => {
+  /**
+   * The llama.cpp a load runs: the one the person configured, else the build
+   * bonaparte installed, else the first on the PATH that answers `--version`.
+   * Found once; not finding it is not remembered — it may be installed later.
+   */
+  let found: Promise<LlamaFound | null> | undefined;
+  function llamaFound(): Promise<LlamaFound | null> {
+    found ??= (async (): Promise<LlamaFound | null> => {
       const read = await readConfig();
-      const binPath = read.backend?.mode === 'managed' ? read.backend.binPath : env['BONAPARTE_LLAMA_BIN'];
-      return binPath ?? (deps.llamaCommand ? 'llama-server' : await findLlamaBinary());
+      const configured = read.backend?.mode === 'managed' ? read.backend.binPath : env['BONAPARTE_LLAMA_BIN'];
+      if (configured) return { source: 'configured', path: configured, build: await buildOf([configured]) };
+      const managed = await installedLlama(llamaDir);
+      if (managed) return { source: 'managed', path: managed.binary, build: managed.build };
+      // The tests' fake binary stands for the one on the PATH.
+      if (deps.llamaCommand) {
+        const build = await buildOf(deps.llamaCommand);
+        return build ? { source: 'path', path: 'llama-server', build } : null;
+      }
+      for (const candidate of LLAMA_CANDIDATES) {
+        const build = await buildOf([candidate]);
+        if (build) return { source: 'path', path: candidate, build };
+      }
+      return null;
     })();
-    // A binary not found now may be installed later: the next question looks again.
-    binary.catch(() => (binary = undefined));
-    return binary;
+    void found.then((result) => {
+      if (!result) found = undefined;
+    }, () => (found = undefined));
+    return found;
   }
 
-  /** The first llama.cpp binary on the PATH that answers --version. */
-  async function findLlamaBinary(): Promise<string> {
-    for (const candidate of LLAMA_CANDIDATES) {
-      if ((await readBuildTag(candidate, ['--version'], deps.spawn)) !== 'unknown') return candidate;
-    }
+  /** `b12383`, read from `--version` (the unified CLI takes it without `serve`); null when it does not answer. */
+  async function buildOf(command: readonly string[]): Promise<string | null> {
+    const tag = await readBuildTag(command[0]!, [...command.slice(1), '--version'], deps.spawn);
+    if (tag === 'unknown') return null;
+    const number = buildNumber(tag);
+    return number === null ? tag : `b${number}`;
+  }
+
+  async function llamaBinary(): Promise<string> {
+    const llama = await llamaFound();
+    if (llama) return llama.path;
+    if (deps.llamaCommand) return 'llama-server';
     throw new Error('llama.cpp was not found: neither llama-server nor llama answers on this machine.');
+  }
+
+  // ── Keeping llama.cpp: what is published, and downloading it on demand ──
+
+  const llamaDir = join(deps.dataDir, 'llama.cpp');
+  let latest: { at: number; asset: LlamaAsset | null } | 'failed' | undefined;
+  let installing: { done: number; total: number | null } | null = null;
+  let install: Promise<LlamaCppState> | undefined;
+  const CHECK_EVERY_MS = 60 * 60 * 1000;
+
+  async function checkLatest(): Promise<void> {
+    if (deps.llamaReleases === null) return;
+    if (latest && latest !== 'failed' && Date.now() - latest.at < CHECK_EVERY_MS) return;
+    try {
+      latest = {
+        at: Date.now(),
+        asset: await latestLlamaAsset(deps.llamaReleases ? { releases: deps.llamaReleases } : {}),
+      };
+    } catch {
+      latest = 'failed';
+    }
+  }
+
+  async function llamaCpp(options: { checkLatest?: boolean } = {}): Promise<LlamaCppState> {
+    if (options.checkLatest) await checkLatest();
+    const current = await llamaFound();
+    const asset = latest && latest !== 'failed' ? latest.asset : null;
+    const behind = (build: string | null): boolean => {
+      const have = build === null ? null : buildNumber(build);
+      const offered = asset ? buildNumber(asset.build) : null;
+      return offered !== null && (have === null || have < offered);
+    };
+    return {
+      current: current ? { source: current.source, build: current.build } : null,
+      latest: asset ? { build: asset.build, bytes: asset.bytes } : null,
+      check: latest === undefined ? 'not-asked' : latest === 'failed' ? 'failed' : 'done',
+      // A llama.cpp the person configured is theirs: nothing is offered over it.
+      updateAvailable: asset !== null && current?.source !== 'configured' && behind(current?.build ?? null),
+      installing,
+    };
+  }
+
+  function installLlamaCpp(): Promise<LlamaCppState> {
+    install ??= (async () => {
+      if (!latest || latest === 'failed' || !latest.asset) await checkLatest();
+      const asset = latest && latest !== 'failed' ? latest.asset : null;
+      if (!asset) throw new Error('No llama.cpp build is published for this machine, or GitHub could not be reached.');
+      installing = { done: 0, total: asset.bytes };
+      try {
+        await installLlama({
+          dir: llamaDir,
+          asset,
+          ...(deps.spawn ? { spawn: deps.spawn } : {}),
+          onProgress: (progress) => (installing = progress),
+        });
+      } finally {
+        installing = null;
+      }
+      // The new build is the one now: what it can use is asked again.
+      found = undefined;
+      gpu = undefined;
+      return llamaCpp();
+    })().finally(() => (install = undefined));
+    return install;
   }
 
   function gpuBytes(): Promise<number | null> {
@@ -219,7 +335,7 @@ export function createCore(deps: CoreDeps): Core {
     const spawn = deps.spawn ? { spawn: deps.spawn } : {};
     // The fake binary of the tests has no device to list.
     if (!deps.llamaCommand) {
-      const command = await llamaBinary().catch(() => undefined);
+      const command = (await llamaFound().catch(() => null))?.path;
       const fromEngine = command
         ? await readLlamaDeviceMemory(command, detectServeCommandPrefix(command), spawn)
         : null;
@@ -324,6 +440,8 @@ export function createCore(deps: CoreDeps): Core {
 
     hold: () => supervisor.hold(),
     stop: () => supervisor.stop(),
+    llamaCpp,
+    installLlamaCpp,
   };
 }
 

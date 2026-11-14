@@ -139,3 +139,54 @@ body {
 .engine-setup__footer[hidden] {
   display: none;
 }
+
+/* The llama.cpp a load runs, and keeping it up to date: a box like the choices below it. */
+.llama-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-4);
+  padding: var(--aparte-space-4) var(--aparte-space-5);
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: var(--aparte-radius-lg);
+}
+
+.llama-status__row {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-5);
+}
+
+.llama-status__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.llama-status__line {
+  margin: 0;
+  font-weight: var(--aparte-font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.llama-status .aparte-field-hint {
+  margin-block-end: 0;
+}
+
+.llama-status__row > .aparte-badge,
+.llama-status__row > .aparte-btn {
+  flex: none;
+}
+
+.llama-status__progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-2);
+}
+
+.llama-status__progress .aparte-progress {
+  max-inline-size: none;
+}
+
+.llama-status__progress .aparte-field-hint {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

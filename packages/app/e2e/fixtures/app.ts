@@ -10,9 +10,11 @@
  */
 
 import {
+  startFakeLlamaReleases,
   startFakeLlamaServer,
   writeFakeGguf,
   type FakeGgufOptions,
+  type FakeLlamaReleases,
   type FakeLlamaServer,
   type FakeLlamaServerOptions,
 } from '@aparte/bonaparte-core/testing';
@@ -52,8 +54,15 @@ export interface LaunchOptions {
    * A managed engine instead of a server that runs: the app finds these
    * models (GGUF headers written for the test) and launches the fake binary
    * when one is loaded. The card is said to have `gpuBytes` (24 GiB).
+   * `releases`: llama.cpp publishes a build (a local server, never GitHub).
+   * `llama: 'missing'`: no llama.cpp on the machine.
    */
-  managed?: { models: Record<string, FakeGgufOptions>; gpuBytes?: number };
+  managed?: {
+    models: Record<string, FakeGgufOptions>;
+    gpuBytes?: number;
+    releases?: boolean;
+    llama?: 'found' | 'missing';
+  };
 }
 
 export interface LaunchedApp {
@@ -63,6 +72,8 @@ export interface LaunchedApp {
   dataDir: string;
   /** The port of the managed engine, in a managed test. */
   enginePort?: number;
+  /** llama.cpp's releases, when the test asked for them. */
+  releases?: FakeLlamaReleases;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
   navigations(): Promise<string[]>;
   /** What the app wrote to its console, main process and window. */
@@ -92,6 +103,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   const lines: string[] = [];
   const output = (): string => lines.join('');
   let app: ElectronApplication | undefined;
+  let releases: FakeLlamaReleases | undefined;
 
   // Once: a test may close the app itself, and the fixture closes what is left after it.
   let closing: Promise<void> | undefined;
@@ -99,6 +111,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
     (closing ??= (async () => {
       if (app) await closeApp(app);
       await server.close();
+      await releases?.close();
       await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
     })());
 
@@ -113,9 +126,14 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
         await writeFakeGguf(join(models, `${name}.gguf`), model);
       }
       enginePort = await freePort();
+      if (options.managed.releases) releases = await startFakeLlamaReleases();
+      // No llama.cpp: a program that is not there stands for the one on the PATH.
+      const llama =
+        options.managed.llama === 'missing' ? [join(dataDir, 'no-llama-here.exe')] : [process.execPath, FAKE_LLAMA_BIN];
       Object.assign(managedEnv, {
+        ...(releases ? { BONAPARTE_E2E_LLAMA_RELEASES: releases.url } : {}),
         BONAPARTE_MODEL_DIRS: models,
-        BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([process.execPath, FAKE_LLAMA_BIN]),
+        BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify(llama),
         BONAPARTE_E2E_GPU_BYTES: String(options.managed.gpuBytes ?? 24 * GiB),
         BONAPARTE_E2E_ENGINE_PORT: String(enginePort),
       });
@@ -172,7 +190,17 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
     const navigations = (): Promise<string[]> =>
       running.evaluate(() => (globalThis as { __navigations?: string[] }).__navigations ?? []);
 
-    return { app, page, server, dataDir, ...(enginePort !== undefined ? { enginePort } : {}), navigations, output, close };
+    return {
+      app,
+      page,
+      server,
+      dataDir,
+      ...(enginePort !== undefined ? { enginePort } : {}),
+      ...(releases ? { releases } : {}),
+      navigations,
+      output,
+      close,
+    };
   } catch (error) {
     await close();
     throw new Error(`The app did not start.\n${output()}`, { cause: error });

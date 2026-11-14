@@ -14,8 +14,9 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core, type CoreDeps } from './api.js';
 import { UnsupportedFamilyError } from './families/index.js';
-import type { SpawnedProcess, SpawnFn } from './process/spawn.js';
+import { spawnHidden, type SpawnedProcess, type SpawnFn } from './process/spawn.js';
 import { FAKE_QWEN_TEMPLATE, startFakeLlamaServer, type FakeLlamaServer } from './testing/fake-llama-server.js';
+import { startFakeLlamaReleases, type FakeLlamaReleases } from './testing/fake-llama-releases.js';
 import { writeFakeGguf } from './testing/fake-gguf.js';
 
 const BIN = fileURLToPath(new URL('./testing/fake-llama-bin.mjs', import.meta.url));
@@ -62,6 +63,8 @@ async function setup(overrides: Partial<CoreDeps> = {}) {
     port: await freePort(),
     modelRoots: [{ dir: models, source: 'custom' }],
     gpuMemory: async () => 24 * GiB,
+    // A test never asks GitHub: the ones that need releases start their own.
+    llamaReleases: null,
     logger: () => undefined,
     ...overrides,
   });
@@ -209,3 +212,84 @@ describe('createCore — the memory a load is announced against', () => {
     expect(model?.announcement?.gpuBytes).toBe(process.platform === 'win32' ? 8 * GiB : null);
   });
 });
+
+describe('createCore — the llama.cpp it runs', () => {
+  let releases: FakeLlamaReleases[] = [];
+  afterEach(async () => {
+    await Promise.all(releases.map((one) => one.close()));
+    releases = [];
+  });
+
+  async function published(): Promise<FakeLlamaReleases> {
+    const one = await startFakeLlamaReleases({ build: 'b12383' });
+    releases.push(one);
+    return one;
+  }
+
+  it('says which llama.cpp it would run, and that a newer build is published — downloading nothing', async () => {
+    const github = await published();
+    const { core } = await setup({ llamaReleases: github.url });
+    // The fake binary says `version: 9999 (fake)`.
+    expect(await core.llamaCpp({ checkLatest: true })).toEqual({
+      current: { source: 'path', build: 'b9999' },
+      latest: { build: 'b12383', bytes: github.bytes },
+      check: 'done',
+      updateAvailable: true,
+      installing: null,
+    });
+    expect(github.downloads).toBe(0);
+  });
+
+  it('asks GitHub only when the window asks it to', async () => {
+    const github = await published();
+    const { core } = await setup({ llamaReleases: github.url });
+    expect(await core.llamaCpp()).toMatchObject({ latest: null, check: 'not-asked', updateAvailable: false });
+  });
+
+  it('says the check failed when GitHub cannot be reached — never « up to date »', async () => {
+    const { core } = await setup({ llamaReleases: 'http://127.0.0.1:9/releases' });
+    expect(await core.llamaCpp({ checkLatest: true })).toMatchObject({ latest: null, check: 'failed', updateAvailable: false });
+  });
+
+  it('downloads the newer build when asked, and keeps it as its own', async () => {
+    const github = await published();
+    const { core } = await setup({ llamaReleases: github.url });
+    await core.llamaCpp({ checkLatest: true });
+    expect(await core.installLlamaCpp()).toMatchObject({
+      current: { source: 'managed', build: 'b12383' },
+      updateAvailable: false,
+      installing: null,
+    });
+    expect(github.downloads).toBe(1);
+  });
+
+  it('a load runs the build bonaparte installed, before the one on the PATH', async () => {
+    const github = await published();
+    const launched: string[] = [];
+    const { core, gemma, dir } = await setup({
+      llamaReleases: github.url,
+      llamaCommand: undefined,
+      spawn: (command, args, options) => {
+        // The package is unpacked for real.
+        if (/[\\/]?tar(\.exe)?$/i.test(command)) return spawnHidden(command, args, { stdio: options.stdio });
+        launched.push(command);
+        if (args.includes('--version')) throw new Error('no llama.cpp on this PATH');
+        throw new Error('stop here: the test only looks at what was launched');
+      },
+    });
+    await core.installLlamaCpp();
+    await expect(core.loadModel(gemma)).rejects.toThrow();
+    const server = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
+    expect(launched.at(-1)).toBe(join(dir, 'data', 'llama.cpp', 'b12383', server));
+  });
+
+  it('keeps the llama.cpp the person configured: no download is offered over it', async () => {
+    const github = await published();
+    const { core } = await setup({ llamaReleases: github.url, env: { BONAPARTE_LLAMA_BIN: 'C:\tools\llama-server.exe' } });
+    expect(await core.llamaCpp({ checkLatest: true })).toMatchObject({
+      current: { source: 'configured' },
+      updateAvailable: false,
+    });
+  });
+});
+

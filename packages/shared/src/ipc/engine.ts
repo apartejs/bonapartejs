@@ -71,3 +71,37 @@ export const engineLoad = defineChannel(
   z.object({ path: z.string().min(1).max(4096) }),
   engineLoadResultSchema,
 );
+
+/** The llama.cpp a load runs, and whether a newer build is published. */
+export const llamaCppStateSchema = z.object({
+  current: z
+    .object({ source: z.enum(['configured', 'managed', 'path']), build: z.string().nullable() })
+    .nullable(),
+  latest: z.object({ build: z.string(), bytes: z.number() }).nullable(),
+  check: z.enum(['not-asked', 'done', 'failed']),
+  updateAvailable: z.boolean(),
+  installing: z.object({ done: z.number(), total: z.number().nullable() }).nullable(),
+});
+
+export type LlamaCppStateView = z.infer<typeof llamaCppStateSchema>;
+
+export const llamaInstallResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), state: llamaCppStateSchema }),
+  z.object({
+    ok: z.literal(false),
+    // `digest`: the file downloaded is not the one published — deleted, never run.
+    error: z.object({ code: z.enum(['digest', 'failed']), detail: z.string() }),
+  }),
+]);
+
+export type LlamaInstallResult = z.infer<typeof llamaInstallResultSchema>;
+
+/** `checkLatest`: ask GitHub what is published (the setup screen does, when it opens). */
+export const engineLlama = defineChannel(
+  'engine.llama',
+  z.object({ checkLatest: z.boolean().optional() }),
+  llamaCppStateSchema,
+);
+
+/** Downloads the newest build for this machine: only on a click, its size said before. */
+export const engineLlamaInstall = defineChannel('engine.llama.install', z.void(), llamaInstallResultSchema);

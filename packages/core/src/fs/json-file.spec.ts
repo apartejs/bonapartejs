@@ -37,7 +37,10 @@ describe('writeJsonFile / readJsonFile', () => {
     await reader;
     expect(seen.length).toBeGreaterThan(0);
     expect(((await readJsonFile(file)) as { n: number }).n).toBe(60);
-  });
+    // Sixty renames under a reader: on Windows, with the suite in parallel and an
+    // antivirus scanning, this takes longer than the default five seconds — the
+    // test is about whole files, not speed.
+  }, 30_000);
 
   it('reads what Windows editors write: a UTF-8 BOM, or UTF-16 from PowerShell', async () => {
     const folder = await dir();

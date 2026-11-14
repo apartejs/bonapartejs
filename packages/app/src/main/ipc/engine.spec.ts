@@ -6,6 +6,7 @@
  */
 
 import {
+  DigestMismatchError,
   EngineStoppedError,
   ModelNotListedError,
   UnsupportedFamilyError,
@@ -25,7 +26,15 @@ const READY: EngineState = {
   model: { path: 'C:\\models\\gemma.gguf', name: 'gemma', family: 'gemma', nCtx: 8192 },
 };
 
-function setup(loadModel: Core['loadModel']) {
+const LLAMA = {
+  current: { source: 'path' as const, build: 'b10217' },
+  latest: { build: 'b12383', bytes: 37_000_000 },
+  check: 'done' as const,
+  updateAvailable: true,
+  installing: null,
+};
+
+function setup(loadModel: Core['loadModel'], llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp'>> = {}) {
   const listeners = new Map<string, Listener>();
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
@@ -33,6 +42,9 @@ function setup(loadModel: Core['loadModel']) {
     engineState: async () => ({ mode: 'managed', status: 'stopped' }) as EngineState,
     models: async () => [],
     loadModel,
+    llamaCpp: async () => LLAMA,
+    installLlamaCpp: async () => ({ ...LLAMA, current: { source: 'managed', build: 'b12383' }, updateAvailable: false }),
+    ...llama,
   } as unknown as Core;
   registerEngineChannels(ipc, core);
   const call = (name: string, input: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);
@@ -88,5 +100,38 @@ describe('the engine channels', () => {
     const { call } = setup(async () => READY);
     await expect(call('engine.load', { path: 42 })).rejects.toThrow(/input/);
     await expect(call('engine.load', { path: '' })).rejects.toThrow(/input/);
+  });
+
+  it('say which llama.cpp runs, asking GitHub only when the window asks to', async () => {
+    const asked: unknown[] = [];
+    const { call } = setup(async () => READY, {
+      llamaCpp: async (options) => {
+        asked.push(options);
+        return LLAMA;
+      },
+    });
+    await expect(call('engine.llama', { checkLatest: true })).resolves.toEqual(LLAMA);
+    await expect(call('engine.llama', {})).resolves.toEqual(LLAMA);
+    expect(asked).toEqual([{ checkLatest: true }, { checkLatest: false }]);
+  });
+
+  it('install llama.cpp, and say a file that is not the one published in its own words', async () => {
+    const { call } = setup(async () => READY);
+    await expect(call('engine.llama.install', undefined)).resolves.toMatchObject({
+      ok: true,
+      state: { current: { source: 'managed', build: 'b12383' } },
+    });
+    const mismatch = setup(async () => READY, {
+      installLlamaCpp: async () => Promise.reject(new DigestMismatchError('https://github.com/x.zip')),
+    }).call;
+    await expect(mismatch('engine.llama.install', undefined)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'digest' },
+    });
+    const offline = setup(async () => READY, { installLlamaCpp: async () => Promise.reject(new Error('fetch failed')) }).call;
+    await expect(offline('engine.llama.install', undefined)).resolves.toEqual({
+      ok: false,
+      error: { code: 'failed', detail: 'fetch failed' },
+    });
   });
 });

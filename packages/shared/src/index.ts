@@ -11,13 +11,23 @@ export type { Bridge, Channel } from './ipc/contract.js';
 export { appInfo, localeSchema } from './ipc/app.js';
 export type { Locale } from './ipc/app.js';
 export {
+  engineLlama,
+  engineLlamaInstall,
   engineLoad,
   engineLoadResultSchema,
   engineModels,
   engineState,
   engineStateSchema,
   familyIdSchema,
+  llamaCppStateSchema,
+  llamaInstallResultSchema,
   loadAnnouncementSchema,
   modelChoiceSchema,
 } from './ipc/engine.js';
-export type { EngineLoadResult, EngineStateView, ModelChoiceView } from './ipc/engine.js';
+export type {
+  EngineLoadResult,
+  EngineStateView,
+  LlamaCppStateView,
+  LlamaInstallResult,
+  ModelChoiceView,
+} from './ipc/engine.js';
