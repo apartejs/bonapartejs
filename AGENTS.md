@@ -33,9 +33,15 @@ core (the llama.cpp client and its fake server, the Qwen template, the agent
 handler) and the Electron shell with one chat. A first thread runs end to end:
 the window posts a turn to `bonaparte://app/agent`, the core asks a llama.cpp
 server — a fake one in the tests, a real one named by `BONAPARTE_LLAMA_URL` —
-and the reply streams back; Stop cuts the generation on the engine. The app
-does not launch llama.cpp itself yet: that is phase 2. A section below that
-names something not built yet says so.
+and the reply streams back; Stop cuts the generation on the engine. Phase 2
+is done: the core owns the engine. It finds the models on the machine, says
+what loading one costs (its time, its video memory — as llama.cpp counts it),
+launches llama.cpp itself, hidden and with its per-launch key, and a turn
+runs in the model's family: Gemma 4 by default, Qwen too. bonaparte keeps
+its own llama.cpp build: it reads what is published, says the size first,
+downloads on a click and verifies the digest. The window opens on « Préparons
+le moteur » until a model is loaded. A section below that names something not
+built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -229,9 +235,18 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   running; `BONAPARTE_DATA_DIR` keeps its data out of the real profile;
   `BONAPARTE_LOCALE` (`fr` or `en`) forces the language of the interface.
   `BONAPARTE_E2E=1` is set by the end-to-end fixture, and by nothing else.
+- `BONAPARTE_LLAMA_BIN` names the llama.cpp binary to launch (a choice of
+  the person: bonaparte then offers no build over it). Without it, the build
+  bonaparte installed (`<data>/llama.cpp/`) comes first, then the PATH.
 - `.github/workflows/ci.yml` runs all of the above, `pnpm dev` excepted, on
-  Ubuntu and on Windows.
-- The real-model smoke arrives with phase 2.
+  Ubuntu and on Windows. A test run never asks GitHub: llama.cpp's releases
+  are a local server of the test (`testing/fake-llama-releases.ts`).
+- The real-model smoke (the `smoke` skill; never in CI), from
+  `packages/core`:
+
+  ```sh
+  BONAPARTE_SMOKE_MODEL=<path to a .gguf> BONAPARTE_SMOKE_LLAMA=<llama-server> npx vitest run src/smoke
+  ```
 
 ## Landmarks
 
@@ -266,9 +281,27 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **aparté 1.7** (2026-11-14) is the version the restart is built on. It
   brought the keyboard of menus and tabs (`enhanceMenu`, `enhanceContextMenu`,
   `enhanceTabs`), the diff view with line comments (`@aparte/plugin-diff`),
-  and steps and activities in the stream of a turn. Its loop runs the tool
-  calls of one model step at the same time, and its agent handler cannot turn
-  that off (apartejs/aparte#202).
+  and steps and activities in the stream of a turn. **aparté 1.8** (the same
+  day) keeps the tool calls of one step in order unless a tool says
+  `parallel: true`, holds the calls after one awaiting approval, and gives
+  `createAparteAgentHandler` its `parallelTools` option: apartejs/aparte#202
+  is fixed. bonaparte runs on 1.8.0.
+- **Model families** (`packages/core/src/families/`): one layer per family —
+  turns, control tokens, stop strings, the tool convention, the lazy tool
+  grammar, the stream demux. **Gemma 4** is the default of the product,
+  rendered byte for byte as Google's template (`__fixtures__/gemma.jinja`,
+  checked with `@huggingface/jinja`); Qwen is the second. Reasoning is
+  switched on once, in the frozen system turn; a turn without it opens with
+  the empty thought channel.
+- **The engine** (`packages/core/src/api.ts`, `engine/`): `createCore` owns
+  the supervisor; asking about the engine runs nothing, a load is the only
+  thing that launches llama.cpp. The card's memory is what llama.cpp lists
+  (`--list-devices`), the registry only after it.
+- **llama.cpp kept by bonaparte** (`engine/llama-release.ts`,
+  `models/download.ts`, `engine/llama-install.ts`): the Vulkan package on
+  Windows and Linux, Metal on a Mac; a package without GitHub's SHA-256
+  digest, or from anywhere but llama.cpp's releases, is never offered;
+  unpacked by the system's `tar` (Windows' own, by its full path).
 - **`archive/v0`** is a local branch. Read it without leaving the current one:
   `git show archive/v0:<path>`, or the `v0-porter` agent. In Git Bash on
   Windows, prefix the command with `MSYS_NO_PATHCONV=1` when the path starts
@@ -342,6 +375,24 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   click replaced the conversation.
 - **The colour guard reads comments too**: write an issue as `owner/repo#123`,
   never as a bare `#123`.
+- **On Windows a child process dies with the app** that launched it without
+  `detached` (libuv puts it in a job object): there, an engine cannot outlive
+  bonaparte whatever it does. Elsewhere the server runs detached, as a group,
+  and quitting must stop it (`main/quit.ts`). And Playwright's own `close()`
+  kills the whole tree on Windows: a test of quitting calls `app.quit()`.
+- **A unified-memory machine is more than its carve-out.** On an APU the
+  registry declares the firmware's share (8 GiB on a Radeon 8060S) while
+  llama.cpp can use the shared memory (79,992 MiB there). Ask the engine.
+- **llama.cpp colours its log even into a pipe**: the lines kept for an error
+  message lose their ANSI escapes (never those of the terminal pane, which
+  an emulator reads).
+- **A model file can be unreadable by the official llama.cpp** while LM
+  Studio runs it: the Gemma 4 GGUFs it stores with a `-gu` suffix lack
+  `blk.N.ffn_gate.weight`, for b10217 and b12383 alike. The load fails with
+  llama.cpp's own lines on the screen; the inventory cannot tell beforehand.
+- **A test of « nothing happens before the click » reads the state**, not
+  only a port: a load that has just begun answers on no port yet, but says
+  `starting` at once.
 
 ## Real-model smoke results
 
