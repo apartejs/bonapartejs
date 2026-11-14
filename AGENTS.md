@@ -210,7 +210,9 @@ phase 1 and are listed here then.
   calls of one model step at the same time, and its agent handler cannot turn
   that off (apartejs/aparte#202).
 - **`archive/v0`** is a local branch. Read it without leaving the current one:
-  `git show archive/v0:<path>`, or the `v0-porter` agent.
+  `git show archive/v0:<path>`, or the `v0-porter` agent. In Git Bash on
+  Windows, prefix the command with `MSYS_NO_PATHCONV=1` when the path starts
+  with a dot.
 - Paul's machine has the **unified `llama` CLI**: the server is `llama serve`,
   with the same flags as llama-server.
 

@@ -17,6 +17,10 @@ Read the branch without leaving the current one:
 - `git show archive/v0:<path>` prints one.
 - `git grep -n <pattern> archive/v0 -- <path>` searches.
 
+In Git Bash on Windows, a path that starts with a dot is mangled
+(`archive/v0:.github/…` becomes a path list): prefix the command with
+`MSYS_NO_PATHCONV=1`.
+
 Never switch branches, check anything out, stash, commit or write a file. If
 `archive/v0` does not exist in this checkout, say so and stop.
 
