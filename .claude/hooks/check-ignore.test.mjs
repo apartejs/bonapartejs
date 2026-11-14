@@ -30,6 +30,8 @@ const ignored = [
   '.claude/settings.local.json',
   '.claude/worktrees/x',
   '.claude/notes/x.md',
+  '.superpowers/sdd/a-plan/progress.md',
+  '.superpowers/brainstorm/x.md',
   'node_modules/x',
 ];
 
@@ -51,3 +53,15 @@ for (const path of tracked) {
     assert.equal(isIgnored(path), false);
   });
 }
+
+// The rules above say what git would ignore. This one looks at what git
+// actually tracks: a file forced past .gitignore (`git add --force`) shows here.
+test('no file that .gitignore keeps out is tracked', () => {
+  const result = spawnSync('git', ['ls-files', '--cached', '--ignored', '--exclude-standard'], {
+    cwd: root,
+    encoding: 'utf8',
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.split('\n').filter(Boolean), []);
+});

@@ -25,6 +25,10 @@ pnpm --filter @aparte/bonaparte-app test:e2e
 
 The end-to-end tests must not bring a window to the foreground.
 
+The first command is also what notices a private file that became tracked: it
+fails if anything `.gitignore` keeps out is in the index. Never answer that
+failure by forcing a file in; `git rm --cached` it.
+
 ## 2. The real-model smoke
 
 Only when the phase touched the engine, the prompt, the KV memory or the agent

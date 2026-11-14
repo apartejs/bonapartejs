@@ -109,3 +109,82 @@ test('a friction is filed on the library repository, with nothing private in it'
   assert.match(body, /apartejs\/aparte/);
   assert.match(body, /private/i);
 });
+
+// --- .claude/settings.json: what runs without asking.
+
+const settings = JSON.parse(readFileSync(join(claudeDir, 'settings.json'), 'utf8'));
+
+/** Whether a rule such as `Bash(git status *)` covers a command typed in that tool. */
+function covers(rule, tool, command) {
+  const match = /^(\w+)\((.*)\)$/.exec(rule);
+  if (!match || match[1] !== tool) return false;
+  const pattern = match[2];
+  if (!pattern.endsWith(' *')) return command === pattern;
+  const prefix = pattern.slice(0, -2);
+  return command === prefix || command.startsWith(`${prefix} `);
+}
+
+const runsUnasked = (tool, command) => settings.permissions.allow.some((rule) => covers(rule, tool, command));
+
+/** Destructive, or reaching outside this machine: a person is asked first. */
+const askFirst = [
+  'git push',
+  'git push origin v1',
+  'git branch -D archive/v0',
+  'git branch -d topic',
+  'git switch --discard-changes main',
+  'git switch -f main',
+  'git stash clear',
+  'git stash drop',
+  'git worktree remove --force ../x',
+  'git reset --hard',
+  'git clean -fdx',
+  'git checkout -- .',
+  'git rebase main',
+  'pnpm exec git push',
+  'pnpm dlx anything',
+  'gh issue close 1',
+  'gh api repos/x/y',
+  'gh repo delete x',
+  'rm -rf .',
+];
+
+const everyday = [
+  'pnpm test',
+  'pnpm lint',
+  'pnpm --filter @aparte/bonaparte-core test',
+  'pnpm exec vitest run',
+  'git status',
+  'git commit -m x',
+  'git add .gitignore',
+  'git log --oneline -5',
+  'git branch --show-current',
+  'node --test ".claude/hooks/*.test.mjs"',
+  'gh issue create --repo apartejs/aparte --title x',
+];
+
+for (const tool of ['Bash', 'PowerShell']) {
+  test(`no ${tool} rule lets a destructive or outward command run unasked`, () => {
+    for (const command of askFirst) assert.equal(runsUnasked(tool, command), false, command);
+  });
+
+  test(`the everyday commands run unasked in ${tool}`, () => {
+    for (const command of everyday) assert.equal(runsUnasked(tool, command), true, command);
+  });
+}
+
+test('Bash and PowerShell have the same rules', () => {
+  for (const list of ['allow', 'deny']) {
+    const of = (tool) =>
+      settings.permissions[list]
+        .filter((rule) => rule.startsWith(`${tool}(`))
+        .map((rule) => rule.slice(tool.length))
+        .sort();
+    assert.deepEqual(of('Bash'), of('PowerShell'), list);
+  }
+});
+
+test('a push is denied in both shells', () => {
+  assert.ok(settings.permissions.deny.includes('Bash(git push *)'));
+  assert.ok(settings.permissions.deny.includes('PowerShell(git push *)'));
+});

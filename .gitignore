@@ -18,6 +18,9 @@ Thumbs.db
 # Private design notes — NEVER remove this line (the repository is public)
 docs/superpowers/
 
+# Scratch space of the plan-execution tooling (ledger, task briefs)
+.superpowers/
+
 # Claude Code: the shared configuration is tracked, everything else stays local
 .claude/*
 !.claude/settings.json
