@@ -1,4 +1,5 @@
 import nx from '@nx/eslint-plugin';
+import react from 'eslint-plugin-react';
 import tseslint from 'typescript-eslint';
 
 const NO_CHILD_PROCESS =
@@ -51,6 +52,15 @@ export default tseslint.config(
     files: ['packages/core/src/process/spawn.ts'],
     rules: {
       'no-restricted-imports': ['error', electron],
+    },
+  },
+  {
+    // No visible text is written in a component: it comes from the language
+    // files, so that it exists in French and in English.
+    files: ['packages/app/src/renderer/**/*.tsx', 'plugins/**/*.tsx'],
+    plugins: { react },
+    rules: {
+      'react/jsx-no-literals': ['error', { noStrings: true, ignoreProps: true }],
     },
   },
   {

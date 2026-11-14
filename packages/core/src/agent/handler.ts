@@ -17,10 +17,10 @@ import { agentBodySchema, messageText, type AgentBody } from './body.js';
 import { encodeEvent, type RunEvent, type WireLine } from './run-events.js';
 
 /**
- * Where the window posts a turn: `bonaparte://app/agent/c/<conversation>`. The
- * same origin as the page, so no CORS in the packaged app.
+ * Where the window posts a turn: `bonaparte://app/agent/c/<conversation>`.
+ * Declared in `shared`, because the window needs it too.
  */
-export const AGENT_ENDPOINT = 'bonaparte://app/agent';
+export { AGENT_ENDPOINT } from '@aparte/bonaparte-shared';
 
 /** Stands in until the layered system prompt of the next phase. Sent to the model: English. */
 const SYSTEM_PROMPT = 'You are bonaparte, a coding agent that runs on this machine.';

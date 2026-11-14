@@ -1,0 +1,32 @@
+/*
+ * The frame of the window. Colours come from the tokens; this file only lays
+ * things out.
+ */
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--aparte-bg);
+  color: var(--aparte-text);
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+}
+
+.bonaparte-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bonaparte-chat {
+  flex: 1;
+  min-height: 0;
+}
+
+.bonaparte-empty {
+  color: var(--aparte-text-muted);
+}

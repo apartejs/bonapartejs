@@ -1,0 +1,48 @@
+{
+  "name": "@aparte/bonaparte-app",
+  "version": "0.1.0",
+  "description": "bonaparte — the Electron app: main process, preload, React window",
+  "private": true,
+  "license": "MIT",
+  "author": "Paul Richez",
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-shared": "workspace:*",
+    "@aparte/core": "1.7.0",
+    "@aparte/locales": "1.7.0",
+    "@aparte/plugin-shiki": "1.7.0",
+    "@aparte/plugin-streaming-markdown": "1.7.0",
+    "@aparte/react": "1.7.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "shiki": "^4.0.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/node": "catalog:",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.3.2",
+    "electron-vite": "^6.0.0",
+    "eslint": "catalog:",
+    "typescript": "catalog:",
+    "vite": "^8.3.8",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": [
+      "scope:app"
+    ]
+  }
+}

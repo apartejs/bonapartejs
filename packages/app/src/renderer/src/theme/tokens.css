@@ -1,0 +1,63 @@
+/*
+ * The design tokens of bonaparte, declared on aparté's masters. The palette is
+ * react.dev's: its blue as the accent, its warm grays. aparté's kit derives the
+ * inks, the surfaces of each state and the diff tints from these.
+ *
+ * This is the only file that writes a colour. A screen reads a token.
+ * Light is the default; the dark values apply when the document's root carries
+ * the dark theme attribute, which the app sets from the person's choice.
+ */
+
+:root {
+  /* The accent the person chose (Settings, Appearance). Blue by default. */
+  --bonaparte-accent: #087EA4;
+
+  --aparte-primary: var(--bonaparte-accent);
+  --aparte-primary-hover: color-mix(in srgb, var(--bonaparte-accent) 75%, black);
+  --aparte-bg: #FFFFFF;
+  --aparte-surface-1: #F6F6F4;
+  --aparte-surface-2: #F1F1EE;
+  --aparte-text: #1D1D1B;
+  --aparte-text-muted: #55554E;
+  --aparte-border: #E6E6E1;
+  --aparte-success: #1E7A4C;
+  --aparte-warning: #8A5A00;
+  --aparte-error: #A1281F;
+  --aparte-info: #1F5FA8;
+
+  /* What aparté does not name. */
+  --bonaparte-accent-soft: color-mix(in srgb, var(--bonaparte-accent) 10%, var(--aparte-bg));
+  --bonaparte-merged: #7A4BC2;
+  --bonaparte-merged-bg: #F3EEFB;
+}
+
+[data-aparte-theme='dark'] {
+  /* The accent, lightened: 60% of it on white. */
+  --aparte-primary: color-mix(in srgb, var(--bonaparte-accent) 60%, white);
+  --aparte-primary-hover: color-mix(in srgb, var(--bonaparte-accent) 45%, white);
+  --aparte-bg: #161615;
+  --aparte-surface-1: #1C1C1A;
+  --aparte-surface-2: #222220;
+  --aparte-text: #EDEDE8;
+  --aparte-text-muted: #B5B5AD;
+  --aparte-border: #2E2E2B;
+  --aparte-success: #4CC38A;
+  --aparte-warning: #E0A84A;
+  --aparte-error: #F4A49C;
+  --aparte-info: #9AB7D8;
+
+  --bonaparte-merged: #C3AEE4;
+  --bonaparte-merged-bg: color-mix(in srgb, var(--bonaparte-merged) 16%, var(--aparte-bg));
+}
+
+[data-bonaparte-accent='teal'] {
+  --bonaparte-accent: #0F766E;
+}
+
+[data-bonaparte-accent='violet'] {
+  --bonaparte-accent: #6D4AFF;
+}
+
+[data-bonaparte-accent='orange'] {
+  --bonaparte-accent: #C2410C;
+}
