@@ -10,6 +10,7 @@
  */
 
 import { spawnHidden, type SpawnFn } from '../process/spawn.js';
+import { runShort } from './process-probe.js';
 
 const DISPLAY_CLASS = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*';
 
@@ -55,4 +56,25 @@ export async function readGpuMemoryBytes(options: GpuMemoryOptions = {}): Promis
   });
   const bytes = Number((output ?? '').trim());
   return Number.isFinite(bytes) && bytes > 0 ? bytes : null;
+}
+
+/**
+ * The memory of the devices llama.cpp itself can run on, as it lists them
+ * (`--list-devices`: `  Vulkan0: <name> (<total> MiB, <free> MiB free)`).
+ * The engine is the judge: on a unified-memory machine (an APU, a Mac) the
+ * registry holds only the carve-out of the firmware, while llama.cpp can use
+ * the shared budget. The largest device is the one the model goes to; null
+ * for a CPU build, or when the binary cannot run.
+ */
+export async function readLlamaDeviceMemory(
+  command: string,
+  prefixArgs: readonly string[],
+  options: { spawn?: SpawnFn } = {},
+): Promise<number | null> {
+  const ran = await runShort(command, [...prefixArgs, '--list-devices'], 15_000, options.spawn);
+  if (!ran) return null;
+  const totals = [...ran.stdout.matchAll(/^\s+\S+: .*\((\d+) MiB, \d+ MiB free\)\s*$/gm)].map(
+    (match) => Number(match[1]) * 1024 ** 2,
+  );
+  return totals.length > 0 ? Math.max(...totals) : null;
 }

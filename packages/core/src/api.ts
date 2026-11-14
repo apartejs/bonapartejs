@@ -15,7 +15,8 @@ import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
 import { announceLoad, type EngineLoadAnnouncement } from './costs/announce.js';
-import { readGpuMemoryBytes } from './engine/gpu-memory.js';
+import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
+import { readGpuMemoryBytes, readLlamaDeviceMemory } from './engine/gpu-memory.js';
 import { MeasureStore } from './engine/measures.js';
 import { readBuildTag } from './engine/process-probe.js';
 import { EngineSupervisor, type EngineConfig, type KvCacheType } from './engine/supervisor.js';
@@ -180,14 +181,21 @@ export function createCore(deps: CoreDeps): Core {
    */
   async function configuredManaged(): Promise<EngineConfig> {
     if (supervisor.engine) return supervisor.engine;
-    const read = await readConfig();
-    const binPath = read.backend?.mode === 'managed' ? read.backend.binPath : env['BONAPARTE_LLAMA_BIN'];
-    await supervisor.configure({
-      mode: 'managed',
-      binPath: binPath ?? (deps.llamaCommand ? 'llama-server' : await findLlamaBinary()),
-      ...(await launchSettings()),
-    });
+    await supervisor.configure({ mode: 'managed', binPath: await llamaBinary(), ...(await launchSettings()) });
     return supervisor.engine!;
+  }
+
+  /** The llama.cpp binary: the configured one, else the first found on the PATH — looked for once. */
+  let binary: Promise<string> | undefined;
+  function llamaBinary(): Promise<string> {
+    binary ??= (async () => {
+      const read = await readConfig();
+      const binPath = read.backend?.mode === 'managed' ? read.backend.binPath : env['BONAPARTE_LLAMA_BIN'];
+      return binPath ?? (deps.llamaCommand ? 'llama-server' : await findLlamaBinary());
+    })();
+    // A binary not found now may be installed later: the next question looks again.
+    binary.catch(() => (binary = undefined));
+    return binary;
   }
 
   /** The first llama.cpp binary on the PATH that answers --version. */
@@ -199,8 +207,25 @@ export function createCore(deps: CoreDeps): Core {
   }
 
   function gpuBytes(): Promise<number | null> {
-    gpu ??= (deps.gpuMemory ?? (() => readGpuMemoryBytes(deps.spawn ? { spawn: deps.spawn } : {})))().catch(() => null);
+    gpu ??= (deps.gpuMemory ?? machineGpuBytes)().catch(() => null);
     return gpu;
+  }
+
+  /**
+   * What llama.cpp says it can use first — on a unified-memory machine the
+   * registry holds only the firmware's carve-out — then the registry.
+   */
+  async function machineGpuBytes(): Promise<number | null> {
+    const spawn = deps.spawn ? { spawn: deps.spawn } : {};
+    // The fake binary of the tests has no device to list.
+    if (!deps.llamaCommand) {
+      const command = await llamaBinary().catch(() => undefined);
+      const fromEngine = command
+        ? await readLlamaDeviceMemory(command, detectServeCommandPrefix(command), spawn)
+        : null;
+      if (fromEngine !== null) return fromEngine;
+    }
+    return readGpuMemoryBytes(spawn);
   }
 
   async function engineState(): Promise<EngineState> {

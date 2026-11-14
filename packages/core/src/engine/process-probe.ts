@@ -21,7 +21,7 @@ interface Ran {
 }
 
 /** Runs a short command and collects what it prints; null when it could not run or took too long. */
-function run(command: string, args: readonly string[], timeoutMs: number, spawn?: SpawnFn): Promise<Ran | null> {
+export function runShort(command: string, args: readonly string[], timeoutMs: number, spawn?: SpawnFn): Promise<Ran | null> {
   return new Promise((resolve) => {
     let child;
     try {
@@ -59,7 +59,7 @@ export const defaultProcessProbe: ProcessProbe = {
     if (process.platform === 'win32') {
       const script =
         `$p = Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}'; ` + 'if ($p) { $p.CommandLine }';
-      const ran = await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], PROBE_TIMEOUT_MS);
+      const ran = await runShort('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], PROBE_TIMEOUT_MS);
       const line = ran?.stdout.trim() ?? '';
       return line === '' ? null : line;
     }
@@ -71,7 +71,7 @@ export const defaultProcessProbe: ProcessProbe = {
         return null;
       }
     }
-    const ran = await run('ps', ['-o', 'command=', '-p', String(pid)], PROBE_TIMEOUT_MS);
+    const ran = await runShort('ps', ['-o', 'command=', '-p', String(pid)], PROBE_TIMEOUT_MS);
     const line = ran?.code === 0 ? ran.stdout.trim() : '';
     return line === '' ? null : line;
   },
@@ -79,7 +79,7 @@ export const defaultProcessProbe: ProcessProbe = {
   async kill(pid) {
     if (!Number.isInteger(pid) || pid <= 0) return;
     if (process.platform === 'win32') {
-      await run('taskkill', ['/pid', String(pid), '/T', '/F'], PROBE_TIMEOUT_MS);
+      await runShort('taskkill', ['/pid', String(pid), '/T', '/F'], PROBE_TIMEOUT_MS);
       return;
     }
     try {
@@ -100,7 +100,7 @@ export const defaultProcessProbe: ProcessProbe = {
  * cannot say. The unified CLI takes `--version` without `serve`.
  */
 export async function readBuildTag(command: string, args: readonly string[], spawn?: SpawnFn): Promise<string> {
-  const ran = await run(command, args, 10_000, spawn);
+  const ran = await runShort(command, args, 10_000, spawn);
   if (!ran) return 'unknown';
   const line = ran.stdout
     .split(/\r?\n/)

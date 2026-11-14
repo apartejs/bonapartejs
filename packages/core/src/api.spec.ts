@@ -9,9 +9,12 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core, type CoreDeps } from './api.js';
 import { UnsupportedFamilyError } from './families/index.js';
+import type { SpawnedProcess, SpawnFn } from './process/spawn.js';
 import { FAKE_QWEN_TEMPLATE, startFakeLlamaServer, type FakeLlamaServer } from './testing/fake-llama-server.js';
 import { writeFakeGguf } from './testing/fake-gguf.js';
 
@@ -159,5 +162,50 @@ describe('createCore — a server that already runs', () => {
     servers.push(remote);
     const { core } = await setup({ env: { BONAPARTE_LLAMA_URL: remote.url } });
     await expect(core.engine()).rejects.toBeInstanceOf(UnsupportedFamilyError);
+  });
+});
+
+describe('createCore — the memory a load is announced against', () => {
+  const MiB = 1024 ** 2;
+  const DEVICES = 'Available devices:\n  Vulkan0: AMD Radeon(TM) 8060S Graphics (79992 MiB, 75992 MiB free)\n';
+
+  /** Programs that print what the test says: llama.cpp lists its devices, PowerShell reads the registry. */
+  function machine(devices: string, registry: string) {
+    const launched: string[][] = [];
+    const spawn: SpawnFn = (command, args) => {
+      launched.push([command, ...args]);
+      const stdout = new PassThrough();
+      const child = Object.assign(new EventEmitter(), { stdout, stderr: new PassThrough(), kill: () => true });
+      const text = args.includes('--list-devices') ? devices : command === 'powershell' ? registry : 'version: 9999 (fake)\n';
+      setImmediate(() => {
+        stdout.end(text);
+        child.emit('exit', 0);
+        child.emit('close', 0);
+      });
+      return child as unknown as SpawnedProcess;
+    };
+    return { spawn, launched };
+  }
+
+  it('is what llama.cpp can use — on a unified-memory machine, more than the registry says', async () => {
+    const { spawn, launched } = machine(DEVICES, String(8 * GiB));
+    const { core, gemma } = await setup({
+      llamaCommand: undefined,
+      gpuMemory: undefined,
+      env: { BONAPARTE_LLAMA_BIN: 'llama' },
+      spawn,
+    });
+    const model = (await core.models()).find((candidate) => candidate.path === gemma);
+    expect(model?.announcement?.gpuBytes).toBe(79992 * MiB);
+    // The unified CLI lists its devices under `serve`.
+    expect(launched).toContainEqual(['llama', 'serve', '--list-devices']);
+  });
+
+  it('is the registry when llama.cpp lists no device', async () => {
+    const { spawn } = machine('Available devices:\n', String(8 * GiB));
+    const { core, gemma } = await setup({ llamaCommand: undefined, gpuMemory: undefined, env: { BONAPARTE_LLAMA_BIN: 'llama-server' }, spawn });
+    const model = (await core.models()).find((candidate) => candidate.path === gemma);
+    // Elsewhere than Windows, there is no registry: unknown, never zero.
+    expect(model?.announcement?.gpuBytes).toBe(process.platform === 'win32' ? 8 * GiB : null);
   });
 });
