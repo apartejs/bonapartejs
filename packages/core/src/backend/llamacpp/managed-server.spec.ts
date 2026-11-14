@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { spawnHidden, type SpawnedProcess, type SpawnFn, type SpawnHiddenOptions } from '../../process/spawn.js';
 import { startFakeLlamaServer, type FakeLlamaServer } from '../../testing/fake-llama-server.js';
 import type { BackendStatus } from '../types.js';
-import { ManagedServer, type ManagedServerOptions } from './managed-server.js';
+import { EngineStoppedError, ManagedServer, type ManagedServerOptions } from './managed-server.js';
 
 const BIN = fileURLToPath(new URL('../../testing/fake-llama-bin.mjs', import.meta.url));
 const MODEL = 'C:\\models\\qwen.gguf';
@@ -142,9 +142,16 @@ describe('ManagedServer', () => {
   it('a server that stops before it is ready: a failure at once, with what it said', async () => {
     const { server } = await managed({ baseEnv: { ...process.env, FAKE_LLAMA_FAIL: 'cannot load the model' } });
     const started = Date.now();
-    await expect(server.start()).rejects.toThrow(/cannot load the model/);
+    const failure = await server.start().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
     expect(Date.now() - started).toBeLessThan(5_000);
     expect(server.status()).toBe('crashed');
+    // What it said, apart from our own sentence: the window shows the engine's lines as they are.
+    expect(failure).toBeInstanceOf(EngineStoppedError);
+    expect((failure as EngineStoppedError).said).toBe('error: cannot load the model');
+    expect((failure as Error).message).toMatch(/cannot load the model/);
   });
 
   it('a server that never answers: crashed after the time allowed, and stopped', async () => {

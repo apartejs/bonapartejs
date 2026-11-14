@@ -283,7 +283,7 @@ export function createCore(deps: CoreDeps): Core {
     async loadModel(path) {
       if ((await mode()) !== 'managed') throw new Error('The engine is a server that already runs: it loads no model.');
       const listed = (await scanModels(deps.modelRoots ?? defaultScanRoots(env))).find((model) => samePath(model.path, path));
-      if (!listed) throw new Error(`This file is not among the models bonaparte found: ${path}`);
+      if (!listed) throw new ModelNotListedError(path);
       const info = await readGgufInfo(listed.path);
       // Refused before anything is launched.
       const layer = layerForModel(info);
@@ -300,6 +300,14 @@ export function createCore(deps: CoreDeps): Core {
     hold: () => supervisor.hold(),
     stop: () => supervisor.stop(),
   };
+}
+
+/** A load names a file the core did not list: the window may only load what it was shown. */
+export class ModelNotListedError extends Error {
+  constructor(readonly path: string) {
+    super(`This file is not among the models bonaparte found: ${path}`);
+    this.name = 'ModelNotListedError';
+  }
 }
 
 function nameOf(path: string): string {

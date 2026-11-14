@@ -45,6 +45,14 @@ function sameModelPath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
+/** llama-server exited before it answered: `said` holds its last lines, as it wrote them. */
+export class EngineStoppedError extends Error {
+  constructor(readonly said: string) {
+    super(`llama-server stopped before it was ready.${said ? `\n${said}` : ''}`);
+    this.name = 'EngineStoppedError';
+  }
+}
+
 export class ManagedServer {
   readonly client: LlamaCppHttpClient;
   private readonly key = randomBytes(24).toString('base64url');
@@ -125,8 +133,7 @@ export class ManagedServer {
     while (Date.now() < deadline) {
       if (!running.running) {
         this.setStatus('crashed');
-        const said = running.lastLines();
-        throw new Error(`llama-server stopped before it was ready.${said ? `\n${said}` : ''}`);
+        throw new EngineStoppedError(running.lastLines());
       }
       if (await this.client.health()) {
         await this.verifyServedModel(running);
