@@ -23,7 +23,7 @@ import { copyFile, mkdir, rm, utimes } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
-import { enforceRetention, type RetentionReport } from './retention.js';
+import { enforceRetention, kvUsage, type KvUsage, type RetentionReport } from './retention.js';
 
 /** What the engine runs now: what a saved state is checked against. */
 export interface LiveConfig {
@@ -175,6 +175,11 @@ export class KvStore {
   /** Is there a state to promise an instant resume with? */
   async has(stateId: string): Promise<boolean> {
     return (await readManifest(this.manifestPath(stateId))) !== null;
+  }
+
+  /** What the states and the seeds take on disk. */
+  usage(): Promise<KvUsage> {
+    return kvUsage(this.dir);
   }
 
   /** A saved state's manifest — what opening it will cost; null without one. */
