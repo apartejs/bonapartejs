@@ -18,6 +18,7 @@ const qwen17: GgufInfo = {
   swaKvElementsPerToken: 0,
   trainContext: 40960,
   tensorCount: 310,
+  family: 'qwen',
 };
 
 const GB = 1024 ** 3;

@@ -20,6 +20,8 @@
  */
 
 import { open, type FileHandle } from 'node:fs/promises';
+import { detectFamily } from '../families/detect.js';
+import type { FamilyId } from '../families/types.js';
 
 /** What the header says about the cost of a model. */
 export interface GgufInfo {
@@ -45,6 +47,8 @@ export interface GgufInfo {
    * speaks, and without it the built-in engine cannot talk to the model.
    */
   chatTemplate?: string;
+  /** The family the template says the model speaks; null when it says nothing the engine knows. */
+  family: FamilyId | null;
 }
 
 export type KvCacheTypeName = 'f16' | 'q8_0' | 'q4_0';
@@ -351,5 +355,6 @@ export async function readGgufInfo(path: string): Promise<GgufInfo> {
     ...(trainContext !== undefined ? { trainContext } : {}),
     tensorCount,
     ...(typeof chatTemplate === 'string' && chatTemplate !== '' ? { chatTemplate } : {}),
+    family: detectFamily(typeof chatTemplate === 'string' ? chatTemplate : undefined),
   };
 }
