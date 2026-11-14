@@ -28,8 +28,10 @@ test. The design came first (a private canvas, then a design document), and the
 implementation follows a plan of fourteen phases, started on 2026-11-14.
 
 Phase 0 is done: this file, the Claude Code configuration under `.claude/`, and
-the project files. The application code starts with phase 1. A section below
-that names something not built yet says so.
+the project files. Phase 1 is under way: the workspace, the first modules of
+the core (the llama.cpp client and its fake server, the Qwen template, the
+agent handler) and the Electron shell with one chat. A section below that
+names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -127,8 +129,11 @@ An issue can stay open after its fix has shipped.
   the end-to-end tests "to watch them fail" on an app that does not exist. The
   end-to-end fixture refuses to launch without a build, and in a test run the
   main process writes its errors to the console instead of showing them (the
-  `run-app` skill has the details). Ask Paul before the first Electron launch
-  of a session.
+  `run-app` skill has the details). The window of a test run is a real one,
+  because a window that is never shown paints no frame: it is kept off the
+  screen, transparent, out of the taskbar and never activated, and it leaves
+  the graphics card alone. Ask Paul before the first Electron launch of a
+  session.
 - **Local commits are free; NO push without Paul's validation in the app.** A
   guard hook refuses `git push`. The restart is built on the local branch `v1`,
   merged into `main` when Paul validates.
@@ -187,13 +192,35 @@ a rule, and a test wherever one is possible.
 
 ## Commands
 
+Node 24 (`.nvmrc`) and pnpm 10.
+
 ```sh
-node --test ".claude/hooks/*.test.mjs"   # the guard hooks and the agent and skill definitions
+pnpm install
+pnpm lint                                      # ESLint: the module boundaries, no shell, no UI string in a component
+pnpm typecheck                                 # every package, the end-to-end tests included
+pnpm test                                      # unit tests (Vitest), against the fake llama-server
+pnpm build                                     # every package; the app goes to packages/app/out
+pnpm --filter @aparte/bonaparte-app test:e2e   # end-to-end (Playwright), on the built app
+pnpm dev                                       # the app, with reload — this one opens a window
+node --test ".claude/hooks/*.test.mjs"         # the guard hooks and the agent and skill definitions
 ```
 
-The workspace commands (`pnpm dev`, `pnpm test`, `pnpm build`, `pnpm lint`,
-`pnpm typecheck`, the end-to-end tests, the real-model smoke) arrive with
-phase 1 and are listed here then.
+One file at a time:
+
+```sh
+pnpm --filter @aparte/bonaparte-core exec vitest run src/agent/handler.spec.ts
+pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
+```
+
+- The end-to-end tests launch Electron. Build first, and read the `run-app`
+  skill before the first launch of a session.
+- `BONAPARTE_LLAMA_URL` points the app at a llama.cpp server that is already
+  running; `BONAPARTE_DATA_DIR` keeps its data out of the real profile;
+  `BONAPARTE_LOCALE` (`fr` or `en`) forces the language of the interface.
+  `BONAPARTE_E2E=1` is set by the end-to-end fixture, and by nothing else.
+- `.github/workflows/ci.yml` runs all of the above, `pnpm dev` excepted, on
+  Ubuntu and on Windows.
+- The real-model smoke arrives with phase 2.
 
 ## Landmarks
 
@@ -208,6 +235,14 @@ phase 1 and are listed here then.
   `skills/`. `guard-command` refuses a push, a skipped git hook, and a visible
   console window; `guard-gitignore` watches the private-notes line of
   `.gitignore`.
+- **The packages**: `packages/shared` (contracts: modes, the IPC channels, the
+  address of the agent), `packages/core` (Node only: the engine side, the
+  agent handler, the fake llama-server under `src/testing/`), `packages/app`
+  (Electron: `src/main`, `src/preload`, `src/renderer`, `e2e`).
+- **End-to-end tests** (`packages/app/e2e/`): `fixtures/app.ts` is the only
+  place that launches the app, and `fixtures/chat.ts` holds every selector
+  into aparté's chat, which documents none: a release that moves one breaks
+  that file, not twenty specs.
 - **The four approval modes** keep aparté's French names in the product:
   Lecture (reads only, and plans), Répétition (asks before every change),
   Plume (edits pass, commands ask), Impro (asks only what is always asked).

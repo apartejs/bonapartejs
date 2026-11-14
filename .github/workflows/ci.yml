@@ -1,0 +1,89 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A superseded push cancels its in-flight run instead of queuing.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # No Nx daemon on a runner: nothing would reuse it, and it outlives the step
+  # that started it.
+  NX_DAEMON: 'false'
+
+jobs:
+  # The gate, on both platforms. Windows is not a courtesy: it is the
+  # maintainer's machine, and the one where a child process can open a console
+  # window. Ubuntu catches what only works on Windows by accident: a path
+  # separator, a file name whose case is wrong.
+  gate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        # The version is read from the packageManager field of package.json.
+
+      - name: Use Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      # The Electron binary is downloaded here. pnpm.onlyBuiltDependencies
+      # names the only packages allowed to run an install script.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The guard hooks of the Claude Code configuration, and the definitions
+      # of the project's agents and skills. Node only, no dependency.
+      - name: Guard hooks and agent definitions
+        run: node --test ".claude/hooks/*.test.mjs"
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      # The end-to-end tests drive the built app against the fake
+      # llama-server: no GPU, no model, and a data folder of their own.
+      - name: End-to-end (Windows)
+        if: runner.os == 'Windows'
+        run: pnpm --filter @aparte/bonaparte-app test:e2e
+
+      # Ubuntu 24.04 forbids the unprivileged user namespaces that Chromium's
+      # sandbox needs. The app keeps its sandbox: the runner lifts the
+      # restriction instead. Electron needs a display, hence xvfb.
+      - name: End-to-end (Ubuntu, on a virtual display)
+        if: runner.os == 'Linux'
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run --auto-servernum pnpm --filter @aparte/bonaparte-app test:e2e
+
+      - name: Upload the traces of the failed end-to-end tests
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-results-${{ matrix.os }}
+          path: packages/app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
