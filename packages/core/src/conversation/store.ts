@@ -40,6 +40,11 @@ export type NewConversation = Pick<ConversationMeta, 'kind' | 'engineId' | 'mode
 type Changes = Partial<Omit<ConversationMeta, 'id' | 'createdAt' | 'updatedAt' | 'pinnedAt' | 'archivedAt'>>;
 type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt'>>;
 
+/** The window's document of a conversation, beside its journal. */
+const DOCUMENT = 'aparte.json';
+/** What a conversation's document may weigh: a guard against a page gone wrong, not a limit anyone meets. */
+const MAX_DOCUMENT_CHARS = 64 * 1024 * 1024;
+
 /** An id becomes a folder name: never a path. */
 const ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
@@ -108,6 +113,29 @@ export class ConversationStore {
   /** Pinning or archiving is not activity: the order of the list does not move. */
   mark(id: string, marks: Marks): Promise<ConversationMeta> {
     return this.change(id, (meta) => ({ ...meta, ...marks }));
+  }
+
+  /**
+   * The window's document of the conversation (aparté's messages and their
+   * tree), kept beside the journal so that the page finds it as it left it.
+   * The journal stays the truth of what was said; this is how it was shown.
+   */
+  async saveDocument(id: string, document: unknown): Promise<void> {
+    const text = JSON.stringify(document);
+    if (text.length > MAX_DOCUMENT_CHARS) throw new Error(`The document of the conversation ${id} is too big to keep.`);
+    await this.writes.run(idOf(id), async () => {
+      if (!(await this.get(id))) throw new Error(`There is no conversation ${id}.`);
+      await writeJsonFile(join(this.dir, id, DOCUMENT), document);
+    });
+  }
+
+  async loadDocument(id: string): Promise<unknown> {
+    const path = join(this.dir, idOf(id), DOCUMENT);
+    try {
+      return await readJsonFile(path);
+    } catch {
+      return null;
+    }
   }
 
   /** The conversation whole: its card and its journal. */

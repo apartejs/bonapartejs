@@ -91,5 +91,21 @@ describe('ConversationStore', () => {
     expect((await conversations.create(NEW, 'c-1234')).id).toBe('c-1234');
     await expect(conversations.create(NEW, '../x')).rejects.toThrow(/conversation id/);
   });
+
+  it("keeps the window's document beside the journal, and gives it back as it was saved", async () => {
+    const { store: conversations } = await store();
+    const meta = await conversations.create(NEW);
+    expect(await conversations.loadDocument(meta.id)).toBeNull();
+    const document = { id: meta.id, messages: [{ id: 'm1', role: 'user', content: 'Bonjour' }], tree: { m1: null } };
+    await conversations.saveDocument(meta.id, document);
+    expect(await conversations.loadDocument(meta.id)).toEqual(document);
+  });
+
+  it('refuses a document for a conversation it does not know, or one too big to be a conversation', async () => {
+    const { store: conversations } = await store();
+    await expect(conversations.saveDocument('nope', {})).rejects.toThrow(/no conversation/);
+    const meta = await conversations.create(NEW);
+    await expect(conversations.saveDocument(meta.id, { text: 'x'.repeat(65 * 1024 * 1024) })).rejects.toThrow(/too big/);
+  });
 });
 
