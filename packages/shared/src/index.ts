@@ -10,3 +10,14 @@ export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { appInfo, localeSchema } from './ipc/app.js';
 export type { Locale } from './ipc/app.js';
+export {
+  engineLoad,
+  engineLoadResultSchema,
+  engineModels,
+  engineState,
+  engineStateSchema,
+  familyIdSchema,
+  loadAnnouncementSchema,
+  modelChoiceSchema,
+} from './ipc/engine.js';
+export type { EngineLoadResult, EngineStateView, ModelChoiceView } from './ipc/engine.js';

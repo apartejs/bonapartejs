@@ -59,3 +59,47 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// Choosing a model: headers written for the test, on a card said to have 8 Go.
+// Their sizes are those of a header, not of a model: the screen is the subject.
+const MODELS = {
+  'gemma-4-E2B-it-Q4_K_M': { paddingBytes: 2 * 1024 * 1024 },
+  'gemma-4-E4B-it-Q4_K_M': { blockCount: 60, embeddingLength: 5376, headCount: 32, headCountKv: 24 },
+  'gemma-4-31B-it-Q4_K_M': { blockCount: 60, embeddingLength: 5376, headCount: 32, headCountKv: 48 },
+  'gemma-2-9b-it-Q4_K_M': { chatTemplate: "{{ '<start_of_turn>' + role }}" },
+};
+const CARD = 8 * 1024 ** 3;
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`choosing a model, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const start = locale === 'fr' ? 'Démarrer' : 'Start';
+
+      const listed = await launch({ locale, managed: { models: MODELS, gpuBytes: CARD } });
+      await listed.page.emulateMedia({ colorScheme: scheme });
+      await expect(listed.page.getByRole('button', { name: start })).toBeEnabled();
+      // Transitions finished: a picture never catches a button half-way to its colour.
+      await listed.page.screenshot({ path: join(into, `setup-${locale}-${scheme}.png`), animations: 'disabled' });
+      await listed.close();
+
+      const failing = await launch({
+        locale,
+        managed: { models: MODELS, gpuBytes: CARD },
+        env: { FAKE_LLAMA_FAIL: 'failed to load model: unable to allocate CUDA0 buffer' },
+      });
+      await failing.page.emulateMedia({ colorScheme: scheme });
+      await failing.page.getByRole('button', { name: start }).click();
+      await expect(failing.page.getByRole('alert')).toBeVisible({ timeout: 20_000 });
+      await failing.page.screenshot({ path: join(into, `setup-failed-${locale}-${scheme}.png`), animations: 'disabled' });
+      await failing.close();
+
+      const empty = await launch({ locale, managed: { models: {} } });
+      await empty.page.emulateMedia({ colorScheme: scheme });
+      await expect(empty.page.locator('.engine-setup__empty')).toBeVisible();
+      await empty.page.screenshot({ path: join(into, `setup-empty-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}

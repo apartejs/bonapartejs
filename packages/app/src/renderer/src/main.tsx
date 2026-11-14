@@ -28,7 +28,7 @@ async function start(): Promise<void> {
   keepLinksInTheWindow();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App messages={messagesFor(info.locale)} />
+      <App messages={messagesFor(info.locale)} locale={info.locale} />
     </StrictMode>,
   );
 }

@@ -9,7 +9,14 @@
  * what the app wrote to its console when the test failed.
  */
 
-import { startFakeLlamaServer, type FakeLlamaServer, type FakeLlamaServerOptions } from '@aparte/bonaparte-core/testing';
+import {
+  startFakeLlamaServer,
+  writeFakeGguf,
+  type FakeGgufOptions,
+  type FakeLlamaServer,
+  type FakeLlamaServerOptions,
+} from '@aparte/bonaparte-core/testing';
+import { createServer } from 'node:net';
 import { _electron as electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,6 +27,19 @@ import { builtAppEntry } from './app-entry.js';
 import { appEnvironment } from './app-env.js';
 
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+/** What the app launches instead of llama.cpp in a managed test: the core's fake binary. */
+const FAKE_LLAMA_BIN = join(appRoot, '..', 'core', 'src', 'testing', 'fake-llama-bin.mjs');
+
+const GiB = 1024 ** 3;
+
+async function freePort(): Promise<number> {
+  const probe = createServer();
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+  const address = probe.address();
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  if (address === null || typeof address === 'string') throw new Error('no free port');
+  return address.port;
+}
 
 export interface LaunchOptions {
   /** The fake engine: what it answers, how fast. */
@@ -28,6 +48,12 @@ export interface LaunchOptions {
   locale?: 'fr' | 'en';
   /** Extra environment for the app. */
   env?: Record<string, string>;
+  /**
+   * A managed engine instead of a server that runs: the app finds these
+   * models (GGUF headers written for the test) and launches the fake binary
+   * when one is loaded. The card is said to have `gpuBytes` (24 GiB).
+   */
+  managed?: { models: Record<string, FakeGgufOptions>; gpuBytes?: number };
 }
 
 export interface LaunchedApp {
@@ -35,6 +61,8 @@ export interface LaunchedApp {
   page: Page;
   server: FakeLlamaServer;
   dataDir: string;
+  /** The port of the managed engine, in a managed test. */
+  enginePort?: number;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
   navigations(): Promise<string[]>;
   /** What the app wrote to its console, main process and window. */
@@ -44,7 +72,12 @@ export interface LaunchedApp {
 
 /** Closes the app, and makes sure of it: a test never leaves an Electron behind. */
 async function closeApp(app: ElectronApplication): Promise<void> {
-  const child = app.process();
+  let child: ReturnType<ElectronApplication['process']>;
+  try {
+    child = app.process();
+  } catch {
+    return; // It quit by itself (a test asked it to): Playwright has let go of it already.
+  }
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
   await Promise.race([app.close().catch(() => undefined), delay(5_000)]);
   if (child.exitCode === null && child.signalCode === null) child.kill();
@@ -60,23 +93,47 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   const output = (): string => lines.join('');
   let app: ElectronApplication | undefined;
 
-  const close = async (): Promise<void> => {
-    if (app) await closeApp(app);
-    await server.close();
-    await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
-  };
+  // Once: a test may close the app itself, and the fixture closes what is left after it.
+  let closing: Promise<void> | undefined;
+  const close = (): Promise<void> =>
+    (closing ??= (async () => {
+      if (app) await closeApp(app);
+      await server.close();
+      await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
+    })());
 
   try {
     await mkdir(join(dataDir, 'config'), { recursive: true });
-    await writeFile(
-      join(dataDir, 'config', 'global.json'),
-      JSON.stringify({ backend: { mode: 'remote', url: server.url } }),
-    );
+    const managedEnv: Record<string, string> = {};
+    let enginePort: number | undefined;
+    if (options.managed) {
+      const models = join(dataDir, 'models');
+      await mkdir(models, { recursive: true });
+      for (const [name, model] of Object.entries(options.managed.models)) {
+        await writeFakeGguf(join(models, `${name}.gguf`), model);
+      }
+      enginePort = await freePort();
+      Object.assign(managedEnv, {
+        BONAPARTE_MODEL_DIRS: models,
+        BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([process.execPath, FAKE_LLAMA_BIN]),
+        BONAPARTE_E2E_GPU_BYTES: String(options.managed.gpuBytes ?? 24 * GiB),
+        BONAPARTE_E2E_ENGINE_PORT: String(enginePort),
+      });
+    } else {
+      await writeFile(
+        join(dataDir, 'config', 'global.json'),
+        JSON.stringify({ backend: { mode: 'remote', url: server.url } }),
+      );
+    }
 
     app = await electron.launch({
       args: [entry],
       cwd: appRoot,
-      env: appEnvironment(process.env, { dataDir, locale: options.locale ?? 'fr', extra: options.env }),
+      env: appEnvironment(process.env, {
+        dataDir,
+        locale: options.locale ?? 'fr',
+        extra: { ...managedEnv, ...options.env },
+      }),
       timeout: 30_000,
     });
     const child = app.process();
@@ -115,7 +172,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
     const navigations = (): Promise<string[]> =>
       running.evaluate(() => (globalThis as { __navigations?: string[] }).__navigations ?? []);
 
-    return { app, page, server, dataDir, navigations, output, close };
+    return { app, page, server, dataDir, ...(enginePort !== undefined ? { enginePort } : {}), navigations, output, close };
   } catch (error) {
     await close();
     throw new Error(`The app did not start.\n${output()}`, { cause: error });

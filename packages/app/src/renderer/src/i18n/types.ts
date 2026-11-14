@@ -3,14 +3,53 @@
  * shape, and a spec checks that they hold the same keys. Nothing here is ever
  * sent to a model: that side is English, always.
  */
+
+import type { ModelChoiceView } from '@aparte/bonaparte-shared';
+import type { SizeUnits } from '../format.js';
+
+type Verdict = NonNullable<ModelChoiceView['announcement']>['verdict'];
+type Problem = NonNullable<ModelChoiceView['problem']>;
+type FamilyId = NonNullable<ModelChoiceView['family']>;
+
+/** What loading a model costs, already written in the language's numbers. */
+export interface LoadCost {
+  seconds: string;
+  estimated: boolean;
+  vram: string;
+  /** The card's memory; null when it could not be measured. */
+  gpu: string | null;
+}
+
 export interface Messages {
   app: {
     name: string;
   };
+  /** Binary units: Mo and Go in French, as Windows writes them. */
+  units: SizeUnits;
+  /** Proper names; the same in every language, kept here with the rest. */
+  families: Record<FamilyId, string>;
   composer: {
     placeholder: string;
   };
   chat: {
     empty: string;
+  };
+  engineSetup: {
+    title: string;
+    lede: string;
+    modelsLegend: string;
+    searching: string;
+    perToken(size: string): string;
+    verdict: Record<Verdict, string>;
+    /** Why the built-in engine cannot run this file, and the way out. */
+    problem: Record<Problem, string>;
+    announce(cost: LoadCost): string;
+    start: string;
+    starting: string;
+    empty: { title: string; body: string };
+    failed: {
+      title: string;
+      reason: Record<'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
+    };
   };
 }

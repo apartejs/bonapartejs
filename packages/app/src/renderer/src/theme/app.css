@@ -34,3 +34,108 @@ body {
   text-align: center;
   color: var(--aparte-text-muted);
 }
+
+/*
+ * Choosing a model (screens/EngineSetup.tsx). The card, the choices, the
+ * badges and the alert are aparté's; this only places them on the page.
+ */
+.engine-setup {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: calc(var(--aparte-space-8) * 3) var(--aparte-space-8);
+}
+
+.engine-setup__card {
+  width: 100%;
+  max-width: 640px;
+}
+
+.engine-setup__header {
+  padding-block: var(--aparte-space-6);
+}
+
+.engine-setup__title {
+  margin: 0;
+  font-size: var(--aparte-font-size-xl);
+  font-weight: var(--aparte-font-weight-semibold);
+  line-height: var(--aparte-line-height-tight);
+}
+
+.engine-setup__lede {
+  margin: var(--aparte-space-2) 0 0;
+  font-size: var(--aparte-font-size-sm);
+  font-weight: var(--aparte-font-weight-normal);
+  color: var(--aparte-text-muted);
+}
+
+.engine-setup__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-6);
+}
+
+.engine-setup__searching {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-3);
+  margin: 0;
+  color: var(--aparte-text-muted);
+}
+
+.engine-setup__empty-title {
+  margin: 0;
+  font-weight: var(--aparte-font-weight-medium);
+}
+
+.model-row {
+  align-items: center;
+}
+
+.model-row__name {
+  display: block;
+  font-weight: var(--aparte-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.model-row .aparte-field-hint {
+  font-variant-numeric: tabular-nums;
+}
+
+.model-row__verdict {
+  flex: none;
+}
+
+.engine-setup__log {
+  margin: var(--aparte-space-3) 0 0;
+  max-height: 12em;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--aparte-code-font-family);
+  font-size: var(--aparte-font-size-xs);
+}
+
+.engine-setup__footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.engine-announcement {
+  margin: 0;
+  font-size: var(--aparte-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--aparte-text-muted);
+}
+
+.engine-setup__footer .aparte-btn {
+  margin-inline-start: auto;
+}
+
+/* No model, nothing to start: the kit's footer is a flex box, which `hidden` alone would not hide (apartejs/aparte#207). */
+.engine-setup__footer[hidden] {
+  display: none;
+}

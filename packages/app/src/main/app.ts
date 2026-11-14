@@ -9,7 +9,10 @@ import { join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore } from '@aparte/bonaparte-core';
 import { appInfo, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
+import { e2eEngineDeps } from './e2e-engine.js';
+import { registerEngineChannels } from './ipc/engine.js';
 import { createIpcRegistry } from './ipc/register.js';
+import { stopEngineBeforeQuit } from './quit.js';
 import { devServerUrlFrom, isTrustedOrigin } from './security.js';
 import { createMainWindow } from './windows.js';
 
@@ -26,7 +29,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
 
   await app.whenReady();
 
-  const core = createCore({ dataDir: bonaparteDataDir() });
+  const core = createCore({ dataDir: bonaparteDataDir(), ...e2eEngineDeps(process.env, options.e2e) });
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),
@@ -35,8 +38,10 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
 
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   ipc.handle(appInfo, () => ({ version: app.getVersion(), locale: interfaceLocale() }));
+  registerEngineChannels(ipc, core);
 
   createMainWindow({ devServerUrl, e2e: options.e2e });
 
   app.on('window-all-closed', () => app.quit());
+  stopEngineBeforeQuit(app, core);
 }
