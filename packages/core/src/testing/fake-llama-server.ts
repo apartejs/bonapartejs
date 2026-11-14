@@ -57,6 +57,11 @@ export interface FakeLlamaServerOptions {
   responder?: (prompt: string) => string;
   /** Number of slots (default 1). */
   totalSlots?: number;
+  /**
+   * The port to listen on (default: any free one). A managed server listens
+   * where its supervisor told it to.
+   */
+  port?: number;
   modelPath?: string;
   /**
    * API key the server demands (`--api-key` / `LLAMA_API_KEY`): every
@@ -401,7 +406,7 @@ export async function startFakeLlamaServer(
     });
   });
 
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(options.port ?? 0, '127.0.0.1', resolve));
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
 

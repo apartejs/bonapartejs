@@ -249,6 +249,32 @@ async function eventsOf(server: FakeLlamaServer, signal?: AbortSignal): Promise<
     .map((block) => JSON.parse(block.slice('data: '.length)));
 }
 
+describe('the port', () => {
+  /** A port that was free a moment ago. */
+  async function freePort(): Promise<number> {
+    const probe = await start();
+    const { port } = probe;
+    await probe.close();
+    servers = servers.filter((server) => server !== probe);
+    return port;
+  }
+
+  it('is the one it was given: a managed server listens where its supervisor said', async () => {
+    const port = await freePort();
+    const server = await start({ port });
+    expect(server.port).toBe(port);
+    expect(server.url).toBe(`http://127.0.0.1:${port}`);
+    expect((await fetch(`${server.url}/health`)).ok).toBe(true);
+  });
+
+  it('is any free one when none is given', async () => {
+    const one = await start();
+    const other = await start();
+    expect(one.port).toBeGreaterThan(0);
+    expect(other.port).not.toBe(one.port);
+  });
+});
+
 describe('a completion that runs to its final event', () => {
   it('is counted as finished, once it has written that event', async () => {
     const server = await start({ responder: () => 'one two three' });
