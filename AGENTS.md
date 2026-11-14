@@ -3,20 +3,33 @@
 Guidance for coding agents and contributors. `CLAUDE.md` imports this file
 (`@AGENTS.md`); keep the two in sync by editing only this one.
 
-bonaparte is a **local-first coding agent** for the desktop (Electron + React +
-apartéJS, managed llama.cpp). Its differentiator: **per-conversation KV cache
-persistence** through llama-server's slots. The full design notes are private,
-in `docs/superpowers/` (git-ignored — **never** remove that line from
-`.gitignore`; the repository is public).
+## What bonaparte is
 
-## Status — restarted from zero (2026-11-13)
+bonaparte is a **local-first coding agent** for the desktop: Electron, React,
+apartéJS, and a llama.cpp server that the app manages. Three things set it
+apart:
 
-The first implementation (v0) is archived on the local branch `archive/v0`,
-uncommitted fixes included; `main` starts over from a design made first (a
-private mock-up canvas, and `docs/superpowers/`). The invariants and the way
-we work below still hold. The sections that name files, commands or
-milestones (Commands, Landmarks, and paths such as `packages/core`) describe
-v0: they stay as its lessons until the new code replaces them.
+- **Each conversation keeps its memory.** The KV state of llama-server is saved
+  and restored per conversation, so reopening a long conversation costs a
+  fraction of a second instead of minutes of re-reading.
+- **Every cost is announced before it is paid**: a model load, a re-read, an
+  eviction, a restart, a download.
+- **The memory serves the work**: going back before a message, or branching,
+  reuses it.
+
+The full design notes are private, in `docs/superpowers/` (git-ignored —
+**never** remove that line from `.gitignore`; the repository is public).
+
+## Status
+
+Restarted from zero on 2026-11-13. The first implementation (v0) is archived on
+the local branch `archive/v0`; it stays as lessons, and as code to port test by
+test. The design came first (a private canvas, then a design document), and the
+implementation follows a plan of fourteen phases, started on 2026-11-14.
+
+Phase 0 is done: this file, the Claude Code configuration under `.claude/`, and
+the project files. The application code starts with phase 1. A section below
+that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -24,7 +37,8 @@ bonaparte is also the proving ground of the apartéJS library (`@aparte/*`).
 **Every friction met with the library is filed immediately**, the moment it
 happens — never at the end of a session — as an issue on
 https://github.com/apartejs/aparte/issues (in English: the repository is
-public). Paul uses them to ship fixes and improvements to the library.
+public). Paul uses them to ship fixes and improvements to the library. The
+`friction` skill is the procedure.
 
 Counts as friction: a missing or awkward API, surprising behaviour, an
 undocumented trap, documentation so absent you had to read the source, a
@@ -34,221 +48,231 @@ do, the friction, the workaround used in bonaparte, and the fix suggested on
 the library side. A notable good surprise is pinned by a contract test in
 bonaparte instead, so nobody breaks what works.
 
+The library ships several releases a week. Before relying on it, and before
+filing a friction, check the latest release and read its notes
+(`npm view @aparte/core version`, `gh release list --repo apartejs/aparte`).
+An issue can stay open after its fix has shipped.
+
 ## Invariants — never violate
 
-- **Append-only prompt.** The frozen history of a `PromptLog` is NEVER
-  re-rendered; everything goes through begin/complete. A change of tools or
-  project is a delta appended to the log. Precisely: append-only *between two
-  rebases* — a rebase (compaction) is an explicit event, never a side effect.
-  This is what protects the KV cache.
-- **`/completion` only** — never `/v1/chat/completions` (Qwen3's chat template
-  is not byte-stable across turns, issue QwenLM/Qwen3#1826).
+- **Append-only prompt** (built-in engine). The frozen text of a `PromptLog` is
+  never re-rendered between two rebases; a change of tools, project or project
+  instructions is a delta appended to it. A rebase (compaction) is an explicit
+  event, never a side effect. This is what protects the KV cache.
+- **`/completion` only** for the built-in engine — never `/v1/chat/completions`.
+  An external endpoint goes through aparté's own handler instead.
 - **Strict restore.** A KV state is restored only when its manifest matches
-  exactly (model fingerprint, `n_ctx`, cache types, llama.cpp build); on any
-  doubt, re-prefill — announced.
-- **`packages/core` never imports `electron`** (boundary enforced by lint).
-- The renderer never talks to llama-server; there is no `AparteClient` in the
-  renderer (it would run a second tool loop) — `<AparteChat>`'s imperative API
-  is driven over IPC. Consequence: **we** call `registerDefaultRenderers()` at
-  renderer startup (the library only does it in `AparteClient`'s constructor),
-  otherwise every segment renders as "[Unknown segment type]" — covered by
-  `aparte-bootstrap.spec.ts`. Under review for the restart: in aparté 1.6,
-  an `AparteClient` driven by `createAgentStreamRunner` is a pipe that runs
-  no tool loop, so the chat may reach the core through it.
-- **A plugin never undoes its registrations by hand.** Everything goes through
-  its context, which the host tears down as one. A failed activation leaves
-  nothing behind, and nothing a plugin starts survives its teardown (dev
-  server, shell, native view).
-- **Nothing expensive without announcing it first** — the product rule. A
-  model reload, a re-prefill, an eviction, a restart: the user sees the cost
-  before paying it.
+  (model file, K/V cache types) and the context holds its tokens; on any doubt,
+  re-read — announced.
+- **The journal is the truth; a KV state is a cache.** Evicting a state never
+  loses a message.
+- **`packages/core` never imports `electron`** (enforced by lint).
+- **The window never talks to llama-server or to a provider.** A turn goes
+  through `bonaparte://agent` with aparté's stock runner; everything else goes
+  through the typed IPC bridge.
+- **One tool registry and one approval policy, in the core.** The window only
+  runs interface tools (`ask_user`).
+- **Nothing expensive without announcing it first**: a model load, a re-read, an
+  eviction, a restart, a download.
+- **Never a shell string, never a visible console.** Every child process goes
+  through `spawnHidden` (argument array, `shell: false`, `windowsHide: true`).
+- **A plugin never undoes its registrations by hand**; its context is torn down
+  as one. A third-party view runs in a sandboxed frame, never with more rights
+  than the conversation.
 
 ## How we work
 
 - **Test first, always.** Red test, then the minimal implementation. The fake
-  llama-server (`core/src/testing/fake-llama-server.ts`) is the fixture for
-  everything that touches the backend — no GPU in CI, ever.
+  llama-server is the fixture for everything that touches the engine — no GPU
+  in CI, ever.
 - **Localise from the first string.** One file per language (`types.ts` +
-  `fr.ts` + `en.ts`; specs check key parity). **Localisation is for the UI.
-  Everything sent to the model is English** — system prompt, tool
-  descriptions, results, tool error messages, permission refusals: it is a
-  protocol, and models are trained on English instructions and tool-calling.
-  The reply language is an explicit prompt instruction (`replyLanguage`),
-  driven by the locale.
-- **English is the language of everything visible in the repository** —
-  code, comments, commit messages, docs, plugin manifests. French is allowed
-  only in the private notes (`docs/superpowers/`, `.claude/`).
+  `fr.ts` + `en.ts`; a spec checks key parity). **Localisation is for the UI.
+  Everything sent to the model is English** — system prompt, tool descriptions,
+  results, tool error messages, permission refusals: it is a protocol, and
+  models are trained on English instructions and tool-calling. The reply
+  language is an explicit prompt instruction, driven by the locale.
+- **English is the language of everything visible in the repository** — code,
+  comments, commit messages, docs, plugin manifests, and the Claude Code
+  configuration under `.claude/`. French is allowed only in the private notes:
+  `docs/superpowers/`, and whatever stays untracked under `.claude/`.
+- **Talk to Paul in French**: steps, command descriptions, summaries.
 - **aparté for every control, no second UI library** (decided 2026-11-13).
   The chat, the composer, the approvals and the segment renderers, and also
-  the app shell, the sidebar, the panes, tabs, menus, dialogs and fields,
-  come from aparté 1.6: its components and its kit of classes. bonaparte
-  exists to prove that library, so what it lacks is added to aparté (an
-  issue on apartejs/aparte), never worked around with another library.
+  the app shell, the sidebar, the panes, tabs, menus, dialogs, fields and the
+  diff view, come from aparté 1.7: its components and its kit of classes.
+  bonaparte exists to prove that library, so what it lacks is added to aparté
+  (an issue on apartejs/aparte), never worked around with another library.
   Semantic hook classes (`.conv-item`, `.setting-row`…) stay on elements,
-  unstyled: the E2E and a host's rules read them.
-- **React, latest stable, through `@aparte/react`** (decided 2026-11-14,
-  when that was 19.3.1). The app is written in React and reaches aparté
-  through its React wrappers wherever one exists: bonaparte is the proving ground of `@aparte/react`, so a
-  friction with a wrapper is an issue like any other. A plugin view is a
-  custom element: built-in plugins are built with the app and share its
-  React; a third-party plugin renders with whatever it brings inside its
-  element (its own React included), and its Node half runs in its own
-  process.
-- **The palette is React's.** react.dev's tokens (blue-50 `#087EA4` accent,
-  their gray scale), declared on the `--aparte-*` masters for light and
-  dark; the kit derives inks and scales from them. Never hard-code a colour:
-  read a token.
+  unstyled: the end-to-end tests and a host's rules read them.
+- **React, latest stable, through `@aparte/react`** (decided 2026-11-14, when
+  that was 19.3.1). The app reaches aparté through its React wrappers wherever
+  one exists: bonaparte is the proving ground of `@aparte/react`, so a friction
+  with a wrapper is an issue like any other. A plugin view is a custom element:
+  built-in plugins are built with the app and share its React; a third-party
+  plugin renders with whatever it brings, inside a sandboxed frame, and its
+  Node half runs in its own process.
+- **The palette is React's.** react.dev's tokens (accent `#087EA4`, their gray
+  scale), declared on the `--aparte-*` masters for light and dark in one file;
+  the kit derives inks and scales from them. Never write a colour anywhere
+  else: read a token.
 - **Professional UI finish from the first draft** — an unfinished screen is
-  not shown. For layout changes, a validated mock-up comes before code.
+  not shown. A screen is built from its board on the design canvas (the
+  `screen` skill), compared with it, and validated by Paul on the real screen.
 - **What the fake server cannot prove is replayed for real** — grammars, slots,
-  the KV prefix under agentic load. Record the result below when you do.
-- **Local commits are free; NO push without Paul's validation in the app.**
+  the KV prefix under agentic load (the `smoke` skill). Record the result at
+  the end of this file.
+- **Local commits are free; NO push without Paul's validation in the app.** A
+  guard hook refuses `git push`. The restart is built on the local branch `v1`,
+  merged into `main` when Paul validates.
+
+### Sub-agents and skills of the project
+
+Sub-agents (`.claude/agents/`), all read-only. Use Sonnet by default, Haiku for
+a trivial lookup, Opus only for a code review; one agent that does three things
+rather than three agents.
+
+| Agent | Model | Use it to |
+|---|---|---|
+| `scout` | haiku | find a file, a symbol, a usage |
+| `aparte-docs` | sonnet | get an aparté API exactly, with where it was read |
+| `canvas-reader` | sonnet | read a board of the design canvas |
+| `v0-porter` | sonnet | read a module of `archive/v0` before porting it |
+| `reviewer` | opus, high effort | review a phase at its gate |
+
+Skills (`.claude/skills/`): `phase-gate` (the gate that ends a phase of the
+plan), `screen` (build a screen from the canvas), `friction` (file an aparté
+friction), `smoke` (the real-model suite), `run-app` (launch the app without a
+console window).
+
+## Security rules
+
+The security audit of v0 found flaws the restart must not repeat. Each one is
+a rule, and a test wherever one is possible.
+
+1. **Electron**: the main window never navigates out of the app, and the
+   preload serves only our pages; a strict CSP; every IPC handler checks its
+   caller's origin and validates its arguments; the window never chooses an
+   executable.
+2. **Commands**: never a shell string. Every process is launched with an
+   argument array, without `shell: true`, the name of an npm script included.
+   "Always allow" remembers the exact command, not its first word, and refuses
+   metacharacters (`&&`, `|`, `;`, a backtick, `$()`).
+3. **Writing is sometimes executing**: files that run later (`.git/hooks`,
+   `package.json`, `*.config.*`, `.husky`, `.env`) always ask, in every mode.
+4. **Reading what leaves the machine is network**: `web_fetch` has the Network
+   effect, not Read, and refuses local and private addresses unless a setting
+   says otherwise.
+5. **Prompt injection**: the control tokens of the model family's template are
+   neutralised in tool results before they are rendered into the prompt.
+6. **Perimeter**: without a project, the home folder — never the whole machine,
+   never a network (UNC) path; symbolic links and junctions are resolved before
+   the perimeter is checked; a deletion never accepts a relative path.
+7. **Resource guards**: the code search runs outside the main process, can be
+   cancelled, and has a time limit; the output of a tool or of a plugin is
+   capped according to the context size.
+8. **Plugins**: the host enforces declared effects; a plugin cannot declare
+   Read and write.
+9. **Modes**: the most permissive mode does not survive a restart without a
+   new confirmation.
+10. **Secrets**: API keys live in the system's vault and are never shown in
+    clear; the terminal does not inherit secret environment variables.
 
 ## Commands
 
 ```sh
-pnpm dev          # Electron app (electron-vite)
-pnpm test         # whole unit suite (Nx, cached)
-pnpm build        # every package and plugin
-pnpm lint         # eslint + module boundaries
-pnpm typecheck
-pnpm --filter @aparte/bonaparte-app test:e2e   # Electron E2E (after pnpm build)
-node packages/cli/dist/cli.js doctor            # machine diagnostic
-# real-model smoke, outside CI (packages/core):
-#   BONAPARTE_SMOKE_MODEL=<path.gguf> npx vitest run src/smoke
+node --test ".claude/hooks/*.test.mjs"   # the guard hooks and the agent and skill definitions
 ```
+
+The workspace commands (`pnpm dev`, `pnpm test`, `pnpm build`, `pnpm lint`,
+`pnpm typecheck`, the end-to-end tests, the real-model smoke) arrive with
+phase 1 and are listed here then.
 
 ## Landmarks
 
-- Design notes (private): the restart's design
-  `docs/superpowers/specs/2026-11-14-bonaparte-v1-refonte-design.md`, the
-  engine chapters (3 to 9 bis) of `2026-08-19-bonaparte-consolidation.md`, and
-  a copy of the design canvas in `docs/superpowers/canvas/`. The v0 notes and
-  audit were removed on 2026-11-14; their lessons are in the design.
-- Paul's machine has the **unified `llama` CLI** (WindowsApps): server =
-  `llama serve`, same flags as llama-server (`detectServeCommandPrefix()`).
-- **Milestones.** J1 foundations + KV ✅ (validated for real by Paul on
-  2026-08-18) · J2 agentic loop / tools / permissions / project ✅ in CI —
-  **first real contact 2026-08-19**: prefill OK (1 295 tokens, 138 tok/s), the
-  model triggers a tool call, the grammar refused the opening tag (fixed, see
-  the grammar note below). **The rest of the agentic path — tool execution,
-  result re-injected, second turn — has still not been seen end to end.** ·
-  J3 plugin-first shell ✅ (reversible plugin host, tabbed tooling panel,
-  schema-driven settings hub, status strip with context gauge, 5 built-in
-  plugins, Playwright E2E) · Consolidation (2026-08-19): the screens are done,
-  the engine is not — retention module, GGUF sizes, prefix seeds,
-  compaction-as-rebase, `gpuAcceleration` setting, per-plugin activation,
-  index and branching are still to do (see the plan) · **Phase 1, engine
-  (2026-08-28)**: the prompt block order (stable → volatile), `EngineSupervisor`
-  and `ConversationEngine` in core (the harness is IPC glue), `n_ctx` owned by
-  the engine, the overflow guard with context shift off, a generation that
-  survives navigation, approvals on apartéJS's elicitation panel, the apartéJS
-  UI kit on every control — all done, 13 Electron E2E against the fake server;
-  left in phase 1: the announced cost of a model switch, per-project
-  allowlists · **2026-08-28 (evening)**: Tailwind + shadcn/ui shell on the
-  React palette; prefix seeds (`KvStore.seedKey/saveSeed/restoreSeed`,
-  restored or prepared at every fresh open, D-75); the KV manifest relaxed
-  to what llama.cpp cannot check itself — the model file and the K/V types
-  — n_ctx only has to hold the saved tokens and a build change no longer
-  re-prefills (D-73); a per-conversation context cap (D-74); a security
-  audit with three findings fixed; a tray icon
-  with close-to-tray (D-76) and an idle model unload (D-77) · J4 MCP · J5
-  npx distribution.
-- **Real-model smoke results.** Record here: date, model, llama.cpp build, and
-  the outcome of each case.
-  - **2026-09-26 (evening) — 9/9 green.** Same model and build. New case:
-    **a real MCP server** — the official filesystem server started through
-    `npx`, over stdio, confined to the project folder: connected with 14
-    tools, the model called `mcp__fs__read_text_file` and answered with the
-    secret. The run also carries the live prefill progress and the
-    generation time now read from the stream (1 770 tokens served from the
-    cache after a tool round-trip, a restore of 960 tokens in 26 ms). One
-    earlier full run was 8/9: the model wrote a path to a file that did not
-    exist, the server said so, and the answer repeated it — the prompt holds
-    a random temp folder name, so each run is a new draw for a 1.7B model;
-    the next run passed unchanged. The harness path (call → MCP server →
-    result → answer) is what the case judges.
-  - **2026-09-26 (later) — 8/8 green**, same model and build. New case:
-    **compaction is the rebase** — the model's summary, asked beside the
-    conversation, kept the secret read from a file ("…contained the
-    password ORANGE-42-VERMILLON…"); after the rebase the prompt restarts
-    from a re-frozen system prompt and that summary alone, and the model
-    answers the password from it, with no tool. Tool round-trip: 3 175
-    tokens from the cache on turn 2 (prefill 19.9 ms); save/restore with
-    tools 1 079 tokens; branch 602/602; seed 518 (prefill 16.7 ms).
-  - **2026-09-26 — 7/7 green** (Qwen3-1.7B Q4_K_M, b10217-ddd4ec142, same
-    settings). New case: **the managed server demands its per-launch key**
-    — the real server answers `/props` without it with HTTP 401, and with
-    it to the backend (`LLAMA_API_KEY` in the child's environment,
-    `--no-webui`, `/props` checked against the launched model). Figures:
-    tool round-trip served 1 755 tokens from the cache on turn 2 (prefill
-    18.7 ms); save/restore with tool turns 893 tokens; branch 602 of 602;
-    seed 518, first turn prefill 18.6 ms. A second full run timed out once
-    on the cache case (the 1.7B reasoned past the per-case limit on turn
-    1) and passed alone — the small model's dice, not the harness.
-  - **2026-08-28 (evening) — 6/6 green.** Same model and build. New case:
-    **prefix seeds** — a fresh conversation restores the shared prefix
-    (518 tokens, the whole system block) and its first turn is served
-    entirely from it (518 cached, prefill 16.5 ms); `n_predict: 0` leaves
-    exactly the prefix in the slot. The branch case now opens B before
-    restoring A's state: a fresh open restores the seed over the slot, so
-    the state restored last is the one that serves — 599 of 599 again.
-  - **2026-08-28 — 5/5 green.** Qwen3-1.7B Q4_K_M (unsloth), unified `llama`
-    CLI build b10217-ddd4ec142, Windows, `-c 8192`, K/V f16, one slot,
-    sampling temperature 0.2 / seed 42. Real tool call → execution → result
-    → answer (the password read from the file, first time the whole agentic
-    path was seen end to end) · lazy grammar not forcing a call · KV prefix
-    kept after a tool round-trip (1 032 tokens served from the cache, prefill
-    18.6 ms) · save/restore with tool turns (636 tokens restored, the secret
-    recalled without rereading) · **a restored state serves as the prefix of
-    a longer, different prompt: 545 of 545 saved tokens reused by a branch**
-    — the property prefix seeds and branching rest on. Lessons: a 1.7B model
-    at default temperature is a coin flip on protocol details (a ```json
-    fence instead of `<tool_call>` once), and it invents a password unless
-    the prompt names the tool; the smoke judges the harness, so its prompts
-    name the tool and its sampling is fixed. The same run had shown the
-    cache gauge reading zero on every real turn — `prompt_progress` never
-    rides the final event; fixed in `http-client.ts`, fake server made
-    faithful.
-- **node-pty loads under Electron 43 WITHOUT a rebuild** (verified 2026-08-20:
-  `pty.spawn(cmd.exe)` answers with its ConPTY sequences). It only needs to be
-  allowed in `pnpm.onlyBuiltDependencies` — pnpm blocks build scripts by
-  default, and without it the module installs with no binary. Paul's toolchain
-  (VS Build Tools 2022+2026, Python 3.14) is enough. The terminal plugin is
-  therefore a REAL terminal: xterm.js in the view, PTY in Node, raw bytes in
+- **Private notes** (`docs/superpowers/`, absent from a public checkout): the
+  design document `specs/2026-11-14-bonaparte-v1-refonte-design.md`; the plan
+  `plans/2026-11-14-bonaparte-v1-plan.md` and where it stands,
+  `plans/SUIVI.md`; the engine chapters (3 to 9 bis) of
+  `specs/2026-08-19-bonaparte-consolidation.md`; a copy of the design canvas
+  in `canvas/`.
+- **Claude Code configuration** (`.claude/`, tracked): `settings.json`
+  (permissions and hooks), `hooks/` (two guards and their tests), `agents/`,
+  `skills/`. `guard-command` refuses a push, a skipped git hook, and a visible
+  console window; `guard-gitignore` watches the private-notes line of
+  `.gitignore`.
+- **The four approval modes** keep aparté's French names in the product:
+  Lecture (reads only, and plans), Répétition (asks before every change),
+  Plume (edits pass, commands ask), Impro (asks only what is always asked).
+- **aparté 1.7** (2026-11-14) is the version the restart is built on. It
+  brought the keyboard of menus and tabs (`enhanceMenu`, `enhanceContextMenu`,
+  `enhanceTabs`), the diff view with line comments (`@aparte/plugin-diff`),
+  and steps and activities in the stream of a turn. Its loop runs the tool
+  calls of one model step at the same time, and its agent handler cannot turn
+  that off (apartejs/aparte#202).
+- **`archive/v0`** is a local branch. Read it without leaving the current one:
+  `git show archive/v0:<path>`, or the `v0-porter` agent.
+- Paul's machine has the **unified `llama` CLI**: the server is `llama serve`,
+  with the same flags as llama-server.
+
+## Lessons from v0
+
+- **`/completion`, not the chat endpoint**: Qwen3's chat template is not
+  byte-stable across turns (QwenLM/Qwen3#1826), which breaks the KV prefix.
+- **Our own agent loop** for the built-in engine, not aparté's
+  `runStreamAgent`: that engine owns the message list, which is incompatible
+  with an append-only prompt. Every rule of the library that the loop depends
+  on is pinned by a contract test.
+- **Tool-call grammar**: `grammar_lazy` + `grammar_triggers` +
+  `preserved_tokens` on `/completion` — undocumented in llama.cpp's README,
+  verified in `tools/server/server-schema.cpp`. Without laziness the model
+  would be forced to call a tool every turn. **The trigger hands its text to
+  the grammar**: the root must consume the opening tag itself, or the server
+  throws "Unexpected empty grammar stack after accepting piece". The root also
+  admits several blocks; with one, parallel calls could not be emitted.
+- **`prompt_progress` never rides the final event** of a completion: the cache
+  gauge must read the intermediate events.
+- **The KV manifest** checks only what llama.cpp cannot check itself: the model
+  file and the K/V cache types. `n_ctx` only has to hold the saved tokens, and
+  a change of llama.cpp build does not force a re-read.
+- **The managed server** demands its per-launch key (`LLAMA_API_KEY` in the
+  child's environment, `--no-webui`), listens on `127.0.0.1`, and `/props` is
+  checked against the model that was launched.
+- **A small model at its default temperature** is a coin flip on protocol
+  details, and invents an answer unless the prompt names the tool. The smoke
+  judges the harness: its prompts name the tool and its sampling is fixed.
+- **node-pty loads under Electron without a rebuild.** It only needs to be
+  allowed in `pnpm.onlyBuiltDependencies`: pnpm blocks build scripts by
+  default, and without that the module installs with no binary. The terminal
+  is a real terminal: xterm.js in the view, a PTY in Node, raw bytes in
   between — never re-filter the ANSI, the emulator interprets it.
-- **The plugin SDK PUSHES, with back-pressure** (`ctx.emit()` + `ctx.onDrain()`),
-  the model taken from VS Code. `emit` returns `false` when the view is behind:
-  the producer must stop — Node streams' `write` then `drain` convention.
-  Thresholds in `FLOW_CONTROL` (host.ts), identical to theirs: pause at
-  100 000 unacknowledged, resume under 5 000, acknowledge in packets of 5 000,
-  **per instance**. **The view acknowledges in `term.write`'s callback** — when
-  xterm has DISPLAYED, not when the IPC delivered — otherwise the producer
-  restarts too early. Without this we lost output while pruning a buffer.
-- **Still to do, and it is the lesson VS Code paid for**: their native Node
-  halves run in a DEDICATED process. Ours (node-pty) live in the main process,
-  so a segfault takes the application — and the loaded model — down. Planned:
-  `utilityProcess`.
-- **Third-party plugins outside the tree are not loadable yet.** Built-in
-  views are collected by `import.meta.glob` (built with the app, loaded
-  lazily); an external plugin will need Electron's custom protocol plus an
-  import map sharing React. Extension point identified, deliberately not
-  opened in v1 (double-React risk).
-- **Tool-call grammar**: `grammar_lazy` + `grammar_triggers` + `preserved_tokens`
-  on `/completion` — **undocumented** in llama.cpp's README, verified in
-  `tools/server/server-schema.cpp`. Without laziness the model would be forced
-  to call a tool every turn. **The trigger HANDS its text to the grammar**:
-  `llama_grammar_accept_impl` (`src/llama-grammar.cpp`) calls
-  `llama_grammar_accept_token(grammar, token, piece)` when a trigger token
-  fires, and replays overlapping tokens for a pattern. The root must therefore
-  consume `<tool_call>` itself, or the server throws "Unexpected empty grammar
-  stack after accepting piece: <tool_call>" on the first call — met for real
-  on 2026-08-19 (the tag is a single special token, id 248058, on Paul's
-  model). The root also admits **several blocks**: with one, the grammar would
-  be satisfied after the first call and parallel calls could not be emitted.
-- The loop does NOT use `runStreamAgent` (`@aparte/engine`): that engine owns
-  the message list, incompatible with the append-only prompt. Own loop in
-  `core/src/agent/loop.ts` (friction recorded; the library added
-  `onHistoryAppend` in 0.4.0 — decision: keep the own loop through v1, and
-  pin every library rule the loop depends on with a contract test, as done for
-  `isSegmentSettled` and `collapsed` after the 0.13 bump).
+- **Native Node halves live in a dedicated process** (`utilityProcess`). In
+  v0, node-pty lived in the main process: a segfault would have taken the
+  application, and the loaded model, down.
+- **The plugin SDK pushes, with back-pressure** (`ctx.emit()` and
+  `ctx.onDrain()`), the model taken from VS Code. `emit` returns `false` when
+  the view is behind, and the producer must stop. Thresholds: pause at 100,000
+  unacknowledged, resume under 5,000, acknowledge in packets of 5,000, per
+  instance. The view acknowledges in `term.write`'s callback — when xterm has
+  displayed, not when the IPC delivered — otherwise the producer restarts too
+  early and output is lost.
+- **The built-in web search worked without a key** (a hidden browser and a
+  public engine); online providers stayed optional, their key in the vault.
+
+## Real-model smoke results
+
+Record here: the date, the model, the llama.cpp build, and the outcome of each
+case. The newest entry comes first.
+
+- **No run yet on the restarted code.** The first one is due at the gate of
+  phase 2.
+- **2026-09-26, v0 — 9/9 green.** Qwen3-1.7B Q4_K_M, llama.cpp
+  b10217-ddd4ec142 (the unified `llama` CLI), Windows, `-c 8192`, K/V f16, one
+  slot, temperature 0.2, seed 42. The cases: a real tool call, its execution,
+  its result and the answer; the lazy grammar does not force a call; the KV
+  prefix is kept after a tool round-trip (1,770 tokens served from the cache);
+  save and restore with tool turns (960 tokens restored in 26 ms); a restored
+  state serves as the prefix of a branch (602 of 602 tokens reused); prefix
+  seeds (518 tokens, the whole system block); the managed server refuses a
+  request without its per-launch key (HTTP 401); compaction is the rebase (the
+  summary kept a secret read from a file); a real MCP server over stdio (the
+  official filesystem server, 14 tools).
