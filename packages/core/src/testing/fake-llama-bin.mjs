@@ -36,6 +36,13 @@ function integer(...flags) {
   return Number.isInteger(number) ? number : undefined;
 }
 
+// A test can make the server fail the way a real one does: a message, then out.
+const failure = process.env['FAKE_LLAMA_FAIL'];
+if (failure) {
+  process.stderr.write(`error: ${failure}\n`);
+  process.exit(1);
+}
+
 const key = process.env['LLAMA_API_KEY'];
 if (!key) {
   process.stderr.write('fake-llama-bin: no LLAMA_API_KEY in the environment: bonaparte always gives one.\n');
@@ -63,6 +70,8 @@ try {
   });
   // What the real server says once it is ready (and never the key).
   process.stderr.write(`main: server is listening on http://127.0.0.1:${server.port}\n`);
+  // A test can make the server print its key, as a verbose build might.
+  if (process.env['FAKE_LLAMA_ECHO']) process.stderr.write(`main: api key ${key}\n`);
   const stop = () => {
     void server.close().finally(() => process.exit(0));
   };
