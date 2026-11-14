@@ -107,5 +107,13 @@ describe('ConversationStore', () => {
     const meta = await conversations.create(NEW);
     await expect(conversations.saveDocument(meta.id, { text: 'x'.repeat(65 * 1024 * 1024) })).rejects.toThrow(/too big/);
   });
+
+  it('ensures a conversation exists under an id: created once, never overwritten', async () => {
+    const { store: conversations } = await store();
+    const [one, two] = await Promise.all([conversations.ensure('c-1', NEW), conversations.ensure('c-1', NEW)]);
+    expect(one).toEqual(two);
+    await conversations.update('c-1', { title: 'Gardé' });
+    expect((await conversations.ensure('c-1', NEW)).title).toBe('Gardé');
+  });
 });
 

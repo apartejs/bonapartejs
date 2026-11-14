@@ -80,12 +80,12 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
 
     let meta;
     try {
-      meta =
-        (await core.conversationStore.get(conversationId)) ??
-        (await core.conversationStore.create(
-          { kind: 'code', engineId: 'builtin', modelId: (await core.engineState()).model?.name ?? '', mode: 'repetition' },
-          conversationId,
-        ));
+      meta = await core.conversationStore.ensure(conversationId, {
+        kind: 'code',
+        engineId: 'builtin',
+        modelId: (await core.engineState()).model?.name ?? '',
+        mode: 'repetition',
+      });
     } catch (error) {
       return jsonError(400, error instanceof Error ? error.message : String(error));
     }

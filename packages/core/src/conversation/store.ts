@@ -72,6 +72,23 @@ export class ConversationStore {
     return meta;
   }
 
+  /**
+   * The conversation under this id, created with `input` if it does not exist
+   * yet — once, never overwritten: the page may save its first message before
+   * that message's turn reaches the core, and both make sure it exists.
+   */
+  async ensure(id: string, input: NewConversation): Promise<ConversationMeta> {
+    return this.writes.run(idOf(id), async () => {
+      const existing = await this.get(id);
+      if (existing) return existing;
+      const now = new Date().toISOString();
+      const meta: ConversationMeta = { title: '', ...input, id, branchId: 'main', createdAt: now, updatedAt: now };
+      await mkdir(join(this.dir, id), { recursive: true });
+      await writeJsonFile(this.metaPath(id), meta);
+      return meta;
+    });
+  }
+
   async get(id: string): Promise<ConversationMeta | null> {
     const path = this.metaPath(id);
     try {
