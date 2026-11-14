@@ -23,6 +23,7 @@ import { copyFile, mkdir, rm, utimes } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
+import { enforceRetention, type RetentionReport } from './retention.js';
 
 /** What the engine runs now: what a saved state is checked against. */
 export interface LiveConfig {
@@ -84,6 +85,21 @@ export interface SeedStats {
 /** What the store asks of the server. */
 export type KvSlots = Pick<LlamaCppHttpClient, 'saveSlot' | 'restoreSlot'>;
 
+export interface KvStoreOptions {
+  /** The disk budget, read at each save (a live setting); absent: no retention. */
+  budgetBytes?: () => number;
+  /** What a save's retention did: for the log, and the « Moteur et mémoire » page. */
+  onRetention?: (report: RetentionReport) => void;
+}
+
+/** What a save will weigh, and what must survive it besides the state saved. */
+export interface SavePlan {
+  /** Tokens × bytes per token: room is made for it before writing. */
+  expectedBytes?: number;
+  /** The state about to be restored, never evicted to make room. */
+  keep?: readonly string[];
+}
+
 export function canRestore(manifest: Pinned, live: LiveConfig): RestoreVerdict {
   if (manifest.modelFingerprint !== live.modelFingerprint) return { ok: false, reason: 'other-model' };
   // Not "the same n_ctx": the saved tokens must fit — what the server checks too, said earlier and clearly.
@@ -120,8 +136,19 @@ async function readManifest<T>(path: string): Promise<T | null> {
 export class KvStore {
   private readonly manifests = new KeyedQueue();
 
-  constructor(readonly dir: string) {
+  constructor(
+    readonly dir: string,
+    private readonly options: KvStoreOptions = {},
+  ) {
     if (!isAbsolute(dir)) throw new Error(`The folder of the KV states must be an absolute path: ${dir}`);
+  }
+
+  /** Room for what is about to be written, before it is: the least recently used go, never `keep`. */
+  private async makeRoom(keep: readonly string[], plan: SavePlan): Promise<void> {
+    const budget = this.options.budgetBytes?.();
+    if (budget === undefined || !(budget > 0)) return;
+    const report = await enforceRetention(this.dir, budget, [...keep, ...(plan.keep ?? [])], plan.expectedBytes ?? 0);
+    if (report.evicted.length > 0 || report.overBudget) this.options.onRetention?.(report);
   }
 
   slotFilename(stateId: string): string {
@@ -179,7 +206,8 @@ export class KvStore {
     return true;
   }
 
-  async saveState(slots: KvSlots, idSlot: number, stateId: string, live: LiveConfig): Promise<KvManifest> {
+  async saveState(slots: KvSlots, idSlot: number, stateId: string, live: LiveConfig, plan: SavePlan = {}): Promise<KvManifest> {
+    await this.makeRoom([stateIdOf(stateId)], plan);
     const saved = await slots.saveSlot(idSlot, this.slotFilename(stateId));
     await mkdir(this.dir, { recursive: true });
     const manifest: KvManifest = {
@@ -226,7 +254,8 @@ export class KvStore {
   }
 
   /** Saves what the slot holds — the prefix, prefilled — as the seed `key`. */
-  async saveSeed(slots: KvSlots, idSlot: number, key: string, live: LiveConfig): Promise<SeedManifest> {
+  async saveSeed(slots: KvSlots, idSlot: number, key: string, live: LiveConfig, plan: SavePlan = {}): Promise<SeedManifest> {
+    await this.makeRoom([], plan);
     const saved = await slots.saveSlot(idSlot, this.seedFilename(key));
     const manifest: SeedManifest = {
       schemaVersion: 2,

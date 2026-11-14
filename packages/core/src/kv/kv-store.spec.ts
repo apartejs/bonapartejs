@@ -155,3 +155,52 @@ describe('KvStore — seeds', () => {
     expect(stats!.restoreMs).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe('KvStore — under a disk budget', () => {
+  it('makes room before it saves, from what the state will weigh — keeping the one about to be restored', async () => {
+    const { dir, client, prefill } = await rig();
+    const store = new KvStore(dir, { budgetBytes: () => 10_000 });
+    for (const id of ['old', 'next']) {
+      await writeFile(join(dir, `${id}.slot`), Buffer.alloc(4_000));
+      await writeFile(join(dir, `${id}.manifest.json`), '{}');
+    }
+    await prefill(PROMPT);
+    await store.saveState(client, 0, 'c1_main', LIVE, { expectedBytes: 3_000, keep: ['next'] });
+    const names = await readdir(dir);
+    expect(names).toContain('c1_main.slot');
+    expect(names).toContain('next.slot');
+    expect(names).not.toContain('old.slot');
+  });
+
+  it('refuses aloud a state bigger than the whole budget, and asks the server for nothing', async () => {
+    const { dir } = await rig();
+    const store = new KvStore(dir, { budgetBytes: () => 1_000 });
+    const asked: string[] = [];
+    const slots = {
+      saveSlot: async (_id: number, filename: string) => {
+        asked.push(filename);
+        return { idSlot: 0, filename, nSaved: 1, nWritten: 1, saveMs: 0 };
+      },
+      restoreSlot: async () => {
+        throw new Error('not here');
+      },
+    };
+    await expect(store.saveState(slots, 0, 'c1_main', LIVE, { expectedBytes: 5_000 })).rejects.toThrow(/does not fit/);
+    expect(asked).toEqual([]);
+  });
+
+  it('a save that fails — a full disk — says so, and leaves no manifest behind', async () => {
+    const { dir } = await rig();
+    const store = new KvStore(dir);
+    const slots = {
+      saveSlot: async () => {
+        throw new Error('failed to write the slot file: no space left on device');
+      },
+      restoreSlot: async () => {
+        throw new Error('not here');
+      },
+    };
+    await expect(store.saveState(slots, 0, 'c1_main', LIVE)).rejects.toThrow(/no space left/);
+    expect(await store.has('c1_main')).toBe(false);
+  });
+});
