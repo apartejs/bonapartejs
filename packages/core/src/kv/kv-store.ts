@@ -177,6 +177,11 @@ export class KvStore {
     return (await readManifest(this.manifestPath(stateId))) !== null;
   }
 
+  /** A saved state's manifest — what opening it will cost; null without one. */
+  manifest(stateId: string): Promise<KvManifest | null> {
+    return readManifest<KvManifest>(this.manifestPath(stateId));
+  }
+
   /** The tokens a state holds — what re-reading it would cost; undefined without one. */
   async savedTokens(stateId: string): Promise<number | undefined> {
     return (await readManifest<KvManifest>(this.manifestPath(stateId)))?.promptTokenCount;

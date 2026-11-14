@@ -165,4 +165,17 @@ describe('createSlotScheduler', () => {
     expect(calls).toEqual(['restore a', 'restore b', 'run b']);
     expect(String(errors[0])).toMatch(/no space/);
   });
+
+  it('says whether an owner sits in a slot, and forgets one without saving it', async () => {
+    const { scheduler, calls, work } = rig();
+    expect(scheduler.isResident(A)).toBe(false);
+    await scheduler.run(A, work('a'));
+    expect(scheduler.isResident(A)).toBe(true);
+    // The engine died, or the conversation was deleted: what the slot held is not saved.
+    scheduler.evict(A);
+    expect(scheduler.isResident(A)).toBe(false);
+    await scheduler.run(B, work('b'));
+    expect(calls).toEqual(['restore a@0', 'run a', 'restore b@0', 'run b']);
+  });
 });
+

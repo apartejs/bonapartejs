@@ -204,3 +204,14 @@ describe('KvStore — under a disk budget', () => {
     expect(await store.has('c1_main')).toBe(false);
   });
 });
+
+describe('KvStore — reading a manifest', () => {
+  it('gives the manifest of a saved state, and null without one', async () => {
+    const { store, client, prefill } = await rig();
+    expect(await store.manifest('c1_main')).toBeNull();
+    await prefill(PROMPT);
+    const saved = await store.saveState(client, 0, 'c1_main', LIVE);
+    expect(await store.manifest('c1_main')).toEqual(saved);
+  });
+});
+
