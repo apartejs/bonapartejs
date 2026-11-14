@@ -28,8 +28,11 @@ export interface FakeLlamaServerOptions {
    */
   paceMs?: number;
   /**
-   * Context size the server enforces: a prompt longer than this is refused
-   * with the 400 the real server sends when context shift is off.
+   * The server's context (`-c`), shared between its slots as llama.cpp does
+   * without a unified KV buffer: each slot gets `nCtx / totalSlots`, reported
+   * in `/props` and enforced — a longer prompt is refused with the 400 the
+   * real server sends when context shift is off. Absent: 4096 reported,
+   * nothing enforced.
    */
   nCtx?: number;
   /**
@@ -140,9 +143,10 @@ export async function startFakeLlamaServer(
 ): Promise<FakeLlamaServer> {
   const msPerToken = options.msPerToken ?? 1;
   const paceMs = options.paceMs ?? 0;
-  const nCtx = options.nCtx;
   const responder = options.responder ?? (() => 'ok');
   const totalSlots = options.totalSlots ?? 1;
+  /** The context one slot really has. */
+  const nCtx = options.nCtx === undefined ? undefined : Math.floor(options.nCtx / totalSlots);
   const modelPath = options.modelPath ?? 'C:\\fake\\model.gguf';
   const files = options.files ?? new Map<string, FakeSlotSnapshot>();
 
@@ -370,7 +374,7 @@ export async function startFakeLlamaServer(
           model_path: modelPath,
           total_slots: totalSlots,
           chat_template: '',
-          default_generation_settings: {},
+          default_generation_settings: { n_ctx: nCtx ?? 4096 },
         });
         return;
       }

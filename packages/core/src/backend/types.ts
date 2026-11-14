@@ -107,5 +107,7 @@ export interface SlotApi {
 export interface ServerProps {
   modelPath: string;
   totalSlots: number;
+  /** The context one slot really has (`-c` is shared between the slots); 0 when the server does not say. */
+  nCtx: number;
   chatTemplate: string;
 }

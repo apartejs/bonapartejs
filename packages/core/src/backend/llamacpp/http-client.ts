@@ -117,9 +117,11 @@ export class LlamaCppHttpClient {
     const raw = await expectJson<Record<string, unknown>>(
       await fetch(`${this.baseUrl}/props`, { headers: this.headers() }),
     );
+    const settings = (raw['default_generation_settings'] ?? {}) as Record<string, unknown>;
     return {
       modelPath: String(raw['model_path'] ?? ''),
       totalSlots: Number(raw['total_slots'] ?? 1),
+      nCtx: Number(settings['n_ctx'] ?? 0) || 0,
       chatTemplate: String(raw['chat_template'] ?? ''),
     };
   }

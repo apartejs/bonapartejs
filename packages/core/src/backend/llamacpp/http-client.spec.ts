@@ -52,6 +52,13 @@ describe('LlamaCppHttpClient', () => {
     expect(props.totalSlots).toBe(4);
   });
 
+  it('props() surfaces the context one slot really has: -c is shared between the slots', async () => {
+    const { client } = await startServer({ nCtx: 8192, totalSlots: 2 });
+    expect((await client.props()).nCtx).toBe(4096);
+    const { client: one } = await startServer({ nCtx: 8192 });
+    expect((await one.props()).nCtx).toBe(8192);
+  });
+
   it('complete() streams the tokens then the final stats', async () => {
     const { client } = await startServer({
       responder: () => 'bonjour le monde',
