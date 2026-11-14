@@ -348,8 +348,20 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
-- **No run yet on the restarted code.** The first one is due at the gate of
-  phase 2.
+- **2026-11-14, phase 2 — 5/5 green.** Gemma 4 26B-A4B-it UD-Q4_K_XL
+  (unsloth), llama.cpp b12383 (`llama-server`, the Vulkan package bonaparte
+  downloads and verifies), Windows, Radeon 8060S (unified memory: llama.cpp
+  lists 79,992 MiB), `-c 8192`, K/V f16, one slot, temperature 0.2, seed 42,
+  loaded in 13 s (37 s cold). Everything through `createCore`, as the app
+  does. The cases: the server refuses a request without the per-launch key
+  (HTTP 401); the rendering is the GGUF's own template byte for byte with
+  reasoning on (`/apply-template`), and a turn without reasoning opens as the
+  template opens one; the lazy tool grammar forces no call on a plain
+  question (answer « 4 »); a real model writes a Gemma call that the demux
+  reads (`read_file {path: notes.txt}`); Stop cuts a real generation — the
+  slot stopped 62 ms after it. Not loadable by official llama.cpp (b10217 nor
+  b12383): the Gemma 4 GGUFs that LM Studio stores with a `-gu` suffix
+  (`tensor 'blk.0.ffn_gate.weight' not found`).
 - **2026-09-26, v0 — 9/9 green.** Qwen3-1.7B Q4_K_M, llama.cpp
   b10217-ddd4ec142 (the unified `llama` CLI), Windows, `-c 8192`, K/V f16, one
   slot, temperature 0.2, seed 42. The cases: a real tool call, its execution,

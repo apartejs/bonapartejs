@@ -130,26 +130,38 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
   });
 
   it("renders a turn exactly as the model's own template does", async (context) => {
-    for (const thinking of [false, true]) {
-      const messages = [
-        { role: 'system', content: 'You are bonaparte.' },
-        { role: 'user', content: 'Bonjour' },
-      ];
-      let theirs: string;
+    const messages = [
+      { role: 'system', content: 'You are bonaparte.' },
+      { role: 'user', content: 'Bonjour' },
+    ];
+    const template = async (thinking: boolean): Promise<string | null> => {
       try {
-        theirs = await engine.client.applyTemplate(messages, { enable_thinking: thinking });
+        // The server adds the BOS token itself when it tokenizes a /completion prompt: ours has none.
+        return (await engine.client.applyTemplate(messages, { enable_thinking: thinking })).replace(/^<bos>/, '');
       } catch (error) {
         console.log(`[smoke] /apply-template is not available: ${String(error)}`);
-        context.skip();
-        return;
+        return null;
       }
+    };
+    const ours = (thinking: boolean): string => {
       const log = new PromptLog(engine.family);
       log.appendSystem('You are bonaparte.');
       log.appendUser('Bonjour');
-      const ours = log.beginAssistantTurn({ thinking });
-      // The server adds the BOS token itself when it tokenizes a /completion prompt: ours has none.
-      expect(theirs.replace(/^<bos>/, ''), `thinking ${thinking}`).toBe(ours);
+      return log.beginAssistantTurn({ thinking });
+    };
+
+    const reasoning = await template(true);
+    if (reasoning === null) {
+      context.skip();
+      return;
     }
+    // A conversation reasons — switched on once, in its frozen system turn —: the whole prompt is the template's.
+    expect(ours(true)).toBe(reasoning);
+    // A turn that should not reason opens as the template opens one. (The template, told
+    // not to reason, also leaves the switch out of the system turn: a frozen prompt cannot.)
+    const opening = engine.family.beginAssistant({ thinking: false });
+    expect((await template(false))!.endsWith(opening)).toBe(true);
+    expect(ours(false).endsWith(opening)).toBe(true);
   });
 
   it('a simple question under the lazy tool grammar: no call is forced', async () => {
