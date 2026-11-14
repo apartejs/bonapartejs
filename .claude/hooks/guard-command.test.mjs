@@ -110,3 +110,100 @@ test('lets through an input it does not understand', () => {
   const result = spawnSync(process.execPath, [script], { input: 'not json', encoding: 'utf8', windowsHide: true });
   assert.equal(result.status, 0);
 });
+
+// --- Found by the review of phase 0: ordinary ways of writing a command that
+// --- used to hide what followed them.
+
+const lines = (...parts) => parts.join('\n');
+
+const hiddenBehindQuoting = [
+  // A PowerShell here-string is how a multi-line commit message is written.
+  [lines("git commit -m @'", 'feat: x', "'@", 'git push origin v1'), 'PowerShell', /Paul pushes/],
+  [lines("git commit -m @'", 'msg', "'@; git push"), 'PowerShell', /Paul pushes/],
+  [lines('$m = @"', 'some text', '"@', 'Start-Process notepad'), 'PowerShell', /visible console/],
+  // In Bash a backtick inside double quotes is not an escape character.
+  ['git commit -am "fix \\`x\\`" && git push', 'Bash', /Paul pushes/],
+  // The Bash idiom for an apostrophe inside single quotes.
+  ["git commit -m 'Paul'\\''s fix' && git push", 'Bash', /Paul pushes/],
+  ["echo it\\'s && git push", 'Bash', /Paul pushes/],
+  // Git Bash needs `//c` to hand `/c` to cmd.
+  ['cmd //c start "" pnpm dev', 'Bash', /visible console/],
+  ['cmd //c "git push"', 'Bash', /Paul pushes/],
+  // Package runners run whatever follows them.
+  ['pnpm exec git push', 'Bash', /Paul pushes/],
+  ['pnpm --filter app exec git push', 'Bash', /Paul pushes/],
+  ['npx --yes git push', 'Bash', /Paul pushes/],
+];
+
+for (const [command, tool, message] of hiddenBehindQuoting) {
+  test(`sees through the quoting: ${JSON.stringify(command)}`, () => {
+    const { status, stderr } = guard(command, tool);
+    assert.equal(status, 2);
+    assert.match(stderr, message);
+  });
+}
+
+const stillAllowed = [
+  [lines("git commit -m @'", 'docs: explain why git push is refused', "'@"), 'PowerShell'],
+  ['git commit -am "fix \\`x\\`"', 'Bash'],
+  ["git commit -m 'Paul'\\''s fix'", 'Bash'],
+  ['pnpm exec vitest run -t "git push is refused"', 'Bash'],
+  ['git commit -am "x"', 'Bash'],
+  ['git merge -n topic', 'Bash'],
+  ['git add -A', 'Bash'],
+  ['git add .gitignore packages/core', 'Bash'],
+  ['git branch -D feature/x', 'Bash'],
+  ['git show archive/v0:README.md', 'Bash'],
+  ['git log --oneline archive/v0', 'Bash'],
+  ['git branch --list archive/v0', 'Bash'],
+];
+
+for (const [command, tool] of stillAllowed) {
+  test(`still lets through: ${JSON.stringify(command)}`, () => {
+    const { status, stderr } = guard(command, tool);
+    assert.equal(status, 0, stderr);
+  });
+}
+
+for (const command of ['git commit -n -m "x"', 'git commit -nm "x"', 'git commit -anm x']) {
+  test(`refuses the short form of --no-verify: ${command}`, () => {
+    const { status, stderr } = guard(command);
+    assert.equal(status, 2);
+    assert.match(stderr, /never skip/i);
+  });
+}
+
+for (const command of ["Start-Process pwsh -ArgumentList '-NoExit'", 'Start-Process pwsh -ArgumentList -NoLogo']) {
+  test(`an option meant for the child does not hide the window: ${command}`, () => {
+    const { status, stderr } = guard(command, 'PowerShell');
+    assert.equal(status, 2);
+    assert.match(stderr, /visible console/);
+  });
+}
+
+for (const command of ['git add -f docs/superpowers/plans/SUIVI.md', 'git add --force .claude/notes/x.md', 'git add -Af']) {
+  test(`refuses to force a file past .gitignore: ${command}`, () => {
+    const { status, stderr } = guard(command);
+    assert.equal(status, 2);
+    assert.match(stderr, /\.gitignore/);
+  });
+}
+
+const archiveAtRisk = [
+  'git branch -D archive/v0',
+  'git branch -d archive/v0',
+  'git branch --delete archive/v0',
+  'git branch -M archive/v0 old-v0',
+  'git branch -f archive/v0 HEAD',
+  'git switch -C archive/v0',
+  'git checkout -B archive/v0 HEAD',
+  'git update-ref -d refs/heads/archive/v0',
+];
+
+for (const command of archiveAtRisk) {
+  test(`protects the only copy of v0: ${command}`, () => {
+    const { status, stderr } = guard(command);
+    assert.equal(status, 2);
+    assert.match(stderr, /archive\/v0/);
+  });
+}
