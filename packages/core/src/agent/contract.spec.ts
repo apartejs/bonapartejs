@@ -103,6 +103,6 @@ describe("aparté's stock runner drives our handler", () => {
 
   it('turns a refusal before the stream into an error that carries our message', async () => {
     const { runner } = await setup('no engine');
-    await expect(runner(turnOf('Bonjour', []))).rejects.toThrow(/No engine is configured/);
+    await expect(runner(turnOf('Bonjour', []))).rejects.toThrow(/No model is loaded/);
   });
 });

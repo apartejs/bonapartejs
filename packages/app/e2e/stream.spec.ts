@@ -80,12 +80,12 @@ test('a reply is on the page while the engine is still writing it', async ({ lau
   await expect(ui.stopButton).toHaveCount(0);
 
   // The engine read the message, in the model's own template.
-  expect(server.getSlotTokens(0).join('')).toContain('<|im_start|>user\nBonjour<|im_end|>');
+  expect(server.getSlotTokens(0).join('')).toContain('<|turn>user\nBonjour<turn|>');
 });
 
 test('what the model thinks is kept apart from what it answers', async ({ launch }) => {
   const { page } = await launch({
-    engine: { responder: () => '<think>Il me salue, je salue.</think>Bonjour Paul.' },
+    engine: { responder: () => '<|channel>thought\nIl me salue, je salue.<channel|>Bonjour Paul.' },
   });
   const ui = chat(page);
 

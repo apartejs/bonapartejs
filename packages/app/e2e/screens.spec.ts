@@ -14,7 +14,7 @@ const folder = process.env['BONAPARTE_SCREENS'];
 
 // What a coding agent answers: some reasoning, a link to a file, two blocks of code.
 const REPLY = [
-  '<think>Il demande la version : elle est dans package.json.</think>',
+  '<|channel>thought\nIl demande la version : elle est dans package.json.<channel|>',
   'La version est dans [package.json](package.json), sous la clé `version` :',
   '',
   '```json',

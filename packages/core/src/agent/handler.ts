@@ -4,14 +4,14 @@
  * Electron's `protocol.handle`, with aparté's stock runner.
  *
  * Text only for now: the prompt is rendered from the messages of the request,
- * and the answer is streamed back as it is generated. The journal, the KV
- * memory and the tools arrive in the next phases.
+ * in the family of the engine's model, and the answer is streamed back as it
+ * is generated. The journal, the KV memory and the tools arrive in the next
+ * phases. A turn never loads a model: with none loaded, it is refused.
  */
 
-import type { Core } from '../api.js';
-import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
+import type { Core, Engine } from '../api.js';
 import type { CompletionStats } from '../backend/types.js';
-import { familyLayer, type DemuxEvent } from '../families/index.js';
+import type { DemuxEvent, FamilyLayer } from '../families/index.js';
 import { PromptLog } from '../prompt/prompt-log.js';
 import { agentBodySchema, messageText, type AgentBody } from './body.js';
 import { encodeEvent, type RunEvent, type WireLine } from './run-events.js';
@@ -57,22 +57,28 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       return jsonError(400, 'Body must be { v: 1, providerId?, messageId, request: { messages }, clientTools }.');
     }
 
-    const engine = await core.engine();
-    if (!engine) {
-      return jsonError(409, 'No engine is configured: choose a model, or connect a service, before sending a message.');
+    let engine: Engine | undefined;
+    try {
+      engine = await core.engine();
+    } catch (error) {
+      // A server that does not answer, a model the engine cannot speak, a
+      // configuration that cannot be read: said, never a silent load.
+      return jsonError(409, error instanceof Error ? error.message : String(error));
     }
-    return streamTurn(engine, body.data, request.signal);
+    if (!engine) {
+      return jsonError(409, 'No model is loaded: choose one, or connect a service, before sending a message.');
+    }
+    return streamTurn(engine, core.hold(), body.data, request.signal);
   };
 }
 
-/** The conversation, rendered once in the model's template, ready for the next answer. */
-function renderPrompt(messages: AgentBody['request']['messages']): string {
+/** The conversation, rendered once in the template of the model's family, ready for the next answer. */
+function renderPrompt(family: FamilyLayer, messages: AgentBody['request']['messages']): string {
   const system = messages
     .filter((message) => message.role === 'system')
     .map((message) => messageText(message.content))
     .join('\n\n');
-  // Qwen until the family is read from the model (task 2.7).
-  const log = new PromptLog(familyLayer('qwen'));
+  const log = new PromptLog(family);
   log.appendSystem(system || SYSTEM_PROMPT);
   for (const message of messages) {
     if (message.role === 'user') {
@@ -92,7 +98,8 @@ function toRunEvent(piece: DemuxEvent): RunEvent | null {
   return null;
 }
 
-function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSignal): Response {
+/** `release`: the engine was held for this turn — it is not unloaded while a turn works. */
+function streamTurn(engine: Engine, release: () => void, body: AgentBody, signal: AbortSignal): Response {
   const encoder = new TextEncoder();
   // Stops the generation: when the window cuts its request, or stops reading.
   const stop = new AbortController();
@@ -116,7 +123,7 @@ function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSi
         const started = Date.now();
         write({ type: 'run-start' });
         write({ type: 'turn-start' });
-        const demux = familyLayer('qwen').createDemux();
+        const demux = engine.family.createDemux();
         const forward = (pieces: DemuxEvent[]): void => {
           for (const piece of pieces) {
             const event = toRunEvent(piece);
@@ -124,10 +131,12 @@ function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSi
           }
         };
         let stats: CompletionStats | undefined;
-        const completion = engine.complete({
-          prompt: renderPrompt(body.request.messages),
+        const completion = engine.client.complete({
+          prompt: renderPrompt(engine.family, body.request.messages),
           cachePrompt: true,
           returnProgress: true,
+          // What ends an answer in this family (Gemma: also a tool call handing over).
+          sampling: { stop: [...engine.family.stop] },
           signal: stop.signal,
         });
         for await (const event of completion) {
@@ -171,7 +180,10 @@ function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSi
             write({ type: 'run-error', message: `The engine failed: ${reason.slice(0, 300)}` });
           }
         })
-        .finally(close);
+        .finally(() => {
+          release();
+          close();
+        });
     },
     // The reader went away (the window dropped the response): stop generating.
     cancel() {

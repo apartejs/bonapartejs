@@ -72,6 +72,8 @@ export interface FakeLlamaServerOptions {
   dropAfter?: number;
   /** Text generated for a given prompt (default: 'ok'). */
   responder?: (prompt: string) => string;
+  /** Sees the body of every completion request: what a test reads of what the client sent. */
+  onCompletion?: (body: Record<string, unknown>) => void;
   /** Number of slots (default 1). */
   totalSlots?: number;
   /** The chat template /props reports: what the family is read from (default: a Gemma 4 one). */
@@ -217,6 +219,7 @@ export async function startFakeLlamaServer(
 
     // `n_predict: 0` is a prefill: nothing generated, the responder not
     // consulted — as the real server behaves (verified on b10217).
+    options.onCompletion?.(body);
     const text = body['n_predict'] === 0 ? '' : responder(prompt);
     slots.set(idSlot, prompt + text);
 

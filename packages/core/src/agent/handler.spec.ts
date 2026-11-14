@@ -11,8 +11,11 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCore } from '../api.js';
+import { createCore, type Core } from '../api.js';
+import { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
+import { familyLayer } from '../families/index.js';
 import {
+  FAKE_QWEN_TEMPLATE,
   startFakeLlamaServer,
   type FakeLlamaServer,
   type FakeLlamaServerOptions,
@@ -114,12 +117,19 @@ describe('the agent handler, before the stream', () => {
     expect((await handler(elsewhere)).status).toBe(404);
   });
 
-  it('answers 409, with a message a person can read, when no engine is configured', async () => {
+  it('answers 409, with a message a person can read, when no model is loaded — never loads one', async () => {
     const dataDir = await mkdtemp(join(tmpdir(), 'bp-agent-'));
     const handler = createAgentHandler(createCore({ dataDir, env: {} }));
     const response = await handler(post(turn(user('Bonjour'))));
     expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ error: { message: expect.stringMatching(/engine/i) } });
+    expect(await response.json()).toEqual({ error: { message: expect.stringMatching(/no model is loaded/i) } });
+  });
+
+  it('answers 409 with what is wrong when the engine serves a model it cannot speak', async () => {
+    const { handler } = await setup({ chatTemplate: '### {{ m }}' });
+    const response = await handler(post(turn(user('Bonjour'))));
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: { message: string } }).error.message).toMatch(/template/i);
   });
 });
 
@@ -140,14 +150,14 @@ describe('the agent handler, streaming a turn', () => {
   });
 
   it('sends reasoning as thinking-delta, apart from the answer', async () => {
-    const { handler } = await setup({ responder: () => '<think>\nje compte\n</think>\n\nBonjour' });
+    const { handler } = await setup({ responder: () => '<|channel>thought\nje compte<channel|>Bonjour' });
     const lines = await linesOf(await handler(post(turn(user('Bonjour')))));
     expect(joined(lines, 'thinking-delta')).toContain('je compte');
     expect(joined(lines, 'text-delta').trim()).toBe('Bonjour');
     expect(joined(lines, 'text-delta')).not.toContain('think');
   });
 
-  it('sends the engine the whole conversation, in the Qwen template', async () => {
+  it("sends the engine the whole conversation, in the template of the model's family (Gemma)", async () => {
     const prompts: string[] = [];
     const { handler } = await setup({
       responder: (prompt) => {
@@ -162,10 +172,57 @@ describe('the agent handler, streaming a turn', () => {
     ];
     await linesOf(await handler(post(turn(...messages))));
     expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain('<|turn>user\nBonjour<turn|>\n');
+    expect(prompts[0]).toContain('Bonjour Paul<turn|>\n');
+    expect(prompts[0]).toContain('<|turn>user\nQuel jour sommes-nous ?<turn|>\n');
+    expect(prompts[0]!.endsWith('<|turn>model\n')).toBe(true);
+  });
+
+  it('speaks Qwen to a model whose template is Qwen', async () => {
+    const prompts: string[] = [];
+    const { handler } = await setup({
+      chatTemplate: FAKE_QWEN_TEMPLATE,
+      responder: (prompt) => {
+        prompts.push(prompt);
+        return 'ok';
+      },
+    });
+    await linesOf(await handler(post(turn(user('Bonjour')))));
     expect(prompts[0]).toContain('<|im_start|>user\nBonjour<|im_end|>\n');
-    expect(prompts[0]).toContain('Bonjour Paul<|im_end|>\n');
-    expect(prompts[0]).toContain('<|im_start|>user\nQuel jour sommes-nous ?<|im_end|>\n');
     expect(prompts[0]!.endsWith('<|im_start|>assistant\n')).toBe(true);
+  });
+
+  it("tells the engine where an answer ends in the model's family", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const { handler } = await setup({ onCompletion: (body) => bodies.push(body) });
+    await linesOf(await handler(post(turn(user('Bonjour')))));
+    expect(bodies[0]?.['stop']).toEqual(['<turn|>', '<|tool_response>']);
+  });
+
+  it('holds the engine for the turn, and lets it go when the turn ends, stopped or not', async () => {
+    const server = await startFakeLlamaServer({ paceMs: 20, responder: () => 'un deux trois quatre cinq six' });
+    servers.push(server);
+    let held = 0;
+    let released = 0;
+    const core = {
+      engine: async () => ({ client: new LlamaCppHttpClient(server.url), family: familyLayer('gemma') }),
+      hold: () => {
+        held += 1;
+        return () => (released += 1);
+      },
+    } as unknown as Core;
+    const handler = createAgentHandler(core);
+    await linesOf(await handler(post(turn(user('Bonjour')))));
+    expect([held, released]).toEqual([1, 1]);
+
+    const controller = new AbortController();
+    const response = await handler(post(turn(user('Encore')), { signal: controller.signal }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    controller.abort();
+    while (!(await reader.read()).done);
+    await expect.poll(() => released).toBe(2);
+    expect(held).toBe(2);
   });
 
   it('emits run-aborted then run-done and cuts the completion when the request is aborted', async () => {
