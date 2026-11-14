@@ -64,7 +64,11 @@ try {
     port,
     apiKey: key,
     modelPath: value('-m', '--model') ?? '',
-    ...(nCtx !== undefined && nCtx > 0 ? { nCtx } : {}),
+    // FAKE_LLAMA_UNIFIED: one KV pool for every slot, as `--kv-unified` gives:
+    // each slot then reports the whole context.
+    ...(nCtx !== undefined && nCtx > 0
+      ? { nCtx: process.env['FAKE_LLAMA_UNIFIED'] ? nCtx * (slots ?? 1) : nCtx }
+      : {}),
     ...(slots !== undefined && slots > 0 ? { totalSlots: slots } : {}),
     ...(slotDir !== undefined ? { slotDir } : {}),
   });
