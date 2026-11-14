@@ -180,8 +180,21 @@ export async function startFakeLlamaServer(
 
   let aborted = 0;
   let finished = 0;
+  /** The slots generating now, as `/slots` reports them (`is_processing`). */
+  const processing = new Set<number>();
 
-  async function handleCompletion(
+  async function handleCompletion(body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+    const rawSlot = body['id_slot'];
+    const idSlot = typeof rawSlot === 'number' && rawSlot !== -1 ? rawSlot : 0;
+    processing.add(idSlot);
+    try {
+      await runCompletion(body, res);
+    } finally {
+      processing.delete(idSlot);
+    }
+  }
+
+  async function runCompletion(
     body: Record<string, unknown>,
     res: ServerResponse,
   ): Promise<void> {
@@ -400,10 +413,24 @@ export async function startFakeLlamaServer(
 
       if (req.method === 'GET' && url.pathname === '/slots') {
         const list = Array.from({ length: totalSlots }, (_, id) => ({
+          id,
+          is_processing: processing.has(id),
           id_slot: id,
           n_ctx_used: slotTokens(id).length,
         }));
         json(res, 200, list);
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/apply-template') {
+        // Not a template engine: the shape of a Gemma 4 prompt for plain text
+        // turns, enough for a client to be tested. The real server renders
+        // with the model's own template; the smoke compares ours with it.
+        const { messages } = (await readBody(req)) as { messages?: { role: string; content: string }[] };
+        const turns = (messages ?? []).map(
+          ({ role, content }) => `<|turn>${role === 'assistant' ? 'model' : role}\n${content}<turn|>\n`,
+        );
+        json(res, 200, { prompt: `<bos>${turns.join('')}<|turn>model\n` });
         return;
       }
 

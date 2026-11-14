@@ -126,6 +126,33 @@ export class LlamaCppHttpClient {
     };
   }
 
+  /**
+   * The prompt the server's own template makes of these messages (route
+   * `/apply-template`). Never what a turn is sent with — the prompt is ours,
+   * append-only: this is how a smoke compares our rendering with the model's.
+   */
+  async applyTemplate(
+    messages: readonly { role: string; content: string }[],
+    templateKwargs?: Record<string, unknown>,
+  ): Promise<string> {
+    const raw = await expectJson<Record<string, unknown>>(
+      await fetch(`${this.baseUrl}/apply-template`, {
+        method: 'POST',
+        headers: this.headers({ 'content-type': 'application/json' }),
+        body: JSON.stringify({ messages, ...(templateKwargs ? { chat_template_kwargs: templateKwargs } : {}) }),
+      }),
+    );
+    return String(raw['prompt'] ?? '');
+  }
+
+  /** Each slot, and whether it is generating now (route `/slots`). */
+  async slots(): Promise<{ id: number; processing: boolean }[]> {
+    const raw = await expectJson<Record<string, unknown>[]>(
+      await fetch(`${this.baseUrl}/slots`, { headers: this.headers() }),
+    );
+    return raw.map((slot) => ({ id: Number(slot['id']), processing: slot['is_processing'] === true }));
+  }
+
   async *complete(request: CompletionRequest): AsyncIterable<CompletionEvent> {
     const res = await fetch(`${this.baseUrl}/completion`, {
       method: 'POST',

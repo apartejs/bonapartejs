@@ -200,4 +200,31 @@ describe('LlamaCppHttpClient', () => {
     // What was generated before the failure was delivered first.
     expect(text).toBe('one two ');
   });
+
+  it('applyTemplate() asks the server to render messages with its own template, and gives the prompt', async () => {
+    const { client } = await startServer();
+    const prompt = await client.applyTemplate([{ role: 'user', content: 'Bonjour' }], { enable_thinking: false });
+    expect(prompt).toBe('<bos><|turn>user\nBonjour<turn|>\n<|turn>model\n');
+  });
+
+  it('slots() says which slots are generating, and stop saying it once the stream is cut', async () => {
+    const { server, client } = await startServer({ totalSlots: 2, paceMs: 20, responder: () => 'one '.repeat(200) });
+    expect(await client.slots()).toEqual([
+      { id: 0, processing: false },
+      { id: 1, processing: false },
+    ]);
+
+    const controller = new AbortController();
+    const stream = client.complete({ prompt: 'count', idSlot: 1, signal: controller.signal })[Symbol.asyncIterator]();
+    await stream.next();
+    expect(await client.slots()).toEqual([
+      { id: 0, processing: false },
+      { id: 1, processing: true },
+    ]);
+
+    controller.abort();
+    await stream.next().catch(() => undefined);
+    await expect.poll(async () => (await client.slots())[1]?.processing).toBe(false);
+    expect(server.aborted).toBe(1);
+  });
 });
