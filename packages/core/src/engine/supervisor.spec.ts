@@ -225,6 +225,18 @@ describe('EngineSupervisor — a managed engine', () => {
     await waitFor(() => supervisor.status() === 'stopped');
   });
 
+  it('says stopped only once it has forgotten what it served', async () => {
+    const { supervisor, modelA } = await setup();
+    await supervisor.configure(MANAGED);
+    await supervisor.ensureLoaded(modelA);
+    const seen: unknown[] = [];
+    supervisor.onStatusChange((status) => {
+      if (status === 'stopped') seen.push({ loaded: supervisor.loaded, live: supervisor.live, client: supervisor.client() });
+    });
+    await supervisor.stop();
+    expect(seen).toEqual([{ loaded: null, live: null, client: undefined }]);
+  });
+
   it('refuses to load before it is configured', async () => {
     const { supervisor, modelA } = await setup();
     await expect(supervisor.ensureLoaded(modelA)).rejects.toThrow(/not configured/);

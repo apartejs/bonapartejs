@@ -359,6 +359,10 @@ export class EngineSupervisor {
 
   private async teardown(): Promise<void> {
     this.clearIdleTimer();
+    // Forgotten first: the 'stopped' the server announces is heard with the
+    // state it describes, not with the model it no longer serves.
+    this.liveEngine = null;
+    this.loadedModel = null;
     const server = this.managed;
     if (server) {
       // The 'stopped' the server announces is part of the story listeners
