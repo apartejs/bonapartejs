@@ -1,0 +1,192 @@
+/**
+ * The slots of the engine — one by default — and who has each. A
+ * conversation, a sub-agent or work beside them (a compaction, a seed) asks
+ * for a slot; requests are served in the order they arrived. When a slot
+ * changes hands, the owner leaving is saved if anything changed since it
+ * arrived, and the one arriving is restored: the KV state follows its
+ * conversation. Work beside a conversation runs on its slot without moving it
+ * out — what it adds after the conversation's prefix is dropped by the
+ * server at the next turn (cache_prompt keeps the common prefix).
+ */
+
+export type SlotOwner =
+  | { kind: 'conversation'; conversationId: string; branchId: string }
+  | { kind: 'subagent'; conversationId: string; agentId: string; name: string }
+  | { kind: 'side'; purpose: 'compaction' | 'seed' };
+
+export interface SlotHandle {
+  readonly id: number;
+  /** This job left the slot as it found it: the owner need not be saved again for it. */
+  unchanged(): void;
+}
+
+export interface SlotScheduler {
+  run<T>(owner: SlotOwner, job: (slot: SlotHandle) => Promise<T>, options?: { signal?: AbortSignal }): Promise<T>;
+  /** The owners working now. */
+  readonly busy: readonly SlotOwner[];
+  /** The owners waiting for a slot, in order. */
+  readonly waiting: readonly SlotOwner[];
+  /** Saves every owner whose state changed (the app closes). */
+  flush(): Promise<void>;
+  onChange(listener: () => void): () => void;
+}
+
+export interface SlotSchedulerOptions {
+  slots: number;
+  save(owner: SlotOwner, slotId: number): Promise<void>;
+  restore(owner: SlotOwner, slotId: number): Promise<void>;
+  /** A save that failed: the state is lost (a re-read later), the next owner goes on. */
+  onError?(error: unknown, owner: SlotOwner): void;
+}
+
+interface Slot {
+  id: number;
+  resident: SlotOwner | null;
+  dirty: boolean;
+  running: SlotOwner | null;
+  usedAt: number;
+}
+
+interface Waiter {
+  owner: SlotOwner;
+  start(slot: Slot): void;
+}
+
+function keyOf(owner: SlotOwner): string {
+  if (owner.kind === 'conversation') return `conversation:${owner.conversationId}:${owner.branchId}`;
+  if (owner.kind === 'subagent') return `subagent:${owner.conversationId}:${owner.agentId}`;
+  return `side:${owner.purpose}`;
+}
+
+export function createSlotScheduler(options: SlotSchedulerOptions): SlotScheduler {
+  const slots: Slot[] = Array.from({ length: Math.max(1, options.slots) }, (_, id) => ({
+    id,
+    resident: null,
+    dirty: false,
+    running: null,
+    usedAt: 0,
+  }));
+  const queue: Waiter[] = [];
+  const listeners = new Set<() => void>();
+  let clock = 0;
+
+  const emit = (): void => {
+    for (const listener of [...listeners]) listener();
+  };
+
+  /** The slot for an owner: the one it already sits in, else an empty one, else the least recently used. */
+  function slotFor(owner: SlotOwner): Slot | undefined {
+    const free = slots.filter((slot) => slot.running === null);
+    if (free.length === 0) return undefined;
+    if (owner.kind !== 'side') {
+      const home = free.find((slot) => slot.resident && keyOf(slot.resident) === keyOf(owner));
+      if (home) return home;
+    }
+    return free.find((slot) => slot.resident === null) ?? [...free].sort((a, b) => a.usedAt - b.usedAt)[0];
+  }
+
+  function dispatch(): void {
+    while (queue.length > 0) {
+      const slot = slotFor(queue[0]!.owner);
+      if (!slot) return;
+      const waiter = queue.shift()!;
+      slot.running = waiter.owner;
+      waiter.start(slot);
+    }
+  }
+
+  async function save(slot: Slot): Promise<void> {
+    const resident = slot.resident;
+    if (!resident || !slot.dirty) return;
+    try {
+      await options.save(resident, slot.id);
+      slot.dirty = false;
+    } catch (error) {
+      options.onError?.(error, resident);
+      slot.resident = null;
+      slot.dirty = false;
+    }
+  }
+
+  async function take(slot: Slot, owner: SlotOwner): Promise<void> {
+    if (owner.kind === 'side' || (slot.resident && keyOf(slot.resident) === keyOf(owner))) return;
+    await save(slot);
+    slot.resident = null;
+    await options.restore(owner, slot.id);
+    slot.resident = owner;
+    slot.dirty = false;
+  }
+
+  return {
+    run<T>(owner: SlotOwner, job: (slot: SlotHandle) => Promise<T>, runOptions: { signal?: AbortSignal } = {}): Promise<T> {
+      const signal = runOptions.signal;
+      return new Promise<T>((resolve, reject) => {
+        const aborted = (): DOMException => new DOMException('The request for the slot was aborted.', 'AbortError');
+        if (signal?.aborted) {
+          reject(aborted());
+          return;
+        }
+        const onAbort = (): void => {
+          const index = queue.indexOf(waiter);
+          if (index < 0) return;
+          queue.splice(index, 1);
+          reject(aborted());
+          emit();
+        };
+        const waiter: Waiter = {
+          owner,
+          start(slot) {
+            signal?.removeEventListener('abort', onAbort);
+            emit();
+            void (async () => {
+              let changed = true;
+              try {
+                await take(slot, owner);
+                const result = await job({
+                  id: slot.id,
+                  unchanged: () => {
+                    changed = false;
+                  },
+                });
+                resolve(result);
+              } catch (error) {
+                reject(error);
+              } finally {
+                if (owner.kind !== 'side' && changed && slot.resident && keyOf(slot.resident) === keyOf(owner)) {
+                  slot.dirty = true;
+                }
+                slot.running = null;
+                slot.usedAt = ++clock;
+                emit();
+                dispatch();
+              }
+            })();
+          },
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        queue.push(waiter);
+        emit();
+        dispatch();
+      });
+    },
+
+    get busy() {
+      return slots.flatMap((slot) => (slot.running ? [slot.running] : []));
+    },
+
+    get waiting() {
+      return queue.map((waiter) => waiter.owner);
+    },
+
+    async flush() {
+      for (const slot of slots) {
+        if (slot.running === null) await save(slot);
+      }
+    },
+
+    onChange(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+}

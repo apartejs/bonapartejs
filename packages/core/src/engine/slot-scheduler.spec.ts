@@ -1,0 +1,168 @@
+/**
+ * The slot is the engine's scarce resource: one by default. Conversations,
+ * sub-agents and the work beside them (a compaction, a seed) take it in
+ * turn. When its owner changes, the one leaving is saved — if it changed —
+ * and the one arriving restored. A request stopped while it waits never
+ * takes the slot.
+ */
+
+import { describe, expect, it } from 'vitest';
+import { createSlotScheduler, type SlotOwner } from './slot-scheduler.js';
+
+const A: SlotOwner = { kind: 'conversation', conversationId: 'a', branchId: 'main' };
+const B: SlotOwner = { kind: 'conversation', conversationId: 'b', branchId: 'main' };
+const SIDE: SlotOwner = { kind: 'side', purpose: 'compaction' };
+
+function name(owner: SlotOwner): string {
+  return owner.kind === 'conversation' ? owner.conversationId : owner.kind === 'subagent' ? owner.agentId : owner.purpose;
+}
+
+function rig(slots = 1) {
+  const calls: string[] = [];
+  const scheduler = createSlotScheduler({
+    slots,
+    save: async (owner, slot) => void calls.push(`save ${name(owner)}@${slot}`),
+    restore: async (owner, slot) => void calls.push(`restore ${name(owner)}@${slot}`),
+  });
+  const work = (label: string) => async () => void calls.push(`run ${label}`);
+  return { scheduler, calls, work };
+}
+
+const gate = () => {
+  let open!: () => void;
+  const opened = new Promise<void>((resolve) => (open = resolve));
+  return { open, opened };
+};
+
+describe('createSlotScheduler', () => {
+  it('going from A to B and back saves A, restores B, then saves B and restores A', async () => {
+    const { scheduler, calls, work } = rig();
+    await scheduler.run(A, work('a'));
+    await scheduler.run(B, work('b'));
+    await scheduler.run(A, work('a again'));
+    expect(calls).toEqual([
+      'restore a@0',
+      'run a',
+      'save a@0',
+      'restore b@0',
+      'run b',
+      'save b@0',
+      'restore a@0',
+      'run a again',
+    ]);
+  });
+
+  it('a conversation that stays in the slot is neither saved nor restored between its turns', async () => {
+    const { scheduler, calls, work } = rig();
+    await scheduler.run(A, work('1'));
+    await scheduler.run(A, work('2'));
+    expect(calls).toEqual(['restore a@0', 'run 1', 'run 2']);
+  });
+
+  it('does not write A again when nothing ran in it', async () => {
+    const { scheduler, calls } = rig();
+    await scheduler.run(A, async (slot) => {
+      calls.push('look at a');
+      slot.unchanged();
+    });
+    await scheduler.run(B, async () => void calls.push('run b'));
+    expect(calls).toEqual(['restore a@0', 'look at a', 'restore b@0', 'run b']);
+  });
+
+  it('work beside a conversation runs on its slot without moving it out', async () => {
+    const { scheduler, calls, work } = rig();
+    await scheduler.run(A, work('a'));
+    await scheduler.run(SIDE, work('summary'));
+    await scheduler.run(A, work('a again'));
+    expect(calls).toEqual(['restore a@0', 'run a', 'run summary', 'run a again']);
+  });
+
+  it('serves the requests in the order they arrived, one at a time on one slot', async () => {
+    const { scheduler } = rig();
+    const order: string[] = [];
+    const first = gate();
+    const running = scheduler.run(A, async () => {
+      order.push('a starts');
+      await first.opened;
+      order.push('a ends');
+    });
+    const b = scheduler.run(B, async () => void order.push('b'));
+    const c = scheduler.run({ kind: 'conversation', conversationId: 'c', branchId: 'main' }, async () => void order.push('c'));
+    await Promise.resolve();
+    expect(scheduler.busy).toEqual([A]);
+    expect(scheduler.waiting).toEqual([B, { kind: 'conversation', conversationId: 'c', branchId: 'main' }]);
+    first.open();
+    await Promise.all([running, b, c]);
+    expect(order).toEqual(['a starts', 'a ends', 'b', 'c']);
+  });
+
+  it('a request stopped while it waits never takes the slot', async () => {
+    const { scheduler, calls } = rig();
+    const first = gate();
+    const running = scheduler.run(A, () => first.opened);
+    const controller = new AbortController();
+    const waiting = scheduler.run(B, async () => void calls.push('run b'), { signal: controller.signal });
+    controller.abort();
+    await expect(waiting).rejects.toThrow(/abort/i);
+    first.open();
+    await running;
+    await scheduler.run(A, async () => void calls.push('run a'));
+    expect(calls).toEqual(['restore a@0', 'run a']);
+  });
+
+  it('with two slots, two owners work at the same time, each kept on its own slot', async () => {
+    const { scheduler, calls } = rig(2);
+    const both = gate();
+    let together = 0;
+    const job = async () => {
+      together += 1;
+      await both.opened;
+    };
+    const a = scheduler.run(A, job);
+    const b = scheduler.run(B, job);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(together).toBe(2);
+    both.open();
+    await Promise.all([a, b]);
+    await scheduler.run(B, async () => void calls.push('run b again'));
+    expect(calls.filter((call) => call.startsWith('restore'))).toEqual(['restore a@0', 'restore b@1']);
+  });
+
+  it('saves what changed when the app closes', async () => {
+    const { scheduler, calls, work } = rig();
+    await scheduler.run(A, work('a'));
+    await scheduler.flush();
+    await scheduler.flush();
+    expect(calls).toEqual(['restore a@0', 'run a', 'save a@0']);
+  });
+
+  it('tells its listeners when the slot changes hands', async () => {
+    const { scheduler, work } = rig();
+    let changes = 0;
+    const stop = scheduler.onChange(() => (changes += 1));
+    await scheduler.run(A, work('a'));
+    stop();
+    await scheduler.run(B, work('b'));
+    expect(changes).toBeGreaterThanOrEqual(2);
+    const after = changes;
+    await scheduler.run(A, work('a'));
+    expect(changes).toBe(after);
+  });
+
+  it('a save that fails costs the state, not the next owner its turn', async () => {
+    const calls: string[] = [];
+    const errors: unknown[] = [];
+    const scheduler = createSlotScheduler({
+      slots: 1,
+      save: async () => {
+        throw new Error('no space left on device');
+      },
+      restore: async (owner) => void calls.push(`restore ${name(owner)}`),
+      onError: (error) => errors.push(error),
+    });
+    await scheduler.run(A, async () => undefined);
+    await scheduler.run(B, async () => void calls.push('run b'));
+    expect(calls).toEqual(['restore a', 'restore b', 'run b']);
+    expect(String(errors[0])).toMatch(/no space/);
+  });
+});
