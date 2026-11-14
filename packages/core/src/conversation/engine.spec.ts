@@ -220,3 +220,41 @@ describe('ConversationEngine — removing', () => {
     expect(await kv.manifest(`${a.id}_main`)).toBeNull();
   });
 });
+
+describe('ConversationEngine — branches', () => {
+  it('asking the last answer again: a branch after the last message, served by the cache up to it', async () => {
+    const { store, engine, conversation, say } = await rig({ server: { responder: () => `réponse ${Math.random()}` } });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    await say(meta.id, 'Et ensuite ?');
+    const before = (await openJournal(store.dir, meta.id)).entries();
+    const lastUser = before.findLast((entry) => entry.kind === 'user')!;
+
+    const result = await engine.turn(meta.id, { forkAfter: lastUser.id }, () => undefined);
+    // Only the opening of the answer was read: everything up to the message came from the cache.
+    expect(result.usage.inputTokens - (result.usage.cacheReadTokens ?? 0)).toBeLessThan(10);
+    const branchId = (await store.get(meta.id))!.branchId;
+    expect(branchId).not.toBe('main');
+    const branch = (await openJournal(store.dir, meta.id, branchId)).entries();
+    expect(branch.map((entry) => entry.kind)).toEqual(['system', 'system', 'user', 'assistant', 'user', 'assistant']);
+    expect(branch.at(-1)).not.toEqual(before.at(-1));
+    // The answer before is still there, in the branch it belongs to.
+    expect((await openJournal(store.dir, meta.id, 'main')).entries()).toEqual(before);
+  });
+
+  it('a message changed: a branch where it stood, the new text from there, the old suite kept', async () => {
+    const { store, engine, conversation, say } = await rig();
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    await say(meta.id, 'Et ensuite ?');
+    const firstAnswer = (await openJournal(store.dir, meta.id)).entries().find((entry) => entry.kind === 'assistant')!;
+    await engine.turn(meta.id, { text: 'Autre chose', forkAfter: firstAnswer.id }, () => undefined);
+    const branchId = (await store.get(meta.id))!.branchId;
+    const texts = (await openJournal(store.dir, meta.id, branchId))
+      .entries()
+      .flatMap((entry) => (entry.kind === 'user' ? [entry.text] : []));
+    expect(texts).toEqual(['Bonjour', 'Autre chose']);
+    const old = (await openJournal(store.dir, meta.id, 'main')).entries().flatMap((entry) => (entry.kind === 'user' ? [entry.text] : []));
+    expect(old).toEqual(['Bonjour', 'Et ensuite ?']);
+  });
+});

@@ -25,7 +25,7 @@ import type { MeasureStore } from '../engine/measures.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
-import type { JournalEntry, Usage } from '../journal/types.js';
+import type { Journal, JournalEntry, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -71,9 +71,15 @@ export type TurnEvent =
   | { type: 'progress'; done: number; total: number };
 
 export interface TurnInput {
-  text: string;
+  /** The person's message; absent: the last one is answered again (with `forkAfter`). */
+  text?: string;
   messageId?: string;
   thinking?: boolean;
+  /**
+   * A branch first, after this entry: the last answer asked again (`retry`),
+   * or a message changed (`edit`). What followed stays in the branch it was in.
+   */
+  forkAfter?: string;
 }
 
 export interface TurnResult {
@@ -199,13 +205,28 @@ export class ConversationEngine {
     return { kind: 'conversation', conversationId: meta.id, branchId: meta.branchId };
   }
 
+  /**
+   * A new branch after `afterEntryId`. The branch it comes from is saved
+   * first, and its state given to the new one: the new answer is served by
+   * the cache up to the branch point.
+   */
+  private async fork(meta: ConversationMeta, journal: Journal, afterEntryId: string): Promise<{ meta: ConversationMeta; journal: Journal }> {
+    const parent = this.ownerOf(meta);
+    await this.scheduler.flush();
+    const branch = await journal.fork(afterEntryId);
+    const child: SlotOwner = { kind: 'conversation', conversationId: meta.id, branchId: branch.branchId };
+    await this.deps.kv.copyState(ownerKey(parent), ownerKey(child));
+    return { meta: await this.deps.store.update(meta.id, { branchId: branch.branchId }), journal: branch };
+  }
+
   private async runTurn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> {
-    const meta = await this.deps.store.get(id);
+    let meta = await this.deps.store.get(id);
     if (!meta) throw new Error(`There is no conversation ${id}.`);
     const engine = await this.deps.engine();
     if (!engine) throw new NoEngineError();
     const { family, client } = engine;
-    const journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+    let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+    if (input.forkAfter) ({ meta, journal } = await this.fork(meta, journal, input.forkAfter));
 
     if (!journal.entries().some((entry) => entry.kind === 'system')) {
       const prompt = buildSystemPrompt({ ...this.deps.prompt(meta), family });
@@ -215,7 +236,8 @@ export class ConversationEngine {
     const entries = journal.entries();
     const stable = entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
     const frozen = frozenPrompt(entries);
-    const userRendered = family.renderUser(input.text);
+    // Answering the last message again appends no message.
+    const userRendered = input.text === undefined ? '' : family.renderUser(input.text);
     const opening = family.beginAssistant({ thinking: input.thinking ?? true });
 
     // Never a context shift: what does not fit is refused before anything is sent.
@@ -224,12 +246,15 @@ export class ConversationEngine {
     const used = estimateTokens(frozen + userRendered + opening);
     if (used + REPLY_ROOM > window) throw new ContextFullError(this.contextFull(engine, used, window));
 
-    const user = await journal.append({
-      kind: 'user',
-      text: input.text,
-      rendered: userRendered,
-      ...(input.messageId ? { messageId: input.messageId } : {}),
-    });
+    const user =
+      input.text === undefined
+        ? null
+        : await journal.append({
+            kind: 'user',
+            text: input.text,
+            rendered: userRendered,
+            ...(input.messageId ? { messageId: input.messageId } : {}),
+          });
     const owner = this.ownerOf(meta);
     const key = ownerKey(owner);
     const turning: Turning = { engine, stable, history: entries.some((entry) => entry.kind === 'user'), sink, rereading: false };
@@ -289,7 +314,7 @@ export class ConversationEngine {
             if (refusedAsTooLong(error)) {
               // The server read nothing of it: the slot holds what it held, and the message is taken back.
               slot.unchanged();
-              await journal.append({ kind: 'withdrawn', entryId: user.id });
+              if (user) await journal.append({ kind: 'withdrawn', entryId: user.id });
               throw new ContextFullError(this.contextFull(engine, used, window));
             }
             await journal.append({ kind: 'assistant', raw, stopped: 'engine', rendered: opening + raw + family.endAssistant(raw) });
