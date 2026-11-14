@@ -1,9 +1,10 @@
 /**
  * How a test finds its way in aparté's chat.
  *
- * The library documents no hook for tests. These selectors were read in its
- * source (1.7.0) and checked against the installed build; they live here, in
- * one place, so that a release that moves one breaks one file.
+ * The library documents no hook for tests (apartejs/aparte#203). These
+ * selectors were read in its source (1.7.0) and checked against the installed
+ * build; they live here, in one place, so that a release that moves one breaks
+ * one file. When the library names the hooks a test may rely on, use those.
  *
  * Everything is in the light DOM. `<AparteChat>` renders a
  * `div[data-aparte-chat]`; each message is an `<aparte-chat-bubble>`; the
