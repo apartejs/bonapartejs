@@ -15,17 +15,21 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Notes privées — ne JAMAIS retirer (repo public)
+# Private design notes — NEVER remove this line (the repository is public)
 docs/superpowers/
 
-# Retours d'audit et notes de travail des agents — privé, jamais poussé
-.claude/
+# Claude Code: the shared configuration is tracked, everything else stays local
+.claude/*
+!.claude/settings.json
+!.claude/agents/
+!.claude/skills/
+!.claude/hooks/
 
-# Artefacts Playwright
+# Playwright artefacts
 packages/app/test-results/
 packages/app/playwright-report/
 
-# Paquets locaux (spike npx : pnpm pack)
+# Local packages (pnpm pack)
 *.tgz
 
 # App directory assembled inside the CLI package for `npx` (pnpm pack)
