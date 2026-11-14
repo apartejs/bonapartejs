@@ -56,28 +56,28 @@ test('the agent endpoint streams: the first piece arrives long before the last',
   expect(seen.arrivals.at(-1)! - seen.arrivals[0]!).toBeGreaterThan(500);
 });
 
-test('a reply appears in the conversation, piece by piece', async ({ launch }) => {
+test('a reply is on the page while the engine is still writing it', async ({ launch }) => {
   const reply = 'Bonjour Paul, voici une phrase assez longue pour arriver en plusieurs morceaux.';
-  const { page, server } = await launch({ engine: { responder: () => reply, paceMs: 80 } });
+  // 150 ms between two words: the engine needs close to two seconds for the whole answer.
+  const { page, server } = await launch({ engine: { responder: () => reply, paceMs: 150 } });
   const ui = chat(page);
 
-  await ui.watchReply();
   await ui.send('Bonjour');
 
   await expect(ui.userMessages).toHaveCount(1);
   await expect(ui.userMessages.first()).toContainText('Bonjour');
+  // Its first words are shown, and the engine has not finished: the answer is
+  // not held back and delivered whole. (Watching the text grow would prove
+  // nothing: aparté reveals a text gradually even when it arrives at once.)
+  await expect(ui.replyText).toContainText('Bonjour Paul');
+  expect(server.finished).toBe(0);
+
   await expect(ui.replyText).toHaveText(reply, { timeout: 15_000 });
+  await expect.poll(() => server.finished).toBe(1);
   await expect(ui.streamingReplies).toHaveCount(0);
   await expect(ui.errors).toHaveCount(0);
   // The composer is ready for the next message.
   await expect(ui.stopButton).toHaveCount(0);
-
-  // Piece by piece: the reply was seen shorter before it was seen whole.
-  const states = await ui.replyStates();
-  expect(states.length).toBeGreaterThanOrEqual(3);
-  expect(states[0]!.length).toBeLessThan(reply.length);
-  expect(reply.startsWith(states[0]!)).toBe(true);
-  expect(states.at(-1)).toBe(reply);
 
   // The engine read the message, in the model's own template.
   expect(server.getSlotTokens(0).join('')).toContain('<|im_start|>user\nBonjour<|im_end|>');

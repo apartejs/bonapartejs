@@ -17,9 +17,13 @@ export function appEnvironment(
 ): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [name, value] of Object.entries(base)) {
+    if (value === undefined) continue;
     // Set by some terminals that are themselves Electron apps: with it, Electron
     // runs the entry as plain Node, and there is no app to drive.
-    if (name === 'ELECTRON_RUN_AS_NODE' || value === undefined) continue;
+    if (name === 'ELECTRON_RUN_AS_NODE') continue;
+    // Set by electron-vite while developing: a test drives the built app,
+    // never a dev server that happens to be running.
+    if (name === 'ELECTRON_RENDERER_URL') continue;
     env[name] = value;
   }
   return {

@@ -10,7 +10,7 @@ import { bonaparteDataDir, createAgentHandler, createCore } from '@aparte/bonapa
 import { appInfo, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
 import { createIpcRegistry } from './ipc/register.js';
-import { isTrustedOrigin } from './security.js';
+import { devServerUrlFrom, isTrustedOrigin } from './security.js';
 import { createMainWindow } from './windows.js';
 
 /** The language of the interface: French on a French system, English otherwise. */
@@ -21,8 +21,8 @@ function interfaceLocale(): Locale {
 }
 
 export async function startApp(options: { e2e: boolean }): Promise<void> {
-  // Set by electron-vite in development: the dev server that serves the window.
-  const devServerUrl = process.env['ELECTRON_RENDERER_URL'] || undefined;
+  // In development, the dev server that serves the window; never in a packaged app.
+  const devServerUrl = devServerUrlFrom(process.env, app.isPackaged);
 
   await app.whenReady();
 

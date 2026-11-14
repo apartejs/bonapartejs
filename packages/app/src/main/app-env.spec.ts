@@ -29,6 +29,11 @@ describe('appEnvironment', () => {
     expect(env['PATH']).toBe('C:/bin');
   });
 
+  it('drops ELECTRON_RENDERER_URL: a test drives the built app, never a dev server', () => {
+    const env = appEnvironment({ ELECTRON_RENDERER_URL: 'http://localhost:5173' }, options);
+    expect(env).not.toHaveProperty('ELECTRON_RENDERER_URL');
+  });
+
   it('leaves out a variable that has no value', () => {
     expect(appEnvironment({ EMPTY: undefined }, options)).not.toHaveProperty('EMPTY');
   });

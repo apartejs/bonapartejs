@@ -50,6 +50,7 @@ export function registerAppProtocol(options: AppProtocolOptions): void {
 
     const file = resolveAppFile(options.rendererDir, url.pathname);
     if (!file) return new Response(null, { status: 404 });
-    return net.fetch(pathToFileURL(file).toString());
+    // A file that is not there is an answer too, not a failure of this process.
+    return net.fetch(pathToFileURL(file).toString()).catch(() => new Response(null, { status: 404 }));
   });
 }

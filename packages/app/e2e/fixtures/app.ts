@@ -35,6 +35,8 @@ export interface LaunchedApp {
   page: Page;
   server: FakeLlamaServer;
   dataDir: string;
+  /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
+  navigations(): Promise<string[]>;
   /** What the app wrote to its console, main process and window. */
   output(): string;
   close(): Promise<void>;
@@ -93,7 +95,27 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
     const page = await app.firstWindow({ timeout: 30_000 });
     watch(page);
     await page.waitForLoadState('domcontentloaded');
-    return { app, page, server, dataDir, output, close };
+
+    // From here on, every document the window loads, or fails to load, is
+    // recorded in the main process: a test can say "it went nowhere" without
+    // waiting for an address to change. (Not `did-start-navigation`: that one
+    // fires for a navigation the app is about to refuse, too.)
+    const running = app;
+    await running.evaluate(({ BrowserWindow }) => {
+      const record = globalThis as { __navigations?: string[] };
+      record.__navigations = [];
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.on('did-navigate', (_event, url) => record.__navigations?.push(url));
+        window.webContents.on('did-fail-load', (_event, code, _description, url, isMainFrame) => {
+          // -3 is a navigation that was cancelled: one the app refused.
+          if (isMainFrame && code !== -3) record.__navigations?.push(url);
+        });
+      }
+    });
+    const navigations = (): Promise<string[]> =>
+      running.evaluate(() => (globalThis as { __navigations?: string[] }).__navigations ?? []);
+
+    return { app, page, server, dataDir, navigations, output, close };
   } catch (error) {
     await close();
     throw new Error(`The app did not start.\n${output()}`, { cause: error });

@@ -14,15 +14,6 @@
 
 import type { Locator, Page } from '@playwright/test';
 
-declare global {
-  interface Window {
-    /** Every text the last reply has shown, in order: set by `watchReply`. */
-    __replyStates?: string[];
-  }
-}
-
-const REPLY_TEXT = 'aparte-chat-bubble[data-role="assistant"] .aparte-segment-text .aparte-segment-content';
-
 export interface ChatDriver {
   /** The field the person types in, by its accessible name: the placeholder. */
   composer(name: string): Locator;
@@ -38,9 +29,6 @@ export interface ChatDriver {
   streamingReplies: Locator;
   errors: Locator;
   send(text: string): Promise<void>;
-  /** Records every text the reply shows from now on. Call it before `send`. */
-  watchReply(): Promise<void>;
-  replyStates(): Promise<string[]>;
 }
 
 export function chat(page: Page): ChatDriver {
@@ -53,7 +41,9 @@ export function chat(page: Page): ChatDriver {
     stopButton: page.locator('aparte-composer-send button[data-act="stop"]'),
     userMessages: page.locator('aparte-chat-bubble[data-role="user"]'),
     replies: page.locator('aparte-chat-bubble[data-role="assistant"]'),
-    replyText: page.locator(REPLY_TEXT).last(),
+    replyText: page
+      .locator('aparte-chat-bubble[data-role="assistant"] .aparte-segment-text .aparte-segment-content')
+      .last(),
     streamingReplies: page.locator(
       'aparte-chat-bubble[data-role="assistant"] .aparte-message[data-streaming="true"]',
     ),
@@ -63,19 +53,5 @@ export function chat(page: Page): ChatDriver {
       await editor.fill(text);
       await sendButton.click();
     },
-
-    async watchReply() {
-      await page.evaluate((selector) => {
-        const states: string[] = [];
-        window.__replyStates = states;
-        new MutationObserver(() => {
-          const nodes = document.querySelectorAll(selector);
-          const text = nodes[nodes.length - 1]?.textContent?.trim() ?? '';
-          if (text !== '' && states[states.length - 1] !== text) states.push(text);
-        }).observe(document.body, { subtree: true, childList: true, characterData: true });
-      }, REPLY_TEXT);
-    },
-
-    replyStates: () => page.evaluate(() => window.__replyStates ?? []),
   };
 }

@@ -95,8 +95,16 @@ describe('the design tokens', () => {
 });
 
 describe('colours outside the tokens file', () => {
-  const hexColour = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/;
+  // Never glued to a word or a slash: that is the number of an issue (`owner/repo#205`).
+  const hexColour = /(?<![\w/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/;
   const sources = new Set(['.ts', '.tsx', '.css', '.html']);
+
+  it('tells a colour from the number of an issue', () => {
+    expect(hexColour.test('color: #fff;')).toBe(true);
+    expect(hexColour.test("fill='#0F766E'")).toBe(true);
+    // A comment that names the issue a workaround waits for is not a colour.
+    expect(hexColour.test('see apartejs/aparte#205')).toBe(false);
+  });
 
   function sourceFiles(dir: string): string[] {
     let entries: string[];

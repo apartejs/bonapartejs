@@ -7,7 +7,7 @@
 import { BrowserWindow } from 'electron';
 import { join } from 'node:path';
 import { APP_ORIGIN } from '@aparte/bonaparte-shared';
-import { isTrustedOrigin } from './security.js';
+import { isOwnPage } from './security.js';
 
 export interface MainWindowOptions {
   devServerUrl?: string | undefined;
@@ -38,9 +38,12 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     },
   });
 
+  // The window is one page, and it stays on it. A link in a reply — to a file,
+  // to the root of the app, to a site — must not replace the conversation.
+  const ownPage = options.devServerUrl ?? `${APP_ORIGIN}/index.html`;
   const contents = window.webContents;
   contents.on('will-navigate', (event, url) => {
-    if (!isTrustedOrigin(url, options.devServerUrl)) event.preventDefault();
+    if (!isOwnPage(url, ownPage)) event.preventDefault();
   });
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
@@ -62,6 +65,6 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     });
   }
 
-  void window.loadURL(options.devServerUrl ?? `${APP_ORIGIN}/index.html`);
+  void window.loadURL(ownPage);
   return window;
 }

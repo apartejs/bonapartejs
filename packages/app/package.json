@@ -12,7 +12,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "pnpm -w build && playwright test"
   },
   "dependencies": {
     "@aparte/bonaparte-core": "workspace:*",
