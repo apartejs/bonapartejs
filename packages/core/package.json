@@ -46,11 +46,11 @@
   },
   "dependencies": {
     "@aparte/bonaparte-shared": "workspace:*",
-    "@aparte/engine": "1.7.0",
+    "@aparte/engine": "1.8.0",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@aparte/core": "1.7.0",
+    "@aparte/core": "1.8.0",
     "@huggingface/jinja": "0.5.13",
     "@types/node": "catalog:",
     "eslint": "catalog:",
