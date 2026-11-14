@@ -1,0 +1,42 @@
+{
+  "name": "bonapartejs",
+  "version": "0.0.0",
+  "description": "Local-first coding agent — Electron + apartéJS + managed llama.cpp, with a memory kept per conversation and every cost announced first",
+  "private": true,
+  "license": "MIT",
+  "author": "Paul Richez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apartejs/bonapartejs.git"
+  },
+  "homepage": "https://github.com/apartejs/bonapartejs#readme",
+  "bugs": {
+    "url": "https://github.com/apartejs/bonapartejs/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @aparte/bonaparte-app dev",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "typecheck": "nx run-many -t typecheck",
+    "lint": "nx show projects && eslint packages plugins --no-error-on-unmatched-pattern --max-warnings 0"
+  },
+  "devDependencies": {
+    "@nx/eslint-plugin": "^24.0.6",
+    "eslint": "catalog:",
+    "nx": "^24.0.6",
+    "typescript": "catalog:",
+    "typescript-eslint": "^8.72.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "node-pty",
+      "nx"
+    ]
+  },
+  "packageManager": "pnpm@10.32.1"
+}

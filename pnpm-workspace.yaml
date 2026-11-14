@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+  - plugins/*
+
+catalog:
+  typescript: ^6.0.3
+  tsup: ^9.0.0
+  vitest: ^5.1.0
+  zod: ^4.6.7
+  eslint: ^9.39.5
+  '@types/node': ^24.19.2
