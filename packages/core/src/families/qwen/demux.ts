@@ -8,11 +8,10 @@
  * let a tag fragment leak into the UI.
  */
 
-import { IM_END, THINK_CLOSE, THINK_OPEN, TOOL_CALL_CLOSE, TOOL_CALL_OPEN } from './parser.js';
+import type { DemuxEvent, StreamDemux } from '../types.js';
+import { IM_END, parseToolCall, THINK_CLOSE, THINK_OPEN, TOOL_CALL_CLOSE, TOOL_CALL_OPEN } from './parser.js';
 
-export type DemuxEvent =
-  | { type: 'text'; delta: string }
-  | { type: 'thinking'; delta: string };
+export type { DemuxEvent } from '../types.js';
 
 type DemuxMode = 'text' | 'think' | 'call' | 'done';
 
@@ -45,7 +44,7 @@ function heldBackLength(buffer: string, markers: string[]): number {
   return 0;
 }
 
-export class HermesStreamDemux {
+export class HermesStreamDemux implements StreamDemux {
   private mode: DemuxMode = 'text';
   private buffer = '';
   private rawOutput = '';
@@ -69,7 +68,8 @@ export class HermesStreamDemux {
   flush(): DemuxEvent[] {
     const events: DemuxEvent[] = [];
     this.drain(events, true);
-    // Unclosed tool call: its partial content must never leak.
+    // Unclosed tool call: its partial content never leaks as text.
+    if (this.mode === 'call' && this.buffer !== '') events.push({ type: 'tool-call-malformed', raw: this.buffer });
     this.buffer = '';
     return events;
   }
@@ -84,6 +84,13 @@ export class HermesStreamDemux {
       if (this.mode === 'call') {
         const close = this.buffer.indexOf(TOOL_CALL_CLOSE);
         if (close === -1) return; // everything is hidden, we wait for the closing tag
+        const body = this.buffer.slice(0, close);
+        const call = parseToolCall(body);
+        events.push(
+          call
+            ? { type: 'tool-call', name: call.name, input: call.arguments }
+            : { type: 'tool-call-malformed', raw: body },
+        );
         this.buffer = this.buffer.slice(close + TOOL_CALL_CLOSE.length);
         this.mode = 'text';
         continue;

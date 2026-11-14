@@ -34,8 +34,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-/** null = unusable block (counted in `malformed`). */
-function parseCall(payload: string): ParsedToolCall | null {
+/** The body of one `<tool_call>` block; null when it cannot be used. */
+export function parseToolCall(payload: string): ParsedToolCall | null {
   let parsed: unknown;
   try {
     parsed = JSON.parse(payload.trim());
@@ -101,7 +101,7 @@ export function parseHermesOutput(raw: string): ParsedOutput {
       malformed += 1;
       break;
     }
-    const parsed = parseCall(source.slice(from, close));
+    const parsed = parseToolCall(source.slice(from, close));
     if (parsed) calls.push(parsed);
     else malformed += 1;
     cursor = close + TOOL_CALL_CLOSE.length;

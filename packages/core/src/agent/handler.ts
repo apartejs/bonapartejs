@@ -11,8 +11,8 @@
 import type { Core } from '../api.js';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import type { CompletionStats } from '../backend/types.js';
-import { HermesStreamDemux, type DemuxEvent } from '../families/qwen/demux.js';
-import { PromptLog } from '../families/qwen/template.js';
+import { familyLayer, type DemuxEvent } from '../families/index.js';
+import { PromptLog } from '../prompt/prompt-log.js';
 import { agentBodySchema, messageText, type AgentBody } from './body.js';
 import { encodeEvent, type RunEvent, type WireLine } from './run-events.js';
 
@@ -71,7 +71,9 @@ function renderPrompt(messages: AgentBody['request']['messages']): string {
     .filter((message) => message.role === 'system')
     .map((message) => messageText(message.content))
     .join('\n\n');
-  const log = new PromptLog(system || SYSTEM_PROMPT);
+  // Qwen until the family is read from the model (task 2.7).
+  const log = new PromptLog(familyLayer('qwen'));
+  log.appendSystem(system || SYSTEM_PROMPT);
   for (const message of messages) {
     if (message.role === 'user') {
       log.appendUser(messageText(message.content));
@@ -83,10 +85,11 @@ function renderPrompt(messages: AgentBody['request']['messages']): string {
   return log.beginAssistantTurn({ thinking: true });
 }
 
-function toRunEvent(piece: DemuxEvent): RunEvent {
-  return piece.type === 'thinking'
-    ? { type: 'thinking-delta', delta: piece.delta }
-    : { type: 'text-delta', delta: piece.delta };
+/** Text and reasoning go to the window; a tool call has nobody to run it yet (phase 4). */
+function toRunEvent(piece: DemuxEvent): RunEvent | null {
+  if (piece.type === 'thinking') return { type: 'thinking-delta', delta: piece.delta };
+  if (piece.type === 'text') return { type: 'text-delta', delta: piece.delta };
+  return null;
 }
 
 function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSignal): Response {
@@ -113,7 +116,13 @@ function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSi
         const started = Date.now();
         write({ type: 'run-start' });
         write({ type: 'turn-start' });
-        const demux = new HermesStreamDemux();
+        const demux = familyLayer('qwen').createDemux();
+        const forward = (pieces: DemuxEvent[]): void => {
+          for (const piece of pieces) {
+            const event = toRunEvent(piece);
+            if (event) write(event);
+          }
+        };
         let stats: CompletionStats | undefined;
         const completion = engine.complete({
           prompt: renderPrompt(body.request.messages),
@@ -122,10 +131,10 @@ function streamTurn(engine: LlamaCppHttpClient, body: AgentBody, signal: AbortSi
           signal: stop.signal,
         });
         for await (const event of completion) {
-          if (event.type === 'token') demux.push(event.text).forEach((piece) => write(toRunEvent(piece)));
+          if (event.type === 'token') forward(demux.push(event.text));
           else if (event.type === 'done') stats = event.stats;
         }
-        demux.flush().forEach((piece) => write(toRunEvent(piece)));
+        forward(demux.flush());
         if (stop.signal.aborted) {
           // A stop ends the run cleanly: the reply is over, not failed.
           write({ type: 'run-aborted' });
