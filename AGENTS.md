@@ -121,6 +121,14 @@ An issue can stay open after its fix has shipped.
 - **What the fake server cannot prove is replayed for real** — grammars, slots,
   the KV prefix under agentic load (the `smoke` skill). Record the result at
   the end of this file.
+- **A test run never puts a window on the screen**, an error box included.
+  Electron shows a native error box whenever it is launched on an app that is
+  not built: never launch it before `pnpm build` has succeeded, and never run
+  the end-to-end tests "to watch them fail" on an app that does not exist. The
+  end-to-end fixture refuses to launch without a build, and in a test run the
+  main process writes its errors to the console instead of showing them (the
+  `run-app` skill has the details). Ask Paul before the first Electron launch
+  of a session.
 - **Local commits are free; NO push without Paul's validation in the app.** A
   guard hook refuses `git push`. The restart is built on the local branch `v1`,
   merged into `main` when Paul validates.
