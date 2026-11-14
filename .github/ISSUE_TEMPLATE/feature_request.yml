@@ -1,0 +1,31 @@
+name: Feature request
+description: A capability bonaparte should have
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem you're solving
+      description: What you're doing with a local model, and where bonaparte stops short.
+    validations: { required: true }
+  - type: textarea
+    id: shape
+    attributes:
+      label: The shape you'd expect
+      description: >
+        A sketch is welcome. One boundary decides a lot up front: bonaparte is
+        not a model manager. It downloads a short list of recommended models and
+        reads the ones you already have.
+  - type: textarea
+    id: cost
+    attributes:
+      label: What it would cost the user
+      description: >
+        A model load, a re-read of a conversation, disk space for saved states,
+        a restart, a download? The rule of the product is that nothing expensive
+        happens without being announced — a feature that hides a cost will be
+        asked to show it.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead

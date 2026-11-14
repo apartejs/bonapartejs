@@ -27,9 +27,13 @@ announced first.**
 ## Contributing
 
 bonaparte is the proving ground of apartéJS: friction with the library is fed
-back upstream rather than worked around in silence. Security issues:
+back upstream rather than worked around in silence. How work lands:
+[CONTRIBUTING.md](./CONTRIBUTING.md). Security issues:
 [SECURITY.md](./SECURITY.md), never as a public issue. Conduct:
 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
+
+Built with agents: see [AGENTS.md](./AGENTS.md) for the rules they follow, and
+`.claude/` for their configuration.
 
 ## License
 

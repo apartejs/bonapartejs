@@ -1,0 +1,68 @@
+name: Bug report
+description: Something behaves wrong in the app, the engine or a plugin
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: bonaparte version
+      description: "`bonaparte --version`, or the commit if you run from source."
+      placeholder: "1.0.0"
+    validations: { required: true }
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: ["Windows", "macOS", "Linux"]
+    validations: { required: true }
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and VRAM
+      description: As reported by `bonaparte doctor`.
+      placeholder: "Radeon 8060S, 32 GB shared / RTX 4070, 12 GB / none (CPU)"
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Engine
+      description: The built-in engine keeps the memory of each conversation; a connected service does not.
+      options:
+        - "Built-in llama.cpp"
+        - "A llama.cpp server already running"
+        - "Ollama"
+        - "LM Studio"
+        - "Another OpenAI-compatible API"
+    validations: { required: true }
+  - type: input
+    id: llama
+    attributes:
+      label: llama.cpp build
+      description: The build shown in Settings, under "Moteur et mémoire". Leave empty for a connected service.
+      placeholder: "b6521, Vulkan"
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: File name and quantisation of the GGUF, and the context size.
+      placeholder: "Qwen3.5-35B-A3B-Q4_K_M.gguf, n_ctx 32768"
+  - type: textarea
+    id: repro
+    attributes:
+      label: What you did
+      description: >
+        Step by step. If a tool call is involved, the mode you were in
+        (Lecture, Répétition, Plume or Impro) matters.
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, what happened instead
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        The main-process log and the engine's lines around the failure. Remove
+        anything private — prompts and file contents end up in these logs.
+      render: text
