@@ -87,6 +87,21 @@ describe('launchServer', () => {
     expect(server.lastLines()).toContain('cannot load the model');
   });
 
+  it('keeps the words of a line, not its colours: llama.cpp colours its log even into a pipe', async () => {
+    const lines: string[] = [];
+    const server = launchServer(process.execPath, [BIN, '-m', 'm.gguf', '--port', '1'], {
+      env: {
+        ...serverEnvironment(process.env, 'k'),
+        FAKE_LLAMA_FAIL: '\u001b[34m0.03.648\u001b[0m \u001b[31mE llama_model_load: missing tensor\u001b[0m',
+      },
+      log: (line) => lines.push(line),
+    });
+    launched.push(server);
+    await server.exited;
+    expect(server.lastLines()).toBe('error: 0.03.648 E llama_model_load: missing tensor');
+    expect(lines.join('\n')).not.toContain('\u001b');
+  });
+
   it('stops a running server, and its exit is awaited', async () => {
     const server = launchServer(process.execPath, [BIN, '-m', 'm.gguf', '--port', '0'], {
       env: serverEnvironment(process.env, 'k'),

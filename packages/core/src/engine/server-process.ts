@@ -89,7 +89,9 @@ export function launchServer(command: string, args: readonly string[], options: 
     partial += chunk.toString();
     const complete = partial.split(/\r?\n/);
     partial = complete.pop() ?? '';
-    for (const line of complete) {
+    for (const coloured of complete) {
+      // llama.cpp colours its log even into a pipe: the words are kept, not the escapes.
+      const line = coloured.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
       if (line.trim() === '') continue;
       lines.push(line);
       if (lines.length > KEPT_LINES) lines.shift();
