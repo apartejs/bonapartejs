@@ -85,4 +85,11 @@ describe('ConversationStore', () => {
     expect(await conversations.get('nope')).toBeNull();
     await expect(conversations.update('nope', { title: 'x' })).rejects.toThrow(/no conversation/);
   });
+
+  it('creates a conversation under the id the window gave it — a name, never a path', async () => {
+    const { store: conversations } = await store();
+    expect((await conversations.create(NEW, 'c-1234')).id).toBe('c-1234');
+    await expect(conversations.create(NEW, '../x')).rejects.toThrow(/conversation id/);
+  });
 });
+

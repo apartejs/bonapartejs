@@ -98,7 +98,8 @@ describe("aparté's stock runner drives our handler", () => {
 
   it('turns a run-error line into an error that carries our message', async () => {
     const { runner } = await setup({ nCtx: 4 });
-    await expect(runner(turnOf('Bonjour, comment vas-tu ?', []))).rejects.toThrow(/The engine failed/);
+    // A server that refuses the prompt as too long: the conversation is full, said in our words.
+    await expect(runner(turnOf('Bonjour, comment vas-tu ?', []))).rejects.toThrow(/The conversation is full/);
   });
 
   it('turns a refusal before the stream into an error that carries our message', async () => {

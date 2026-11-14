@@ -272,6 +272,7 @@ export class ConversationEngine {
           const demux = family.createDemux();
           let raw = '';
           let usage: Usage = { inputTokens: 0, outputTokens: 0 };
+          let finished = false;
           const finishReread = (): void => {
             if (!turning.rereading) return;
             turning.rereading = false;
@@ -293,6 +294,7 @@ export class ConversationEngine {
               } else if (event.type === 'progress') {
                 sink({ type: 'progress', done: event.progress.processed, total: event.progress.total });
               } else {
+                finished = true;
                 const { stats } = event;
                 usage = {
                   inputTokens: stats.progress?.total ?? stats.promptUncachedTokens,
@@ -305,6 +307,13 @@ export class ConversationEngine {
             }
             for (const piece of demux.flush()) sink(piece);
             finishReread();
+            // The stream ended without its final event: the person stopped it (it may end quietly then),
+            // or the engine went away.
+            if (!finished) {
+              throw signal?.aborted
+                ? new DOMException('The answer was stopped.', 'AbortError')
+                : new Error('The engine ended its answer before finishing it.');
+            }
           } catch (error) {
             finishReread();
             if (signal?.aborted) {

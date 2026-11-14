@@ -7,19 +7,20 @@
  * prompt is rendered from the messages of the request.
  */
 
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core } from '../api.js';
-import { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
-import { familyLayer } from '../families/index.js';
 import {
   FAKE_QWEN_TEMPLATE,
   startFakeLlamaServer,
   type FakeLlamaServer,
   type FakeLlamaServerOptions,
 } from '../testing/fake-llama-server.js';
+import { writeFakeGguf } from '../testing/fake-gguf.js';
 import { AGENT_ENDPOINT, createAgentHandler } from './handler.js';
 
 let servers: FakeLlamaServer[] = [];
@@ -39,7 +40,8 @@ async function setup(options: FakeLlamaServerOptions = {}) {
     join(dataDir, 'config', 'global.json'),
     JSON.stringify({ backend: { mode: 'remote', url: server.url } }),
   );
-  return { server, handler: createAgentHandler(createCore({ dataDir, env: {} })) };
+  const core = createCore({ dataDir, env: {} });
+  return { server, core, handler: createAgentHandler(core) };
 }
 
 const conversation = `${AGENT_ENDPOINT}/c/c1`;
@@ -157,7 +159,7 @@ describe('the agent handler, streaming a turn', () => {
     expect(joined(lines, 'text-delta')).not.toContain('think');
   });
 
-  it("sends the engine the whole conversation, in the template of the model's family (Gemma)", async () => {
+  it("sends the engine the whole conversation from its journal, in the template of the model's family (Gemma)", async () => {
     const prompts: string[] = [];
     const { handler } = await setup({
       responder: (prompt) => {
@@ -165,17 +167,20 @@ describe('the agent handler, streaming a turn', () => {
         return 'ok';
       },
     });
+    await linesOf(await handler(post(turn(user('Bonjour')))));
     const messages = [
       user('Bonjour'),
-      { role: 'assistant', content: 'Bonjour Paul' },
+      { role: 'assistant', content: 'ok' },
       user([{ type: 'text', text: 'Quel jour ' }, { type: 'text', text: 'sommes-nous ?' }]),
     ];
     await linesOf(await handler(post(turn(...messages))));
-    expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toContain('<|turn>user\nBonjour<turn|>\n');
-    expect(prompts[0]).toContain('Bonjour Paul<turn|>\n');
-    expect(prompts[0]).toContain('<|turn>user\nQuel jour sommes-nous ?<turn|>\n');
-    expect(prompts[0]!.endsWith('<|turn>model\n')).toBe(true);
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]!.startsWith(prompts[0]!)).toBe(true);
+    expect(prompts[1]).toContain('<|turn>user\nBonjour<turn|>\n');
+    expect(prompts[1]).toContain('ok<turn|>\n');
+    // A text file the window inlined arrives as a part of the message: it enters the message.
+    expect(prompts[1]).toContain('<|turn>user\nQuel jour sommes-nous ?<turn|>\n');
+    expect(prompts[1]!.endsWith('<|turn>model\n')).toBe(true);
   });
 
   it('speaks Qwen to a model whose template is Qwen', async () => {
@@ -200,17 +205,16 @@ describe('the agent handler, streaming a turn', () => {
   });
 
   it('holds the engine for the turn, and lets it go when the turn ends, stopped or not', async () => {
-    const server = await startFakeLlamaServer({ paceMs: 20, responder: () => 'un deux trois quatre cinq six' });
-    servers.push(server);
+    const { core: real } = await setup({ paceMs: 20, responder: () => 'un deux trois quatre cinq six' });
     let held = 0;
     let released = 0;
     const core = {
-      engine: async () => ({ client: new LlamaCppHttpClient(server.url), family: familyLayer('gemma') }),
+      ...real,
       hold: () => {
         held += 1;
         return () => (released += 1);
       },
-    } as unknown as Core;
+    } as Core;
     const handler = createAgentHandler(core);
     await linesOf(await handler(post(turn(user('Bonjour')))));
     expect([held, released]).toEqual([1, 1]);
@@ -286,5 +290,98 @@ describe('the agent handler, streaming a turn', () => {
     const types = lines.map((line) => line.type);
     expect(types).not.toContain('run-done');
     expect(types).not.toContain('run-aborted');
+  });
+});
+
+/** A request to another conversation of the same core. */
+function postTo(id: string, body: unknown): Request {
+  return new Request(`${AGENT_ENDPOINT}/c/${id}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+/** A core whose engine is managed: the fake binary launched with its slots folder, a KV memory on disk. */
+async function managed() {
+  const dataDir = await mkdtemp(join(tmpdir(), 'bp-agent-managed-'));
+  const models = join(dataDir, 'models');
+  await mkdir(models, { recursive: true });
+  const model = join(models, 'gemma-4-test.gguf');
+  await writeFakeGguf(model);
+  const probe = createServer();
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+  const port = (probe.address() as { port: number }).port;
+  await new Promise<void>((resolve) => probe.close(() => resolve()));
+  const core = createCore({
+    dataDir,
+    env: {},
+    llamaCommand: [process.execPath, fileURLToPath(new URL('../testing/fake-llama-bin.mjs', import.meta.url))],
+    port,
+    modelRoots: [{ dir: models, source: 'custom' }],
+    gpuMemory: async () => 24 * 1024 ** 3,
+    llamaReleases: null,
+    logger: () => undefined,
+  });
+  managedCores.push(core);
+  await core.loadModel(model);
+  return { core, dataDir, handler: createAgentHandler(core) };
+}
+
+const managedCores: Core[] = [];
+afterEach(async () => {
+  await Promise.all(managedCores.splice(0).map((core) => core.stop()));
+});
+
+describe('the agent handler, on the journal', () => {
+  it('answers 409 to a history that is not this conversation’s', async () => {
+    const { handler } = await setup();
+    await linesOf(await handler(post(turn(user('Bonjour')))));
+    const response = await handler(post(turn(user('Autre'), { role: 'assistant', content: 'x' }, user('Encore'))));
+    expect(response.status).toBe(409);
+  });
+
+  it('refuses an image before anything runs, and says why', async () => {
+    const { handler } = await setup();
+    const response = await handler(post(turn(user([{ type: 'text', text: 'Regarde' }, { type: 'image', image: 'data:image/png;base64,AAAA' }]))));
+    expect(response.status).toBe(400);
+    expect(((await response.json()) as { error: { message: string } }).error.message).toMatch(/reads no image/);
+  });
+
+  it('the last answer asked again: served by the cache up to the message, the usage says so', async () => {
+    const { handler } = await setup({ responder: () => `réponse ${Math.random()}` });
+    await linesOf(await handler(post(turn(user('Bonjour')))));
+    const again = await linesOf(await handler(post(turn(user('Bonjour')))));
+    const done = again.at(-1)!;
+    expect(done.type).toBe('run-done');
+    expect(done['usage'].inputTokens - done['usage'].cacheReadTokens).toBeLessThan(10);
+  });
+
+  it('a conversation brought back from its memory says it, as a restore step', async () => {
+    const { handler } = await managed();
+    await linesOf(await handler(postTo('c1', turn(user('Bonjour')))));
+    await linesOf(await handler(postTo('c2', turn(user('Salut')))));
+    const lines = await linesOf(await handler(postTo('c1', turn(user('Bonjour'), { role: 'assistant', content: 'ok' }, user('Encore')))));
+    expect(lines).toContainEqual({ type: 'step-start', name: 'restore' });
+    expect(lines).toContainEqual({ type: 'step-end', name: 'restore' });
+    expect(lines.at(-1)!['usage'].cacheReadTokens).toBeGreaterThan(30);
+  });
+
+  it('a memory let go is read again: a reread step, and its progress up to the whole', async () => {
+    const { handler, dataDir } = await managed();
+    await linesOf(await handler(postTo('c1', turn(user('Bonjour')))));
+    await linesOf(await handler(postTo('c2', turn(user('Salut')))));
+    for (const name of await readdir(join(dataDir, 'kv-slots'))) {
+      if (name.startsWith('c1_main')) await rm(join(dataDir, 'kv-slots', name));
+    }
+    const lines = await linesOf(await handler(postTo('c1', turn(user('Bonjour'), { role: 'assistant', content: 'ok' }, user('Encore')))));
+    const start = lines.findIndex((line) => line.type === 'step-start' && line['name'] === 'reread');
+    const end = lines.findIndex((line) => line.type === 'step-end' && line['name'] === 'reread');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const progress = lines.slice(start, end).filter((line) => line.type === 'activity' && line['activityType'] === 'reread');
+    expect(progress.length).toBeGreaterThan(0);
+    const last = progress.at(-1)!['content'] as { done: number; total: number };
+    expect(last.done).toBe(last.total);
   });
 });

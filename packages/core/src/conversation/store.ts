@@ -57,8 +57,9 @@ export class ConversationStore {
     return join(this.dir, idOf(id), 'meta.json');
   }
 
-  async create(input: NewConversation): Promise<ConversationMeta> {
-    const id = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+  /** `id`: the one the window gave it (aparté's client names its conversations); else a new one. */
+  async create(input: NewConversation, givenId?: string): Promise<ConversationMeta> {
+    const id = givenId === undefined ? `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}` : idOf(givenId);
     const now = new Date().toISOString();
     const meta: ConversationMeta = { title: '', ...input, id, branchId: 'main', createdAt: now, updatedAt: now };
     await mkdir(join(this.dir, id), { recursive: true });

@@ -181,6 +181,13 @@ describe('ConversationEngine — when it does not go well', () => {
     expect(await engine.open(meta.id)).toMatchObject({ kind: 'reread', reason: 'engine-died' });
   });
 
+  it('an answer that ends without its final event is the engine failing, not a finished answer', async () => {
+    const { store, conversation, say } = await rig({ server: { dropAfter: 2, responder: () => 'un deux trois quatre' } });
+    const meta = await conversation();
+    await expect(say(meta.id, 'Compte')).rejects.toBeInstanceOf(EngineFailedError);
+    expect((await openJournal(store.dir, meta.id)).entries().at(-1)).toMatchObject({ kind: 'assistant', stopped: 'engine' });
+  });
+
   it('Stop keeps what arrived, marked as stopped by the person', async () => {
     const { store, engine, conversation } = await rig({
       server: { paceMs: 30, responder: () => 'un deux trois quatre cinq six sept huit' },

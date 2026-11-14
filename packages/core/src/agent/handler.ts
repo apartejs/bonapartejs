@@ -3,18 +3,22 @@
  * the shape of aparté's own agent handler. The window reaches it through
  * Electron's `protocol.handle`, with aparté's stock runner.
  *
- * Text only for now: the prompt is rendered from the messages of the request,
- * in the family of the engine's model, and the answer is streamed back as it
- * is generated. The journal, the KV memory and the tools arrive in the next
- * phases. A turn never loads a model: with none loaded, it is refused.
+ * The journal is the truth: the history aparté sends is compared with it
+ * (`divergence.ts`) — a new message, the last answer asked again, a message
+ * changed (both make a branch), or a history that is not this
+ * conversation's (409). The turn runs on the conversation engine, which
+ * restores the memory or reads it again; what it waits for is said as
+ * aparté's steps (`slot-wait`, `restore`, `seed`, `reread` — keys the window
+ * translates), and a re-read's progress as a `reread` activity. A turn never
+ * loads a model: with none loaded, it is refused.
  */
 
 import type { Core, Engine } from '../api.js';
-import type { CompletionStats } from '../backend/types.js';
-import type { DemuxEvent, FamilyLayer } from '../families/index.js';
-import { PromptLog } from '../prompt/prompt-log.js';
-import { agentBodySchema, messageText, type AgentBody } from './body.js';
-import { encodeEvent, type RunEvent, type WireLine } from './run-events.js';
+import { ContextFullError, EngineFailedError, type TurnEvent, type TurnInput, type TurnResult } from '../conversation/engine.js';
+import { openJournal } from '../journal/journal.js';
+import { agentBodySchema, type AgentBody } from './body.js';
+import { compareWithJournal } from './divergence.js';
+import { encodeEvent, type WireLine } from './run-events.js';
 
 /**
  * Where the window posts a turn: `bonaparte://app/agent/c/<conversation>`.
@@ -22,14 +26,16 @@ import { encodeEvent, type RunEvent, type WireLine } from './run-events.js';
  */
 export { AGENT_ENDPOINT } from '@aparte/bonaparte-shared';
 
-/** Stands in until the layered system prompt of the next phase. Sent to the model: English. */
-const SYSTEM_PROMPT = 'You are bonaparte, a coding agent that runs on this machine.';
-
 function jsonError(status: number, message: string): Response {
   return new Response(JSON.stringify({ error: { message } }), {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+/** v1 reads no image: said before anything runs. */
+function hasImage(body: AgentBody): boolean {
+  return body.request.messages.some((message) => Array.isArray(message.content) && message.content.some((part) => part.type === 'image'));
 }
 
 export function createAgentHandler(core: Core): (request: Request) => Promise<Response> {
@@ -53,8 +59,11 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       return jsonError(400, 'Unsupported agent wire version: expected v 1.');
     }
     const body = agentBodySchema.safeParse(raw);
-    if (!body.success) {
+    if (!body.success || body.data.request.messages.length === 0) {
       return jsonError(400, 'Body must be { v: 1, providerId?, messageId, request: { messages }, clientTools }.');
+    }
+    if (hasImage(body.data)) {
+      return jsonError(400, 'The built-in engine reads no image: send text, or describe what the image shows.');
     }
 
     let engine: Engine | undefined;
@@ -68,43 +77,62 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
     if (!engine) {
       return jsonError(409, 'No model is loaded: choose one, or connect a service, before sending a message.');
     }
-    return streamTurn(engine, core.hold(), body.data, request.signal);
+
+    let meta;
+    try {
+      meta =
+        (await core.conversationStore.get(conversationId)) ??
+        (await core.conversationStore.create(
+          { kind: 'code', engineId: 'builtin', modelId: (await core.engineState()).model?.name ?? '', mode: 'repetition' },
+          conversationId,
+        ));
+    } catch (error) {
+      return jsonError(400, error instanceof Error ? error.message : String(error));
+    }
+    const entries = (await openJournal(core.conversationStore.dir, conversationId, meta.branchId)).entries();
+    const divergence = compareWithJournal(body.data.request.messages, entries);
+    if (divergence.kind === 'mismatch') {
+      return jsonError(409, 'This history is not the one of this conversation: open it again.');
+    }
+    const input: TurnInput =
+      divergence.kind === 'append'
+        ? { text: divergence.text, messageId: body.data.messageId }
+        : divergence.kind === 'retry'
+          ? { forkAfter: divergence.afterEntryId }
+          : { text: divergence.text, forkAfter: divergence.afterEntryId, messageId: body.data.messageId };
+    return streamTurn(core, conversationId, input, request.signal);
   };
 }
 
-/** The conversation, rendered once in the template of the model's family, ready for the next answer. */
-function renderPrompt(family: FamilyLayer, messages: AgentBody['request']['messages']): string {
-  const system = messages
-    .filter((message) => message.role === 'system')
-    .map((message) => messageText(message.content))
-    .join('\n\n');
-  const log = new PromptLog(family);
-  log.appendSystem(system || SYSTEM_PROMPT);
-  for (const message of messages) {
-    if (message.role === 'user') {
-      log.appendUser(messageText(message.content));
-    } else if (message.role === 'assistant') {
-      log.beginAssistantTurn({ thinking: true });
-      log.completeAssistantTurn(messageText(message.content));
-    }
+/** What the engine says while it works, in aparté's words. */
+function toWire(event: TurnEvent, rereading: { on: boolean }): WireLine | null {
+  switch (event.type) {
+    case 'text':
+      return { type: 'text-delta', delta: event.delta };
+    case 'thinking':
+      return { type: 'thinking-delta', delta: event.delta };
+    case 'step':
+      if (event.name === 'reread') rereading.on = event.phase === 'start';
+      return { type: event.phase === 'start' ? 'step-start' : 'step-end', name: event.name };
+    case 'progress':
+      // The progress of a prompt read again: the bar of the `reread` activity.
+      return rereading.on
+        ? { type: 'activity', id: 'reread', activityType: 'reread', content: { done: event.done, total: event.total } }
+        : null;
+    default:
+      // A tool call has nobody to run it yet (phase 4).
+      return null;
   }
-  return log.beginAssistantTurn({ thinking: true });
 }
 
-/** Text and reasoning go to the window; a tool call has nobody to run it yet (phase 4). */
-function toRunEvent(piece: DemuxEvent): RunEvent | null {
-  if (piece.type === 'thinking') return { type: 'thinking-delta', delta: piece.delta };
-  if (piece.type === 'text') return { type: 'text-delta', delta: piece.delta };
-  return null;
-}
-
-/** `release`: the engine was held for this turn — it is not unloaded while a turn works. */
-function streamTurn(engine: Engine, release: () => void, body: AgentBody, signal: AbortSignal): Response {
+function streamTurn(core: Core, conversationId: string, input: TurnInput, signal: AbortSignal): Response {
   const encoder = new TextEncoder();
   // Stops the generation: when the window cuts its request, or stops reading.
   const stop = new AbortController();
   if (signal.aborted) stop.abort();
   else signal.addEventListener('abort', () => stop.abort(), { once: true });
+  // The engine is not unloaded while a turn works.
+  const release = core.hold();
 
   // False once the reader is gone: nothing more can be written.
   let open = true;
@@ -123,50 +151,33 @@ function streamTurn(engine: Engine, release: () => void, body: AgentBody, signal
         const started = Date.now();
         write({ type: 'run-start' });
         write({ type: 'turn-start' });
-        const demux = engine.family.createDemux();
-        const forward = (pieces: DemuxEvent[]): void => {
-          for (const piece of pieces) {
-            const event = toRunEvent(piece);
-            if (event) write(event);
-          }
-        };
-        let stats: CompletionStats | undefined;
-        const completion = engine.client.complete({
-          prompt: renderPrompt(engine.family, body.request.messages),
-          cachePrompt: true,
-          returnProgress: true,
-          // What ends an answer in this family (Gemma: also a tool call handing over).
-          sampling: { stop: [...engine.family.stop] },
-          signal: stop.signal,
-        });
-        for await (const event of completion) {
-          if (event.type === 'token') forward(demux.push(event.text));
-          else if (event.type === 'done') stats = event.stats;
-        }
-        forward(demux.flush());
-        if (stop.signal.aborted) {
+        const rereading = { on: false };
+        const result: TurnResult = await core.conversations.turn(
+          conversationId,
+          input,
+          (event) => {
+            const line = toWire(event, rereading);
+            if (line) write(line);
+          },
+          stop.signal,
+        );
+        if (result.stopped === 'user') {
           // A stop ends the run cleanly: the reply is over, not failed.
           write({ type: 'run-aborted' });
           write({ type: 'run-done' });
           return;
         }
-        if (!stats) {
-          // The engine went away in the middle of its answer. Nobody stopped
-          // it: saying so is the difference between a cut reply and a failure.
-          write({ type: 'run-error', message: 'The engine ended its answer before finishing it.' });
-          return;
-        }
-        const inputTokens = stats.progress?.total ?? stats.promptUncachedTokens;
+        const { usage } = result;
         write({
           type: 'run-done',
           usage: {
-            inputTokens,
-            outputTokens: stats.predictedTokens,
-            totalTokens: inputTokens + stats.predictedTokens,
-            cacheReadTokens: stats.progress?.cache ?? 0,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.inputTokens + usage.outputTokens,
+            cacheReadTokens: usage.cacheReadTokens ?? 0,
             durationMs: Date.now() - started,
           },
-          finishReason: stats.truncated ? 'length' : 'stop',
+          finishReason: 'stop',
         });
       };
 
@@ -175,10 +186,14 @@ function streamTurn(engine: Engine, release: () => void, body: AgentBody, signal
           if (stop.signal.aborted) {
             write({ type: 'run-aborted' });
             write({ type: 'run-done' });
-          } else {
-            const reason = error instanceof Error ? error.message : String(error);
-            write({ type: 'run-error', message: `The engine failed: ${reason.slice(0, 300)}` });
+            return;
           }
+          if (error instanceof ContextFullError) {
+            write({ type: 'run-error', message: error.message, code: 'context-full' });
+            return;
+          }
+          const reason = error instanceof EngineFailedError ? error.message : `The engine failed: ${error instanceof Error ? error.message : String(error)}`;
+          write({ type: 'run-error', message: reason.slice(0, 400) });
         })
         .finally(() => {
           release();
