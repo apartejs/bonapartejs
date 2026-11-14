@@ -5,7 +5,8 @@
  * scheme the window lives on, which Electron only accepts before it is ready.
  * And, in a test run, it makes sure that nothing can put a window on the
  * person's screen — an error box included: the error is written to the
- * console and the process exits with a code.
+ * console and the process exits with a code — and that it stays off the
+ * graphics card.
  *
  * The app itself is imported after that, so that even a failure to load it
  * goes through these guards.
@@ -32,6 +33,9 @@ function fail(error: unknown): void {
 
 if (e2e) {
   dialog.showErrorBox = (title, content) => console.error(`[bonaparte] ${title}: ${content}`);
+  // A test run draws for nobody: it leaves the graphics card to whatever the
+  // person is doing. Chromium fixes this at startup, before the app is ready.
+  app.disableHardwareAcceleration();
 }
 process.on('uncaughtException', fail);
 process.on('unhandledRejection', fail);

@@ -11,9 +11,12 @@ import { isTrustedOrigin } from './security.js';
 
 export interface MainWindowOptions {
   devServerUrl?: string | undefined;
-  /** A test run: the window is never shown, so it can never take the foreground. */
+  /** A test run: the window stays off the person's screen, and is never activated. */
   e2e: boolean;
 }
+
+/** Where a test run parks its window: far off any screen. */
+const OFF_SCREEN = -32_000;
 
 export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   const window = new BrowserWindow({
@@ -23,12 +26,14 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     minHeight: 480,
     show: false,
     title: 'bonaparte',
+    // A test run: invisible from the first instant, whatever shows it later.
+    ...(options.e2e ? { x: OFF_SCREEN, y: OFF_SCREEN, opacity: 0, skipTaskbar: true } : {}),
     webPreferences: {
       preload: join(import.meta.dirname, '..', 'preload', 'index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      // A window that is never shown must still render, for the tests to read it.
+      // A window nobody sees must still render at full speed, for the tests to read it.
       backgroundThrottling: !options.e2e,
     },
   });
@@ -39,7 +44,23 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
   });
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  if (!options.e2e) window.once('ready-to-show', () => window.show());
+  if (!options.e2e) {
+    window.once('ready-to-show', () => window.show());
+  } else {
+    // Electron has no headless mode, and the tests must not put a window in
+    // front of the person. But a window that is never shown paints no frame:
+    // transitions freeze half way, and every click waits for a frame that does
+    // not come. So it is shown — off the screen, transparent, deaf to the
+    // mouse, out of the taskbar, and without being activated. The tests drive
+    // it through the debugging protocol. (A lesson of the first implementation.)
+    window.once('ready-to-show', () => {
+      window.setSkipTaskbar(true);
+      window.setIgnoreMouseEvents(true);
+      window.setOpacity(0);
+      window.setPosition(OFF_SCREEN, OFF_SCREEN);
+      window.showInactive();
+    });
+  }
 
   void window.loadURL(options.devServerUrl ?? `${APP_ORIGIN}/index.html`);
   return window;
