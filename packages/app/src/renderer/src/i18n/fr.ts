@@ -428,6 +428,25 @@ export const fr: Messages = {
     wentBack: 'Revenue avant ce message',
     count: (messages) => (messages === 1 ? '1 message' : `${messages} messages`),
   },
+  compact: {
+    command: 'Résume la conversation, et elle repart de ce résumé',
+    full: (percent) => `Contexte plein à ${percent} %`,
+    counts: (used, window) => `${used} / ${window}`,
+    bar: (percent) => `${percent} % du contexte utilisé`,
+    line: 'La prochaine réponse risque d’être coupée. Compacter réécrit la conversation en un résumé, et elle repart de là.',
+    now: (duration) => `Compacter · ${duration}`,
+    later: 'Continuer quand même',
+    first: (duration) => `Compacter d’abord · ${duration}`,
+    running: 'Compaction en cours : le modèle résume la conversation…',
+    refused: {
+      pending: 'Rien n’a été compacté : un appel attend ta réponse.',
+      'not-worth': 'Rien n’a été compacté : la conversation est trop courte pour qu’un résumé vaille la peine.',
+      'no-room': 'Rien n’a été compacté : il ne reste plus assez de place dans le contexte pour écrire le résumé.',
+      cut: 'Rien n’a été compacté : le résumé a été coupé avant sa fin.',
+      empty: 'Rien n’a été compacté : le résumé est revenu vide.',
+      failed: 'Rien n’a été compacté : le moteur n’a pas répondu.',
+    },
+  },
   pr: {
     markOpen: (number, ci) =>
       `pull request ${number} ouverte${ci === 'success' ? ', CI réussie' : ci === 'failure' ? ', CI en échec' : ci === 'pending' ? ', CI en cours' : ''}`,

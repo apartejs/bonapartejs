@@ -51,6 +51,8 @@ import { close as closePane, opened, opensByItself, shownPanes, toggle as toggle
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { RewindBanner } from './chat/RewindBanner';
+import { ContextBanner } from './chat/ContextBanner';
+import { useCompaction } from './chat/useCompaction';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
 import { useRewind } from './chat/useRewind';
 import { setupMessageActions } from './aparte/message-actions';
@@ -587,6 +589,19 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     changed: () => setAsked((count) => count + 1),
   });
 
+  // Compaction (task 7.3): the context nearly full said, « Compacter », « / compact », « Restaurer ».
+  const compaction = useCompaction({
+    handles,
+    conversationId,
+    turnsEnded,
+    messages,
+    onRestored: (id) => {
+      void bridge.invoke(conversationsMemory, { id }).then((view) => {
+        if (id === shownIdRef.current) setMemory(view.announcement);
+      });
+    },
+  });
+
   // What opening the conversation will cost, said before anything is paid.
   useEffect(() => {
     setMemory(null);
@@ -819,7 +834,25 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           ) : rewinding.rewound && rewinding.rewound.conversationId === conversationId ? (
             <RewindBanner rewound={rewinding.rewound} messages={messages} locale={locale} busy={rewinding.busy} onUndo={rewinding.undo} />
           ) : memory ? (
-            <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} />
+            <MemoryBanner
+              announcement={memory}
+              messages={messages}
+              style={style}
+              onContinue={() => setMemory(null)}
+              onCompactFirst={() => {
+                setMemory(null);
+                if (conversationId) compaction.compact(conversationId);
+              }}
+            />
+          ) : conversationId && (compaction.state || compaction.context) ? (
+            <ContextBanner
+              context={compaction.context}
+              state={compaction.state}
+              messages={messages}
+              locale={locale}
+              onCompact={() => compaction.compact(conversationId)}
+              onLater={compaction.later}
+            />
           ) : !conversationId && placeShown ? (
             <WhereItWorks messages={messages} place={placeShown} onChange={setPlaceShown} />
           ) : undefined

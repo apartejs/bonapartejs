@@ -113,4 +113,20 @@ describe('compareWithJournal', () => {
     const none = [...JOURNAL, entry({ kind: 'rebase', summary: 'Tout.' })];
     expect(compareWithJournal([assistant('On continue.'), user('Merci')], none)).toEqual({ kind: 'append', text: 'Merci' });
   });
+
+  it('the summary aparté sends first, as a message of the person’s — alone or joined to the first kept — is not one of theirs', () => {
+    const preamble = 'The earlier part of this conversation was compacted. This is a summary of what came before; continue from it.';
+    const kept = JOURNAL[4]!;
+    const compacted = [...JOURNAL, entry({ kind: 'rebase', summary: 'Ils se sont salués.', keptFrom: kept.id })];
+    const joined = user(`${preamble}
+
+Ils se sont salués.
+
+Et ensuite ?`);
+    expect(compareWithJournal([joined, assistant('On continue.'), user('Merci')], compacted)).toEqual({ kind: 'append', text: 'Merci' });
+    const none = [...JOURNAL, entry({ kind: 'rebase', summary: 'Tout.' })];
+    expect(compareWithJournal([user(`${preamble}
+
+Tout.`), assistant('On continue.'), user('Merci')], none)).toEqual({ kind: 'append', text: 'Merci' });
+  });
 });

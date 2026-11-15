@@ -427,6 +427,25 @@ export const en: Messages = {
     wentBack: 'Went back before this message',
     count: (messages) => (messages === 1 ? '1 message' : `${messages} messages`),
   },
+  compact: {
+    command: 'Summarise the conversation, and it goes on from the summary',
+    full: (percent) => `Context ${percent} % full`,
+    counts: (used, window) => `${used} / ${window}`,
+    bar: (percent) => `${percent} % of the context used`,
+    line: 'The next answer may be cut. Compacting rewrites the conversation as a summary, and it goes on from there.',
+    now: (duration) => `Compact · ${duration}`,
+    later: 'Go on anyway',
+    first: (duration) => `Compact first · ${duration}`,
+    running: 'Compacting: the model summarises the conversation…',
+    refused: {
+      pending: 'Nothing was compacted: a call waits for your answer.',
+      'not-worth': 'Nothing was compacted: the conversation is too short for a summary to be worth it.',
+      'no-room': 'Nothing was compacted: there is no room left in the context to write the summary.',
+      cut: 'Nothing was compacted: the summary was cut before its end.',
+      empty: 'Nothing was compacted: the summary came back empty.',
+      failed: 'Nothing was compacted: the engine did not answer.',
+    },
+  },
   pr: {
     markOpen: (number, ci) =>
       `pull request ${number} open${ci === 'success' ? ', CI passed' : ci === 'failure' ? ', CI failed' : ci === 'pending' ? ', CI running' : ''}`,

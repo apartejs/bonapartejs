@@ -22,7 +22,7 @@ test('« / » lists the commands, and the one for a new conversation starts one'
   await page.keyboard.type('/');
   const list = page.getByRole('listbox');
   // Exactly these: no approval command beside the mode switch, whatever a plugin adds.
-  await expect(list.getByRole('option')).toHaveText([/^\/new/, /^\/retry/, /^\/copy/]);
+  await expect(list.getByRole('option')).toHaveText([/^\/new/, /^\/retry/, /^\/copy/, /^\/compact/]);
   await list.getByRole('option', { name: /Commencer une nouvelle conversation/ }).click();
   await expect(ui.userMessages).toHaveCount(0);
 });

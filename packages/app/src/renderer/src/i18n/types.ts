@@ -427,6 +427,20 @@ export interface Messages {
     wentBack: string;
     count(messages: number): string;
   };
+  /** Compaction (board « Coûts annoncés », 4; task 7.3). */
+  compact: {
+    /** The « / » command's description. */
+    command: string;
+    full(percent: number): string;
+    counts(used: string, window: string): string;
+    bar(percent: number): string;
+    line: string;
+    now(duration: string): string;
+    later: string;
+    first(duration: string): string;
+    running: string;
+    refused: Record<'pending' | 'not-worth' | 'no-room' | 'cut' | 'empty' | 'failed', string>;
+  };
   /** A branch's pull request, and archiving a conversation on its branch (task 6.8). */
   pr: {
     /** The mark of a row, said whole: « pull request 42 ouverte, CI réussie ». */

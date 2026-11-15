@@ -354,7 +354,9 @@ export class ConversationEngine {
     if (!engine) return null;
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
     if (!entries.some((entry) => entry.kind === 'user')) return null;
-    const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engine.live?.nCtx || Number.POSITIVE_INFINITY);
+    // The window as a turn reads it: the managed engine's, else the server's own.
+    const engineWindow = engine.live?.nCtx || (await engine.client.props().catch(() => ({ nCtx: 0 }))).nCtx || Number.POSITIVE_INFINITY;
+    const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
     if (!Number.isFinite(window)) return null;
     const used = estimateTokens(frozenPrompt(entries));
     // The summary reads a prompt its memory serves; then it is written, and the short prompt read.

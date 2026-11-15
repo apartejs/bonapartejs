@@ -283,6 +283,52 @@ body {
   min-width: 0;
 }
 
+/* The context nearly full (board « Coûts annoncés », 4; task 7.3): how full, the bar, the two choices. */
+.context-banner {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--aparte-message-max-width, 800px);
+  margin: 0 auto var(--aparte-space-4);
+}
+
+.context-banner .aparte-alert__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.context-banner__head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--aparte-space-3);
+}
+
+.context-banner__counts {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--aparte-font-weight-normal, 400);
+}
+
+.context-banner__bar {
+  height: 8px;
+  margin-block: var(--aparte-space-2);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--aparte-warning-surface);
+}
+
+.context-banner__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--aparte-warning);
+}
+
+.context-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-3);
+  margin-block-start: var(--aparte-space-3);
+}
+
 /* « Brancher » (task 7.2): each branch, what it says where it parts, and how long it is. */
 .conversation-branches__item {
   display: flex;

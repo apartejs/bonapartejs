@@ -25,17 +25,27 @@ export function compareWithJournal(messages: readonly AgentMessage[], entries: r
   // kept, then what came after it — compared with those; a page without the checkpoint sends everything.
   const rebase = entries.findLastIndex((entry) => entry.kind === 'rebase');
   if (rebase >= 0) {
-    const keptFrom = (entries[rebase] as Extract<JournalEntry, { kind: 'rebase' }>).keptFrom;
+    const { keptFrom, summary } = entries[rebase] as Extract<JournalEntry, { kind: 'rebase' }>;
     const kept = keptFrom ? entries.findIndex((entry) => entry.id === keptFrom) : -1;
-    const shortened = compare(messages, entries, kept >= 0 ? kept : rebase + 1);
+    const shortened = compare(messages, entries, kept >= 0 ? kept : rebase + 1, summary);
     if (shortened.kind !== 'mismatch') return shortened;
   }
   return compare(messages, entries, 0);
 }
 
-/** The page's messages of the person against the journal's from `from` on. */
-function compare(messages: readonly AgentMessage[], entries: readonly JournalEntry[], from: number): Divergence {
+/**
+ * The page's messages of the person against the journal's from `from` on. `summary`: what aparté sends
+ * first after its checkpoint, as a message of the person's under a preamble — alone, or joined to the first
+ * message kept; it is no message of theirs, and is taken off (apartejs/aparte#243: unmarked in the wire).
+ */
+function compare(messages: readonly AgentMessage[], entries: readonly JournalEntry[], from: number, summary?: string): Divergence {
   const sent = messages.filter((message) => message.role === 'user').map((message) => messageText(message.content));
+  const at = summary ? (sent[0]?.indexOf(summary) ?? -1) : -1;
+  if (summary && at >= 0) {
+    const rest = sent[0]!.slice(at + summary.length).replace(/^\n\n/, '');
+    if (rest === '') sent.shift();
+    else sent[0] = rest;
+  }
   const said = entries.flatMap((entry, index) => (entry.kind === 'user' && index >= from ? [{ text: entry.text, index }] : []));
   if (sent.length === 0) return { kind: 'mismatch' };
 

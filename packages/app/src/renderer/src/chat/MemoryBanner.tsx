@@ -16,9 +16,11 @@ export interface MemoryBannerProps {
   messages: Messages;
   style: NumberStyle;
   onContinue(): void;
+  /** « Compacter d'abord » (task 7.3): the conversation summarised before it is read again. */
+  onCompactFirst?(): void;
 }
 
-export function MemoryBanner({ announcement, messages, style, onContinue }: MemoryBannerProps) {
+export function MemoryBanner({ announcement, messages, style, onContinue, onCompactFirst }: MemoryBannerProps) {
   const text = messages.memory;
   const { locale } = style;
   const estimated = announcement.estimated ? ` ${text.estimated}` : '';
@@ -59,6 +61,11 @@ export function MemoryBanner({ announcement, messages, style, onContinue }: Memo
           <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={onContinue}>
             {text.rereadContinue}
           </button>
+          {onCompactFirst && announcement.compactSeconds !== undefined ? (
+            <button type="button" className="aparte-btn aparte-btn--outline" onClick={onCompactFirst}>
+              {messages.compact.first(formatDuration(announcement.compactSeconds, locale))}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
