@@ -108,14 +108,61 @@ describe('announceOpen', () => {
     expect(Math.round(announcement?.kind === 'restore' ? announcement.bytes / MiB : 0)).toBe(610);
   });
 
-  it('a memory let go is a re-read, with its time: 22 100 tokens at 130 a second, 170 s', () => {
+  const letGo = { at: '2026-11-11T09:00:00.000Z', budgetBytes: 20 * 1024 ** 3 };
+
+  it('a memory let go is a re-read, with its time: 22 100 tokens at 130 a second, 170 s — and when, under which budget', () => {
     expect(
-      announceOpen({ resident: false, promptTokens: 22_100, saved: null, refusal: 'missing', measures: { prefillTokensPerSecond: 130 } }),
-    ).toEqual({ kind: 'reread', tokens: 22_100, seconds: 170, reason: 'evicted', estimated: false });
+      announceOpen({
+        resident: false,
+        promptTokens: 22_100,
+        saved: null,
+        refusal: 'missing',
+        evicted: letGo,
+        measures: { prefillTokensPerSecond: 130 },
+      }),
+    ).toEqual({ kind: 'reread', tokens: 22_100, seconds: 170, reason: 'evicted', evicted: letGo, estimated: false });
+  });
+
+  it('a memory never saved — the app closed first, or the save failed — says so, not that it was let go', () => {
+    expect(announceOpen({ resident: false, promptTokens: 1000, saved: null, refusal: 'missing', measures: {} })).toMatchObject({
+      kind: 'reread',
+      reason: 'not-saved',
+    });
+  });
+
+  it('a memory older than the conversation: its state is restored, and what came after is read — that, and only that, is announced', () => {
+    expect(
+      announceOpen({
+        resident: false,
+        promptTokens: 25_000,
+        saved: { ...saved, promptTokenCount: 2_000 },
+        refusal: null,
+        behind: true,
+        measures: { prefillTokensPerSecond: 200 },
+      }),
+    ).toEqual({ kind: 'reread', tokens: 23_000, seconds: 115, reason: 'behind', estimated: false });
+  });
+
+  it('the engine died in the middle of the last answer: said so, with what remains to read', () => {
+    expect(
+      announceOpen({
+        resident: false,
+        promptTokens: 25_000,
+        saved: { ...saved, promptTokenCount: 2_000 },
+        refusal: null,
+        behind: true,
+        diedMidAnswer: true,
+        measures: {},
+      }),
+    ).toMatchObject({ kind: 'reread', tokens: 23_000, reason: 'engine-died' });
+    expect(announceOpen({ resident: false, promptTokens: 100, saved: null, refusal: 'missing', diedMidAnswer: true, measures: {} })).toMatchObject({
+      tokens: 100,
+      reason: 'engine-died',
+    });
   });
 
   it('says why a state cannot serve, in the words of the manifest', () => {
-    for (const refusal of ['other-model', 'cache-types', 'context-too-small', 'engine-died'] as const) {
+    for (const refusal of ['other-model', 'cache-types', 'context-too-small'] as const) {
       expect(announceOpen({ resident: false, promptTokens: 100, saved: null, refusal, measures: {} })).toMatchObject({
         kind: 'reread',
         reason: refusal,

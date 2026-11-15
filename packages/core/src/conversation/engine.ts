@@ -63,6 +63,8 @@ export interface ConversationEngineDeps {
   prompt(meta: ConversationMeta): Omit<SystemPromptOptions, 'family'>;
   measures?: MeasureStore;
   slots?: number;
+  /** A save that failed (a full disk, a state bigger than the budget): said, never dropped in silence. */
+  onSaveError?(error: unknown, conversationId: string): void;
 }
 
 export type TurnEvent =
@@ -126,6 +128,13 @@ interface Turning {
   history: boolean;
   sink: (event: TurnEvent) => void;
   rereading: boolean;
+  /** Its saved state is older than its last entries: restored, it leaves the rest to read. */
+  behind: boolean;
+}
+
+/** Was this state saved before some of the conversation's entries — is it older than the conversation? */
+function savedBefore(entries: readonly JournalEntry[], savedAt: string): boolean {
+  return entries.some((entry) => entry.kind !== 'system' && entry.at > savedAt);
 }
 
 const ownerKey = (owner: SlotOwner): string =>
@@ -146,6 +155,9 @@ export class ConversationEngine {
       slots: deps.slots ?? 1,
       save: (owner, slot, incoming) => this.save(owner, slot, incoming),
       restore: (owner, slot) => this.restore(owner, slot),
+      onError: (error, owner) => {
+        if (owner.kind === 'conversation') this.deps.onSaveError?.(error, owner.conversationId);
+      },
     });
   }
 
@@ -160,10 +172,10 @@ export class ConversationEngine {
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
     if (!entries.some((entry) => entry.kind === 'user')) return null;
     const last = entries.findLast((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
-    const manifest = await this.deps.kv.manifest(ownerKey(owner));
+    const key = ownerKey(owner);
+    const manifest = await this.deps.kv.manifest(key);
     let refusal: Parameters<typeof announceOpen>[0]['refusal'] = null;
-    if (last?.stopped === 'engine' && (!manifest || manifest.savedAt < last.at)) refusal = 'engine-died';
-    else if (!manifest) refusal = 'missing';
+    if (!manifest) refusal = 'missing';
     else {
       const verdict = canRestore(manifest, engine.live);
       if (!verdict.ok) refusal = verdict.reason;
@@ -174,6 +186,9 @@ export class ConversationEngine {
       promptTokens: estimateTokens(frozenPrompt(entries)),
       saved: refusal === null ? manifest : null,
       refusal,
+      behind: manifest !== null && savedBefore(entries, manifest.savedAt),
+      diedMidAnswer: last?.stopped === 'engine' && (!manifest || manifest.savedAt < last.at),
+      evicted: manifest ? null : await this.deps.kv.evicted(key),
       measures: prefill === undefined ? {} : { prefillTokensPerSecond: prefill },
     });
   }
@@ -278,7 +293,15 @@ export class ConversationEngine {
           });
     const owner = this.ownerOf(meta);
     const key = ownerKey(owner);
-    const turning: Turning = { engine, stable, history: entries.some((entry) => entry.kind === 'user'), sink, rereading: false };
+    const saved = engine.live ? await this.deps.kv.manifest(key) : null;
+    const turning: Turning = {
+      engine,
+      stable,
+      history: entries.some((entry) => entry.kind === 'user'),
+      sink,
+      rereading: false,
+      behind: saved !== null && savedBefore(entries, saved.savedAt),
+    };
     this.turning.set(key, turning);
     this.lastRun.set(key, { engine, tokens: used });
 
@@ -392,7 +415,14 @@ export class ConversationEngine {
     turning.sink({ type: 'step', name: 'restore', phase: 'start' });
     const restored = await kv.restoreState(client, slotId, ownerKey(owner), live);
     turning.sink({ type: 'step', name: 'restore', phase: 'end' });
-    if (restored.restored) return;
+    if (restored.restored) {
+      // A state older than the conversation: what came after it is read now, and said.
+      if (turning.behind && turning.history) {
+        turning.rereading = true;
+        turning.sink({ type: 'step', name: 'reread', phase: 'start' });
+      }
+      return;
+    }
 
     turning.sink({ type: 'step', name: 'seed', phase: 'start' });
     try {

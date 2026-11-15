@@ -29,7 +29,9 @@ export const rereadAnnouncementSchema = z.object({
   kind: z.literal('reread'),
   tokens: z.number(),
   seconds: z.number(),
-  reason: z.enum(['evicted', 'other-model', 'cache-types', 'context-too-small', 'engine-died']),
+  reason: z.enum(['evicted', 'not-saved', 'behind', 'other-model', 'cache-types', 'context-too-small', 'engine-died']),
+  /** A memory let go under the disk budget: when, and which budget. */
+  evicted: z.object({ at: z.string(), budgetBytes: z.number() }).optional(),
   compactSeconds: z.number().optional(),
   estimated: z.boolean(),
 });

@@ -23,7 +23,7 @@ import { copyFile, mkdir, rm, utimes } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
-import { enforceRetention, kvUsage, type KvUsage, type RetentionReport } from './retention.js';
+import { enforceRetention, kvUsage, type EvictionNote, type KvUsage, type RetentionReport } from './retention.js';
 
 /** What the engine runs now: what a saved state is checked against. */
 export interface LiveConfig {
@@ -197,6 +197,7 @@ export class KvStore {
   async forget(stateId: string): Promise<void> {
     await rm(join(this.dir, this.slotFilename(stateId)), { force: true });
     await rm(this.manifestPath(stateId), { force: true });
+    await rm(this.evictionPath(stateId), { force: true });
   }
 
   /**
@@ -231,7 +232,20 @@ export class KvStore {
     };
     await writeJsonFile(this.manifestPath(stateId), manifest);
     await this.touch(this.slotFilename(stateId));
+    await rm(this.evictionPath(stateId), { force: true });
     return manifest;
+  }
+
+  /** When a state was let go to stay under the budget, and which budget; null if it was not (or was saved since). */
+  async evicted(stateId: string): Promise<EvictionNote | null> {
+    const note = await readManifest<Partial<EvictionNote>>(this.evictionPath(stateId));
+    return note && typeof note.at === 'string' && typeof note.budgetBytes === 'number'
+      ? { at: note.at, budgetBytes: note.budgetBytes }
+      : null;
+  }
+
+  private evictionPath(stateId: string): string {
+    return join(this.dir, `${stateIdOf(stateId)}.evicted.json`);
   }
 
   async restoreState(slots: KvSlots, idSlot: number, stateId: string, live: LiveConfig): Promise<RestoreOutcome> {

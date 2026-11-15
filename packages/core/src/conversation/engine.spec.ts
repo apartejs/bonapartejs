@@ -50,9 +50,11 @@ async function rig(
   const kv = new KvStore(kvDir, options.budget ? { budgetBytes: options.budget } : {});
   const live = options.live === undefined ? LIVE : options.live;
   let generation = 1;
+  const saveErrors: unknown[] = [];
   const engine = new ConversationEngine({
     store,
     kv,
+    onSaveError: (error) => saveErrors.push(error),
     engine: async () => ({ client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation }),
     prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: 'French' }),
   });
@@ -67,7 +69,7 @@ async function rig(
     generation += 1;
     await client.eraseSlot(0);
   };
-  return { dir, server, client, store, kv, engine, prompts, conversation, say, relaunch };
+  return { dir, server, client, store, kv, engine, prompts, conversation, say, relaunch, saveErrors };
 }
 
 describe('ConversationEngine — a turn', () => {
@@ -133,6 +135,40 @@ describe('ConversationEngine — the memory', () => {
     // B sat in the slot of the server that went away: what the new one holds is not B.
     await say(a.id, 'Encore');
     expect(await kv.manifest(`${b.id}_main`)).toBeNull();
+  });
+
+  it('a memory older than the conversation: announced as what remains to read, and that reading is shown', async () => {
+    const first = await rig();
+    const a = await first.conversation();
+    const b = await first.conversation();
+    await first.say(a.id, 'Bonjour');
+    await first.say(b.id, 'Salut');
+    await first.say(a.id, `Encore une question ${'avec beaucoup de mots '.repeat(40)}`);
+    // The app is killed: A's last turns were never saved. It starts again on the same folder.
+    const second = await rig({ dir: first.dir });
+    const announced = await second.engine.open(a.id);
+    expect(announced).toMatchObject({ kind: 'reread', reason: 'behind' });
+    expect(announced?.kind === 'reread' ? announced.tokens : 0).toBeGreaterThan(200);
+    const { events } = await second.say(a.id, 'Et alors ?');
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'end' });
+    expect(events).toContainEqual({ type: 'step', name: 'reread', phase: 'start' });
+  });
+
+  it('a memory never saved says so, not that the budget let it go', async () => {
+    const first = await rig();
+    const a = await first.conversation();
+    await first.say(a.id, 'Bonjour');
+    const second = await rig({ dir: first.dir });
+    expect(await second.engine.open(a.id)).toMatchObject({ kind: 'reread', reason: 'not-saved' });
+  });
+
+  it('a save that fails is said, never dropped in silence', async () => {
+    const { conversation, say, saveErrors } = await rig({ budget: () => 1 });
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    await say(b.id, 'Salut');
+    expect(String(saveErrors[0])).toMatch(/does not fit/);
   });
 
   it('saving the conversation that leaves never evicts the state of the one arriving', async () => {

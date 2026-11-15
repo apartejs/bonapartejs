@@ -6,7 +6,7 @@
  * Evicting costs a re-read, announced — never a message.
  */
 
-import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -65,7 +65,8 @@ describe('enforceRetention', () => {
     // 1 200 there, 500 to come, 1 500 allowed: one state must go.
     const report = await enforceRetention(dir, 1500, [], 500);
     expect(report.evicted).toEqual(['old']);
-    expect((await readdir(dir)).sort()).toEqual(['mid.manifest.json', 'mid.slot', 'new.manifest.json', 'new.slot']);
+    // What stays of the one let go: the note its re-read will read.
+    expect((await readdir(dir)).sort()).toEqual(['mid.manifest.json', 'mid.slot', 'new.manifest.json', 'new.slot', 'old.evicted.json']);
   });
 
   it('never evicts the state being saved nor the one about to be restored, even the oldest', async () => {
@@ -75,6 +76,15 @@ describe('enforceRetention', () => {
     await state(dir, 'other', 400, 10);
     const report = await enforceRetention(dir, 900, ['active', 'next'], 0);
     expect(report.evicted).toEqual(['other']);
+  });
+
+  it('leaves a note of each state it lets go: when, and under which budget', async () => {
+    const dir = await folder();
+    await state(dir, 'old', 400, 30);
+    await enforceRetention(dir, 500, [], 300);
+    const note = JSON.parse(await readFile(join(dir, 'old.evicted.json'), 'utf8')) as { at: string; budgetBytes: number };
+    expect(note.budgetBytes).toBe(500);
+    expect(Date.now() - Date.parse(note.at)).toBeLessThan(60_000);
   });
 
   it('does not count twice the state a save replaces: its old file goes when the new one is written', async () => {

@@ -80,7 +80,12 @@ export interface Messages {
     restoreLine(seconds: string, instead: string): string;
     restoreSaved(date: string, time: string, size: string): string;
     rereadTitle(tokens: string, duration: string): string;
-    rereadReason: Record<'evicted' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died', string>;
+    rereadReason: Record<
+      'evicted' | 'not-saved' | 'behind' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died',
+      string
+    >;
+    /** A memory let go under the disk budget: on which day, under which budget. */
+    rereadEvicted(date: string, budget: string): string;
     rereadContinue: string;
     /** After a figure no measure backs yet. */
     estimated: string;

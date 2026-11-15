@@ -40,13 +40,29 @@ export interface RestoreAnnouncement {
   estimated: boolean;
 }
 
-export type RereadReason = 'evicted' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died';
+/**
+ * Why a conversation is read again: its memory let go under the budget
+ * (`evicted`), never saved (`not-saved`), older than its last messages
+ * (`behind`: its state is restored, and what came after is read), made for
+ * another model or other cache settings, too big for the context now, or the
+ * engine died in the middle of the last answer.
+ */
+export type RereadReason =
+  | 'evicted'
+  | 'not-saved'
+  | 'behind'
+  | 'other-model'
+  | 'cache-types'
+  | 'context-too-small'
+  | 'engine-died';
 
 export interface RereadAnnouncement {
   kind: 'reread';
   tokens: number;
   seconds: number;
   reason: RereadReason;
+  /** A memory let go: when, and under which budget. */
+  evicted?: { at: string; budgetBytes: number };
   compactSeconds?: number;
   estimated: boolean;
 }
@@ -142,8 +158,14 @@ export interface OpenFacts {
   promptTokens: number;
   /** Its saved state, when one can be restored. */
   saved: { promptTokenCount: number; slotFileBytes: number; savedAt: string } | null;
-  /** Why it cannot be (the KV store's reason), or the engine died under it. */
-  refusal: 'missing' | 'refused' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died' | null;
+  /** Why it cannot be (the KV store's reason). */
+  refusal: 'missing' | 'refused' | 'other-model' | 'cache-types' | 'context-too-small' | null;
+  /** The saved state is older than the conversation's last entries: what came after must be read. */
+  behind?: boolean;
+  /** The engine died in the middle of the last answer, after the state was saved. */
+  diedMidAnswer?: boolean;
+  /** A missing state that the budget let go: when, and under which budget. */
+  evicted?: { at: string; budgetBytes: number } | null;
   measures: { prefillTokensPerSecond?: number; restoreBytesPerSecond?: number };
 }
 
@@ -151,7 +173,8 @@ export interface OpenFacts {
 export function announceOpen(facts: OpenFacts): RestoreAnnouncement | RereadAnnouncement | null {
   if (facts.resident || facts.promptTokens <= 0) return null;
   const prefill = facts.measures.prefillTokensPerSecond ?? DEFAULT_PREFILL_TOKENS_PER_SECOND;
-  if (facts.saved && !facts.refusal) {
+  const restorable = facts.saved !== null && facts.refusal === null;
+  if (facts.saved && restorable && !facts.behind && !facts.diedMidAnswer) {
     const restore = facts.measures.restoreBytesPerSecond ?? DEFAULT_RESTORE_BYTES_PER_SECOND;
     return {
       kind: 'restore',
@@ -163,13 +186,23 @@ export function announceOpen(facts: OpenFacts): RestoreAnnouncement | RereadAnno
       estimated: facts.measures.prefillTokensPerSecond === undefined || facts.measures.restoreBytesPerSecond === undefined,
     };
   }
-  // A state absent, or one the server could not read: the memory was let go.
-  const reason: RereadReason = facts.refusal === null || facts.refusal === 'missing' || facts.refusal === 'refused' ? 'evicted' : facts.refusal;
+  // A state that serves, but older than the conversation: it is restored, and what came after is read.
+  const tokens = facts.saved && restorable ? Math.max(0, facts.promptTokens - facts.saved.promptTokenCount) : facts.promptTokens;
+  const reason: RereadReason = facts.diedMidAnswer
+    ? 'engine-died'
+    : restorable
+      ? 'behind'
+      : facts.refusal === 'missing' || facts.refusal === 'refused' || facts.refusal === null
+        ? facts.evicted && facts.refusal === 'missing'
+          ? 'evicted'
+          : 'not-saved'
+        : facts.refusal;
   return {
     kind: 'reread',
-    tokens: facts.promptTokens,
-    seconds: facts.promptTokens / prefill,
+    tokens,
+    seconds: tokens / prefill,
     reason,
+    ...(reason === 'evicted' && facts.evicted ? { evicted: facts.evicted } : {}),
     estimated: facts.measures.prefillTokensPerSecond === undefined,
   };
 }

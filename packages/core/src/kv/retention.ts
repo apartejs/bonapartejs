@@ -7,7 +7,7 @@
  * evicting costs a re-read, announced, never a message.
  */
 
-import { readdir, rm, stat } from 'node:fs/promises';
+import { readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const GiB = 1024 ** 3;
@@ -73,13 +73,21 @@ export async function kvUsage(dir: string): Promise<KvUsage> {
   return { totalBytes: entries.reduce((sum, entry) => sum + entry.bytes, 0), entries };
 }
 
-async function evict(dir: string, entry: KvEntry): Promise<void> {
+/** The note a state let go leaves behind: when, and under which budget — what its re-read will say. */
+export interface EvictionNote {
+  at: string;
+  budgetBytes: number;
+}
+
+async function evict(dir: string, entry: KvEntry, budgetBytes: number): Promise<void> {
   if (entry.kind === 'seed') {
     await rm(join(dir, `seed-${entry.id}.slot`), { force: true });
     await rm(join(dir, 'seeds', `${entry.id}.manifest.json`), { force: true });
   } else {
     await rm(join(dir, `${entry.id}.slot`), { force: true });
     await rm(join(dir, `${entry.id}.manifest.json`), { force: true });
+    const note: EvictionNote = { at: new Date().toISOString(), budgetBytes };
+    await writeFile(join(dir, `${entry.id}.evicted.json`), JSON.stringify(note)).catch(() => undefined);
   }
 }
 
@@ -107,7 +115,7 @@ export async function enforceRetention(
     .sort((a, b) => a.usedAt - b.usedAt);
   for (const entry of candidates) {
     if (total + needBytes <= budgetBytes) break;
-    await evict(dir, entry);
+    await evict(dir, entry, budgetBytes);
     total -= entry.bytes;
     evicted.push(entry.kind === 'seed' ? `seed:${entry.id}` : entry.id);
   }

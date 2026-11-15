@@ -5,7 +5,7 @@
  * otherwise.
  */
 
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
@@ -166,7 +166,13 @@ for (const locale of ['fr', 'en'] as const) {
       // Its memory let go, as the disk budget does.
       await page.getByRole('button', { name: words.new }).click();
       const dir = join(launched.dataDir, 'kv-slots');
-      for (const name of (await readdir(dir)).filter((one) => one !== 'seeds')) await rm(join(dir, name), { force: true });
+      for (const name of (await readdir(dir)).filter((one) => one.endsWith('.slot') && !one.startsWith('seed-'))) {
+        const id = name.slice(0, -'.slot'.length);
+        await rm(join(dir, name), { force: true });
+        await rm(join(dir, `${id}.manifest.json`), { force: true });
+        // The note the core's retention leaves: when, under which budget.
+        await writeFile(join(dir, `${id}.evicted.json`), JSON.stringify({ at: new Date().toISOString(), budgetBytes: 20 * 1024 ** 3 }));
+      }
       await first.click();
       await expect(page.getByRole('button', { name: words.goOn })).toBeVisible();
       await shot('memory-reread');

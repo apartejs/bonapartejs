@@ -446,6 +446,9 @@ export function createCore(deps: CoreDeps): Core {
       };
     },
     prompt: (meta) => ({ kind: meta.kind, tools: [], perimeter: [], replyLanguage: deps.replyLanguage?.() ?? 'English' }),
+    // The person learns it when the conversation opens again (« not saved »); the log keeps why.
+    onSaveError: (error, conversationId) =>
+      deps.logger?.(`[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`),
   });
 
   async function currentEngine(): Promise<Engine | undefined> {

@@ -8,7 +8,7 @@
  * restart, the same conversation resumes from it.
  */
 
-import { readdir, rm } from 'node:fs/promises';
+import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test, type LaunchedApp } from './fixtures/app.js';
@@ -52,12 +52,21 @@ async function twoConversations(page: Page): Promise<void> {
   await ask(page, 'Une autre question');
 }
 
-/** The saved states of the conversations, gone — as the disk budget lets them go. The seeds stay. */
+/**
+ * The saved states of the conversations, gone as the disk budget lets them go:
+ * each leaves the note the core's retention writes (when, under which budget).
+ * The seeds stay.
+ */
 async function letMemoriesGo(launched: LaunchedApp): Promise<void> {
   const dir = join(launched.dataDir, 'kv-slots');
-  const states = (await readdir(dir)).filter((name) => name !== 'seeds');
+  const states = (await readdir(dir)).filter((name) => name.endsWith('.slot') && !name.startsWith('seed-'));
   expect(states.length).toBeGreaterThan(0);
-  for (const name of states) await rm(join(dir, name), { force: true });
+  for (const name of states) {
+    const id = name.slice(0, -'.slot'.length);
+    await rm(join(dir, name), { force: true });
+    await rm(join(dir, `${id}.manifest.json`), { force: true });
+    await writeFile(join(dir, `${id}.evicted.json`), JSON.stringify({ at: new Date().toISOString(), budgetBytes: 20 * 1024 ** 3 }));
+  }
 }
 
 test('reopening a conversation whose memory was saved says so, with nothing to choose', async ({ launch }) => {
@@ -97,7 +106,7 @@ test('a memory let go says what reading again costs, and nothing is read before 
   await openConversation(page, FIRST);
   const banner = page.locator('.memory-banner');
   await expect(banner).toContainText(/À relire\s:\s[\d\s]+jetons, ~/);
-  await expect(banner).toContainText('Sa mémoire a été libérée pour rester sous le budget disque.');
+  await expect(banner).toContainText(/Sa mémoire a été libérée le \d\d\/\d\d pour rester sous les 20 Go\./);
   const goOn = banner.getByRole('button', { name: 'Relire et continuer' });
   await expect(goOn).toBeVisible();
 
