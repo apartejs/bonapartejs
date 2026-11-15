@@ -54,8 +54,17 @@ export class ConversationIndex {
     if (words === '') return { conversations: [], files: [] };
     const needle = words.toLowerCase();
     const texts = await this.all();
+    // The cards as they are now: a rename shows at once, a deleted conversation is never found.
+    const cards = new Map((await this.store.list()).map((meta) => [meta.id, meta] as const));
     const conversations: FoundConversation[] = [];
-    for (const [id, { title, text }] of texts) {
+    for (const [id, read] of texts) {
+      const card = cards.get(id);
+      if (!card) {
+        texts.delete(id);
+        continue;
+      }
+      const { text } = read;
+      const title = card.title;
       const inTitle = title.toLowerCase().indexOf(needle);
       const inText = text.toLowerCase().indexOf(needle);
       if (inTitle < 0 && inText < 0) continue;

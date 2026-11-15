@@ -18,9 +18,13 @@ import {
 import { useEffect, useId, useRef, useState } from 'react';
 import { bridge } from '../bridge';
 import { formatBytes, formatDuration, formatTokens, type NumberStyle } from '../format';
+import { memoriesToFree } from './budget';
 import type { PageProps } from './SettingsView';
 
 const GIB = 1024 ** 3;
+
+/** Said on the window when the settings close: the window reads the engine's state again (unloaded, restarted). */
+export const ENGINE_CHANGED = 'bonaparte-engine';
 
 export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps & { onPage(page: 'models'): void }) {
   const words = messages.settings.engine;
@@ -57,21 +61,11 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
   const since = engine.since ? (Date.now() - Date.parse(engine.since)) / 1000 : null;
   const budgetGiB = Number.parseFloat(draft.replace(',', '.'));
   const newBudget = Number.isFinite(budgetGiB) && budgetGiB > 0 ? Math.round(budgetGiB * GIB) : null;
-  // What the retention would let go under the new budget: the oldest saved first, never the one in the engine.
-  const freed: string[] = [];
-  if (newBudget !== null && newBudget < overview.usedBytes) {
-    let used = overview.usedBytes;
-    for (const row of [...overview.rows].filter((one) => one.state === 'saved' && one.bytes).sort((a, b) => a.at.localeCompare(b.at))) {
-      if (used <= newBudget) break;
-      freed.push(row.title || messages.search.untitled);
-      used -= row.bytes ?? 0;
-    }
-  }
+  // What the retention would let go under the new budget, by conversation.
+  const freed = newBudget === null ? [] : memoriesToFree(overview.rows, overview.usedBytes, newBudget);
   const applyBudget = async (): Promise<void> => {
     if (newBudget === null) return;
-    for (const row of overview.rows.filter((one) => freed.includes(one.title || messages.search.untitled) && one.state === 'saved')) {
-      await bridge.invoke(engineReleaseMemory, { id: row.id }).catch(() => undefined);
-    }
+    for (const row of freed) await bridge.invoke(engineReleaseMemory, { id: row.id }).catch(() => undefined);
     change('kvBudgetBytes', newBudget);
     setEditing(false);
     setTimeout(read, 100);
@@ -102,12 +96,23 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
         <div className="setting-actions">
           {engine.running ? (
             <>
-              <button type="button" className="aparte-btn aparte-btn--outline" onClick={() => void bridge.invoke(engineUnload, undefined).then(read)}>
+              <button
+                type="button"
+                className="aparte-btn aparte-btn--outline"
+                disabled={engine.busy}
+                onClick={() =>
+                  void bridge
+                    .invoke(engineUnload, undefined)
+                    .catch(() => undefined)
+                    .finally(read)
+                }
+              >
                 {words.unload}
               </button>
               <button
                 type="button"
                 className="aparte-btn aparte-btn--outline"
+                disabled={engine.busy}
                 onClick={() => {
                   // What restarting costs, said before it is paid: the model's last load.
                   void bridge.invoke(engineModels, undefined).then((models) => {
@@ -119,6 +124,11 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
                 {words.restart}
               </button>
             </>
+          ) : null}
+          {engine.busy ? (
+            <p className="setting-section__hint" role="status">
+              {words.busy}
+            </p>
           ) : null}
           <button type="button" className="aparte-btn aparte-btn--outline" onClick={() => onPage('models')}>
             {words.changeModel}
@@ -152,7 +162,9 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
             />
-            {freed.length > 0 ? <p className="setting-section__hint">{words.budgetFrees(freed.join(', '))}</p> : null}
+            {freed.length > 0 ? (
+              <p className="setting-section__hint">{words.budgetFrees(freed.map((row) => row.title || messages.search.untitled).join(', '))}</p>
+            ) : null}
             <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" disabled={newBudget === null} onClick={() => void applyBudget()}>
               {freed.length > 0 ? words.budgetFreeAndApply : words.budgetApply}
             </button>
@@ -247,7 +259,10 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
             className="aparte-btn aparte-btn--primary aparte-btn--solid"
             onClick={() => {
               setAsking(false);
-              void bridge.invoke(engineRestart, undefined).then(read);
+              void bridge
+                .invoke(engineRestart, undefined)
+                .catch(() => undefined)
+                .finally(read);
             }}
           >
             {words.restartNow}

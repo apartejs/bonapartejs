@@ -289,6 +289,7 @@ export const en: Messages = {
       contextLine: (tokens, slots, cacheType) => `${tokens} tokens · ${slots} slot${slots === 1 ? '' : 's'} · K/V ${cacheType}`,
       unload: 'Unload',
       restart: 'Restart',
+      busy: 'A reply is running: the engine unloads or restarts once it is done.',
       restartQuestion: 'Restart the engine?',
       restartCost: (seconds) => `The model loads again: ~${seconds}. The memory of the conversation in it is saved first.`,
       restartNow: 'Restart',

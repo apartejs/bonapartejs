@@ -7,7 +7,7 @@
 import { BrowserWindow } from 'electron';
 import { join } from 'node:path';
 import { APP_ORIGIN } from '@aparte/bonaparte-shared';
-import { isOwnPage } from './security.js';
+import { isOwnPage, isPermissionAllowed } from './security.js';
 
 export interface MainWindowOptions {
   devServerUrl?: string | undefined;
@@ -46,6 +46,9 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     if (!isOwnPage(url, ownPage)) event.preventDefault();
   });
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  // The page is granted nothing but the clipboard's write, asked or checked.
+  contents.session.setPermissionRequestHandler((_contents, permission, answer) => answer(isPermissionAllowed(permission)));
+  contents.session.setPermissionCheckHandler((_contents, permission) => isPermissionAllowed(permission));
 
   if (!options.e2e) {
     window.once('ready-to-show', () => window.show());

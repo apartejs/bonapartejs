@@ -7,7 +7,7 @@
 
 import { posix, win32 } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { devServerUrlFrom, isOwnPage, isTrustedOrigin, resolveAppFile } from './security.js';
+import { isPermissionAllowed, devServerUrlFrom, isOwnPage, isTrustedOrigin, resolveAppFile } from './security.js';
 
 describe('isTrustedOrigin', () => {
   it('trusts the pages of the app', () => {
@@ -142,3 +142,13 @@ describe.each([
     expect(resolveAppFile(root, '/a%00b', paths)).toBeNull();
   });
 });
+
+describe('the permissions of the page', () => {
+  it('grants the clipboard write, and nothing else', () => {
+    expect(isPermissionAllowed('clipboard-sanitized-write')).toBe(true);
+    for (const permission of ['media', 'notifications', 'geolocation', 'clipboard-read', 'midi', 'openExternal']) {
+      expect(isPermissionAllowed(permission)).toBe(false);
+    }
+  });
+});
+

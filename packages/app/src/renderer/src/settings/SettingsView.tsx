@@ -109,6 +109,7 @@ export function SettingsView({
                 {...(one === page ? { 'aria-current': 'page' as const } : {})}
                 onClick={(event) => {
                   event.preventDefault();
+                  setProject(null);
                   onPage(one);
                 }}
               >

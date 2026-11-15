@@ -24,6 +24,7 @@ export const memoryOverviewSchema = z.object({
     running: z.boolean(),
     since: z.string().nullable(),
     model: z.object({ name: z.string(), path: z.string() }).nullable(),
+    busy: z.boolean(),
     nCtx: z.number(),
     cacheType: z.string(),
     slots: z.number(),

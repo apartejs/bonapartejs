@@ -63,6 +63,8 @@ function readProject(raw: unknown): Project | null {
     name: project.name,
     roots: project.roots.filter((root): root is string => typeof root === 'string' && !/^[\\/]{2}/.test(root)),
     defaultMode: MODES.has(String(project.defaultMode)) ? (project.defaultMode as PlayMode) : 'repetition',
+    // What the project adds to « toujours demandé »: kept through every read, or the protection goes.
+    ...(Array.isArray(project.alwaysAsk) ? { alwaysAsk: project.alwaysAsk.filter((name): name is string => typeof name === 'string') } : {}),
     createdAt: typeof project.createdAt === 'string' ? project.createdAt : new Date(0).toISOString(),
     updatedAt: typeof project.updatedAt === 'string' ? project.updatedAt : new Date(0).toISOString(),
   };

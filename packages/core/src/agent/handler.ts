@@ -112,7 +112,10 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       const project = await core.projects.get(url.searchParams.get('project') ?? '');
       if (project) await core.conversationStore.update(conversationId, { projectId: project.id });
       const mode = chosen.success ? chosen.data : project?.defaultMode;
-      if (mode) await core.setMode(conversationId, mode);
+      // Only a mode the person picked in this run confirms Impro: a default read from disk does not
+      // (security rule 9) — the window says `picked=1` when the person chose it in the switch.
+      const picked = chosen.success && url.searchParams.get('picked') === '1';
+      if (mode) await core.setMode(conversationId, mode, { confirmed: picked });
     }
     const divergence = compareWithJournal(body.data.request.messages, entries);
     if (divergence.kind === 'mismatch') {

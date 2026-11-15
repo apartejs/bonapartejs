@@ -121,3 +121,27 @@ test('a narrow window folds the sidebar into icons', async ({ launch }) => {
   await expect(page.getByRole('navigation', { name: 'Projets et conversations', exact: true })).toBeVisible();
 });
 
+test("a row's menu opens on a right click; a conversation is pinned, renamed and archived from the list", async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' } });
+  await ask(page, 'Première');
+  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await ask(page, 'Seconde');
+  const list = conversationList(page);
+
+  await list.row('Première').click({ button: 'right' });
+  await expect(page.getByRole('menuitem', { name: 'Épingler' })).toBeVisible();
+  await page.getByRole('menuitem', { name: 'Épingler' }).click();
+  await expect.poll(async () => (await list.list.locator('[data-conv-id]').allTextContents()).map((text) => text.trim())[0]).toContain('Première');
+
+  await list.openMenu('Seconde');
+  await page.getByRole('menuitem', { name: 'Renommer' }).click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('Deuxième');
+  await page.keyboard.press('Enter');
+  await expect(list.row('Deuxième')).toBeVisible();
+
+  await list.openMenu('Deuxième');
+  await page.getByRole('menuitem', { name: 'Archiver' }).click();
+  await expect(list.row('Deuxième')).toHaveCount(0);
+});
+

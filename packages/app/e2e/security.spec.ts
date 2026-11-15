@@ -13,6 +13,20 @@ test('the page has no Node, and only the narrow bridge', async ({ launch }) => {
   ]);
 });
 
+test('the page is granted no device and no permission: microphone, camera, notifications refused', async ({ launch }) => {
+  const { page } = await launch();
+  const asked = await page.evaluate(async () => {
+    const media = await navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then(() => 'granted')
+      .catch((error: Error) => error.name);
+    const notification = await Notification.requestPermission();
+    return { media, notification };
+  });
+  expect(asked.media).not.toBe('granted');
+  expect(asked.notification).toBe('denied');
+});
+
 test('the window never navigates out of the app', async ({ launch }) => {
   const launched = await launch();
   const { app, page } = launched;

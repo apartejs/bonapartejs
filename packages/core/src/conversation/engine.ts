@@ -28,7 +28,7 @@ import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
-import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
+import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -444,7 +444,12 @@ export class ConversationEngine {
     if (!journal.entries().some((entry) => entry.kind === 'system')) {
       const asked = this.deps.prompt(meta);
       const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
-      await journal.append({ kind: 'system', rendered: family.renderSystem(prompt.stable), replyLanguage: asked.replyLanguage });
+      await journal.append({
+        kind: 'system',
+        rendered: family.renderSystem(prompt.stable),
+        replyLanguage: asked.replyLanguage,
+        perimeter: [...asked.perimeter],
+      });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
       if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
     }
@@ -473,6 +478,13 @@ export class ConversationEngine {
         const delta = renderModeDelta(running, launched);
         await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       }
+    }
+    if (!input.resume) {
+      // The project's folders changed (one added, one removed): told by a note, the frozen text untouched.
+      const current = [...this.deps.prompt(meta).perimeter];
+      const told = lastToldPerimeter(journal.entries());
+      const delta = told === undefined ? null : renderPerimeterDelta(told, current);
+      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, roots: current }, rendered: family.renderSystemNote(delta.text) });
     }
     if (!input.resume) {
       // The person changed the language of the interface: the replies follow it, told by a note.
@@ -719,6 +731,16 @@ function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
     if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
   }
   return 'repetition';
+}
+
+/** The folders the model last read of in this branch: its last note of them, else the frozen prompt's. */
+function lastToldPerimeter(entries: readonly JournalEntry[]): string[] | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'delta' && entry.delta.kind === 'perimeter' && entry.delta.roots) return entry.delta.roots;
+    if (entry.kind === 'system' && entry.perimeter) return entry.perimeter;
+  }
+  return undefined;
 }
 
 /**

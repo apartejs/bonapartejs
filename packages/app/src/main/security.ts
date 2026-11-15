@@ -90,3 +90,12 @@ export function resolveAppFile(root: string, pathname: string, paths: PathFlavou
   if (target === base) return paths.join(base, 'index.html');
   return target.startsWith(base + paths.sep) ? target : null;
 }
+
+/**
+ * What the page may be granted by the browser: writing to the clipboard (copying a reply, a block of
+ * code), nothing else — no microphone, no camera, no notification of its own, no location.
+ */
+export function isPermissionAllowed(permission: string): boolean {
+  return permission === 'clipboard-sanitized-write';
+}
+

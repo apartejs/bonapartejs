@@ -135,6 +135,8 @@ export interface MemoryOverview {
     /** When the model became ready (ISO date); null when none runs. */
     since: string | null;
     model: { name: string; path: string } | null;
+    /** A reply runs: « Décharger » and « Redémarrer » wait for it. */
+    busy: boolean;
     nCtx: number;
     cacheType: string;
     slots: number;
@@ -253,7 +255,8 @@ export interface Core {
   modeOf(
     conversationId: string,
   ): Promise<{ mode: PlayMode; reconfirm: boolean }>;
-  setMode(conversationId: string, mode: PlayMode): Promise<void>;
+  /** `confirmed`: the person chose it in this run (the default); Impro read from a default is not. */
+  setMode(conversationId: string, mode: PlayMode, options?: { confirmed?: boolean }): Promise<void>;
   /** What a call would change — the text before and after, and their diff — for the approval card. */
   previewCall(
     conversationId: string,
@@ -1053,6 +1056,7 @@ export function createCore(deps: CoreDeps): Core {
           running,
           since: running ? loaded!.at : null,
           model: running ? { name: basename(loaded!.path).replace(/\.gguf$/i, ''), path: loaded!.path } : null,
+          busy: supervisor.held,
           nCtx: launch.nCtx,
           cacheType: launch.cacheType,
           slots: 1,
@@ -1067,6 +1071,8 @@ export function createCore(deps: CoreDeps): Core {
     releaseMemory: (id) => conversations.release(id),
 
     async unloadModel() {
+      // A reply in progress keeps the engine: cutting it would lose its answer and its memory.
+      if (supervisor.held) throw new Error('A reply is running: the engine is not unloaded under it.');
       await conversations
         .flush()
         .catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
@@ -1076,6 +1082,7 @@ export function createCore(deps: CoreDeps): Core {
 
     async restartEngine() {
       if (!loaded) throw new Error('No model runs: there is nothing to restart.');
+      if (supervisor.held) throw new Error('A reply is running: the engine is not restarted under it.');
       const path = loaded.path;
       await this.unloadModel();
       await this.loadModel(path);
@@ -1084,9 +1091,9 @@ export function createCore(deps: CoreDeps): Core {
     agentTurn,
     modeOf,
 
-    async setMode(conversationId, mode) {
+    async setMode(conversationId, mode, options = {}) {
       await conversationStore.update(conversationId, { mode });
-      if (mode === 'impro') improConfirmed.add(conversationId);
+      if (mode === 'impro' && options.confirmed !== false) improConfirmed.add(conversationId);
       else improConfirmed.delete(conversationId);
     },
 

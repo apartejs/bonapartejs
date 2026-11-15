@@ -272,6 +272,7 @@ export interface Messages {
       contextLine(tokens: string, slots: number, cacheType: string): string;
       unload: string;
       restart: string;
+      busy: string;
       restartQuestion: string;
       restartCost(seconds: string): string;
       restartNow: string;

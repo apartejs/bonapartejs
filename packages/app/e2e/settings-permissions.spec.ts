@@ -58,14 +58,65 @@ test('a project opened from « Permissions »: its folders, its instructions, it
     await expect(folders.getByText('racine')).toBeVisible();
     await expect(page.getByText(/AGENTS\.md trouvé à la racine/)).toBeVisible();
 
-    await page.getByRole('radiogroup', { name: 'Mode par défaut des conversations de ce projet' }).getByRole('radio', { name: /Impro/ }).check();
+    await page.getByRole('radiogroup', { name: 'Mode par défaut des conversations de ce projet' }).getByRole('radio', { name: /Lecture/ }).check();
     await page.getByRole('textbox', { name: 'Fichier à toujours demander' }).fill('Makefile');
     await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const stored = async (): Promise<string> =>
       JSON.stringify(JSON.parse(await readFile(join(dataDir, 'projects.json'), 'utf8')));
-    await expect.poll(stored).toContain('"defaultMode":"impro"');
+    await expect.poll(stored).toContain('"defaultMode":"lecture"');
     await expect.poll(stored).toContain('"alwaysAsk":["Makefile"]');
   } finally {
     await rm(folder, { recursive: true, force: true });
   }
 });
+
+test('the default mode applies from the launch; an Impro default starts in Plume, until the person picks Impro', async ({ launch }) => {
+  const lecture = await launch({ engine: { responder: () => 'ok' }, settings: { defaultMode: 'lecture', reopenLast: false } });
+  await expect(chat(lecture.page).modeShown).toHaveText('Lecture');
+  await lecture.close();
+  const impro = await launch({ engine: { responder: () => 'ok' }, settings: { defaultMode: 'impro' } });
+  await expect(chat(impro.page).modeShown).toHaveText('Plume');
+});
+
+test("a project's default mode changed in the settings is the one of its next conversation", async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'spanwise-'));
+  try {
+    const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    await page.getByRole('button', { name: 'Nouveau projet' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
+    await dialog.getByRole('button', { name: 'Choisir un dossier…' }).click();
+    await expect(dialog.getByRole('textbox', { name: 'Nom' })).toHaveValue(/^spanwise-/);
+    await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+    await expect(dialog).toBeHidden();
+    await chat(page).send('Dans le projet');
+    await expect(chat(page).replyText).toHaveText('ok', { timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+    const nav = page.getByRole('navigation', { name: 'Réglages' });
+    await nav.getByRole('link', { name: 'Permissions' }).click();
+    await page.getByRole('button', { name: /^Ouvrir spanwise-/ }).click();
+    await page.getByRole('radiogroup', { name: 'Mode par défaut des conversations de ce projet' }).getByRole('radio', { name: /Lecture/ }).check();
+    // « Permissions » in the navigation leaves the project's page.
+    await nav.getByRole('link', { name: 'Permissions' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Permissions' })).toBeVisible();
+    await nav.getByRole('link', { name: 'Conversations' }).click();
+    await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+    await expect(chat(page).modeShown).toHaveText('Lecture');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+test('Ctrl K over the settings closes them and opens « Rechercher »; Ctrl B folds the sidebar the person sees', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' } });
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Réglages' })).toBeVisible();
+  await page.keyboard.press('Control+K');
+  await expect(page.getByRole('navigation', { name: 'Réglages' })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Rechercher' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await page.keyboard.press('Control+B');
+  await expect(page.getByRole('navigation', { name: 'Projets et conversations, barre réduite' })).toBeVisible();
+});
+

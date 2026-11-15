@@ -458,8 +458,18 @@ describe('the agent handler — the mode of a new conversation', () => {
 
   it('Impro chosen for a new conversation is the person’s choice of now: nothing to confirm again', async () => {
     const { core, handler } = await setup({ responder: () => 'ok' });
-    await (await handler(at('/c/bold?mode=impro', turn(user('Bonjour'))))).text();
+    await (await handler(at('/c/bold?mode=impro&picked=1', turn(user('Bonjour'))))).text();
     expect(await core.modeOf('bold')).toEqual({ mode: 'impro', reconfirm: false });
+  });
+
+  it('Impro as a default — the settings’ or a project’s, read from disk — is no confirmation (security rule 9)', async () => {
+    const { core, handler } = await setup({ responder: () => 'ok' });
+    await (await handler(at('/c/defaulted?mode=impro', turn(user('Bonjour'))))).text();
+    expect(await core.modeOf('defaulted')).toEqual({ mode: 'plume', reconfirm: true });
+    const folder = await mkdtemp(join(tmpdir(), 'bp-handler-impro-'));
+    const project = await core.projects.create({ name: 'p', roots: [folder], defaultMode: 'impro' });
+    await (await handler(at(`/c/projected?project=${project.id}`, turn(user('Bonjour'))))).text();
+    expect(await core.modeOf('projected')).toEqual({ mode: 'plume', reconfirm: true });
   });
 
   it("a conversation started in a project belongs to it, runs in its default mode, and reads its instructions", async () => {

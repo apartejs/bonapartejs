@@ -270,6 +270,11 @@ export class EngineSupervisor {
    * Work in progress (a turn): the model is not unloaded while one is held.
    * The while without work is counted from the last release.
    */
+  /** A turn holds the engine: it is neither unloaded nor restarted under it. */
+  get held(): boolean {
+    return this.holds > 0;
+  }
+
   hold(): () => void {
     this.holds += 1;
     this.clearIdleTimer();

@@ -48,7 +48,7 @@ export class NetworkPathError extends Error {
 }
 
 /** `\\server\share`, `//server/share`, and the `\\?\` and `\\.\` prefixes: never a perimeter, never a target. */
-function isNetwork(path: string): boolean {
+export function isNetwork(path: string): boolean {
   return /^[\\/]{2}/.test(path);
 }
 

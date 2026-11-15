@@ -59,6 +59,19 @@ describe('ConversationIndex', () => {
     expect(excerpt.after).toBe(' trompe');
   });
 
+  it('follows a rename and a deletion: the new title is found, a deleted conversation never', async () => {
+    const store = new ConversationStore(await folder('bp-index-'));
+    const kept = await conversation(store, 'Les heures', [['Le parseur des heures', 'ok']]);
+    const gone = await conversation(store, 'Autre', [['Le parseur aussi', 'ok']]);
+    const index = new ConversationIndex(store, () => familyLayer('gemma'));
+    expect((await index.search('parseur')).conversations).toHaveLength(2);
+    await store.rename(kept.id, 'Les fuseaux');
+    await store.remove(gone.id);
+    const found = await index.search('parseur');
+    expect(found.conversations.map((one) => [one.id, one.title])).toEqual([[kept.id, 'Les fuseaux']]);
+    expect((await index.search('fuseaux')).conversations.map((one) => one.id)).toEqual([kept.id]);
+  });
+
   it('a turn that ends is found at once', async () => {
     const store = new ConversationStore(await folder('bp-index-'));
     const meta = await conversation(store, 'Vide', []);

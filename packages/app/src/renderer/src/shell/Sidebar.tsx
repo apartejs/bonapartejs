@@ -47,7 +47,11 @@ function List({ items, activeId, flat }: { items: readonly ListedConversation[];
   // aparté's list draws itself again whenever it is given a new array — closing a row's open
   // menu: it gets a new one only when what it draws has changed.
   const drawn = items.map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt].join('\u0000')).join('\u0001');
-  const conversations = useMemo(() => [...items], [drawn]);
+  // A flat list has no « Épinglées » group: a pinned conversation comes first, the last pinned at the top.
+  const conversations = useMemo(
+    () => [...items.filter((item) => item.pinnedAt).sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0)), ...items.filter((item) => !item.pinnedAt)],
+    [drawn],
+  );
   return (
     <AparteConversationList
       className="bonaparte-conversations"

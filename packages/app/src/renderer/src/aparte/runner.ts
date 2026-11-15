@@ -15,6 +15,8 @@ type StreamRunner = ReturnType<typeof createAgentStreamRunner>;
 export interface ConversationRunnerOptions {
   /** The mode the switch shows now: read at each turn. */
   mode?: () => PlayMode;
+  /** The person picked the mode in the switch, in this run: Impro then counts as confirmed (security rule 9). */
+  picked?: () => boolean;
   /** The project a new conversation starts in (the core takes it at its first turn only). */
   project?: () => string | null;
   /** Tests only. */
@@ -27,6 +29,7 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
       const at = `${AGENT_ENDPOINT}/c/${encodeURIComponent(conversationId ?? '')}`;
       const query = new URLSearchParams();
       if (options.mode) query.set('mode', options.mode());
+      if (options.picked?.()) query.set('picked', '1');
       const project = options.project?.();
       if (project) query.set('project', project);
       const said = query.toString();

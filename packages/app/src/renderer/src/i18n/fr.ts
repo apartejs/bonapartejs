@@ -289,6 +289,7 @@ export const fr: Messages = {
       contextLine: (tokens, slots, cacheType) => `${tokens} jetons · ${slots} slot${slots > 1 ? 's' : ''} · K/V ${cacheType}`,
       unload: 'Décharger',
       restart: 'Redémarrer',
+      busy: 'Une réponse est en cours : le moteur se décharge ou redémarre quand elle est finie.',
       restartQuestion: 'Redémarrer le moteur ?',
       restartCost: (seconds) => `Le modèle se recharge : ~${seconds}. La mémoire de la conversation en cours est sauvée avant.`,
       restartNow: 'Redémarrer',

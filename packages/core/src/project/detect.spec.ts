@@ -76,6 +76,13 @@ describe('detectProject', () => {
     expect((await detectProject(tree)).git).toEqual({ branch: 'bonaparte/export' });
   });
 
+  it('never reaches the network: a network folder is refused, a git pointer to a network share ignored', async () => {
+    await expect(detectProject('\\\\server\\share\\project')).rejects.toThrow(/network/i);
+    const dir = await folder();
+    await writeFile(join(dir, '.git'), 'gitdir: \\\\attacker.example\\share\n');
+    expect((await detectProject(dir)).git).toBeNull();
+  });
+
   it('a plain folder is a project too: nothing detected, nothing invented', async () => {
     const dir = await folder();
     expect(await detectProject(dir)).toEqual({

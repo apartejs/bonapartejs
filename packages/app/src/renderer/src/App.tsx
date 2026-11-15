@@ -33,6 +33,7 @@ import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
 import { ConversationHeader } from './shell/ConversationHeader';
 import { Rail } from './shell/Rail';
+import { ENGINE_CHANGED } from './settings/EngineMemory';
 import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
 import { Sidebar } from './shell/Sidebar';
 import { useConversationStatuses, useMemoryMarks, useWaitingMarks } from './shell/statuses';
@@ -45,6 +46,14 @@ type Announcement = ConversationMemoryView['announcement'];
  * turn posted by aparté's runner to the conversation it belongs to.
  * Provisional layout: the shell of the canvas comes with task 5.6.
  */
+/**
+ * The mode a new conversation starts in from a default: Impro read from a setting or a project is no
+ * confirmation (security rule 9) — it starts in Plume, and the person picks Impro in the switch.
+ */
+function startingMode(mode: PlayMode): PlayMode {
+  return mode === 'impro' ? 'plume' : mode;
+}
+
 /** A mode from a setting's value, or null. */
 function playModeOf(value: unknown): PlayMode | null {
   return value === 'lecture' || value === 'repetition' || value === 'plume' || value === 'impro' ? value : null;
@@ -61,6 +70,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   // The mode the switch shows, read at each turn: a conversation the turn creates runs in it.
   const chosen = useRef<PlayMode>('repetition');
+  // The person picked it in the switch, for the conversation about to start: theirs, not a default's.
+  const picked = useRef(false);
   // The project new conversations start in (task 5.3; the sidebar's projects come with 5.6).
   const [activeProject, setActiveProject] = useState<ProjectView | null>(null);
   const project = useRef<ProjectView | null>(null);
@@ -74,6 +85,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     const onKey = (event: KeyboardEvent): void => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
         event.preventDefault();
+        // Over the settings: they close, and the search opens over the conversations.
+        setSettingsPage(null);
         setSearching(true);
       }
     };
@@ -104,6 +117,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     const onKey = (event: KeyboardEvent): void => {
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'b') {
         event.preventDefault();
+        setSettingsPage(null);
         toggleRef.current();
       }
     };
@@ -133,7 +147,13 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       .invoke(settingsGet, { key: 'defaultMode' })
       .then((value) => {
         const parsed = playModeOf(value);
-        if (parsed) defaultMode.current = parsed;
+        if (!parsed) return;
+        defaultMode.current = parsed;
+        // Read after the first conversation was set up: a new one, outside a project, takes it now.
+        if (open.current === null && !project.current) {
+          setMode(startingMode(parsed));
+          picked.current = false;
+        }
       })
       .catch(() => undefined);
   }, []);
@@ -145,7 +165,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       if (key === 'defaultMode') {
         defaultMode.current = playModeOf(value) ?? defaultMode.current;
         // A new conversation, nothing said yet, outside a project: it starts in the new default.
-        if (open.current === null && !project.current) setMode(defaultMode.current);
+        if (open.current === null && !project.current) {
+          setMode(startingMode(defaultMode.current));
+          picked.current = false;
+        }
       }
     };
     window.addEventListener(SETTING_CHANGED, follow);
@@ -153,11 +176,25 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, []);
   // The settings, over the shell: null for the conversations.
   const [settingsPage, setSettingsPage] = useState<SettingsPageName | null>(null);
+  // The settings closed, by any way (back, Ctrl K, Ctrl B): what they may have changed is read again —
+  // the projects' default modes, the engine (unloaded, restarted).
+  const wereOpen = useRef(false);
+  useEffect(() => {
+    if (settingsPage !== null) {
+      wereOpen.current = true;
+      return;
+    }
+    if (!wereOpen.current) return;
+    wereOpen.current = false;
+    readProjects();
+    window.dispatchEvent(new CustomEvent(ENGINE_CHANGED));
+  }, [settingsPage]);
   // Where each conversation born here was started: until its first turn tells the core.
   const bornIn = useRef(new Map<string, string | null>());
 
   const streamRunner = useMemo(
-    () => createConversationRunner({ mode: () => chosen.current, project: () => project.current?.id ?? null }),
+    () =>
+      createConversationRunner({ mode: () => chosen.current, picked: () => picked.current, project: () => project.current?.id ?? null }),
     [],
   );
   // The core decides every call; what it asks about waits here for the person's answer on the card.
@@ -195,9 +232,13 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useMemoryMarks(statuses, messages.shell.memory);
   useWaitingMarks(statuses);
   const projectOf = (id: string): string | null => statuses[id]?.projectId ?? bornIn.current.get(id) ?? null;
-  // A new conversation starts in the project of the conversation open.
+  // A new conversation starts in the project of the conversation open — as the projects now are.
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId) {
+      const fresh = projects.find((candidate) => candidate.id === project.current?.id);
+      if (fresh) project.current = fresh;
+      return;
+    }
     const id = statuses[conversationId]?.projectId ?? bornIn.current.get(conversationId) ?? null;
     const found = projects.find((candidate) => candidate.id === id) ?? null;
     project.current = found;
@@ -222,7 +263,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => {
     // A new conversation starts in its project's default mode, else where the product does.
     if (!conversationId) {
-      setMode(project.current?.defaultMode ?? defaultMode.current);
+      setMode(startingMode(project.current?.defaultMode ?? defaultMode.current));
+      picked.current = false;
       return;
     }
     let current = true;
@@ -442,6 +484,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             mode={mode}
             onMode={(next) => {
               setMode(next);
+              if (!conversationId) picked.current = true;
               // The core keeps it: the next call of the conversation is decided in it.
               if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
             }}
@@ -474,6 +517,15 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
     return () => {
       current = false;
     };
+  }, []);
+
+  // « Décharger » or « Redémarrer » in the settings: the state read again — no model, « Démarrer » again.
+  useEffect(() => {
+    const follow = (): void => {
+      void bridge.invoke(engineState, undefined).then(setEngine);
+    };
+    window.addEventListener(ENGINE_CHANGED, follow);
+    return () => window.removeEventListener(ENGINE_CHANGED, follow);
   }, []);
 
   const needsModel = engine?.mode === 'managed' && engine.status !== 'ready';

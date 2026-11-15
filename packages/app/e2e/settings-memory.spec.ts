@@ -56,4 +56,8 @@ test('the engine, the memory of each conversation, « Libérer », « Redémarre
 
   await page.getByRole('button', { name: 'Décharger' }).click();
   await expect(engine).toContainText('Déchargé', { timeout: 15_000 });
+
+  // Back to the conversations: no model runs, so the window offers to start one again.
+  await settings.getByRole('link', { name: 'Conversations' }).click();
+  await expect(page.getByRole('button', { name: 'Démarrer' })).toBeVisible({ timeout: 15_000 });
 });

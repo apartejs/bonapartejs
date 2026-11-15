@@ -56,7 +56,8 @@ test('a setting changed is kept after a restart', async ({ launch }) => {
 });
 
 test('the language changes the interface at once', async ({ launch }) => {
-  const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_LOCALE: '' } });
+  // In French whatever the machine speaks (CI's runners are English): the setting, not the locale.
+  const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_LOCALE: '' }, settings: { language: 'fr' } });
   await openSettings(page);
   await page.getByRole('radio', { name: 'English' }).check();
   await expect(page.getByRole('heading', { level: 1, name: 'General' })).toBeVisible();

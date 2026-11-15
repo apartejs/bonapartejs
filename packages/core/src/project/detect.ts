@@ -7,6 +7,7 @@
  * progress) comes with the branches (6.7).
  */
 
+import { isNetwork, NetworkPathError } from './paths.js';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, isAbsolute, join, resolve } from 'node:path';
 import { INSTRUCTION_FILES } from './instructions.js';
@@ -39,6 +40,8 @@ const exists = async (path: string): Promise<boolean> => (await stat(path).catch
 const text = async (path: string): Promise<string | null> => readFile(path, 'utf8').catch(() => null);
 
 export async function detectProject(dir: string): Promise<ProjectFacts> {
+  // Reading a network folder sends the person's credentials to its host: never.
+  if (isNetwork(dir)) throw new NetworkPathError(dir);
   const root = resolve(dir);
   const [git, pkg, instructions, services] = await Promise.all([gitOf(root), packageOf(root), instructionsOf(root), servicesOf(root)]);
   return { name: basename(root), git, ...pkg, instructions, services };
@@ -52,7 +55,7 @@ async function gitOf(root: string): Promise<ProjectFacts['git']> {
   let gitDir = dotGit;
   if (found.isFile()) {
     const pointer = /^gitdir:\s*(.+)$/m.exec((await text(dotGit)) ?? '')?.[1]?.trim();
-    if (!pointer) return null;
+    if (!pointer || isNetwork(pointer)) return null;
     gitDir = isAbsolute(pointer) ? pointer : resolve(root, pointer);
   }
   const head = (await text(join(gitDir, 'HEAD')))?.trim();

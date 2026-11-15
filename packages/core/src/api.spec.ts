@@ -186,6 +186,20 @@ describe('createCore — the managed engine', () => {
     expect(after.engine.since).not.toBe(before);
   });
 
+  it('« Décharger » and « Redémarrer » are refused while a reply holds the engine, and the page is told it runs', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    const release = core.hold();
+    expect((await core.memory()).engine.busy).toBe(true);
+    await expect(core.unloadModel()).rejects.toThrow(/reply is running/);
+    await expect(core.restartEngine()).rejects.toThrow(/reply is running/);
+    expect(await core.engineState()).toMatchObject({ status: 'ready' });
+    release();
+    expect((await core.memory()).engine.busy).toBe(false);
+    await core.unloadModel();
+    expect(await core.engineState()).toMatchObject({ status: 'stopped' });
+  });
+
   it('switching models saves first the memory of the conversation the engine holds', async () => {
     const { core, dir, gemma, qwen } = await setup();
     await core.loadModel(gemma);

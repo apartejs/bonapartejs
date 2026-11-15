@@ -32,6 +32,17 @@ describe('ProjectStore', () => {
     expect(project.id).toMatch(/\w/);
   });
 
+  it("keeps a project's own « toujours demandé » list through any later write, and a restart", async () => {
+    const dir = await folder();
+    const store = new ProjectStore(dir);
+    const a = await store.create({ name: 'a', roots: ['C:/code/a'] });
+    await store.update(a.id, { alwaysAsk: ['Dockerfile'] });
+    await store.update(a.id, { defaultMode: 'plume' });
+    await store.create({ name: 'b', roots: ['C:/code/b'] });
+    expect((await store.get(a.id))?.alwaysAsk).toEqual(['Dockerfile']);
+    expect((await new ProjectStore(dir).get(a.id))?.alwaysAsk).toEqual(['Dockerfile']);
+  });
+
   it('lists, reads, changes and removes; the changes survive a restart', async () => {
     const dir = await folder();
     const store = new ProjectStore(dir);

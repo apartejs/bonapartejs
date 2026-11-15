@@ -42,6 +42,7 @@ async function rig(
     instructions?: () => Promise<string | undefined>;
     mode?: () => Promise<PlayMode>;
     replyLanguage?: () => string;
+    perimeter?: () => string[];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
@@ -72,7 +73,7 @@ async function rig(
       engineCalls += 1;
       return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
     },
-    prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
+    prompt: () => ({ kind: 'code', tools: [], perimeter: options.perimeter?.() ?? [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
   });
   const conversation = () => store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
   const say = async (id: string, text: string, signal?: AbortSignal) => {
@@ -287,6 +288,23 @@ describe('ConversationEngine — the memory', () => {
     await engine.flush();
     expect(server.files.size).toBe(0);
     expect(await engine.open(b.id)).toBeNull();
+  });
+});
+
+describe('ConversationEngine — the folders of the project', () => {
+  it('a folder added to the project is told at the next message, once; the frozen text stays as it was', async () => {
+    let roots = ['C:/code/spanwise'];
+    const { say, conversation, prompts } = await rig({ perimeter: () => roots });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const frozen = prompts[0]!.slice(0, prompts[0]!.indexOf('Bonjour'));
+    roots = ['C:/code/spanwise', 'C:/code/spanwise-docs'];
+    await say(meta.id, 'Et maintenant ?');
+    const told = prompts.at(-1)!;
+    expect(told.startsWith(frozen)).toBe(true);
+    expect(told.slice(frozen.length)).toContain('spanwise-docs');
+    await say(meta.id, 'Encore ?');
+    expect(prompts.at(-1)!.split('[project update]').length - 1).toBe(1);
   });
 });
 
