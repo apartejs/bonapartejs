@@ -18,6 +18,8 @@ export interface Project {
   name: string;
   roots: string[];
   defaultMode: PlayMode;
+  /** What the project adds to the files always asked (« Dockerfile »). */
+  alwaysAsk?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -28,7 +30,7 @@ export interface NewProject {
   defaultMode?: PlayMode;
 }
 
-export type ProjectChanges = Partial<Pick<Project, 'name' | 'defaultMode'>> & { roots?: readonly string[] };
+export type ProjectChanges = Partial<Pick<Project, 'name' | 'defaultMode'>> & { roots?: readonly string[]; alwaysAsk?: readonly string[] };
 
 interface ProjectsFile {
   version: 1;
@@ -111,6 +113,7 @@ export class ProjectStore {
         ...(changes.name !== undefined ? { name: changes.name } : {}),
         ...(changes.defaultMode !== undefined ? { defaultMode: changes.defaultMode } : {}),
         ...(roots !== undefined ? { roots } : {}),
+        ...(changes.alwaysAsk !== undefined ? { alwaysAsk: [...new Set(changes.alwaysAsk.map((name) => name.trim()).filter(Boolean))] } : {}),
         updatedAt: new Date().toISOString(),
       };
       return projects.map((project, at) => (at === index ? changed! : project));

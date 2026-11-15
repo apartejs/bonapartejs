@@ -71,6 +71,10 @@ export const APP_SETTINGS: SettingField[] = [
   // The conversation's own engine, or a provider's id (task 9.2).
   { key: 'subagentsEngine', type: 'string', scopes: GLOBAL, default: 'conversation' },
   { key: 'askBeforeNetwork', type: 'boolean', scopes: BY_PROJECT, default: true },
+  // The files the person adds to « toujours demandé » (Settings, Permissions): asked in every mode.
+  { key: 'alwaysAsk', type: 'list', scopes: BY_PROJECT, default: [] },
+  // The mode a conversation without a project starts in (Settings, Permissions).
+  { key: 'defaultMode', type: 'select', scopes: GLOBAL, default: 'repetition', options: ['lecture', 'repetition', 'plume', 'impro'] },
   { key: 'closeToTray', type: 'boolean', scopes: GLOBAL, default: true },
   { key: 'launchAtLogin', type: 'boolean', scopes: GLOBAL, default: false },
   { key: 'reopenLast', type: 'boolean', scopes: GLOBAL, default: true },

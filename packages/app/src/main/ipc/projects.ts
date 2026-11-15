@@ -5,6 +5,7 @@
  */
 
 import {
+  projectsAddFolder,
   projectsChooseFolder,
   projectsCreate,
   projectsDetect,
@@ -32,4 +33,12 @@ export function registerProjectChannels(ipc: IpcRegistry, core: ProjectCore, cho
   ipc.handle(projectsCreate, (input) => core.projects.create(input));
   ipc.handle(projectsUpdate, ({ id, changes }) => core.projects.update(id, changes));
   ipc.handle(projectsRemove, ({ id }) => core.projects.remove(id));
+  // A folder for the project, chosen in the system's dialog: the window names none.
+  ipc.handle(projectsAddFolder, async ({ id }) => {
+    const folder = await chooseFolder();
+    if (folder === null) return null;
+    const project = await core.projects.get(id);
+    if (!project) throw new Error(`Unknown project: ${id}`);
+    return core.projects.update(id, { roots: [...project.roots, folder] });
+  });
 }

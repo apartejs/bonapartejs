@@ -755,6 +755,23 @@ export function createCore(deps: CoreDeps): Core {
   // before a turn, a preview or a resume (rootsOf), so the policy — which decides at once — finds them.
   const projectStore = new ProjectStore(deps.dataDir);
   const projectRoots = new Map<string, string[]>();
+  // What each project adds to « toujours demandé », kept as projects are read and changed.
+  const projectAlwaysAsk = new Map<string, string[]>();
+  void projectStore
+    .list()
+    .then((projects) => {
+      for (const project of projects) projectAlwaysAsk.set(project.id, project.alwaysAsk ?? []);
+    })
+    .catch(() => undefined);
+  // « Permissions », as the person leaves them: the network asked, the files always asked.
+  let askBeforeNetwork = true;
+  let alwaysAsk: string[] = [];
+  const readPolicy = (key: string, value: unknown): void => {
+    if (key === 'askBeforeNetwork') askBeforeNetwork = value !== false;
+    if (key === 'alwaysAsk') alwaysAsk = Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string') : [];
+  };
+  void Promise.all(['askBeforeNetwork', 'alwaysAsk'].map(async (key) => readPolicy(key, await appSettings.get(key)))).catch(() => undefined);
+  appSettings.onChange(readPolicy);
   async function rootsOf(
     conversationId: string,
   ): Promise<{ roots: string[]; projectId?: string }> {
@@ -768,6 +785,8 @@ export function createCore(deps: CoreDeps): Core {
     roots: (projectId) =>
       projectId ? (projectRoots.get(projectId) ?? perimeter()) : perimeter(),
     dataDir: deps.dataDir,
+    askBeforeNetwork: () => askBeforeNetwork,
+    alwaysAsk: (projectId) => [...alwaysAsk, ...(projectId ? (projectAlwaysAsk.get(projectId) ?? []) : [])],
   });
   // Before a tool writes, the file as it was, kept per turn (the turn is its message).
   const checkpoints = new CheckpointStore(join(deps.dataDir, 'checkpoints'));
@@ -959,7 +978,12 @@ export function createCore(deps: CoreDeps): Core {
       list: () => projectStore.list(),
       get: (id) => projectStore.get(id),
       create: (input) => projectStore.create(input),
-      update: (id, changes) => projectStore.update(id, changes),
+      async update(id, changes) {
+        const project = await projectStore.update(id, changes);
+        projectRoots.set(project.id, project.roots);
+        projectAlwaysAsk.set(project.id, project.alwaysAsk ?? []);
+        return project;
+      },
       remove: (id) => projectStore.remove(id),
     },
 

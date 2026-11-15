@@ -6,7 +6,7 @@
  * whatever else follows it (the sidebar's grouping).
  */
 
-import { appInfo, engineLlama, settingsAll, settingsSet, type Locale } from '@aparte/bonaparte-shared';
+import { appInfo, engineLlama, projectsList, settingsAll, settingsSet, type Locale } from '@aparte/bonaparte-shared';
 import { useEffect, useState } from 'react';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
@@ -15,6 +15,8 @@ import { AppearancePage } from './Appearance';
 import { GeneralPage } from './General';
 import { EngineMemoryPage } from './EngineMemory';
 import { ModelsPage } from './Models';
+import { PermissionsPage } from './Permissions';
+import { ProjectPage } from './ProjectPage';
 
 export type SettingsPageName = 'general' | 'appearance' | 'engine' | 'models' | 'permissions';
 
@@ -53,6 +55,9 @@ export function SettingsView({
 }) {
   const words = messages.settings;
   const [values, setValues] = useState<Values | null>(null);
+  // A project's page, opened from « Permissions »: the navigation keeps « Permissions » chosen.
+  const [project, setProject] = useState<{ id: string; name: string } | null>(null);
+  useEffect(() => setProject(null), [page]);
   const [versions, setVersions] = useState<{ app: string; llama: string | null } | null>(null);
   useEffect(() => {
     let alive = true;
@@ -114,12 +119,24 @@ export function SettingsView({
         ))}
         {versions ? <span className="settings__versions">{words.versions(versions.app, versions.llama ?? words.llamaMissing)}</span> : null}
       </nav>
-      <div className={`settings__page${page === 'engine' ? ' settings__page--wide' : ''}`}>
-        <h1 className="settings__heading">{words.pages[page]}</h1>
+      <div className={`settings__page${page === 'engine' || project ? ' settings__page--wide' : ''}`}>
+        <h1 className="settings__heading">{project ? project.name : words.pages[page]}</h1>
         {props && page === 'general' ? <GeneralPage {...props} /> : null}
         {props && page === 'appearance' ? <AppearancePage {...props} /> : null}
         {props && page === 'models' ? <ModelsPage {...props} /> : null}
         {props && page === 'engine' ? <EngineMemoryPage {...props} onPage={onPage} /> : null}
+        {props && page === 'permissions' && !project ? (
+          <PermissionsPage
+            {...props}
+            onProject={(id) => {
+              void bridge.invoke(projectsList, undefined).then((all) => {
+                const found = all.find((one) => one.id === id);
+                if (found) setProject({ id: found.id, name: found.name });
+              });
+            }}
+          />
+        ) : null}
+        {props && page === 'permissions' && project ? <ProjectPage messages={messages} projectId={project.id} /> : null}
       </div>
     </div>
   );

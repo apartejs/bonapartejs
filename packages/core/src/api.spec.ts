@@ -486,6 +486,33 @@ describe('createCore — the modes and the previews of the window', () => {
     expect((await core.search('form')).files).toEqual([]);
   });
 
+  it('« Permissions »: a file added to « toujours demandé » asks even in Plume; the network asked or not', async () => {
+    const { core, dir } = await setup();
+    const folder = join(dir, 'project');
+    await mkdir(folder, { recursive: true });
+    const project = await core.projects.create({ name: 'p', roots: [folder] });
+    const write = core.tools.get('write_file')!.def;
+    const fetchPage = core.tools.get('web_fetch')!.def;
+    const dockerfile = { tool: write, input: { path: join(folder, 'Dockerfile') }, mode: 'plume' as const, projectId: project.id };
+    expect(core.permissions.evaluate(dockerfile)).toEqual({ verdict: 'allow' });
+    await core.settings.set('alwaysAsk', ['Dockerfile']);
+    expect(core.permissions.evaluate(dockerfile)).toEqual({ verdict: 'ask', why: 'armed-path' });
+
+    // A project's own list asks in that project only.
+    await core.settings.set('alwaysAsk', []);
+    await core.projects.update(project.id, { alwaysAsk: ['Makefile'] });
+    const makefile = { ...dockerfile, input: { path: join(folder, 'Makefile') } };
+    expect(core.permissions.evaluate(makefile)).toEqual({ verdict: 'ask', why: 'armed-path' });
+
+    const online = { tool: fetchPage, input: { url: 'https://example.com' }, projectId: project.id };
+    expect(core.permissions.evaluate({ ...online, mode: 'impro' })).toMatchObject({ verdict: 'ask' });
+    await core.settings.set('askBeforeNetwork', false);
+    expect(core.permissions.evaluate({ ...online, mode: 'impro' })).toEqual({ verdict: 'allow' });
+    for (const mode of ['lecture', 'repetition', 'plume'] as const) {
+      expect(core.permissions.evaluate({ ...online, mode }).verdict).not.toBe('allow');
+    }
+  });
+
   it("without a project, and outside a test run, the tools work in the person's home folder", async () => {
     const { core } = await setup();
     const write = core.tools.get('write_file')!.def;

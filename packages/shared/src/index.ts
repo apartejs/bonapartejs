@@ -19,6 +19,7 @@ export type { SearchResultView } from './ipc/search.js';
 export {
   projectFactsSchema,
   projectSchema,
+  projectsAddFolder,
   projectsChooseFolder,
   projectsCreate,
   projectsDetect,

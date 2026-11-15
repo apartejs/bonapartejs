@@ -45,6 +45,11 @@ type Announcement = ConversationMemoryView['announcement'];
  * turn posted by aparté's runner to the conversation it belongs to.
  * Provisional layout: the shell of the canvas comes with task 5.6.
  */
+/** A mode from a setting's value, or null. */
+function playModeOf(value: unknown): PlayMode | null {
+  return value === 'lecture' || value === 'repetition' || value === 'plume' || value === 'impro' ? value : null;
+}
+
 /** Under 1 100 px, the sidebar folds into icons (board « Fenêtre étroite »). */
 const NARROW = '(max-width: 1099px)';
 
@@ -121,11 +126,27 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       .then((value) => setGrouping(value === 'single' ? 'single' : 'project'))
       .catch(() => undefined);
   }, []);
-  // The sidebar follows its setting as the person changes it.
+  // The mode a conversation without a project starts in (Settings, Permissions).
+  const defaultMode = useRef<PlayMode>('repetition');
+  useEffect(() => {
+    bridge
+      .invoke(settingsGet, { key: 'defaultMode' })
+      .then((value) => {
+        const parsed = playModeOf(value);
+        if (parsed) defaultMode.current = parsed;
+      })
+      .catch(() => undefined);
+  }, []);
+  // The sidebar follows its setting as the person changes it; so does the default mode.
   useEffect(() => {
     const follow = (event: Event): void => {
       const { key, value } = (event as CustomEvent<{ key: string; value: unknown }>).detail;
       if (key === 'sidebarGrouping') setGrouping(value === 'single' ? 'single' : 'project');
+      if (key === 'defaultMode') {
+        defaultMode.current = playModeOf(value) ?? defaultMode.current;
+        // A new conversation, nothing said yet, outside a project: it starts in the new default.
+        if (open.current === null && !project.current) setMode(defaultMode.current);
+      }
     };
     window.addEventListener(SETTING_CHANGED, follow);
     return () => window.removeEventListener(SETTING_CHANGED, follow);
@@ -201,7 +222,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => {
     // A new conversation starts in its project's default mode, else where the product does.
     if (!conversationId) {
-      setMode(project.current?.defaultMode ?? 'repetition');
+      setMode(project.current?.defaultMode ?? defaultMode.current);
       return;
     }
     let current = true;

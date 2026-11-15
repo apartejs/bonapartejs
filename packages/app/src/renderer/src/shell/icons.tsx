@@ -6,6 +6,7 @@
 
 import {
   chevronRightIcon,
+  closeIcon,
   cpuIcon,
   folderIcon,
   messageSquareIcon,
@@ -33,6 +34,7 @@ const ICONS = {
   settings: settingsIcon,
   more: moreHorizontalIcon,
   conversation: messageSquareIcon,
+  close: closeIcon,
 } as const;
 
 export type IconName = keyof typeof ICONS;

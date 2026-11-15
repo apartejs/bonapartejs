@@ -227,6 +227,39 @@ export interface Messages {
       exportFailed: string;
       exportLabels: { person: string; assistant: string; untitled: string };
     };
+    permissions: {
+      intro: string;
+      defaultMode: string;
+      modeNotes: { lecture: string; repetition: string; plume: string; impro: string };
+      alwaysAsk: string;
+      alwaysAskHint: string;
+      builtins: string[];
+      addFileField: string;
+      add: string;
+      remove(name: string): string;
+      network: string;
+      networkHint: string;
+      networkAsk: string;
+      byProject: string;
+      open: string;
+      openProject(name: string): string;
+      noProject: string;
+      noProjectHint: string;
+    };
+    project: {
+      badge: string;
+      intro: string;
+      folders: string;
+      root: string;
+      removeFolder: string;
+      addFolder: string;
+      instructions: string;
+      instructionsFound(file: string): string;
+      noInstructions: string;
+      permissions: string;
+      projectMode: string;
+      alwaysAskHere: string;
+    };
     engine: {
       intro: string;
       engine: string;

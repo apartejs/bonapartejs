@@ -1495,3 +1495,108 @@ body {
 .settings__page--wide .settings__heading {
   max-width: 1040px;
 }
+
+/* Settings, Permissions and a project's page: the modes as cards, what is always asked as pills. */
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.mode-card {
+  cursor: pointer;
+}
+
+.asked-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.asked-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--aparte-warning-surface);
+  color: var(--aparte-warning-ink);
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+}
+
+.asked-pill__remove {
+  display: inline-flex;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.asked-pill__remove .bonaparte-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.asked-field {
+  width: 240px;
+  font-family: var(--aparte-code-font-family);
+}
+
+.setting-section__subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.project-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  margin-inline-end: 6px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+.project-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+}
+
+.project-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.project-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-folder__path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.project-folder__root {
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+

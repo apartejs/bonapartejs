@@ -17,6 +17,8 @@ export const projectSchema = z.object({
   name: z.string(),
   roots: z.array(z.string()),
   defaultMode: playModeSchema,
+  /** What the project adds to the files always asked (« Dockerfile »). */
+  alwaysAsk: z.array(z.string()).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -54,9 +56,14 @@ export const projectsUpdate = defineChannel(
       name: z.string().trim().min(1).max(200).optional(),
       roots: z.array(folderSchema).min(1).max(16).optional(),
       defaultMode: playModeSchema.optional(),
+      alwaysAsk: z.array(z.string().trim().min(1).max(200)).max(64).optional(),
     }),
   }),
   projectSchema,
 );
 
 export const projectsRemove = defineChannel('projects.remove', z.object({ id: idSchema }), z.void());
+
+/** « Ajouter un dossier » on the project's page: the folder chosen in the system's dialog; null when closed. */
+export const projectsAddFolder = defineChannel('projects.addFolder', z.object({ id: idSchema }), projectSchema.nullable());
+

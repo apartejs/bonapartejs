@@ -24,7 +24,12 @@ function setup(chosen: string | null = 'C:/dev/spanwise') {
         created.push(input);
         return { ...PROJECT, ...input, roots: [...(input.roots ?? [])] };
       },
-      update: async (_id, changes) => ({ ...PROJECT, ...changes, roots: [...(changes.roots ?? PROJECT.roots)] }),
+      update: async (_id, { alwaysAsk, ...changes }) => ({
+        ...PROJECT,
+        ...changes,
+        roots: [...(changes.roots ?? PROJECT.roots)],
+        ...(alwaysAsk ? { alwaysAsk: [...alwaysAsk] } : {}),
+      }),
       remove: async () => undefined,
     },
   };
@@ -34,6 +39,15 @@ function setup(chosen: string | null = 'C:/dev/spanwise') {
   const call = (name: string, input?: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);
   return { call, created };
 }
+
+describe('the project channels — a folder added', () => {
+  it('adds the folder the person chose to the project, and nothing when the dialog was closed', async () => {
+    await expect(setup('C:/dev/spanwise-docs').call('projects.addFolder', { id: 'p-1' })).resolves.toMatchObject({
+      roots: ['C:/dev/spanwise', 'C:/dev/spanwise-docs'],
+    });
+    await expect(setup(null).call('projects.addFolder', { id: 'p-1' })).resolves.toBeNull();
+  });
+});
 
 describe('the project channels', () => {
   it('say what a folder holds, before anything is made of it', async () => {
