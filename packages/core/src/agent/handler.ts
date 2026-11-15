@@ -42,7 +42,8 @@ function hasImage(body: AgentBody): boolean {
 
 /** A branch's name as git takes it from the window: no option, no `..`, no space — else none. */
 function refName(value: string | null): string | null {
-  return value && /^[\w][\w./-]{0,99}$/.test(value) && !value.includes('..') && !value.endsWith('/') && !value.endsWith('.lock') ? value : null;
+  // A name git takes, in any language (`bonaparte/réunion`): letters, digits, `_`, then `.`, `/` and `-` too.
+  return value && /^[\p{L}\p{N}_][\p{L}\p{N}_./-]{0,99}$/u.test(value) && !value.includes('..') && !value.endsWith('/') && !value.endsWith('.lock') ? value : null;
 }
 
 export function createAgentHandler(core: Core): (request: Request) => Promise<Response> {

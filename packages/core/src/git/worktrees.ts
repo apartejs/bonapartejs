@@ -10,13 +10,38 @@
  * included.
  */
 
+import { existsSync } from 'node:fs';
 import { appendFile, copyFile, mkdir, readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { git } from './git.js';
 
 export interface Worktree {
   dir: string;
   branch: string;
+}
+
+/**
+ * Where a conversation on its own branch works: each folder of its project
+ * that is in the repository, at the same place in its worktree (a project
+ * made from `packages/app` works in `<worktree>/packages/app`); a folder out
+ * of the repository stays as it is. `barred`: the project's own folders in
+ * the repository — never written from the branch.
+ */
+export function branchRoots(projectRoots: readonly string[], worktree: string): { roots: string[]; barred: string[] } {
+  // `<repo>/.bonaparte/worktrees/<name>`.
+  const repo = resolve(worktree, '..', '..', '..');
+  const roots: string[] = [];
+  const barred: string[] = [];
+  for (const root of projectRoots) {
+    const rel = relative(repo, resolve(root));
+    if (rel.startsWith('..') || isAbsolute(rel)) {
+      roots.push(root);
+      continue;
+    }
+    roots.push(rel === '' ? worktree : join(worktree, rel));
+    barred.push(resolve(root));
+  }
+  return { roots, barred };
 }
 
 export interface BranchStatus {
@@ -33,30 +58,46 @@ export async function repoRoot(dir: string): Promise<string | null> {
   return result.code === 0 && root ? resolve(root) : null;
 }
 
-/** The repository's own exclude: `.bonaparte/` out of its status, the project's files untouched. */
+/** Where the worktrees live: out of the project's status — only them, the project's own `.bonaparte/` files stay seen. */
+const OUR_EXCLUDE = '/.bonaparte/worktrees/';
+
+/** The repository's own exclude: the worktrees out of its status, the project's files untouched. */
 async function excludeOurFolder(repo: string): Promise<void> {
   const found = await git(['rev-parse', '--git-path', 'info/exclude'], repo);
   if (found.code !== 0 || !found.stdout.trim()) return;
   const path = found.stdout.trim();
   const exclude = isAbsolute(path) ? path : join(repo, path);
   const said = await readFile(exclude, 'utf8').catch(() => '');
-  if (said.split(/\r?\n/).includes('/.bonaparte/')) return;
+  if (said.split(/\r?\n/).includes(OUR_EXCLUDE)) return;
   await mkdir(dirname(exclude), { recursive: true });
-  await appendFile(exclude, `${said === '' || said.endsWith('\n') ? '' : '\n'}/.bonaparte/\n`);
+  await appendFile(exclude, `${said === '' || said.endsWith('\n') ? '' : '\n'}${OUR_EXCLUDE}\n`);
 }
 
 const failed = (what: string, stderr: string): Error => new Error(`${what}: ${stderr.trim() || 'git failed'}`);
+
+/** The first name free in this repository: `name`, then `name-2`, `name-3`… — a branch and a folder both. */
+async function freeName(repo: string, prefix: string, name: string): Promise<string> {
+  for (let n = 1; n <= 99; n++) {
+    const tried = n === 1 ? name : `${name}-${n}`;
+    const taken = await git(['rev-parse', '--verify', '--quiet', `refs/heads/${prefix}${tried}`], repo);
+    if (taken.code !== 0 && !existsSync(join(repo, '.bonaparte', 'worktrees', tried))) return tried;
+  }
+  throw new Error(`No branch name is free for ${prefix}${name}: remove some of its branches`);
+}
 
 export async function createWorktree(options: {
   repo: string;
   name: string;
   base: string;
   prefix: string;
-  /** Ignored files to copy in, as the person listed them (a `.env`). */
+  /** Ignored files to copy in, as the person listed them (a `.env`): one git does not ignore is never copied. */
   copy?: readonly string[];
 }): Promise<Worktree> {
-  const dir = join(options.repo, '.bonaparte', 'worktrees', options.name);
-  const branch = `${options.prefix}${options.name}`;
+  const found = await git(['rev-parse', '--verify', '--quiet', `${options.base}^{commit}`], options.repo);
+  if (found.code !== 0) throw new Error(`The base ${options.base} is not a branch nor a commit of this repository`);
+  const name = await freeName(options.repo, options.prefix, options.name);
+  const dir = join(options.repo, '.bonaparte', 'worktrees', name);
+  const branch = `${options.prefix}${name}`;
   await excludeOurFolder(options.repo);
   const added = await git(['worktree', 'add', '-b', branch, dir, options.base], options.repo);
   if (added.code !== 0) throw failed(`The branch ${branch} could not be made`, added.stderr);
@@ -65,6 +106,8 @@ export async function createWorktree(options: {
     const to = resolve(dir, file);
     // Only a file of the project, into the worktree.
     if (!from.startsWith(resolve(options.repo)) || !to.startsWith(dir)) continue;
+    // Only one git ignores: a tracked or a seen one would be committed, and pushed.
+    if ((await git(['check-ignore', '--quiet', file], options.repo)).code !== 0) continue;
     try {
       await mkdir(dirname(to), { recursive: true });
       await copyFile(from, to);

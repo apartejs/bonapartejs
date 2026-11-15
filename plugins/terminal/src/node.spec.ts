@@ -16,6 +16,8 @@ interface FakePty {
   written: string[];
   size: [number, number];
   killed: boolean;
+  /** Its output held by the app (node-pty's pause), until resumed. */
+  paused: boolean;
   print(data: string): void;
   exit(code: number): void;
 }
@@ -25,6 +27,7 @@ function rig(options: { terminals?: boolean } = {}) {
   const commands = new Map<string, (payload: unknown) => unknown>();
   const sent: { instanceId: string; event: string; payload: unknown }[] = [];
   const drains = new Map<string, () => void>();
+  const resets: string[] = [];
   let behind = false;
   const ctx = {
     pluginId: 'terminal',
@@ -35,6 +38,7 @@ function rig(options: { terminals?: boolean } = {}) {
         return !behind;
       },
       onDrain: (listener: () => void) => drains.set(instanceId, listener),
+      reset: () => resets.push(instanceId),
       dispose: () => undefined,
     }),
     onDispose: () => undefined,
@@ -56,6 +60,7 @@ function rig(options: { terminals?: boolean } = {}) {
                 written: [],
                 size: [opts.cols, opts.rows],
                 killed: false,
+                paused: false,
                 print: (data) => onData(data),
                 exit: (code) => onExit(code),
               };
@@ -75,6 +80,12 @@ function rig(options: { terminals?: boolean } = {}) {
                 kill: () => {
                   pty.killed = true;
                 },
+                pause: () => {
+                  pty.paused = true;
+                },
+                resume: () => {
+                  pty.paused = false;
+                },
               };
             },
           },
@@ -85,6 +96,7 @@ function rig(options: { terminals?: boolean } = {}) {
   return {
     ptys,
     sent,
+    resets,
     call,
     behind: (value: boolean) => {
       behind = value;
@@ -138,6 +150,30 @@ describe('the terminal plugin', () => {
     behind(false);
     drain('t1');
     expect(data(sent, 't1')).toBe('one two three');
+  });
+
+  it('a view behind holds its shell, which goes on once the view has caught up: nothing piles up in between', () => {
+    const { ptys, sent, call, behind, drain } = rig();
+    call('open', { instanceId: 't1', cols: 80, rows: 24 });
+    behind(true);
+    ptys[0]!.print('one ');
+    expect(ptys[0]!.paused).toBe(true);
+    behind(false);
+    drain('t1');
+    expect(ptys[0]!.paused).toBe(false);
+    expect(data(sent, 't1')).toBe('one ');
+  });
+
+  it('a view that comes back starts its flow afresh, and a shell held for the view that went goes on', () => {
+    const { ptys, call, behind, resets } = rig();
+    call('open', { instanceId: 't1', cols: 80, rows: 24 });
+    behind(true);
+    ptys[0]!.print('a lot');
+    call('detach', { instanceId: 't1' });
+    expect(ptys[0]!.paused).toBe(false);
+    behind(false);
+    call('open', { instanceId: 't1', cols: 80, rows: 24 });
+    expect(resets).toEqual(['t1', 't1']);
   });
 
   it('a view that goes away detaches: nothing is sent, the history is kept and redraws it when it comes back', () => {

@@ -2,8 +2,10 @@
  * The terminal's Node half (task 6.6): one session per tab, on one of the
  * shells the app found — the plugin chooses a shell by its id, never names
  * an executable. What the shell prints goes to its tab's view raw (the
- * view's emulator reads the escapes), as it comes, held while the view is
- * behind (the host's back-pressure). A view that goes away detaches: its
+ * view's emulator reads the escapes), as it comes; while the view is behind
+ * (the host's back-pressure) the shell itself is held, so that nothing piles
+ * up in between, and goes on when the view has caught up. A view that goes
+ * away detaches: its
  * shell runs on, its output kept in a bounded history that redraws the
  * view when it comes back. Closing a tab kills its shell; everything else
  * goes with the plugin.
@@ -23,7 +25,7 @@ interface Session {
   shellId: string;
   history: string;
   exited: boolean;
-  /** The view is behind: what comes waits here. */
+  /** The view is behind: the shell is held, what was already on its way waits here. */
   paused: boolean;
   pending: string;
   /** No view: nothing is sent, the history keeps it. */
@@ -45,10 +47,21 @@ export const terminal = definePlugin({
     const send = (session: Session, data: string): void => {
       if (session.detached) return;
       if (session.paused) {
-        session.pending += data;
+        // What the shell had already printed before it was held: never more than its history.
+        session.pending = (session.pending + data).slice(-MAX_HISTORY_CHARS);
         return;
       }
-      if (!session.channel.emit('data', data)) session.paused = true;
+      if (!session.channel.emit('data', data)) {
+        session.paused = true;
+        session.pty.pause();
+      }
+    };
+    /** The flow afresh — a view comes or goes: the shell goes on, nothing waits for a view that left. */
+    const release = (session: Session): void => {
+      if (session.paused && !session.exited) session.pty.resume();
+      session.paused = false;
+      session.pending = '';
+      session.channel.reset();
     };
 
     const open = (instanceId: string, shellId: string, payload: Record<string, unknown>): Session => {
@@ -70,9 +83,11 @@ export const terminal = definePlugin({
         if (!session.detached) channel.emit('exit', { code });
       });
       channel.onDrain(() => {
+        if (!session.paused) return;
         session.paused = false;
         const pending = session.pending;
         session.pending = '';
+        if (!session.exited) session.pty.resume();
         if (pending) send(session, pending);
       });
       sessions.set(instanceId, session);
@@ -97,8 +112,7 @@ export const terminal = definePlugin({
       // The tab comes back to its shell: the history redraws it, and its output flows again.
       if (live && !live.exited) {
         live.detached = false;
-        live.paused = false;
-        live.pending = '';
+        release(live);
         return { shellId: live.shellId, history: live.history, exited: false };
       }
       live?.channel.dispose();
@@ -129,8 +143,7 @@ export const terminal = definePlugin({
     ctx.registerCommand('detach', (payload) =>
       withSession(payload, (session) => {
         session.detached = true;
-        session.paused = false;
-        session.pending = '';
+        release(session);
         return { detached: true };
       }),
     );

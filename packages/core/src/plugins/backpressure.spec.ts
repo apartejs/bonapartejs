@@ -64,6 +64,7 @@ function capturing(): {
     channel: (id: string) => {
       emit: (e: string, p: unknown) => boolean;
       onDrain: (cb: () => void) => void;
+      reset: () => void;
       dispose: () => void;
     };
   };
@@ -220,6 +221,24 @@ describe('backpressure PER INSTANCE', () => {
     expect(one.emit('data', 'x')).toBe(true);
     // t2 acknowledged nothing: it stays paused.
     expect(two.emit('data', 'y')).toBe(false);
+  });
+
+  it('a channel reset forgets what was in flight: a new view of the same tab starts free, its listeners kept', async () => {
+    // A view that went away never acknowledges what it had not drawn; the one
+    // that comes back counts from zero.
+    const { host: h } = await hostWithTerm();
+    const plugin = capturing();
+    await h.activate('term', plugin.module);
+
+    const tab = plugin.ctx().channel('t1');
+    const drained = vi.fn();
+    tab.onDrain(drained);
+    expect(tab.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
+    tab.reset();
+    expect(tab.emit('data', 'x')).toBe(true);
+    expect(tab.emit('data', 'x'.repeat(FLOW_CONTROL.highWatermark))).toBe(false);
+    h.acknowledge('term', 't1', FLOW_CONTROL.highWatermark);
+    expect(drained).toHaveBeenCalledTimes(1);
   });
 
   it('wakes up the right instance', async () => {

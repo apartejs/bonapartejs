@@ -18,6 +18,7 @@ import type { JournalEntry, Outcome, PendingCall } from '../journal/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolSet } from '../tools/registry.js';
 import type { ToolContext, ToolResult } from '../tools/types.js';
+import type { ChangePlace } from './loop.js';
 import type { Tickets } from './tickets.js';
 
 export type Pause = Extract<JournalEntry, { kind: 'pending' }>;
@@ -90,12 +91,14 @@ export interface AnswerContext {
   beforeWrite?: ToolContext['beforeWrite'];
   afterWrite?: ToolContext['afterWrite'];
   onOutput?: ToolContext['onOutput'];
+  /** Folders it never writes (on its own branch, its project's own checkout). */
+  barred?: readonly string[];
   /**
-   * Before the first call that changes something (a write, a command): the
-   * conversation may move to its own branch — the folders it works in from
-   * then on (task 6.7).
+   * Before the first call that changes something (a write, a command) is
+   * judged: the conversation may move to its own branch — the folders it
+   * works in from then on (task 6.7) — or say why it cannot.
    */
-  beforeChange?: () => Promise<readonly string[] | undefined>;
+  beforeChange?: () => Promise<ChangePlace | undefined>;
 }
 
 /** Answers the calls of a pause, in order: their results, and those that must wait again. */
@@ -112,8 +115,16 @@ export async function answerPause(
   const run = async (call: PendingCall, granted = false): Promise<void> => {
     const effect = ctx.registry.get(call.name)?.def.effect;
     if ((effect === 'write' || effect === 'execute') && ctx.beforeChange) {
-      const moved = await ctx.beforeChange();
-      if (moved) ctx.roots = moved;
+      const place = await ctx.beforeChange();
+      if (place && 'error' in place) {
+        emit({ type: 'tool-failed', toolCallId: call.toolCallId, error: place.error });
+        results.push({ toolCallId: call.toolCallId, name: call.name, content: place.error, failed: true });
+        return;
+      }
+      if (place) {
+        ctx.roots = place.roots;
+        ctx.barred = place.barred;
+      }
     }
     const result = await ctx.registry.run(
       { id: call.toolCallId, name: call.name, input: call.input },
@@ -208,6 +219,8 @@ export async function answerPause(
       input: call.input,
       mode: ctx.mode,
       ...(ctx.projectId !== undefined ? { projectId: ctx.projectId } : {}),
+      roots: ctx.roots,
+      ...(ctx.barred ? { barred: ctx.barred } : {}),
     });
     if (verdict.verdict === 'deny') {
       reject(call, toolRefusal({ reason: verdict.reason, by: 'policy' }));

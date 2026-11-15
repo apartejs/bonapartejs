@@ -57,7 +57,7 @@ import type { SeedStats } from './kv/kv-store.js';
 import { exportConversations } from './conversation/export.js';
 import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
-import { runAgentTurn } from './agent/loop.js';
+import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
 import {
   createTickets,
@@ -91,7 +91,7 @@ import {
   type ProjectChanges,
 } from './project/store.js';
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
-import { branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, type BranchStatus } from './git/worktrees.js';
+import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, type BranchStatus } from './git/worktrees.js';
 import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { PluginHost } from './plugins/host.js';
@@ -823,13 +823,14 @@ export function createCore(deps: CoreDeps): Core {
   appSettings.onChange(readPolicy);
   async function rootsOf(
     conversationId: string,
-  ): Promise<{ roots: string[]; projectId?: string }> {
+  ): Promise<{ roots: string[]; projectId?: string; barred?: string[] }> {
     const meta = await conversationStore.get(conversationId);
     const project = meta?.projectId ? await projectStore.get(meta.projectId) : undefined;
     if (!project) return { roots: perimeter() };
     projectRoots.set(project.id, project.roots);
-    // On its own branch: its worktree, inside the project's folder.
-    return { roots: meta?.worktree ? [meta.worktree] : project.roots, projectId: project.id };
+    // On its own branch: the project's folders in its worktree; their own checkout never written.
+    if (meta?.worktree) return { ...branchRoots(project.roots, meta.worktree), projectId: project.id };
+    return { roots: project.roots, projectId: project.id };
   }
   // GitHub's CLI (task 6.8): `gh` unless the deps say otherwise; null for none.
   const gh = deps.gh === undefined ? ['gh'] : deps.gh;
@@ -849,6 +850,8 @@ export function createCore(deps: CoreDeps): Core {
         if (Date.parse(meta.archivedAt) > Date.now() - ARCHIVE_KEEP_MS) continue;
         const repo = await repoOf(meta);
         if (!repo) continue;
+        // Work never committed there (a pull request merged meanwhile) is the person's: kept.
+        if ((await uncommittedFiles(meta.worktree)) > 0) continue;
         await removeWorktree(repo, meta.worktree, meta.branch);
         await conversationStore.update(meta.id, { worktree: undefined });
       }
@@ -856,23 +859,30 @@ export function createCore(deps: CoreDeps): Core {
     .catch(() => undefined);
   // A conversation on its own branch gets its worktree at its first write (task 6.7) — once,
   // whatever the calls of that turn.
-  const branching = new Map<string, Promise<readonly string[] | undefined>>();
-  const ensureBranch = (conversationId: string): Promise<readonly string[] | undefined> => {
+  // Whatever stops it is said to the model as the call's result; the turn goes on.
+  const branching = new Map<string, Promise<ChangePlace | undefined>>();
+  const ensureBranch = (conversationId: string): Promise<ChangePlace | undefined> => {
     const running = branching.get(conversationId);
     if (running) return running;
-    const made = (async (): Promise<readonly string[] | undefined> => {
+    const made = (async (): Promise<ChangePlace | undefined> => {
       const meta = await conversationStore.get(conversationId);
       if (!meta || meta.worksIn !== 'branch' || meta.worktree || !meta.projectId) return undefined;
       const project = await projectStore.get(meta.projectId);
       const repo = project?.roots[0] ? await repoRoot(project.roots[0]) : null;
-      if (!repo) return undefined;
+      // Never into the project's own folder instead.
+      if (!project || !repo) return { error: 'This conversation works on its own branch, and its project is not in a git repository any more: it changes nothing.' };
       const prefix = String((await appSettings.get('branchPrefix').catch(() => 'bonaparte/')) ?? 'bonaparte/');
       const asked = meta.branch ?? `${prefix}${conversationId.slice(0, 8)}`;
       const name = asked.split('/').pop() || conversationId.slice(0, 8);
-      const base = meta.base ?? ((await currentBranch(repo)) || 'HEAD');
-      const worktree = await createWorktree({ repo, name, base, prefix: asked.slice(0, asked.length - name.length), copy: ['.env'] });
-      await conversationStore.update(conversationId, { worktree: worktree.dir, branch: worktree.branch, base });
-      return [worktree.dir];
+      // `HEAD` as a base is the branch checked out now, so that what is counted against it stays put.
+      const base = meta.base && meta.base !== 'HEAD' ? meta.base : (await currentBranch(repo)) || 'HEAD';
+      try {
+        const worktree = await createWorktree({ repo, name, base, prefix: asked.slice(0, asked.length - name.length), copy: ['.env'] });
+        await conversationStore.update(conversationId, { worktree: worktree.dir, branch: worktree.branch, base });
+        return branchRoots(project.roots, worktree.dir);
+      } catch (error) {
+        return { error: `This conversation could not make its own branch, and changes nothing: ${error instanceof Error ? error.message : String(error)}` };
+      }
     })().finally(() => branching.delete(conversationId));
     branching.set(conversationId, made);
     return made;
@@ -957,7 +967,13 @@ export function createCore(deps: CoreDeps): Core {
     prompt: (meta) => ({
       kind: meta.kind,
       tools: toolsFor(meta.kind, tools.view(plugins.visibleTo(meta.projectId)).list()),
-      perimeter: meta.worktree ? [meta.worktree] : meta.projectId ? (projectRoots.get(meta.projectId) ?? []) : [],
+      perimeter: !meta.projectId
+        ? []
+        : meta.worktree
+          ? projectRoots.has(meta.projectId)
+            ? branchRoots(projectRoots.get(meta.projectId)!, meta.worktree).roots
+            : [meta.worktree]
+          : (projectRoots.get(meta.projectId) ?? []),
       replyLanguage: deps.replyLanguage?.() ?? 'English',
     }),
     // The project's instructions (.bonaparte/instructions.md, AGENTS.md or CLAUDE.md), read at each turn:
@@ -1016,7 +1032,7 @@ export function createCore(deps: CoreDeps): Core {
       where: 'window',
     }));
     const signer = await tickets();
-    const { roots, projectId } = await rootsOf(conversationId);
+    const { roots, projectId, barred } = await rootsOf(conversationId);
     // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
     try {
       return await runAgentTurn(
@@ -1029,6 +1045,7 @@ export function createCore(deps: CoreDeps): Core {
           permissions,
           conversations,
           roots,
+          ...(barred ? { barred } : {}),
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
           windowTools,
           ...keepOriginals(conversationId, input.messageId ?? 'turn'),
@@ -1301,6 +1318,7 @@ export function createCore(deps: CoreDeps): Core {
           registry: tools.view(plugins.visibleTo(place.projectId)),
           permissions,
           roots: place.roots,
+          ...(place.barred ? { barred: place.barred } : {}),
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
           signal: options.signal,
           windowTools: new Set(options.clientTools.map((tool) => tool.name)),

@@ -24,7 +24,9 @@ export type ToPty =
   | { type: 'open'; id: string; file: string; args: string[]; cwd: string; cols: number; rows: number; env: Record<string, string> }
   | { type: 'write'; id: string; data: string }
   | { type: 'resize'; id: string; cols: number; rows: number }
-  | { type: 'kill'; id: string };
+  | { type: 'kill'; id: string }
+  | { type: 'pause'; id: string }
+  | { type: 'resume'; id: string };
 
 /** What comes back. */
 export type FromPty = { type: 'data'; id: string; data: string } | { type: 'exit'; id: string; code: number | null };
@@ -104,6 +106,12 @@ export function createTerminalService(options: TerminalServiceOptions): Terminal
         },
         resize: (cols, rows) => {
           if (live.has(id)) post({ type: 'resize', id, cols, rows });
+        },
+        pause: () => {
+          if (live.has(id)) post({ type: 'pause', id });
+        },
+        resume: () => {
+          if (live.has(id)) post({ type: 'resume', id });
         },
         onData: (listener) => {
           terminal.data.push(listener);

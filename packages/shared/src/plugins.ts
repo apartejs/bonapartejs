@@ -192,6 +192,9 @@ export interface PluginPty {
   onData(listener: (data: string) => void): void;
   onExit(listener: (code: number | null) => void): void;
   kill(): void;
+  /** Its output held while a view is behind — the shell itself stops at the next write it makes. */
+  pause(): void;
+  resume(): void;
 }
 
 export interface PluginPtyOptions {
@@ -223,6 +226,8 @@ export interface PluginInstanceChannel {
   /** False: the view is behind — stop until `onDrain`. */
   emit(event: string, payload: unknown): boolean;
   onDrain(listener: () => void): void;
+  /** A new view of this instance: what was sent and never acknowledged is forgotten; its listeners stay. */
+  reset(): void;
   dispose(): void;
 }
 

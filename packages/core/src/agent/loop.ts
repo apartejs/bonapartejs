@@ -27,6 +27,9 @@ import { NOT_RUN_STOPPED } from './resume.js';
 
 export const DEFAULT_MAX_TOOL_ROUNDS = 25;
 
+/** Where a conversation works from its first change on, or why it cannot move there. */
+export type ChangePlace = { roots: readonly string[]; barred: readonly string[] } | { error: string };
+
 export interface AgentTurnContext {
   conversationId: string;
   /** The person's message, or a branch: what the turn answers. */
@@ -50,12 +53,14 @@ export interface AgentTurnContext {
   beforeWrite?: ToolContext['beforeWrite'];
   afterWrite?: ToolContext['afterWrite'];
   onOutput?: ToolContext['onOutput'];
+  /** Folders it never writes (on its own branch, its project's own checkout). */
+  barred?: readonly string[];
   /**
-   * Before the first call that changes something (a write, a command): the
-   * conversation may move to its own branch — the folders it works in from
-   * then on (task 6.7).
+   * Before the first call that changes something (a write, a command) is
+   * judged: the conversation may move to its own branch — the folders it
+   * works in from then on (task 6.7) — or say why it cannot.
    */
-  beforeChange?: () => Promise<readonly string[] | undefined>;
+  beforeChange?: () => Promise<ChangePlace | undefined>;
 }
 
 /**
@@ -100,12 +105,30 @@ export async function runAgentTurn(
       }
       const tool = ctx.registry.get(call.name);
       if (tool) {
-        const verdict = ctx.permissions.evaluate({
-          tool: tool.def,
-          input: call.input,
-          mode: ctx.mode,
-          ...(ctx.projectId !== undefined ? { projectId: ctx.projectId } : {}),
-        });
+        const judge = () =>
+          ctx.permissions.evaluate({
+            tool: tool.def,
+            input: call.input,
+            mode: ctx.mode,
+            ...(ctx.projectId !== undefined ? { projectId: ctx.projectId } : {}),
+            roots: ctx.roots,
+            ...(ctx.barred ? { barred: ctx.barred } : {}),
+          });
+        let verdict = judge();
+        // A change the mode lets through or asks: its branch first, so what is judged, shown and done is there.
+        if (verdict.verdict !== 'deny' && (tool.def.effect === 'write' || tool.def.effect === 'execute') && ctx.beforeChange) {
+          const place = await ctx.beforeChange();
+          if (place && 'error' in place) {
+            emit({ type: 'tool-failed', toolCallId: call.id, error: place.error });
+            results.push({ toolCallId: call.id, name: call.name, content: place.error, failed: true });
+            continue;
+          }
+          if (place) {
+            ctx.roots = place.roots;
+            ctx.barred = place.barred;
+            verdict = judge();
+          }
+        }
         if (verdict.verdict === 'deny') {
           const refusal = toolRefusal({ reason: verdict.reason, by: 'policy' });
           emit({ type: 'tool-rejected', toolCallId: call.id, ...refusal });
@@ -117,10 +140,6 @@ export async function runAgentTurn(
           pending.push({ toolCallId: call.id, name: call.name, input: call.input, reason: 'approval' });
           continue;
         }
-      }
-      if (tool && (tool.def.effect === 'write' || tool.def.effect === 'execute') && ctx.beforeChange) {
-        const moved = await ctx.beforeChange();
-        if (moved) ctx.roots = moved;
       }
       const result = await ctx.registry.run(
         { id: call.id, name: call.name, input: call.input },

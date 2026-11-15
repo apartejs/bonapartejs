@@ -26,11 +26,14 @@ async function project(signal = new AbortController().signal): Promise<ToolConte
   await writeFile(join(root, 'src', 'a.ts'), 'const a = 1;\nconst hours = 7.5;\n');
   await writeFile(join(root, 'src', 'b.ts'), 'export const hours = 8;\n');
   await writeFile(join(root, 'node_modules', 'dep', 'index.js'), 'const hours = 0;\n');
+  // A conversation's own branch: a copy of the project, never walked from it.
+  await mkdir(join(root, '.bonaparte', 'worktrees', 'heures', 'src'), { recursive: true });
+  await writeFile(join(root, '.bonaparte', 'worktrees', 'heures', 'src', 'a.ts'), 'const hours = 9;\n');
   return { conversationId: 'c1', roots: [root], nCtx: 8_192, signal };
 }
 
 describe('search', () => {
-  it('finds the lines that match, as path:line: text, in order — never in node_modules', async () => {
+  it('finds the lines that match, as path:line: text, in order — never in node_modules, nor in a branch’s worktree', async () => {
     const ctx = await project();
     const result = await search.handler({ id: 't1', name: 'search', input: { pattern: 'hours =' } }, ctx);
     expect(result.content).toBe('src/a.ts:2: const hours = 7.5;\nsrc/b.ts:1: export const hours = 8;');

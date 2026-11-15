@@ -432,6 +432,8 @@ describe('PluginHost — terminals', () => {
           kill: () => {
             pty.killed = true;
           },
+          pause: () => undefined,
+          resume: () => undefined,
         };
       },
     };

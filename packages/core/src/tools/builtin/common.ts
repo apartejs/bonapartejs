@@ -78,4 +78,4 @@ export function workRoot(ctx: ToolContext): string {
 }
 
 /** Folders never walked: what a build or a package manager made. */
-export const SKIPPED_FOLDERS = new Set(['node_modules', '.git', 'dist', 'out', '.nx', '.next', 'target', '__pycache__']);
+export const SKIPPED_FOLDERS = new Set(['node_modules', '.git', 'dist', 'out', '.nx', '.next', 'target', '__pycache__', '.bonaparte']);

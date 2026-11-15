@@ -161,6 +161,19 @@ describe('the rules remembered', () => {
 });
 
 describe('after a restart', () => {
+  it('a conversation on its own branch is judged in its worktree, and never writes its project’s own folder', () => {
+    const worktree = join(project, '.bonaparte', 'worktrees', 'heures');
+    const judge = (path: string, mode: PlayMode) =>
+      engine().evaluate({ tool: EDIT, input: { path, old_string: 'a', new_string: 'b' }, mode, roots: [worktree], barred: [project] });
+    expect(judge('src/a.ts', 'plume')).toEqual({ verdict: 'allow' });
+    expect(judge(join(worktree, 'src', 'a.ts'), 'plume')).toEqual({ verdict: 'allow' });
+    const refused = judge(join(project, 'src', 'a.ts'), 'impro');
+    expect(refused.verdict).toBe('deny');
+    expect(refused.verdict === 'deny' && refused.reason).toContain(worktree);
+    // Out of both: asked, as anywhere outside.
+    expect(judge(join(tmpdir(), 'elsewhere.txt'), 'impro')).toEqual({ verdict: 'ask', why: 'outside-project' });
+  });
+
   it('Impro is not kept without a new confirmation; the other modes are', () => {
     expect(modeAfterRestart('impro')).toBe('plume');
     for (const mode of ['lecture', 'repetition', 'plume'] as const) expect(modeAfterRestart(mode)).toBe(mode);

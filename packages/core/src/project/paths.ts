@@ -52,7 +52,8 @@ export function isNetwork(path: string): boolean {
   return /^[\\/]{2}/.test(path);
 }
 
-function contains(root: string, absolute: string): boolean {
+/** Whether a path is the folder or inside it (a link is not followed: say where it really lands first). */
+export function contains(root: string, absolute: string): boolean {
   const rel = relative(resolve(root), absolute);
   if (rel === '') return true;
   return !rel.startsWith('..') && !isAbsolute(rel);

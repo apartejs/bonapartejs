@@ -7,12 +7,12 @@
  */
 
 import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { tempRepo, type TempRepo } from '../testing/temp-repo.js';
 import { git } from './git.js';
-import { branchStatus, commitAll, createWorktree, removeWorktree, repoRoot, uncommittedFiles } from './worktrees.js';
+import { branchRoots, branchStatus, commitAll, createWorktree, removeWorktree, repoRoot, uncommittedFiles } from './worktrees.js';
 
 let repos: TempRepo[] = [];
 afterEach(async () => {
@@ -30,7 +30,8 @@ async function repo(files: Record<string, string>, ignored: string[] = []): Prom
   return made;
 }
 
-describe('a conversation on its own branch', () => {
+// git is slow when the whole suite runs at once.
+describe('a conversation on its own branch', { timeout: 30_000 }, () => {
   it('a worktree under .bonaparte/worktrees, on its branch from its base, the listed ignored files copied, locked', async () => {
     const { dir } = await repo({ 'src/format.ts': 'export const a = 1;\n' }, ['.env']);
     await writeFile(join(dir, '.env'), 'API_URL=http://localhost\n');
@@ -73,6 +74,37 @@ describe('a conversation on its own branch', () => {
     await removeWorktree(dir, made.dir, made.branch);
     expect(existsSync(made.dir)).toBe(false);
     expect((await git(['branch', '--list', made.branch], dir)).stdout.trim()).toBe('');
+  });
+
+  it('never copies a .env git does not ignore: tracked, or only not ignored, it would be committed', async () => {
+    const tracked = await repo({ '.env': 'TOKEN=committed\n', 'a.ts': 'a\n' });
+    await writeFile(join(tracked.dir, '.env'), 'TOKEN=secret\n');
+    const fromTracked = await createWorktree({ repo: tracked.dir, name: 'heures', base: 'main', prefix: 'bonaparte/', copy: ['.env'] });
+    expect(await readFile(join(fromTracked.dir, '.env'), 'utf8')).toBe('TOKEN=committed\n');
+    expect(await uncommittedFiles(fromTracked.dir)).toBe(0);
+
+    const seen = await repo({ 'a.ts': 'a\n' });
+    await writeFile(join(seen.dir, '.env'), 'TOKEN=secret\n');
+    const fromSeen = await createWorktree({ repo: seen.dir, name: 'heures', base: 'main', prefix: 'bonaparte/', copy: ['.env'] });
+    expect(existsSync(join(fromSeen.dir, '.env'))).toBe(false);
+  });
+
+  it('only the worktrees are out of the project’s status: its own .bonaparte files stay seen', async () => {
+    const { dir } = await repo({ 'a.ts': 'a\n' });
+    await createWorktree({ repo: dir, name: 'heures', base: 'main', prefix: 'bonaparte/' });
+    await mkdir(join(dir, '.bonaparte'), { recursive: true });
+    await writeFile(join(dir, '.bonaparte', 'instructions.md'), 'Be brief.\n');
+    expect((await git(['status', '--porcelain', '--untracked-files=all'], dir)).stdout).toContain('.bonaparte/instructions.md');
+    expect((await git(['status', '--porcelain', '--untracked-files=all'], dir)).stdout).not.toContain('worktrees');
+  });
+
+  it('a branch made in a folder of its repository: the project’s folders at the same place in the worktree', () => {
+    const worktree = join('C:', 'repo', '.bonaparte', 'worktrees', 'heures');
+    expect(branchRoots([join('C:', 'repo', 'packages', 'app'), join('C:', 'elsewhere')], worktree)).toEqual({
+      roots: [join(worktree, 'packages', 'app'), join('C:', 'elsewhere')],
+      barred: [join('C:', 'repo', 'packages', 'app')],
+    });
+    expect(branchRoots([join('C:', 'repo')], worktree)).toEqual({ roots: [worktree], barred: [join('C:', 'repo')] });
   });
 
   it('a folder that is not a repository has no root', async () => {

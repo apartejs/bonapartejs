@@ -92,9 +92,13 @@ describe('the app’s terminals', () => {
     pty.onExit((code) => ended.push(code));
     pty.write('ls\r');
     pty.resize(120, 40);
+    pty.pause();
+    pty.resume();
     expect(started[0]!.posted.slice(1)).toEqual([
       { type: 'write', id, data: 'ls\r' },
       { type: 'resize', id, cols: 120, rows: 40 },
+      { type: 'pause', id },
+      { type: 'resume', id },
     ]);
     started[0]!.say({ type: 'data', id, data: 'hello' });
     started[0]!.say({ type: 'data', id: 'other', data: 'not mine' });

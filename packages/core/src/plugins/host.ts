@@ -447,6 +447,12 @@ export class PluginHost {
       onDrain: (listener) => {
         if (!disposed && !activation.closed) this.flowOf(activation, instanceId).drained.push(listener);
       },
+      reset: () => {
+        const flow = activation.flows.get(instanceId);
+        if (!flow) return;
+        flow.unacknowledged = 0;
+        flow.paused = false;
+      },
       dispose: () => {
         disposed = true;
         activation.flows.delete(instanceId);

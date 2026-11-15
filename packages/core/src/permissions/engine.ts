@@ -19,7 +19,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import type { PlayMode, ToolEffect, Verdict } from '@aparte/bonaparte-shared';
 import type { ToolDef } from '../tools/types.js';
-import { InvalidPathError, NetworkPathError, PathOutsideHomeError, permissionPath, realLocation, resolveInPerimeter } from '../project/paths.js';
+import { contains, InvalidPathError, NetworkPathError, PathOutsideHomeError, permissionPath, realLocation, resolveInPerimeter } from '../project/paths.js';
 import { isValidRule, matchesRule, type AllowRule, type CommandLine } from './rules.js';
 
 export interface PermissionQuery {
@@ -28,6 +28,10 @@ export interface PermissionQuery {
   mode: PlayMode;
   projectId?: string;
   agentId?: string;
+  /** Where this conversation works when it is not its project's folders: its worktree (task 6.7). */
+  roots?: readonly string[];
+  /** Folders it never writes: on its own branch, its project's own checkout. */
+  barred?: readonly string[];
 }
 
 export interface PermissionEngineDeps {
@@ -136,7 +140,7 @@ export class PermissionEngine {
     if (effect === 'write') {
       const requested = pathOf(query.input);
       if (requested !== undefined) {
-        const roots = this.deps.roots(query.projectId);
+        const roots = query.roots ?? this.deps.roots(query.projectId);
         const home = this.deps.home ?? homedir();
         let inside = true;
         try {
@@ -153,6 +157,13 @@ export class PermissionEngine {
         const real = inside ? permissionPath(roots, requested, home) : realLocation(resolve(roots[0] ?? home, requested));
         if (isArmedPath(real, this.deps.dataDir, this.deps.alwaysAsk?.(query.projectId) ?? [])) {
           return { verdict: 'ask', why: 'armed-path' };
+        }
+        // On its own branch, the project's own folder is another checkout: never written from here.
+        if (!inside && (query.barred ?? []).some((root) => contains(root, real))) {
+          return {
+            verdict: 'deny',
+            reason: `This conversation works on its own branch, in ${roots[0] ?? ''}: write its files there, never in the project's own folder.`,
+          };
         }
         if (!inside) return { verdict: 'ask', why: 'outside-project' };
       }

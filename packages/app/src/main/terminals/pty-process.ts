@@ -48,5 +48,12 @@ port.on('message', (event) => {
     case 'kill':
       ptys.get(message.id)?.kill();
       break;
+    // Held while its view is behind: node-pty stops reading, and the shell stops at its next write.
+    case 'pause':
+      ptys.get(message.id)?.pause();
+      break;
+    case 'resume':
+      ptys.get(message.id)?.resume();
+      break;
   }
 });
