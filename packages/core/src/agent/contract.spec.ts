@@ -43,12 +43,13 @@ async function setup(options: FakeLlamaServerOptions | 'no engine' = {}) {
       JSON.stringify({ backend: { mode: 'remote', url: server.url } }),
     );
   }
-  const handler = createAgentHandler(createCore({ dataDir, env: {} }));
+  const core = createCore({ dataDir, env: {}, logger: () => undefined });
+  const handler = createAgentHandler(core);
   const runner = createAgentStreamRunner({
     endpoint: `${AGENT_ENDPOINT}/c/c1`,
     fetch: (input, init) => handler(new Request(input as string, init)),
   });
-  return { server, runner };
+  return { server, runner, core };
 }
 
 /** What the client hands its runner for one turn: only what the stock runner reads. */
@@ -105,5 +106,37 @@ describe("aparté's stock runner drives our handler", () => {
   it('turns a refusal before the stream into an error that carries our message', async () => {
     const { runner } = await setup('no engine');
     await expect(runner(turnOf('Bonjour', []))).rejects.toThrow(/No model is loaded/);
+  });
+});
+
+describe("aparté's stock runner, through a pause", () => {
+  it('reads run-suspended; called again with its deferral, it resumes and reads the rest of the turn', async () => {
+    const touch = '<|tool_call>call:touch_test{}<tool_call|>';
+    const { runner, core } = await setup({
+      responder: (prompt) => (prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? 'Done.' : touch),
+    });
+    let touched = 0;
+    core.tools.register(
+      { name: 'touch_test', description: 'Touch the test.', inputSchema: { type: 'object', properties: {} }, effect: 'write', source: 'builtin', where: 'core' },
+      async () => {
+        touched += 1;
+        return { content: 'touched' };
+      },
+    );
+
+    const first: StreamRunEvent[] = [];
+    await runner(turnOf('Go', first));
+    const suspended = first.at(-1) as Extract<StreamRunEvent, { type: 'run-suspended' }> & { ticket?: string };
+    expect(suspended.type).toBe('run-suspended');
+    expect(suspended.pending).toMatchObject([{ name: 'touch_test', reason: 'approval' }]);
+    expect(typeof suspended.ticket).toBe('string');
+    expect(touched).toBe(0);
+
+    const second: StreamRunEvent[] = [];
+    const outcomes = { [suspended.pending[0]!.toolCallId]: { kind: 'decision', approved: true } };
+    await runner({ ...turnOf('Go', second), deferral: { token: suspended.ticket, outcomes } } as unknown as RunnerOptions);
+    expect(second.map((event) => event.type)).toEqual(expect.arrayContaining(['tool-approved', 'tool-resolved', 'run-done']));
+    expect(textOf(second)).toContain('Done.');
+    expect(touched).toBe(1);
   });
 });
