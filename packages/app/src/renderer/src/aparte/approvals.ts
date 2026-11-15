@@ -28,13 +28,13 @@ export interface ApprovalDecision extends ApprovalAnswer {
 export interface ApprovalsStore {
   /** The requests waiting, of one conversation or of all. */
   list(conversationId?: string | null): ApprovalRequest[];
-  ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalDecision | undefined>;
+  ask(request: ApprovalRequest, signal: AbortSignal): Promise<ApprovalDecision>;
   answer(id: string, answer: ApprovalAnswer): void;
   subscribe(listener: () => void): () => void;
 }
 
 export function createApprovalsStore(): ApprovalsStore {
-  const waiting = new Map<string, { request: ApprovalRequest; settle: (decision: ApprovalDecision | undefined) => void }>();
+  const waiting = new Map<string, { request: ApprovalRequest; settle: (decision: ApprovalDecision) => void }>();
   const listeners = new Set<() => void>();
   const changed = (): void => {
     for (const listener of [...listeners]) listener();
@@ -46,17 +46,19 @@ export function createApprovalsStore(): ApprovalsStore {
     },
     ask(request, signal) {
       return new Promise((resolve) => {
+        // A turn stopped before anyone answered: refused — aparté's client resumes nothing then.
+        const stopped: ApprovalDecision = { approved: false, by: 'person' };
         if (signal.aborted) {
-          resolve(undefined);
+          resolve(stopped);
           return;
         }
-        const settle = (decision: ApprovalDecision | undefined): void => {
+        const settle = (decision: ApprovalDecision): void => {
           if (!waiting.delete(request.id)) return;
           signal.removeEventListener('abort', onAbort);
           resolve(decision);
           changed();
         };
-        const onAbort = (): void => settle(undefined);
+        const onAbort = (): void => settle(stopped);
         signal.addEventListener('abort', onAbort, { once: true });
         waiting.set(request.id, { request, settle });
         changed();
@@ -78,6 +80,6 @@ export function createApprovalsStore(): ApprovalsStore {
  * once, apartejs/aparte#215).
  */
 export function createApprovalResolver(store: ApprovalsStore, conversation: () => string | null) {
-  return (call: { id: string; name: string; input: Record<string, unknown> }, signal: AbortSignal): Promise<ApprovalDecision | undefined> =>
+  return (call: { id: string; name: string; input: Record<string, unknown> }, signal: AbortSignal): Promise<ApprovalDecision> =>
     store.ask({ id: call.id, conversationId: conversation(), name: call.name, input: call.input }, signal);
 }

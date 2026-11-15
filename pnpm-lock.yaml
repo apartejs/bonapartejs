@@ -62,6 +62,12 @@ importers:
       '@aparte/locales':
         specifier: 1.9.0
         version: 1.9.0(@aparte/core@1.9.0)
+      '@aparte/plugin-approval':
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
+      '@aparte/plugin-diff':
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
       '@aparte/plugin-shiki':
         specifier: 1.9.0
         version: 1.9.0(@aparte/core@1.9.0)(shiki@4.6.0)
@@ -188,6 +194,12 @@ packages:
 
   '@aparte/locales@1.9.0':
     resolution: {integrity: sha512-6X5AdKy2YTbSV8F/5Vp/r5MV6PCm8aXI3fSQkeKue+J3Ms4hQbz/aterQVB1SBLhEXLil4Q/6Z31d6D2ZjpbmA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@aparte/core': '>=1.9.0 <2.0.0'
+
+  '@aparte/plugin-approval@1.9.0':
+    resolution: {integrity: sha512-3hEX01lv1QxU5tJmGliuv10hzsELQqtb7G+rrpFAMJ4ZXxPFoGHBNcGdv+BVSqR5xSA42G4hv3bmIR8bBOFGRg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': '>=1.9.0 <2.0.0'
@@ -3371,6 +3383,10 @@ snapshots:
       '@aparte/core': 1.9.0
 
   '@aparte/locales@1.9.0(@aparte/core@1.9.0)':
+    dependencies:
+      '@aparte/core': 1.9.0
+
+  '@aparte/plugin-approval@1.9.0(@aparte/core@1.9.0)':
     dependencies:
       '@aparte/core': 1.9.0
 

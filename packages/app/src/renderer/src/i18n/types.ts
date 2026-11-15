@@ -96,4 +96,23 @@ export interface Messages {
     ready: string;
     line(context: string): string;
   };
+  /** The card of a call the core asks about (canvas « Conversation au travail »). */
+  approval: {
+    /** The card's accessible name. */
+    region: string;
+    /** What the call does, before its target: « Modifier », « Lancer »… */
+    verbs: Record<'edit' | 'write' | 'run' | 'fetch' | 'other', string>;
+    /** What closes the question (« ? » with its space in French). */
+    question: string;
+    /** What the mode of the conversation means for this request. */
+    modeNote: Record<'lecture' | 'repetition' | 'plume' | 'impro', string>;
+    allow: string;
+    allowAndPlume: string;
+    refuse: string;
+    refuseConfirm: string;
+    instructionLabel: string;
+    instructionPlaceholder: string;
+    hint: string;
+    fails: { missing: string; notFound: string; ambiguous(times: number): string };
+  };
 }

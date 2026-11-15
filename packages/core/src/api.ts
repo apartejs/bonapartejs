@@ -62,6 +62,8 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
+  /** Tests only: the home folder the tools work in when a conversation has no project. */
+  home?: string;
   /** The language the answers are written in, in plain words (« French »): the interface's. */
   replyLanguage?: () => string;
   /** Where llama.cpp's releases are read (default: GitHub's API); null: never asked (tests). */
@@ -489,7 +491,9 @@ export function createCore(deps: CoreDeps): Core {
   // The one registry, and the one policy. No project yet: the perimeter is the home folder.
   const tools = new ToolRegistry();
   for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
-  const permissions = new PermissionEngine({ roots: () => [], dataDir: deps.dataDir });
+  // Without a project the perimeter is the home folder — a test run's own, when it gives one.
+  const perimeter = (): string[] => (deps.home ? [deps.home] : []);
+  const permissions = new PermissionEngine({ roots: () => perimeter(), dataDir: deps.dataDir });
   // Impro confirmed by the person during this run of the app: a mode read from disk is not a confirmation.
   const improConfirmed = new Set<string>();
   async function modeOf(conversationId: string): Promise<{ mode: PlayMode; reconfirm: boolean }> {
@@ -568,7 +572,7 @@ export function createCore(deps: CoreDeps): Core {
         registry: tools,
         permissions,
         conversations,
-        roots: [],
+        roots: perimeter(),
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
         windowTools,
         ticket: (pending) => signer.signTicket({ messageId: input.messageId ?? '', calls: pending.map((call) => call.toolCallId) }),
@@ -623,7 +627,7 @@ export function createCore(deps: CoreDeps): Core {
 
     async previewCall(_conversationId, call) {
       // No project yet: the perimeter is the home folder (the projects reach the conversations in 5.3).
-      const roots: string[] = [];
+      const roots = perimeter();
       const preview = await previewToolCall(call, {
         resolve: (requested) => {
           try {
@@ -648,7 +652,7 @@ export function createCore(deps: CoreDeps): Core {
           mode: (await modeOf(conversationId)).mode,
           registry: tools,
           permissions,
-          roots: [],
+          roots: perimeter(),
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
           signal: options.signal,
         },

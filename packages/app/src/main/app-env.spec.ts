@@ -18,6 +18,13 @@ describe('appEnvironment', () => {
     });
   });
 
+  it("gives the tools a home folder of the test's: they never read or write the person's", () => {
+    const env = appEnvironment({ USERPROFILE: 'C:/Users/someone' }, { ...options, home: 'C:/tmp/bonaparte-e2e-1/home' });
+    expect(env['BONAPARTE_E2E_HOME']).toBe('C:/tmp/bonaparte-e2e-1/home');
+    // Electron itself keeps the machine's: without it, it does not start.
+    expect(env['USERPROFILE']).toBe('C:/Users/someone');
+  });
+
   it("never lets the machine's own engine into a test", () => {
     const env = appEnvironment({ BONAPARTE_LLAMA_URL: 'http://127.0.0.1:8080' }, options);
     expect(env['BONAPARTE_LLAMA_URL']).toBe('');

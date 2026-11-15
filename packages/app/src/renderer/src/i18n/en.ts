@@ -97,4 +97,27 @@ export const en: Messages = {
     ready: 'Engine ready',
     line: (context) => `Ready · context ${context} · 1 slot`,
   },
+  approval: {
+    region: 'Approval request',
+    verbs: { edit: 'Edit', write: 'Write', run: 'Run', fetch: 'Open', other: 'Use' },
+    question: '?',
+    modeNote: {
+      lecture: 'Lecture: nothing is written without a plan',
+      repetition: 'Répétition: every write is asked',
+      plume: 'Plume: commands are asked',
+      impro: 'Impro: this file is always asked',
+    },
+    allow: 'Allow',
+    allowAndPlume: 'Allow and switch to Plume',
+    refuse: 'Refuse…',
+    refuseConfirm: 'Refuse',
+    instructionLabel: 'What it should do instead',
+    instructionPlaceholder: 'Tell it what to do instead (optional)',
+    hint: 'Enter allows · Escape refuses',
+    fails: {
+      missing: 'The file does not exist: the edit will fail.',
+      notFound: 'The text to replace is not in the file: the edit will fail.',
+      ambiguous: (times) => `The text to replace is there ${times} times: the edit will fail.`,
+    },
+  },
 };

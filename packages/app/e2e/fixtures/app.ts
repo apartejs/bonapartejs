@@ -87,6 +87,8 @@ export interface LaunchedApp {
   page: Page;
   server: FakeLlamaServer;
   dataDir: string;
+  /** The app's home folder: without a project, the perimeter of its tools. */
+  home: string;
   /** The port of the managed engine, in a managed test. */
   enginePort?: number;
   /** llama.cpp's releases, when the test asked for them. */
@@ -144,6 +146,8 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
 
   try {
     await mkdir(join(dataDir, 'config'), { recursive: true });
+    const home = join(dataDir, 'home');
+    await mkdir(home, { recursive: true });
     const managedEnv: Record<string, string> = {};
     let enginePort: number | undefined;
     if (options.managed) {
@@ -183,6 +187,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       env: appEnvironment(process.env, {
         dataDir,
         locale: options.locale ?? 'fr',
+        home,
         extra: { ...managedEnv, ...options.env },
       }),
       timeout: 30_000,
@@ -228,6 +233,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       page,
       server,
       dataDir,
+      home,
       ...(enginePort !== undefined ? { enginePort } : {}),
       ...(releases ? { releases } : {}),
       navigations,

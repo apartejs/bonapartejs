@@ -6,14 +6,18 @@
  * releases are read — a local server of the test, never GitHub.
  */
 
+import { posix, win32 } from 'node:path';
 import type { CoreDeps } from '@aparte/bonaparte-core';
 
 export function e2eEngineDeps(
   env: Record<string, string | undefined>,
   e2e: boolean,
-): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases'> {
+): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home'> {
   if (!e2e) return {};
-  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases'> = {};
+  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home'> = {};
+  // The tools' home folder: the test's, never the person's.
+  const home = env['BONAPARTE_E2E_HOME'];
+  if (home && (win32.isAbsolute(home) || posix.isAbsolute(home))) deps.home = home;
   try {
     const command = JSON.parse(env['BONAPARTE_E2E_LLAMA_COMMAND'] ?? 'null') as unknown;
     if (Array.isArray(command) && command.length > 0 && command.every((part) => typeof part === 'string')) {

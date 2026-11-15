@@ -2,16 +2,21 @@ import { AparteChat, AparteContext, AparteConversationList, useAparteClient, use
 import {
   conversationsMemory,
   engineState,
+  modesGet,
+  modesSet,
   type ConversationMemoryView,
   type EngineStateView,
   type Locale,
+  type PlayMode,
 } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createApprovalResolver, createApprovalsStore } from './aparte/approvals';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
+import { ApprovalCard } from './chat/ApprovalCard';
 import { MemoryBanner } from './chat/MemoryBanner';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
@@ -32,7 +37,34 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const [memory, setMemory] = useState<Announcement>(null);
 
   const streamRunner = useMemo(() => createConversationRunner(), []);
-  useAparteClient({ streamRunner });
+  // The core decides every call; what it asks about waits here for the person's answer on the card.
+  // The resolver owns the decision: aparté's page policy is never consulted.
+  const approvals = useMemo(() => createApprovalsStore(), []);
+  const open = useRef<string | null>(null);
+  useEffect(() => {
+    open.current = conversationId ?? null;
+  }, [conversationId]);
+  const approvalResolver = useMemo(() => createApprovalResolver(approvals, () => open.current), [approvals]);
+  useAparteClient({ streamRunner, approvalResolver });
+  const [asked, setAsked] = useState(0);
+  useEffect(() => approvals.subscribe(() => setAsked((count) => count + 1)), [approvals]);
+  const request = approvals.list(conversationId ?? null)[0];
+
+  // The mode the conversation runs in: read again when a request comes, which it explains.
+  const [mode, setMode] = useState<PlayMode>('repetition');
+  useEffect(() => {
+    if (!conversationId) return;
+    let current = true;
+    void bridge
+      .invoke(modesGet, { id: conversationId })
+      .then((view) => {
+        if (current) setMode(view.mode);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [conversationId, asked]);
 
   useEffect(() => {
     // One manager and one storage for the life of the window.
@@ -90,7 +122,22 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         // The window is one page: a link in a reply never takes it away (the main process refuses too).
         onLinkClick={(_detail, event) => event.preventDefault()}
         aboveComposer={
-          memory ? <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} /> : undefined
+          request ? (
+            <ApprovalCard
+              request={request}
+              mode={mode}
+              messages={messages}
+              onAnswer={(answer) => approvals.answer(request.id, answer)}
+              onAllowAndPlume={() => {
+                // The writes after this one pass without asking; the commands still ask.
+                if (request.conversationId) void bridge.invoke(modesSet, { id: request.conversationId, mode: 'plume' }).catch(() => undefined);
+                setMode('plume');
+                approvals.answer(request.id, { approved: true });
+              }}
+            />
+          ) : memory ? (
+            <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} />
+          ) : undefined
         }
         toolbar={engine.model ? <AparteContext window={String(engine.model.nCtx)} variant="ring" /> : undefined}
       />

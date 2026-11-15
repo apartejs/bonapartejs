@@ -30,6 +30,12 @@ describe('e2eEngineDeps', () => {
     expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_RELEASES: 'https://example.com/releases' }, true).llamaReleases).toBeNull();
   });
 
+  it("gives the tools the test's home folder — an absolute path, in a test run only", () => {
+    expect(e2eEngineDeps({ BONAPARTE_E2E_HOME: 'C:\\tmp\\e2e\\home' }, true).home).toBe('C:\\tmp\\e2e\\home');
+    expect(e2eEngineDeps({ BONAPARTE_E2E_HOME: 'relative/home' }, true).home).toBeUndefined();
+    expect(e2eEngineDeps({ BONAPARTE_E2E_HOME: 'C:\\tmp\\e2e\\home' }, false).home).toBeUndefined();
+  });
+
   it('ignores them outside a test run', () => {
     expect(e2eEngineDeps(env, false)).toEqual({});
   });

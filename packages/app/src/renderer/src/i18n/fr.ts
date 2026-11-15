@@ -97,4 +97,27 @@ export const fr: Messages = {
     ready: 'Moteur prêt',
     line: (context) => `Prêt · contexte ${context} · 1 slot`,
   },
+  approval: {
+    region: 'Demande d’accord',
+    verbs: { edit: 'Modifier', write: 'Écrire', run: 'Lancer', fetch: 'Ouvrir', other: 'Utiliser' },
+    question: ' ?',
+    modeNote: {
+      lecture: 'Lecture : rien n’est écrit sans plan',
+      repetition: 'Répétition : chaque écriture est demandée',
+      plume: 'Plume : les commandes sont demandées',
+      impro: 'Impro : ce fichier est toujours demandé',
+    },
+    allow: 'Autoriser',
+    allowAndPlume: 'Autoriser et passer en Plume',
+    refuse: 'Refuser…',
+    refuseConfirm: 'Refuser',
+    instructionLabel: 'Ce qu’il doit faire à la place',
+    instructionPlaceholder: 'Dis-lui quoi faire à la place (facultatif)',
+    hint: 'Entrée autorise · Échap refuse',
+    fails: {
+      missing: 'Le fichier n’existe pas : la modification échouera.',
+      notFound: 'Le texte à remplacer n’est pas dans le fichier : la modification échouera.',
+      ambiguous: (times) => `Le texte à remplacer y est ${times} fois : la modification échouera.`,
+    },
+  },
 };

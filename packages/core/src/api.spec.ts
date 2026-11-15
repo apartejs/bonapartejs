@@ -352,6 +352,16 @@ describe('createCore — the modes and the previews of the window', () => {
     expect(await again.modeOf('c1')).toEqual({ mode: 'impro', reconfirm: false });
   });
 
+  it("a test run's home folder is where the tools work without a project", async () => {
+    const home = await mkdtemp(join(tmpdir(), 'bp-core-home-'));
+    dirs.push(home);
+    await writeFile(join(home, 'notes.txt'), 'old line\n');
+    const { core } = await setup({ home });
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    const preview = await core.previewCall('c1', { name: 'edit_file', input: { path: 'notes.txt', old_string: 'old line', new_string: 'new line' } });
+    expect(preview).toMatchObject({ kind: 'diff', path: 'notes.txt', before: 'old line\n', after: 'new line\n' });
+  });
+
   it('previews a write: the text before and after, and their diff — nothing is written', async () => {
     const { core } = await setup();
     await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });

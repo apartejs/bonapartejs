@@ -22,12 +22,12 @@ describe('the approvals store and its resolver', () => {
     expect(store.list('c-1')).toEqual([]);
   });
 
-  it('a turn stopped while it waits answers nothing: the request goes', async () => {
+  it('a turn stopped while it waits: the request goes, refused (the client resumes nothing then)', async () => {
     const store = createApprovalsStore();
     const controller = new AbortController();
     const decision = createApprovalResolver(store, () => 'c-1')(CALL, controller.signal);
     controller.abort();
-    await expect(decision).resolves.toBeUndefined();
+    await expect(decision).resolves.toEqual({ approved: false, by: 'person' });
     expect(store.list()).toEqual([]);
   });
 

@@ -7,6 +7,8 @@ export interface AppEnvironmentOptions {
   /** A folder of its own: a test never touches the person's conversations. */
   dataDir: string;
   locale: 'fr' | 'en';
+  /** A home folder for the tools: without a project, they work there — never in the person's. */
+  home?: string;
   /** What one test adds. It wins over the fixture's values, the test flag excepted. */
   extra?: Record<string, string> | undefined;
 }
@@ -30,6 +32,8 @@ export function appEnvironment(
     ...env,
     BONAPARTE_DATA_DIR: options.dataDir,
     BONAPARTE_LOCALE: options.locale,
+    // The tools' home, not Electron's: with USERPROFILE moved, Electron does not start.
+    ...(options.home ? { BONAPARTE_E2E_HOME: options.home } : {}),
     // The machine's own engine must never leak into a test.
     BONAPARTE_LLAMA_URL: '',
     ...options.extra,
