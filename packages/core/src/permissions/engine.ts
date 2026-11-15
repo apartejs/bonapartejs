@@ -114,9 +114,11 @@ function commandOf(input: unknown): CommandLine | undefined {
 
 function refusal(mode: PlayMode, effect: KnownEffect): string {
   if (mode === 'lecture' && effect === 'write') {
-    return 'Lecture mode: the agent reads and plans; it writes nothing. Present the change as a plan instead.';
+    return 'Lecture mode: the agent reads and plans; it writes nothing. Present the change as a plan with update_plan instead.';
   }
-  if (mode === 'lecture') return 'Lecture mode: the agent reads and plans; it runs nothing. Present what it would run as a plan instead.';
+  if (mode === 'lecture') {
+    return 'Lecture mode: the agent reads and plans; it runs nothing. Present what it would run as a plan with update_plan instead.';
+  }
   return 'This call is not allowed in this mode.';
 }
 

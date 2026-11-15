@@ -8,6 +8,8 @@
  * concatenation of its entries' `rendered`, from the last rebase.
  */
 
+import type { PlayMode } from '@aparte/bonaparte-shared';
+
 import type { ToolResult } from '../tools/types.js';
 
 export interface Attachment {
@@ -39,8 +41,10 @@ export type Outcome =
 
 /** What changed since the system prompt was frozen, appended instead of rewritten (task 3.2). */
 export interface Delta {
-  kind: 'inventory' | 'perimeter' | 'instructions' | 'reply-language';
+  kind: 'inventory' | 'perimeter' | 'instructions' | 'reply-language' | 'mode';
   text: string;
+  /** A note of the mode: the mode it told (the next turn compares with it). */
+  mode?: PlayMode;
 }
 
 interface Common {

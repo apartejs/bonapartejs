@@ -508,6 +508,8 @@ export function createCore(deps: CoreDeps): Core {
     store: conversationStore,
     kv,
     measures,
+    // The model is told the mode the calls are decided in: Impro not confirmed again runs, and is told, as Plume.
+    mode: async (meta) => (await modeOf(meta.id)).mode,
     engine: async (): Promise<EngineView | undefined> => {
       const engine = await currentEngine();
       if (!engine) return undefined;

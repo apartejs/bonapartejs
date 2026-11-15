@@ -84,5 +84,9 @@ describe('the matrix of the design document', () => {
     const refused = engine().evaluate({ tool: tool('edit_file', 'write'), input: input('edit_file'), mode: 'lecture' });
     expect(refused.verdict).toBe('deny');
     expect(refused.verdict === 'deny' ? refused.reason : '').toMatch(/Lecture mode/);
+    // A small model plans only when the tool is named (a lesson of v0).
+    expect(refused.verdict === 'deny' ? refused.reason : '').toContain('update_plan');
+    const run = engine().evaluate({ tool: tool('run_command', 'execute'), input: input('run_command'), mode: 'lecture' });
+    expect(run.verdict === 'deny' ? run.reason : '').toContain('update_plan');
   });
 });

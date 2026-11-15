@@ -7,6 +7,7 @@
  * shifts the context, and a failure keeps what was said.
  */
 
+import type { PlayMode } from '@aparte/bonaparte-shared';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,6 +40,7 @@ async function rig(
     dir?: string;
     budget?: () => number;
     instructions?: () => Promise<string | undefined>;
+    mode?: () => Promise<PlayMode>;
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
@@ -64,6 +66,7 @@ async function rig(
     kv,
     onSaveError: (error) => saveErrors.push(error),
     ...(options.instructions ? { instructions: options.instructions } : {}),
+    ...(options.mode ? { mode: options.mode } : {}),
     engine: async () => {
       engineCalls += 1;
       return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
@@ -552,5 +555,49 @@ describe('ConversationEngine — the project instructions', () => {
     await say(meta.id, 'Et puis ?');
     const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
     expect(notes).toHaveLength(1);
+  });
+});
+
+describe('ConversationEngine — the mode, as the model knows it', () => {
+  it('a conversation in Lecture tells the model at its first turn: plan with update_plan, change nothing', async () => {
+    const { store, prompts, say } = await rig();
+    const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
+    await say(meta.id, 'Bonjour');
+    const prompt = prompts.filter((one) => one.includes('Bonjour')).at(-1)!;
+    expect(prompt).toContain('[mode]');
+    expect(prompt).toContain('update_plan');
+    expect(prompt.indexOf('[mode]')).toBeLessThan(prompt.indexOf('Bonjour'));
+  });
+
+  it('Répétition, the default, needs no note: the first turn is as it always was', async () => {
+    const { store, conversation, say } = await rig();
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const kinds = (await openJournal(store.dir, meta.id)).entries().map((entry) => entry.kind);
+    expect(kinds).toEqual(['system', 'system', 'user', 'assistant']);
+  });
+
+  it('a change of mode between turns is a note at the start of the next one, once — the frozen text untouched', async () => {
+    const { store, prompts, conversation, say } = await rig();
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const first = prompts.at(-1)!;
+    await store.update(meta.id, { mode: 'plume' });
+    await say(meta.id, 'Vas-y');
+    const second = prompts.at(-1)!;
+    expect(second.startsWith(first.slice(0, first.indexOf('Bonjour')))).toBe(true);
+    expect(second).toContain('[mode] Plume');
+    await say(meta.id, 'Encore');
+    const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
+    expect(notes).toHaveLength(1);
+  });
+
+  it('the mode the core runs in is the one told: Impro not confirmed again after a restart is told as Plume', async () => {
+    const { store, prompts, say } = await rig({ mode: async () => 'plume' });
+    const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'impro' });
+    await say(meta.id, 'Bonjour');
+    const prompt = prompts.at(-1)!;
+    expect(prompt).toContain('[mode] Plume');
+    expect(prompt).not.toContain('[mode] Impro');
   });
 });

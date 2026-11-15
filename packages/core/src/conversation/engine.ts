@@ -28,10 +28,11 @@ import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
-import { renderInstructionsDelta } from '../prompt/deltas.js';
+import { renderInstructionsDelta, renderModeDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
+import type { PlayMode } from '@aparte/bonaparte-shared';
 
 /** A rough count, for the checks made before the server's: about three characters a token. */
 export function estimateTokens(text: string): number {
@@ -70,6 +71,8 @@ export interface ConversationEngineDeps {
   onSaveError?(error: unknown, conversationId: string): void;
   /** The project's instructions now (its `.bonaparte/instructions.md`, `AGENTS.md` or `CLAUDE.md`). */
   instructions?(meta: ConversationMeta): Promise<string | undefined>;
+  /** The mode the core decides the calls in (Impro not confirmed again after a restart runs as Plume); the card's by default. */
+  mode?(meta: ConversationMeta): Promise<PlayMode>;
 }
 
 export type TurnEvent =
@@ -355,6 +358,15 @@ export class ConversationEngine {
       if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       meta = await this.deps.store.update(id, { instructions });
     }
+    if (!input.resume) {
+      // The mode the calls are decided in, told when it is not the one the model last read (Répétition until told).
+      const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
+      const told = lastToldMode(journal.entries());
+      if (running !== told) {
+        const delta = renderModeDelta(running);
+        await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
+      }
+    }
     const entries = journal.entries();
     const stable = entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
     const frozen = frozenPrompt(entries);
@@ -585,3 +597,13 @@ export class ConversationEngine {
     });
   }
 }
+
+/** The mode the model last read in this branch: its last note of the mode, else Répétition (the frozen prompt names none). */
+function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
+  }
+  return 'repetition';
+}
+
