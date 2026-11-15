@@ -126,6 +126,9 @@ importers:
       '@aparte/engine':
         specifier: 1.9.0
         version: 1.9.0(@aparte/core@1.9.0)
+      '@aparte/plugin-diff':
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
       zod:
         specifier: 'catalog:'
         version: 4.6.7
@@ -185,6 +188,12 @@ packages:
 
   '@aparte/locales@1.9.0':
     resolution: {integrity: sha512-6X5AdKy2YTbSV8F/5Vp/r5MV6PCm8aXI3fSQkeKue+J3Ms4hQbz/aterQVB1SBLhEXLil4Q/6Z31d6D2ZjpbmA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@aparte/core': '>=1.9.0 <2.0.0'
+
+  '@aparte/plugin-diff@1.9.0':
+    resolution: {integrity: sha512-ivam3yhJoqlnbRdgBO4qvSoNP9CE+KimZkcVFM2bj0g0kvDfALb/uut7vncVY8lKf22X6mrYfIRAaJv/5KDX3w==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': '>=1.9.0 <2.0.0'
@@ -3362,6 +3371,10 @@ snapshots:
       '@aparte/core': 1.9.0
 
   '@aparte/locales@1.9.0(@aparte/core@1.9.0)':
+    dependencies:
+      '@aparte/core': 1.9.0
+
+  '@aparte/plugin-diff@1.9.0(@aparte/core@1.9.0)':
     dependencies:
       '@aparte/core': 1.9.0
 

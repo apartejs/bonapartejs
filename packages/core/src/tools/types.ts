@@ -28,3 +28,29 @@ export interface ToolResult {
   structuredContent?: unknown;
   failed?: boolean;
 }
+
+/** A call the model made: its id, the tool, what it gave. */
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+/** What a tool runs in: its conversation (whose writes pass one at a time), its folders, the context it is cut to. */
+export interface ToolContext {
+  conversationId: string;
+  /** The perimeter: the project's folders, or the home folder without a project. */
+  roots: readonly string[];
+  /** The engine's context: what the output is cut to. */
+  nCtx: number;
+  signal: AbortSignal;
+}
+
+/** What a tool gives back; the registry adds the call it answers. */
+export interface ToolOutput {
+  content: string;
+  structuredContent?: unknown;
+  failed?: boolean;
+}
+
+export type ToolHandler = (call: ToolCall, ctx: ToolContext) => Promise<ToolOutput>;
