@@ -111,6 +111,7 @@ export class EngineSupervisor {
   private readonly measures: MeasureStore;
   private readonly probe: ProcessProbe;
   private readonly listeners = new Set<(status: BackendStatus) => void>();
+  private readyCount = 0;
   private readonly log: (line: string) => void;
 
   constructor(private readonly options: EngineSupervisorOptions) {
@@ -139,6 +140,11 @@ export class EngineSupervisor {
   /** How long this model took to load on this machine, last time; undefined if never measured. */
   loadSeconds(modelPath: string): number | undefined {
     return this.measures.get(modelPath)?.loadSeconds;
+  }
+
+  /** How many servers became ready: a relaunched one — after a crash, a stop, another model — has empty slots. */
+  get generation(): number {
+    return this.readyCount;
   }
 
   status(): BackendStatus {
@@ -325,6 +331,7 @@ export class EngineSupervisor {
   }
 
   private emit(status: BackendStatus): void {
+    if (status === 'ready') this.readyCount += 1;
     for (const listener of this.listeners) listener(status);
   }
 

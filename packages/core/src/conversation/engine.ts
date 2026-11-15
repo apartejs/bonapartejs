@@ -50,6 +50,8 @@ export interface EngineView {
   modelPath: string;
   /** What a saved state will weigh, a token. */
   kvBytesPerToken: number | null;
+  /** Which server: a relaunched one (after a crash, another model) is a new one, its slots empty. */
+  generation: number;
 }
 
 export interface ConversationEngineDeps {
@@ -136,6 +138,8 @@ export class ConversationEngine {
   private readonly turning = new Map<string, Turning>();
   /** What each conversation last ran on, and how big it was: what the save hook needs. */
   private readonly lastRun = new Map<string, { engine: EngineView; tokens: number }>();
+  /** The server the slots' residents sit in. */
+  private generation: number | undefined;
 
   constructor(private readonly deps: ConversationEngineDeps) {
     this.scheduler = createSlotScheduler({
@@ -150,6 +154,7 @@ export class ConversationEngine {
     const meta = await this.deps.store.get(id);
     if (!meta) return null;
     const engine = await this.deps.engine();
+    if (engine) this.follow(engine);
     if (!engine?.live) return null;
     const owner = this.ownerOf(meta);
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
@@ -178,8 +183,23 @@ export class ConversationEngine {
   }
 
   /** Saves the conversations whose state changed (the app closes). */
-  flush(): Promise<void> {
+  async flush(): Promise<void> {
+    const engine = await this.deps.engine();
+    if (engine) this.follow(engine);
     return this.scheduler.flush();
+  }
+
+  /**
+   * A server relaunched — by itself after a crash, or for another model —
+   * holds nothing: its slots' residents are forgotten, none saved over the
+   * memory on disk, and the next turn restores what it needs.
+   */
+  private follow(engine: EngineView): void {
+    if (this.generation !== undefined && engine.generation !== this.generation) {
+      this.scheduler.reset();
+      this.lastRun.clear();
+    }
+    this.generation = engine.generation;
   }
 
   /**
@@ -224,6 +244,7 @@ export class ConversationEngine {
     if (!meta) throw new Error(`There is no conversation ${id}.`);
     const engine = await this.deps.engine();
     if (!engine) throw new NoEngineError();
+    this.follow(engine);
     const { family, client } = engine;
     let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
     if (input.forkAfter) ({ meta, journal } = await this.fork(meta, journal, input.forkAfter));
@@ -404,6 +425,8 @@ export class ConversationEngine {
     const last = this.lastRun.get(ownerKey(owner));
     const live = last?.engine.live;
     if (!last || !live) return;
+    // The slot of a server that went away holds nothing of this conversation.
+    if ((await this.deps.engine())?.generation !== last.engine.generation) return;
     await this.deps.kv.saveState(last.engine.client, slotId, ownerKey(owner), live, {
       expectedBytes: last.tokens * (last.engine.kvBytesPerToken ?? 0),
       keep: incoming?.kind === 'conversation' ? [ownerKey(incoming)] : [],

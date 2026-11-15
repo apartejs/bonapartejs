@@ -294,6 +294,22 @@ describe('EngineSupervisor — the server an earlier session left behind', () =>
     return { processProbe, killed };
   };
 
+  it('counts each server that became ready: a relaunch after a crash is a new one, its slots empty', async () => {
+    const { supervisor, modelA, modelB } = await setup();
+    await supervisor.configure(MANAGED);
+    expect(supervisor.generation).toBe(0);
+    await supervisor.ensureLoaded(modelA);
+    const first = supervisor.generation;
+    expect(first).toBeGreaterThan(0);
+    // The server goes away between two turns: the supervisor relaunches it by itself.
+    const pid = supervisor.serverPid!;
+    process.kill(pid);
+    await waitFor(() => supervisor.status() === 'ready' && supervisor.serverPid !== pid);
+    expect(supervisor.generation).toBe(first + 1);
+    await supervisor.ensureLoaded(modelB);
+    expect(supervisor.generation).toBe(first + 2);
+  });
+
   it('writes down the pid of each launch, and forgets it on a clean stop', async () => {
     const { supervisor, dir, modelA } = await setup();
     await supervisor.configure(MANAGED);

@@ -442,6 +442,7 @@ export function createCore(deps: CoreDeps): Core {
         live,
         modelPath: supervisor.loaded?.modelPath ?? '',
         kvBytesPerToken: loaded && live ? kvBytesPerToken(loaded.info, live.cacheTypeK) : null,
+        generation: supervisor.generation,
       };
     },
     prompt: (meta) => ({ kind: meta.kind, tools: [], perimeter: [], replyLanguage: deps.replyLanguage?.() ?? 'English' }),

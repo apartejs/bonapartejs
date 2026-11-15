@@ -49,10 +49,11 @@ async function rig(
   const store = new ConversationStore(join(dir, 'conversations'));
   const kv = new KvStore(kvDir, options.budget ? { budgetBytes: options.budget } : {});
   const live = options.live === undefined ? LIVE : options.live;
+  let generation = 1;
   const engine = new ConversationEngine({
     store,
     kv,
-    engine: async () => ({ client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100 }),
+    engine: async () => ({ client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation }),
     prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: 'French' }),
   });
   const conversation = () => store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
@@ -61,7 +62,12 @@ async function rig(
     const result = await engine.turn(id, { text }, (event) => events.push(event), signal);
     return { result, events };
   };
-  return { dir, server, client, store, kv, engine, prompts, conversation, say };
+  /** The engine goes away and comes back, as the supervisor relaunches it: its slot is empty. */
+  const relaunch = async () => {
+    generation += 1;
+    await client.eraseSlot(0);
+  };
+  return { dir, server, client, store, kv, engine, prompts, conversation, say, relaunch };
 }
 
 describe('ConversationEngine — a turn', () => {
@@ -102,6 +108,31 @@ describe('ConversationEngine — the memory', () => {
     expect(result.usage.cacheReadTokens).toBeGreaterThan(20);
     const seeds = await kv.usage();
     expect(seeds.entries.some((entry) => entry.kind === 'seed')).toBe(true);
+  });
+
+  it('a relaunched engine holds nothing: the next turn restores the conversation, and its opening says so', async () => {
+    const { engine, conversation, say, relaunch } = await rig();
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    await say(b.id, 'Salut');
+    await say(a.id, 'Encore');
+    await relaunch();
+    expect(await engine.open(a.id)).not.toBeNull();
+    const { events } = await say(a.id, 'Et alors ?');
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'start' });
+  });
+
+  it('nothing is saved from a relaunched engine over the memory on disk', async () => {
+    const { kv, conversation, say, relaunch } = await rig();
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    await say(b.id, 'Salut');
+    await relaunch();
+    // B sat in the slot of the server that went away: what the new one holds is not B.
+    await say(a.id, 'Encore');
+    expect(await kv.manifest(`${b.id}_main`)).toBeNull();
   });
 
   it('saving the conversation that leaves never evicts the state of the one arriving', async () => {
