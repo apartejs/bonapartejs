@@ -58,6 +58,15 @@ describe('compareWithJournal', () => {
     expect(compareWithJournal(messages, JOURNAL)).toEqual({ kind: 'append', text: 'Merci' });
   });
 
+  it('a paragraph added in front of the last message is an edit of it, not the same message', () => {
+    const messages = [user('Bonjour'), assistant('Bonjour Paul.'), user('Un mot de contexte.\n\nEt ensuite ?')];
+    expect(compareWithJournal(messages, JOURNAL)).toEqual({
+      kind: 'edit',
+      afterEntryId: JOURNAL[3]!.id,
+      text: 'Un mot de contexte.\n\nEt ensuite ?',
+    });
+  });
+
   it('a history that is not this conversation is a mismatch', () => {
     expect(compareWithJournal([user('Autre'), assistant('x'), user('y')], JOURNAL)).toEqual({ kind: 'mismatch' });
     expect(compareWithJournal([user('a'), assistant('b'), user('c')], JOURNAL.slice(0, 2))).toEqual({ kind: 'mismatch' });

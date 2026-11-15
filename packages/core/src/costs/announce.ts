@@ -162,6 +162,8 @@ export interface OpenFacts {
   refusal: 'missing' | 'refused' | 'other-model' | 'cache-types' | 'context-too-small' | null;
   /** The saved state is older than the conversation's last entries: what came after must be read. */
   behind?: boolean;
+  /** What came after it, estimated like the rest: what a restore leaves to read. */
+  behindTokens?: number;
   /** The engine died in the middle of the last answer, after the state was saved. */
   diedMidAnswer?: boolean;
   /** A missing state that the budget let go: when, and under which budget. */
@@ -187,7 +189,10 @@ export function announceOpen(facts: OpenFacts): RestoreAnnouncement | RereadAnno
     };
   }
   // A state that serves, but older than the conversation: it is restored, and what came after is read.
-  const tokens = facts.saved && restorable ? Math.max(0, facts.promptTokens - facts.saved.promptTokenCount) : facts.promptTokens;
+  const tokens =
+    facts.saved && restorable
+      ? (facts.behindTokens ?? Math.max(0, facts.promptTokens - facts.saved.promptTokenCount))
+      : facts.promptTokens;
   const reason: RereadReason = facts.diedMidAnswer
     ? 'engine-died'
     : restorable

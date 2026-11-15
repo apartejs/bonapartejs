@@ -26,8 +26,8 @@ export interface SlotScheduler {
   readonly busy: readonly SlotOwner[];
   /** The owners waiting for a slot, in order. */
   readonly waiting: readonly SlotOwner[];
-  /** Saves every owner whose state changed (the app closes). */
-  flush(): Promise<void>;
+  /** Saves every owner whose state changed (the app closes); `keepFor`: an owner whose saved state must survive the room made. */
+  flush(keepFor?: SlotOwner): Promise<void>;
   /** Does this owner sit in a slot — would its next turn find its state there? */
   isResident(owner: SlotOwner): boolean;
   /** Forgets what a slot holds for this owner, without saving it: the engine died, or the conversation was deleted. */
@@ -185,9 +185,9 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
       return queue.map((waiter) => waiter.owner);
     },
 
-    async flush() {
+    async flush(keepFor) {
       for (const slot of slots) {
-        if (slot.running === null) await save(slot);
+        if (slot.running === null) await save(slot, keepFor);
       }
     },
 

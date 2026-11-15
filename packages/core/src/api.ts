@@ -153,6 +153,8 @@ export function createCore(deps: CoreDeps): Core {
   // The KV states live where the managed server saves its slots.
   const kvDir = join(deps.dataDir, 'kv-slots');
   const measures = new MeasureStore(join(engineDir, 'measures.json'));
+  // Where the core says what went wrong without failing: the supervisor's own default.
+  const log = deps.logger ?? ((line: string) => console.log(line));
   const supervisor = new EngineSupervisor({
     slotsDir: kvDir,
     pidFile: join(engineDir, 'managed-server.pid'),
@@ -165,6 +167,8 @@ export function createCore(deps: CoreDeps): Core {
     ...(deps.llamaCommand ? { llamaCommand: deps.llamaCommand } : {}),
     ...(deps.spawn ? { spawn: deps.spawn } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
+    // Another model replaces this one: the memory the engine holds is saved first, while it still serves.
+    beforeUnload: () => conversations.flush(),
   });
 
   let config: GlobalConfig | undefined;
@@ -448,7 +452,7 @@ export function createCore(deps: CoreDeps): Core {
     prompt: (meta) => ({ kind: meta.kind, tools: [], perimeter: [], replyLanguage: deps.replyLanguage?.() ?? 'English' }),
     // The person learns it when the conversation opens again (« not saved »); the log keeps why.
     onSaveError: (error, conversationId) =>
-      deps.logger?.(`[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`),
+      log(`[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`),
   });
 
   async function currentEngine(): Promise<Engine | undefined> {
@@ -493,7 +497,7 @@ export function createCore(deps: CoreDeps): Core {
     hold: () => supervisor.hold(),
     // The conversation in the slot is saved before the engine stops: its memory survives the restart.
     async stop() {
-      await conversations.flush().catch((error: unknown) => deps.logger?.(`[bonaparte] a memory was not saved: ${String(error)}`));
+      await conversations.flush().catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
       await supervisor.stop();
     },
     conversations,

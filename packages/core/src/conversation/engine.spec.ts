@@ -50,12 +50,16 @@ async function rig(
   const kv = new KvStore(kvDir, options.budget ? { budgetBytes: options.budget } : {});
   const live = options.live === undefined ? LIVE : options.live;
   let generation = 1;
+  let engineCalls = 0;
   const saveErrors: unknown[] = [];
   const engine = new ConversationEngine({
     store,
     kv,
     onSaveError: (error) => saveErrors.push(error),
-    engine: async () => ({ client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation }),
+    engine: async () => {
+      engineCalls += 1;
+      return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
+    },
     prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: 'French' }),
   });
   const conversation = () => store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
@@ -69,7 +73,7 @@ async function rig(
     generation += 1;
     await client.eraseSlot(0);
   };
-  return { dir, server, client, store, kv, engine, prompts, conversation, say, relaunch, saveErrors };
+  return { dir, server, client, store, kv, engine, prompts, conversation, say, relaunch, saveErrors, engineCalls: () => engineCalls };
 }
 
 describe('ConversationEngine — a turn', () => {
@@ -132,6 +136,46 @@ describe('ConversationEngine — the memory', () => {
     expect(await engine.open(a.id)).not.toBeNull();
     const { events } = await say(a.id, 'Et alors ?');
     expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'start' });
+  });
+
+  it('after a relaunch, the next turn restores the conversation even when nobody opened it again', async () => {
+    const { conversation, say, relaunch } = await rig();
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    await say(b.id, 'Salut');
+    await say(a.id, 'Encore');
+    await relaunch();
+    const { events } = await say(a.id, 'Et alors ?');
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'start' });
+  });
+
+  it('closing asks nothing of a server that keeps no memory', async () => {
+    const { engine, conversation, say, engineCalls } = await rig({ live: null });
+    const a = await conversation();
+    await say(a.id, 'Bonjour');
+    const before = engineCalls();
+    await engine.flush();
+    expect(engineCalls()).toBe(before);
+  });
+
+  it('a branch keeps the state it starts from: the save the fork makes first never evicts it', async () => {
+    let budget = Number.POSITIVE_INFINITY;
+    const { store, kv, server, engine, conversation, say } = await rig({ budget: () => budget });
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    await say(b.id, `Salut ${'encore un mot '.repeat(30)}`);
+    // B sits in the slot, unsaved; the room for it costs A's state unless A is kept.
+    const bBytes = server.getSlotTokens(0).length * 100;
+    const aBytes = (await kv.usage()).entries.find((entry) => entry.id === `${a.id}_main`)!.bytes;
+    budget = aBytes + bBytes - 1;
+    // A's last answer asked again: a branch after its message, from A's state.
+    const lastUser = (await openJournal(store.dir, a.id)).entries().findLast((entry) => entry.kind === 'user')!;
+    const events: TurnEvent[] = [];
+    await engine.turn(a.id, { forkAfter: lastUser.id }, (event) => events.push(event));
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'end' });
+    expect(events.filter((event) => event.type === 'step' && event.name === 'reread')).toEqual([]);
   });
 
   it('nothing is saved from a relaunched engine over the memory on disk', async () => {

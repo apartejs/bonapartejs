@@ -139,6 +139,14 @@ function savedBefore(entries: readonly JournalEntry[], savedAt: string): boolean
   return entries.some((entry) => entry.kind !== 'system' && entry.at > savedAt);
 }
 
+/** The text a state saved at `savedAt` leaves to read: what the entries after it froze into the prompt. */
+function renderedAfter(entries: readonly JournalEntry[], savedAt: string): string {
+  return entries
+    .filter((entry) => entry.kind !== 'system' && entry.at > savedAt)
+    .map((entry) => entry.rendered ?? '')
+    .join('');
+}
+
 const ownerKey = (owner: SlotOwner): string =>
   owner.kind === 'conversation' ? `${owner.conversationId}_${owner.branchId}` : '';
 
@@ -189,6 +197,7 @@ export class ConversationEngine {
       saved: refusal === null ? manifest : null,
       refusal,
       behind: manifest !== null && savedBefore(entries, manifest.savedAt),
+      ...(manifest ? { behindTokens: estimateTokens(renderedAfter(entries, manifest.savedAt)) } : {}),
       diedMidAnswer: last?.stopped === 'engine' && (!manifest || manifest.savedAt < last.at),
       evicted: manifest ? null : await this.deps.kv.evicted(key),
       measures: prefill === undefined ? {} : { prefillTokensPerSecond: prefill },
@@ -201,8 +210,11 @@ export class ConversationEngine {
 
   /** Saves the conversations whose state changed (the app closes). */
   async flush(): Promise<void> {
-    const engine = await this.deps.engine();
-    if (engine) this.follow(engine);
+    // Only an engine that keeps a memory is asked which server it is: a remote one is never joined to close.
+    if ([...this.lastRun.values()].some((run) => run.engine.live)) {
+      const engine = await this.deps.engine();
+      if (engine) this.follow(engine);
+    }
     return this.scheduler.flush();
   }
 
@@ -249,7 +261,8 @@ export class ConversationEngine {
    */
   private async fork(meta: ConversationMeta, journal: Journal, afterEntryId: string): Promise<{ meta: ConversationMeta; journal: Journal }> {
     const parent = this.ownerOf(meta);
-    await this.scheduler.flush();
+    // What sits in the slot is saved first — never at the cost of the state the branch starts from.
+    await this.scheduler.flush(parent);
     const branch = await journal.fork(afterEntryId);
     const child: SlotOwner = { kind: 'conversation', conversationId: meta.id, branchId: branch.branchId };
     await this.deps.kv.copyState(ownerKey(parent), ownerKey(child));

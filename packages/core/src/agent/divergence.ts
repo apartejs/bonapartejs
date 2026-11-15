@@ -25,10 +25,12 @@ export type Divergence =
  * one before it: aparté 1.9 drops a message whose answer failed from the next
  * request, then joins it to the following one with a blank line
  * (apartejs/aparte#213). The journal never kept it — refused before anything
- * ran — or kept it on the branch an edit left behind.
+ * ran — or kept it on the branch an edit left behind. Never the last message
+ * sent: that one is the person's own, as written (a paragraph added in front
+ * of it is an edit).
  */
-function sameMessage(sent: string, said: string): boolean {
-  return sent === said || sent.endsWith(`\n\n${said}`);
+function sameMessage(sent: string, said: string, last: boolean): boolean {
+  return sent === said || (!last && sent.endsWith(`\n\n${said}`));
 }
 
 export function compareWithJournal(messages: readonly AgentMessage[], entries: readonly JournalEntry[]): Divergence {
@@ -36,7 +38,9 @@ export function compareWithJournal(messages: readonly AgentMessage[], entries: r
   const said = entries.flatMap((entry, index) => (entry.kind === 'user' ? [{ text: entry.text, index }] : []));
   if (sent.length === 0) return { kind: 'mismatch' };
 
-  const differs = sent.findIndex((text, index) => index < said.length && !sameMessage(text, said[index]!.text));
+  const differs = sent.findIndex(
+    (text, index) => index < said.length && !sameMessage(text, said[index]!.text, index === sent.length - 1),
+  );
   if (differs < 0) {
     if (sent.length === said.length + 1) return { kind: 'append', text: sent.at(-1)! };
     if (sent.length === said.length && messages.at(-1)?.role === 'user') {

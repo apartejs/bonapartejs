@@ -125,6 +125,15 @@ describe('KvStore', () => {
 });
 
 describe('KvStore — seeds', () => {
+  it("a branch's copy keeps the age of what it holds: a copy of an old state is still an old state", async () => {
+    const { client, store, prefill } = await rig();
+    await prefill(PROMPT);
+    const saved = await store.saveState(client, 0, 'c1_main', LIVE);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await store.copyState('c1_main', 'c1_b-1')).toBe(true);
+    expect((await store.manifest('c1_b-1'))?.savedAt).toBe(saved.savedAt);
+  });
+
   it('keys a seed by the model, the K/V types and the text of the prefix — not by the context', () => {
     const store = new KvStore(join(tmpdir(), 'bp-kv-keys'));
     const key = store.seedKey('<|turn>system\nYou are bonaparte.<turn|>\n', LIVE);

@@ -4,7 +4,7 @@
  * asked, and a turn then runs on that engine, in the model's family.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -125,6 +125,15 @@ describe('createCore — the managed engine', () => {
     const engine = await core.engine();
     expect(engine?.family.id).toBe('gemma');
     expect((await engine!.client.props()).modelPath).toBe(gemma);
+  });
+
+  it('switching models saves first the memory of the conversation the engine holds', async () => {
+    const { core, dir, gemma, qwen } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    await core.loadModel(qwen);
+    await expect(readFile(join(dir, 'data', 'kv-slots', 'c1_main.manifest.json'), 'utf8')).resolves.toContain('c1_main');
   });
 
   it('refuses to load a file that is not among the models it found', async () => {

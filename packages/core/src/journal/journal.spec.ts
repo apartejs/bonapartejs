@@ -150,11 +150,13 @@ describe('openJournal', () => {
   it('a write that fails half-way is taken back whole: the journal stays readable, the next entry whole', async () => {
     const dir = await folder();
     const journal = await openJournal(dir, 'c1');
+    await journal.append({ kind: 'user', text: 'Avant', rendered: USER });
     await halfWrite(dir, 'throws');
     await expect(journal.append({ kind: 'user', text: 'Bonjour', rendered: USER })).rejects.toThrow(/no space/);
     await journal.append({ kind: 'user', text: 'Salut', rendered: USER });
     const reopened = await openJournal(dir, 'c1');
-    expect(reopened.entries().map((entry) => (entry.kind === 'user' ? entry.text : entry.kind))).toEqual(['Salut']);
+    // What was there before stays whole: only the half line is taken back.
+    expect(reopened.entries().map((entry) => (entry.kind === 'user' ? entry.text : entry.kind))).toEqual(['Avant', 'Salut']);
   });
 
   it('two writes at the same time are two whole lines, in the order they were asked', async () => {

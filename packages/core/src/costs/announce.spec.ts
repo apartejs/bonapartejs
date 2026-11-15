@@ -143,6 +143,20 @@ describe('announceOpen', () => {
     ).toEqual({ kind: 'reread', tokens: 23_000, seconds: 115, reason: 'behind', estimated: false });
   });
 
+  it('what remains to read is counted on what came after the state, in one unit — not a measure taken from an estimate', () => {
+    expect(
+      announceOpen({
+        resident: false,
+        promptTokens: 25_000,
+        saved: { ...saved, promptTokenCount: 2_000 },
+        refusal: null,
+        behind: true,
+        behindTokens: 1_500,
+        measures: { prefillTokensPerSecond: 150 },
+      }),
+    ).toMatchObject({ kind: 'reread', tokens: 1_500, seconds: 10, reason: 'behind' });
+  });
+
   it('the engine died in the middle of the last answer: said so, with what remains to read', () => {
     expect(
       announceOpen({

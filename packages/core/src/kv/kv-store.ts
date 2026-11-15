@@ -213,7 +213,8 @@ export class KvStore {
     } catch {
       return false;
     }
-    await writeJsonFile(this.manifestPath(toId), { ...manifest, stateId: toId, savedAt: new Date().toISOString() });
+    // The copy holds what the original held, from when it was saved: its age goes with it.
+    await writeJsonFile(this.manifestPath(toId), { ...manifest, stateId: toId });
     await this.touch(this.slotFilename(toId));
     return true;
   }
