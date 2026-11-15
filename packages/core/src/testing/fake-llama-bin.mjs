@@ -9,7 +9,8 @@
  * Node 24 runs the TypeScript of the fake server directly.
  */
 
-import { startFakeLlamaServer } from './fake-llama-server.ts';
+import { appendFileSync } from 'node:fs';
+import { fakeTokenize, startFakeLlamaServer } from './fake-llama-server.ts';
 
 const args = process.argv.slice(2);
 if (args[0] === 'serve') args.shift();
@@ -55,6 +56,21 @@ if (port === undefined) {
   process.exit(2);
 }
 
+/** A whole number from the environment, or undefined. */
+function fromEnv(name) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return undefined;
+  const number = Number.parseInt(raw, 10);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+// What an end-to-end test cannot set otherwise, the engine being another process:
+// how fast it reads and writes, and a record of what it was asked.
+const prefillBatch = fromEnv('FAKE_LLAMA_PREFILL_BATCH');
+const prefillPaceMs = fromEnv('FAKE_LLAMA_PREFILL_PACE_MS');
+const paceMs = fromEnv('FAKE_LLAMA_PACE_MS');
+const requests = process.env['FAKE_LLAMA_REQUESTS'];
+
 const nCtx = integer('-c', '--ctx-size');
 const slots = integer('-np', '--parallel');
 const slotDir = value('--slot-save-path');
@@ -71,6 +87,21 @@ try {
       : {}),
     ...(slots !== undefined && slots > 0 ? { totalSlots: slots } : {}),
     ...(slotDir !== undefined ? { slotDir } : {}),
+    ...(prefillBatch !== undefined ? { prefillBatch } : {}),
+    ...(prefillPaceMs !== undefined ? { prefillPaceMs } : {}),
+    ...(paceMs !== undefined ? { paceMs } : {}),
+    // FAKE_LLAMA_REQUESTS: one line per completion asked, in that file — its prompt's length,
+    // the tokens the server counts in it, and n_predict.
+    ...(requests
+      ? {
+          onCompletion: (body) => {
+            const prompt = typeof body['prompt'] === 'string' ? body['prompt'] : '';
+            const nPredict = typeof body['n_predict'] === 'number' ? body['n_predict'] : null;
+            const line = { promptChars: prompt.length, promptTokens: fakeTokenize(prompt).length, nPredict };
+            appendFileSync(requests, `${JSON.stringify(line)}\n`);
+          },
+        }
+      : {}),
   });
   // What the real server says once it is ready (and never the key).
   process.stderr.write(`main: server is listening on http://127.0.0.1:${server.port}\n`);

@@ -20,7 +20,7 @@ import {
 } from '@aparte/bonaparte-core/testing';
 import { createServer } from 'node:net';
 import { _electron as electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -63,6 +63,23 @@ export interface LaunchOptions {
     releases?: boolean;
     llama?: 'found' | 'missing';
   };
+  /**
+   * The data folder of an earlier launch: the app starts again on what it
+   * kept — its conversations, its memory. A model already there is not
+   * written again: its fingerprint (its date) still matches its saved states.
+   */
+  dataDir?: string;
+  /** Keep the data folder when this launch closes, for a later one (the fixture removes it at the end of the test). */
+  keepData?: boolean;
+}
+
+/** One completion the managed engine was asked for. */
+export interface EngineRequest {
+  promptChars: number;
+  /** The tokens the engine counts in the prompt. */
+  promptTokens: number;
+  /** 0 is a reading without writing: a seed being prepared, a prefill. */
+  nPredict: number | null;
 }
 
 export interface LaunchedApp {
@@ -74,6 +91,8 @@ export interface LaunchedApp {
   enginePort?: number;
   /** llama.cpp's releases, when the test asked for them. */
   releases?: FakeLlamaReleases;
+  /** What the managed engine was asked, in order: every completion it received. */
+  engineRequests(): Promise<EngineRequest[]>;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
   navigations(): Promise<string[]>;
   /** What the app wrote to its console, main process and window. */
@@ -99,7 +118,8 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   // Before anything is started: no build, no Electron.
   const entry = builtAppEntry(appRoot);
   const server = await startFakeLlamaServer(options.engine);
-  const dataDir = await mkdtemp(join(tmpdir(), 'bonaparte-e2e-'));
+  const dataDir = options.dataDir ?? (await mkdtemp(join(tmpdir(), 'bonaparte-e2e-')));
+  const requestsFile = join(dataDir, 'engine-requests.jsonl');
   const lines: string[] = [];
   const output = (): string => lines.join('');
   let app: ElectronApplication | undefined;
@@ -112,8 +132,15 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       if (app) await closeApp(app);
       await server.close();
       await releases?.close();
-      await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
+      if (!options.keepData && !options.dataDir) await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
     })());
+  const engineRequests = async (): Promise<EngineRequest[]> => {
+    const text = await readFile(requestsFile, 'utf8').catch(() => '');
+    return text
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as EngineRequest);
+  };
 
   try {
     await mkdir(join(dataDir, 'config'), { recursive: true });
@@ -123,7 +150,12 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       const models = join(dataDir, 'models');
       await mkdir(models, { recursive: true });
       for (const [name, model] of Object.entries(options.managed.models)) {
-        await writeFakeGguf(join(models, `${name}.gguf`), model);
+        const file = join(models, `${name}.gguf`);
+        const there = await access(file).then(
+          () => true,
+          () => false,
+        );
+        if (!there) await writeFakeGguf(file, model);
       }
       enginePort = await freePort();
       if (options.managed.releases) releases = await startFakeLlamaReleases();
@@ -136,6 +168,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
         BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify(llama),
         BONAPARTE_E2E_GPU_BYTES: String(options.managed.gpuBytes ?? 24 * GiB),
         BONAPARTE_E2E_ENGINE_PORT: String(enginePort),
+        FAKE_LLAMA_REQUESTS: requestsFile,
       });
     } else {
       await writeFile(
@@ -198,6 +231,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       ...(enginePort !== undefined ? { enginePort } : {}),
       ...(releases ? { releases } : {}),
       navigations,
+      engineRequests,
       output,
       close,
     };
@@ -229,6 +263,10 @@ export const test = base.extend<{ launch: (options?: LaunchOptions) => Promise<L
         if (taken) await testInfo.attach('window.png', { path: picture, contentType: 'image/png' });
       }
       await one.close();
+    }
+    // A data folder kept for a later launch goes at the end of the test.
+    for (const dir of new Set(launched.map((one) => one.dataDir))) {
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     }
   },
 });

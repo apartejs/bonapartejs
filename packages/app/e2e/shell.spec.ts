@@ -74,3 +74,23 @@ test('a test run keeps its window off the screen, and off the graphics card', as
     )
     .toEqual({ windows: 1, focused: false, hardwareAcceleration: false, hidden: true });
 });
+
+test('a conversation with a long title keeps the sidebar to its width, and the window to the screen', async ({ launch }) => {
+  const { page } = await launch();
+  const ui = chat(page);
+  await expect(ui.editor).toBeVisible();
+  const before = (await page.locator('.bonaparte-sidebar').boundingBox())?.width;
+  const long = `Une très longue première question : ${'encore un mot '.repeat(120)}`.trim();
+  await ui.send(long);
+  await expect(ui.replyText).toHaveText('ok');
+
+  // The title is cut in its row, not the row stretched to the title.
+  await expect(page.locator('aparte-conversation-list').getByRole('button', { name: /^Une très longue/ })).toBeVisible();
+  const after = (await page.locator('.bonaparte-sidebar').boundingBox())?.width;
+  expect(after).toBe(before);
+  const width = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(width.scroll).toBe(width.client);
+  // And the sidebar covers nothing: the chat still takes a click.
+  await ui.send('Encore une');
+  await expect(ui.userMessages).toHaveCount(2);
+});

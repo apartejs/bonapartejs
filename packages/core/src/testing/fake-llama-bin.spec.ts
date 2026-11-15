@@ -5,7 +5,10 @@
  * through `spawnHidden`, as the supervisor will.
  */
 
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseLlamaBuildNumber } from '../backend/llamacpp/version.js';
@@ -112,5 +115,32 @@ describe('fake-llama-bin', () => {
       () => false,
     );
     expect(answered).toBe(false);
+  });
+
+  it('records each completion it is asked, and reads in the batches it was given', async () => {
+    const port = await freePort();
+    const dir = await mkdtemp(join(tmpdir(), 'fake-llama-bin-'));
+    try {
+      const requests = join(dir, 'requests.jsonl');
+      launch(['-m', 'm.gguf', '--port', String(port)], {
+        LLAMA_API_KEY: KEY,
+        FAKE_LLAMA_REQUESTS: requests,
+        FAKE_LLAMA_PREFILL_BATCH: '2',
+      });
+      await healthy(port);
+      const prompt = 'abcdefghijklmnopqrstuvwxyz012345'; // 32 characters: 8 tokens, 4 batches of 2
+      const body = await fetch(`http://127.0.0.1:${port}/completion`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt, n_predict: 3, stream: true, return_progress: true }),
+      }).then((response) => response.text());
+      const steps = body.split('\n').filter((line) => line.includes('"prompt_progress"'));
+      expect(steps.length).toBeGreaterThanOrEqual(4);
+
+      const lines = (await readFile(requests, 'utf8')).trim().split('\n');
+      expect(lines.map((line) => JSON.parse(line))).toEqual([{ promptChars: 32, promptTokens: 8, nPredict: 3 }]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

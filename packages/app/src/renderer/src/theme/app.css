@@ -205,6 +205,8 @@ body {
   flex-direction: column;
   gap: var(--aparte-space-4);
   min-height: 0;
+  /* Its width is its own: a long title is cut in its row, never stretches the column. */
+  min-width: 0;
   padding: var(--aparte-space-5) var(--aparte-space-4);
   background: var(--aparte-surface-1);
   border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
