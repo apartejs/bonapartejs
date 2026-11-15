@@ -1,4 +1,4 @@
-import { AparteChat, AparteConversationList, useAparteClient, useConversationManager } from '@aparte/react';
+import { AparteChat, AparteContext, AparteConversationList, useAparteClient, useConversationManager } from '@aparte/react';
 import {
   conversationsMemory,
   engineState,
@@ -92,7 +92,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         aboveComposer={
           memory ? <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} /> : undefined
         }
-        toolbar={engine.model ? <aparte-context window={String(engine.model.nCtx)} variant="ring" /> : undefined}
+        toolbar={engine.model ? <AparteContext window={String(engine.model.nCtx)} variant="ring" /> : undefined}
       />
     </div>
   );

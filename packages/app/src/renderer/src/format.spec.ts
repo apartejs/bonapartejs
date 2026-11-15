@@ -48,6 +48,12 @@ describe('formatDuration', () => {
     expect(formatDuration(240, 'en')).toBe('4 min');
     expect(formatDuration(0.04, 'en')).toBe('0.1 s');
   });
+
+  it('rounds before it splits: never « 1 min 60 », never « 60 s »', () => {
+    expect(formatDuration(119.7, 'fr')).toBe('2 min');
+    expect(formatDuration(59.6, 'fr')).toBe('1 min');
+    expect(formatDuration(9.97, 'fr')).toBe('10 s');
+  });
 });
 
 describe('formatTokens', () => {

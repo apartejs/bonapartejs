@@ -47,9 +47,11 @@ export function formatDuration(seconds: number, locale: string): string {
     const tenth = Math.max(0.1, Math.round(seconds * 10) / 10);
     return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(tenth)} s`;
   }
-  if (seconds < 60) return `${Math.round(seconds)} s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds - minutes * 60);
+  // Rounded first, then split: 119.7 s is « 2 min », never « 1 min 60 ».
+  const whole = Math.round(seconds);
+  if (whole < 60) return `${whole} s`;
+  const minutes = Math.floor(whole / 60);
+  const rest = whole - minutes * 60;
   return rest === 0 ? `${minutes} min` : `${minutes} min ${String(rest).padStart(2, '0')}`;
 }
 
