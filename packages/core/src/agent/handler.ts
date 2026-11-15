@@ -40,6 +40,11 @@ function hasImage(body: AgentBody): boolean {
   return body.request.messages.some((message) => Array.isArray(message.content) && message.content.some((part) => part.type === 'image'));
 }
 
+/** A branch's name as git takes it from the window: no option, no `..`, no space — else none. */
+function refName(value: string | null): string | null {
+  return value && /^[\w][\w./-]{0,99}$/.test(value) && !value.includes('..') && !value.endsWith('/') && !value.endsWith('.lock') ? value : null;
+}
+
 export function createAgentHandler(core: Core): (request: Request) => Promise<Response> {
   return async (request) => {
     const url = new URL(request.url);
@@ -116,6 +121,12 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       // (security rule 9) — the window says `picked=1` when the person chose it in the switch.
       const picked = chosen.success && url.searchParams.get('picked') === '1';
       if (mode) await core.setMode(conversationId, mode, { confirmed: picked });
+      // On its own branch (task 6.7): chosen before its first message, made at its first write.
+      if (project && url.searchParams.get('worksIn') === 'branch') {
+        const branch = refName(url.searchParams.get('branch'));
+        const base = refName(url.searchParams.get('base'));
+        await core.conversationStore.update(conversationId, { worksIn: 'branch', ...(branch ? { branch } : {}), ...(base ? { base } : {}) });
+      }
     }
     const divergence = compareWithJournal(body.data.request.messages, entries);
     if (divergence.kind === 'mismatch') {

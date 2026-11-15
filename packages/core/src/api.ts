@@ -91,6 +91,8 @@ import {
   type ProjectChanges,
 } from './project/store.js';
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
+import { createWorktree, repoRoot } from './git/worktrees.js';
+import { currentBranch } from './git/branch.js';
 import { PluginHost } from './plugins/host.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { CommandOutputEvent, ToolDef } from './tools/types.js';
@@ -807,12 +809,36 @@ export function createCore(deps: CoreDeps): Core {
   async function rootsOf(
     conversationId: string,
   ): Promise<{ roots: string[]; projectId?: string }> {
-    const projectId = (await conversationStore.get(conversationId))?.projectId;
-    const project = projectId ? await projectStore.get(projectId) : undefined;
+    const meta = await conversationStore.get(conversationId);
+    const project = meta?.projectId ? await projectStore.get(meta.projectId) : undefined;
     if (!project) return { roots: perimeter() };
     projectRoots.set(project.id, project.roots);
-    return { roots: project.roots, projectId: project.id };
+    // On its own branch: its worktree, inside the project's folder.
+    return { roots: meta?.worktree ? [meta.worktree] : project.roots, projectId: project.id };
   }
+  // A conversation on its own branch gets its worktree at its first write (task 6.7) — once,
+  // whatever the calls of that turn.
+  const branching = new Map<string, Promise<readonly string[] | undefined>>();
+  const ensureBranch = (conversationId: string): Promise<readonly string[] | undefined> => {
+    const running = branching.get(conversationId);
+    if (running) return running;
+    const made = (async (): Promise<readonly string[] | undefined> => {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta || meta.worksIn !== 'branch' || meta.worktree || !meta.projectId) return undefined;
+      const project = await projectStore.get(meta.projectId);
+      const repo = project?.roots[0] ? await repoRoot(project.roots[0]) : null;
+      if (!repo) return undefined;
+      const prefix = String((await appSettings.get('branchPrefix').catch(() => 'bonaparte/')) ?? 'bonaparte/');
+      const asked = meta.branch ?? `${prefix}${conversationId.slice(0, 8)}`;
+      const name = asked.split('/').pop() || conversationId.slice(0, 8);
+      const base = meta.base ?? ((await currentBranch(repo)) || 'HEAD');
+      const worktree = await createWorktree({ repo, name, base, prefix: asked.slice(0, asked.length - name.length), copy: ['.env'] });
+      await conversationStore.update(conversationId, { worktree: worktree.dir, branch: worktree.branch, base });
+      return [worktree.dir];
+    })().finally(() => branching.delete(conversationId));
+    branching.set(conversationId, made);
+    return made;
+  };
   const permissions = new PermissionEngine({
     roots: (projectId) =>
       projectId ? (projectRoots.get(projectId) ?? perimeter()) : perimeter(),
@@ -893,7 +919,7 @@ export function createCore(deps: CoreDeps): Core {
     prompt: (meta) => ({
       kind: meta.kind,
       tools: toolsFor(meta.kind, tools.view(plugins.visibleTo(meta.projectId)).list()),
-      perimeter: meta.projectId ? (projectRoots.get(meta.projectId) ?? []) : [],
+      perimeter: meta.worktree ? [meta.worktree] : meta.projectId ? (projectRoots.get(meta.projectId) ?? []) : [],
       replyLanguage: deps.replyLanguage?.() ?? 'English',
     }),
     // The project's instructions (.bonaparte/instructions.md, AGENTS.md or CLAUDE.md), read at each turn:
@@ -968,6 +994,7 @@ export function createCore(deps: CoreDeps): Core {
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
           windowTools,
           ...keepOriginals(conversationId, input.messageId ?? 'turn'),
+          beforeChange: () => ensureBranch(conversationId),
           ticket: (pending) =>
             signer.signTicket({
               messageId: input.messageId ?? '',
@@ -1197,6 +1224,7 @@ export function createCore(deps: CoreDeps): Core {
           signal: options.signal,
           windowTools: new Set(options.clientTools.map((tool) => tool.name)),
           ...keepOriginals(conversationId, options.messageId),
+          beforeChange: () => ensureBranch(conversationId),
         },
         check.pause,
         check.outcomes,

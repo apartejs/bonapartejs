@@ -24,8 +24,14 @@ export interface ConversationMeta {
   mode: PlayMode;
   /** The branch of the journal it shows. */
   branchId: string;
-  /** The git branch it works on (task 6.7). */
+  /** The git branch it works on (task 6.7): the one asked for, then the one made. */
   branch?: string;
+  /** Where it works: the project's folder, or its own branch (made at its first write). */
+  worksIn?: 'folder' | 'branch';
+  /** What its branch starts from. */
+  base?: string;
+  /** Its worktree, once its first write made it: the folder it works in from then on. */
+  worktree?: string;
   /** A context smaller than the engine's, for this conversation. */
   contextCap?: number;
   /** The project's instructions as the model last read them: a change is appended as a note (task 4.7). */

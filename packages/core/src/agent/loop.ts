@@ -50,6 +50,12 @@ export interface AgentTurnContext {
   beforeWrite?: ToolContext['beforeWrite'];
   afterWrite?: ToolContext['afterWrite'];
   onOutput?: ToolContext['onOutput'];
+  /**
+   * Before the first call that changes something (a write, a command): the
+   * conversation may move to its own branch — the folders it works in from
+   * then on (task 6.7).
+   */
+  beforeChange?: () => Promise<readonly string[] | undefined>;
 }
 
 /**
@@ -111,6 +117,10 @@ export async function runAgentTurn(
           pending.push({ toolCallId: call.id, name: call.name, input: call.input, reason: 'approval' });
           continue;
         }
+      }
+      if (tool && (tool.def.effect === 'write' || tool.def.effect === 'execute') && ctx.beforeChange) {
+        const moved = await ctx.beforeChange();
+        if (moved) ctx.roots = moved;
       }
       const result = await ctx.registry.run(
         { id: call.id, name: call.name, input: call.input },

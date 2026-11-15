@@ -90,6 +90,12 @@ export interface AnswerContext {
   beforeWrite?: ToolContext['beforeWrite'];
   afterWrite?: ToolContext['afterWrite'];
   onOutput?: ToolContext['onOutput'];
+  /**
+   * Before the first call that changes something (a write, a command): the
+   * conversation may move to its own branch — the folders it works in from
+   * then on (task 6.7).
+   */
+  beforeChange?: () => Promise<readonly string[] | undefined>;
 }
 
 /** Answers the calls of a pause, in order: their results, and those that must wait again. */
@@ -104,6 +110,11 @@ export async function answerPause(
   let refused = false;
   // `granted`: the person allowed this very call — a write outside the project goes where the card showed.
   const run = async (call: PendingCall, granted = false): Promise<void> => {
+    const effect = ctx.registry.get(call.name)?.def.effect;
+    if ((effect === 'write' || effect === 'execute') && ctx.beforeChange) {
+      const moved = await ctx.beforeChange();
+      if (moved) ctx.roots = moved;
+    }
     const result = await ctx.registry.run(
       { id: call.toolCallId, name: call.name, input: call.input },
       {

@@ -8,8 +8,10 @@ test('the page has no Node, and only the narrow bridge', async ({ launch }) => {
   const { page } = await launch();
   expect(await page.evaluate(() => typeof (globalThis as { require?: unknown }).require)).toBe('undefined');
   expect(await page.evaluate(() => typeof (globalThis as { process?: unknown }).process)).toBe('undefined');
+  // Calls, and the one channel the main process pushes on (a terminal's output, task 6.6).
   expect(await page.evaluate(() => Object.keys((globalThis as { bonaparte?: object }).bonaparte ?? {}))).toEqual([
     'invoke',
+    'on',
   ]);
 });
 
