@@ -55,6 +55,7 @@ import { SettingsStore } from './settings/store.js';
 import type { MemoryRow } from './conversation/engine.js';
 import type { SeedStats } from './kv/kv-store.js';
 import { exportConversations } from './conversation/export.js';
+import { createRewind, type RewindPreview, type RewindResult, type RewindTarget, type RewindWhat } from './conversation/rewind.js';
 import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
@@ -237,6 +238,12 @@ export interface Core {
   commitBranch(conversationId: string, message: string): Promise<boolean>;
   /** Archived or taken out of it: its worktree let go, or held again; kept 30 days, then removed. */
   conversationArchived(conversationId: string, archived: boolean): Promise<void>;
+  /** What going back before a message would move — said before the person decides; nothing moved. */
+  rewindPreview(conversationId: string, target: RewindTarget): Promise<RewindPreview>;
+  /** Going back before a message (task 7.1): what it put back, the branch shown from now on. */
+  rewind(conversationId: string, target: RewindTarget, what: RewindWhat): Promise<RewindResult>;
+  /** « Annuler le retour »: until the conversation's next turn begins; null when nothing is left to undo. */
+  undoRewind(conversationId: string): Promise<{ branchId: string; filesRestored: string[]; conflicts: string[] } | null>;
   /** The « Changements » pane: what the conversation changed, before and now; « Revenir » on one file. */
   readonly changes: {
     list(conversationId: string): Promise<AppliedChange[]>;
@@ -992,6 +999,13 @@ export function createCore(deps: CoreDeps): Core {
         `[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`,
       ),
   });
+  // Going back before a message (task 7.1): the files by the checkpoints, the conversation by a branch.
+  const rewinds = createRewind({
+    engine: conversations,
+    checkpoints,
+    store: conversationStore,
+    family: () => loaded?.layer ?? remoteFamily ?? familyLayer('gemma'),
+  });
 
   async function currentEngine(): Promise<Engine | undefined> {
     if ((await mode()) === 'remote') {
@@ -1144,6 +1158,10 @@ export function createCore(deps: CoreDeps): Core {
       const meta = await conversationStore.get(conversationId);
       return meta?.worktree ? commitAll(meta.worktree, message) : false;
     },
+
+    rewindPreview: (conversationId, target) => rewinds.preview(conversationId, target),
+    rewind: (conversationId, target, what) => rewinds.rewind(conversationId, target, what),
+    undoRewind: (conversationId) => rewinds.undo(conversationId),
 
     async conversationArchived(conversationId, archived) {
       const meta = await conversationStore.get(conversationId);

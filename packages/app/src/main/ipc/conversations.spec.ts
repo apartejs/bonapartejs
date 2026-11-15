@@ -42,6 +42,11 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     uncommitted: async () => 0,
     commitBranch: async () => false,
     conversationArchived: async () => undefined,
+    rewindPreview: async () => ({ files: [], commands: [] }),
+    rewind: async () => {
+      throw new Error('not in this test');
+    },
+    undoRewind: async () => null,
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
       removed.push(id);

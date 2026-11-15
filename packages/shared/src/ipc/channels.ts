@@ -26,6 +26,9 @@ import {
   conversationsShowPr,
   conversationsArchiveCheck,
   conversationsCommitBranch,
+  conversationsRewindPreview,
+  conversationsRewind,
+  conversationsUndoRewind,
 } from './conversations.js';
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { changesList, changesRevert } from './changes.js';
@@ -50,6 +53,9 @@ export const CHANNELS = [
   conversationsShowPr,
   conversationsArchiveCheck,
   conversationsCommitBranch,
+  conversationsRewindPreview,
+  conversationsRewind,
+  conversationsUndoRewind,
   pluginsInvoke,
   pluginsAck,
   engineState,

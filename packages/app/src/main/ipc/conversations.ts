@@ -16,6 +16,9 @@ import {
   conversationsOpenPr,
   conversationsArchiveCheck,
   conversationsCommitBranch,
+  conversationsRewindPreview,
+  conversationsRewind,
+  conversationsUndoRewind,
   conversationsLoadDraft,
   conversationsSaveDraft,
   conversationsDelete,
@@ -46,6 +49,9 @@ interface ConversationCore {
   uncommitted: Core['uncommitted'];
   commitBranch: Core['commitBranch'];
   conversationArchived: Core['conversationArchived'];
+  rewindPreview: Core['rewindPreview'];
+  rewind: Core['rewind'];
+  undoRewind: Core['undoRewind'];
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
@@ -88,6 +94,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     const meta = await store.get(id);
     return core.commitBranch(id, `bonaparte: ${meta?.title || id}`);
   });
+  // Going back before a message (task 7.1): the core checks the message is the branch's, then moves.
+  ipc.handle(conversationsRewindPreview, ({ id, userIndex, text }) => core.rewindPreview(id, { userIndex, text }));
+  ipc.handle(conversationsRewind, ({ id, userIndex, text, what }) => core.rewind(id, { userIndex, text }, what));
+  ipc.handle(conversationsUndoRewind, ({ id }) => core.undoRewind(id));
   ipc.handle(conversationsRename, async ({ id, title }) => void (await store.rename(id, title)));
   ipc.handle(conversationsLoadDraft, ({ id }) => store.loadDraft(id));
   ipc.handle(conversationsSaveDraft, ({ id, text }) => store.saveDraft(id, text));

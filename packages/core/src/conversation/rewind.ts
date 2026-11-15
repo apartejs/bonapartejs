@@ -37,6 +37,14 @@ export interface RewindResult {
   commandsNotUndone: string[];
 }
 
+/** What going back before a message would move, said before the person decides. */
+export interface RewindPreview {
+  /** The files changed since the message: what « le code » puts back, what « la conversation seulement » leaves. */
+  files: string[];
+  /** Commands run since: none of them is undone. */
+  commands: string[];
+}
+
 export interface RewindDeps {
   engine: ConversationEngine;
   checkpoints: CheckpointStore;
@@ -98,6 +106,15 @@ export function rewindNote(
 
 export function createRewind(deps: RewindDeps) {
   return {
+    /** What going back before the message would move — read, nothing moved. */
+    async preview(id: string, target: RewindTarget): Promise<RewindPreview> {
+      const look = await deps.engine.lookBefore(id, target);
+      return {
+        files: await deps.checkpoints.changedSince(id, look.message.at, { except: look.earlier }),
+        commands: commandsRun(look.after, deps.family()),
+      };
+    },
+
     /** Going back before the person's message the window names; its text checked, nothing moved otherwise. */
     async rewind(id: string, target: RewindTarget, what: RewindWhat): Promise<RewindResult> {
       const look: RewindLook = await deps.engine.lookBefore(id, target);

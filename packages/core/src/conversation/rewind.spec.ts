@@ -178,6 +178,16 @@ describe('going back before a message', () => {
     expect(await rewind.undo(id)).toBeNull();
   });
 
+  it('says beforehand what going back would move — the files, the commands — and moves nothing', async () => {
+    const { id, rewind, a, target, branchOf } = await rig();
+    const before = await branchOf();
+    const preview = await rewind.preview(id, target);
+    expect([...preview.files].sort()).toEqual(['csv.ts', 'weekly.ts']);
+    expect(preview.commands).toEqual(['pnpm test']);
+    expect(await branchOf()).toBe(before);
+    expect(await readFile(a, 'utf8')).toBe('v3');
+  });
+
   it('refuses a message that is not the one the window names: nothing moves', async () => {
     const { id, rewind, a, branchOf } = await rig();
     const before = await branchOf();

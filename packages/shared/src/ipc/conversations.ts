@@ -132,3 +132,37 @@ export const conversationsArchiveCheck = defineChannel(
 
 /** « Commiter d'abord »: everything in its worktree committed. */
 export const conversationsCommitBranch = defineChannel('conversations.commitBranch', z.object({ id: z.string().min(1).max(128) }), z.boolean());
+
+const conversationId = z.string().min(1).max(128);
+/** The person's message to go back before: its rank among their messages of the branch shown, and its text (task 7.1). */
+const rewindTarget = { id: conversationId, userIndex: z.number().int().min(0).max(100_000), text: z.string().max(1_000_000) };
+const rewindWhat = z.enum(['both', 'conversation', 'code']);
+export type RewindWhatView = z.infer<typeof rewindWhat>;
+
+/** What going back before a message would move, said before the person decides: nothing moves. */
+export const conversationsRewindPreview = defineChannel(
+  'conversations.rewindPreview',
+  z.object(rewindTarget),
+  z.object({ files: z.array(z.string()), commands: z.array(z.string()) }),
+);
+
+/** « Revenir »: the files, the conversation, or both, back to before the message. */
+export const conversationsRewind = defineChannel(
+  'conversations.rewind',
+  z.object({ ...rewindTarget, what: rewindWhat }),
+  z.object({
+    branchId: z.string(),
+    fromBranchId: z.string(),
+    text: z.string(),
+    filesRestored: z.array(z.string()),
+    conflicts: z.array(z.string()),
+    commandsNotUndone: z.array(z.string()),
+  }),
+);
+
+/** « Annuler le retour »: until the next turn begins; null when nothing is left to undo. */
+export const conversationsUndoRewind = defineChannel(
+  'conversations.undoRewind',
+  z.object({ id: conversationId }),
+  z.object({ branchId: z.string(), filesRestored: z.array(z.string()), conflicts: z.array(z.string()) }).nullable(),
+);
