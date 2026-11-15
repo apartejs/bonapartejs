@@ -969,6 +969,47 @@ body {
   flex: 1;
 }
 
+/* Its own branch in the header (task 6.7): the branch, its commits ahead. */
+.conversation-header__branch {
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+}
+
+.conversation-header__ahead {
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+/* Where a new conversation works (board « Branches et conversations »). */
+.where-it-works {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-block-end: 10px;
+}
+
+.where-it-works__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.where-it-works__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.where-it-works__code {
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+}
+
+.where-it-works__note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 /* The header's counts: « +4 −4 », a click opens « Changements ». */
 .conversation-header__counts {
   gap: 6px;
@@ -1306,10 +1347,28 @@ body {
  * mark of the row (aparté's `renderMeta`, after the title button), drawn
  * first. A row without memory keeps the place, empty.
  */
-.bonaparte-sidebar .aparte-conv-item__meta:has(> .conv-memory) {
+/* The marks take part in the row itself: the memory before the title, the branch after it. */
+.bonaparte-sidebar .aparte-conv-item__meta:has(> .conv-marks),
+.bonaparte-sidebar .conv-marks {
+  display: contents;
+}
+
+.bonaparte-sidebar .conv-memory {
   order: -1;
-  padding-inline-start: var(--aparte-space-4);
-  margin-inline-end: calc(-1 * var(--aparte-space-3));
+  margin-inline: var(--aparte-space-4) calc(-1 * var(--aparte-space-3));
+}
+
+/* A conversation on its own branch: the branch, and its files changed. */
+.conv-branch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  margin-inline-end: var(--aparte-space-2);
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  --aparte-icon-size: 12px;
 }
 
 .conv-memory {

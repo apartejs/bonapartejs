@@ -37,6 +37,7 @@ interface ConversationCore {
   conversationDocument: Core['conversationDocument'];
   conversations: Pick<Core['conversations'], 'open' | 'status'>;
   removeConversation: Core['removeConversation'];
+  branchOf: Core['branchOf'];
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
@@ -91,7 +92,12 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
         const status = await core.conversations.status(id);
         if (!status) return null;
         const meta = await store.get(id);
-        return [id, { projectId: meta?.projectId ?? null, ...status }] as const;
+        // On its own branch: what it counts against its base (git, read when the window asks).
+        const branch = meta?.worktree ? await core.branchOf(id).catch(() => null) : null;
+        const counted = branch
+          ? { branch: { name: branch.name, base: branch.base, ahead: branch.ahead, added: branch.added, removed: branch.removed, files: branch.files } }
+          : {};
+        return [id, { projectId: meta?.projectId ?? null, ...status, ...counted }] as const;
       }),
     );
     return Object.fromEntries(found.filter((entry) => entry !== null));

@@ -91,7 +91,8 @@ import {
   type ProjectChanges,
 } from './project/store.js';
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
-import { createWorktree, repoRoot } from './git/worktrees.js';
+import { branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, type BranchStatus } from './git/worktrees.js';
+import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { PluginHost } from './plugins/host.js';
 import { ToolRegistry } from './tools/registry.js';
@@ -124,6 +125,8 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
+  /** GitHub's CLI, for a branch's pull request: `gh` by default; a fake one in tests; null for none (a test run never asks GitHub). */
+  gh?: readonly string[] | null;
   /** Terminals for the plugins: the app finds the shells and runs them in a process of its own. None without it. */
   terminals?: TerminalService;
   /** An event of a plugin for one of its views (a terminal's tab), pushed to the window. */
@@ -222,6 +225,18 @@ export interface Core {
     /** What the conversation changed and still stands. */
     changed(conversationId: string): Promise<ChangedFile[]>;
   };
+  /** A conversation's own branch (task 6.7): its name, its folder, what it counts against its base; null without one. */
+  branchOf(conversationId: string): Promise<{ name: string; base: string; worktree: string } & BranchStatus | null>;
+  /** The pull request of a conversation's branch, and its CI (task 6.8): none without one, or without GitHub's CLI. */
+  prOf(conversationId: string): Promise<PrStatus | null>;
+  /** « Ouvrir une PR », on the person's word: the branch pushed, its pull request opened. */
+  openPr(conversationId: string): Promise<PrStatus | null>;
+  /** What archiving a conversation on its branch would leave uncommitted: its files. */
+  uncommitted(conversationId: string): Promise<number>;
+  /** « Commiter d'abord »: everything in its worktree committed. */
+  commitBranch(conversationId: string, message: string): Promise<boolean>;
+  /** Archived or taken out of it: its worktree let go, or held again; kept 30 days, then removed. */
+  conversationArchived(conversationId: string, archived: boolean): Promise<void>;
   /** The « Changements » pane: what the conversation changed, before and now; « Revenir » on one file. */
   readonly changes: {
     list(conversationId: string): Promise<AppliedChange[]>;
@@ -816,6 +831,29 @@ export function createCore(deps: CoreDeps): Core {
     // On its own branch: its worktree, inside the project's folder.
     return { roots: meta?.worktree ? [meta.worktree] : project.roots, projectId: project.id };
   }
+  // GitHub's CLI (task 6.8): `gh` unless the deps say otherwise; null for none.
+  const gh = deps.gh === undefined ? ['gh'] : deps.gh;
+  const PR_FRESH_MS = 20_000;
+  const prs = new Map<string, { at: number; pr: PrStatus | null }>();
+  const repoOf = async (meta: { projectId?: string }): Promise<string | null> => {
+    const project = meta.projectId ? await projectStore.get(meta.projectId) : undefined;
+    return project?.roots[0] ? repoRoot(project.roots[0]) : null;
+  };
+  // An archived conversation keeps its folder and its branch 30 days; then both go.
+  const ARCHIVE_KEEP_MS = 30 * 24 * 3600 * 1000;
+  void conversationStore
+    .list()
+    .then(async (metas) => {
+      for (const meta of metas) {
+        if (!meta.worktree || !meta.branch || !meta.archivedAt) continue;
+        if (Date.parse(meta.archivedAt) > Date.now() - ARCHIVE_KEEP_MS) continue;
+        const repo = await repoOf(meta);
+        if (!repo) continue;
+        await removeWorktree(repo, meta.worktree, meta.branch);
+        await conversationStore.update(meta.id, { worktree: undefined });
+      }
+    })
+    .catch(() => undefined);
   // A conversation on its own branch gets its worktree at its first write (task 6.7) — once,
   // whatever the calls of that turn.
   const branching = new Map<string, Promise<readonly string[] | undefined>>();
@@ -1059,6 +1097,49 @@ export function createCore(deps: CoreDeps): Core {
       list: async (scope, dir) => listEntries(await scopeRoots(scope), dir, deps.home),
       read: async (scope, path) => readText(await scopeRoots(scope), path, undefined, deps.home),
       changed: (conversationId) => checkpoints.files(conversationId),
+    },
+
+    async prOf(conversationId) {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta?.worktree || !meta.branch) return null;
+      // Read at the end of a turn and while it is on screen — never more than once in a while.
+      const cached = prs.get(conversationId);
+      if (cached && cached.at > Date.now() - PR_FRESH_MS) return cached.pr;
+      const pr = await prStatus(gh, meta.worktree, meta.branch);
+      prs.set(conversationId, { at: Date.now(), pr });
+      return pr;
+    },
+
+    async openPr(conversationId) {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta?.worktree || !meta.branch || !meta.base) return null;
+      const pr = await openPr(gh, meta.worktree, meta.branch, meta.base);
+      prs.set(conversationId, { at: Date.now(), pr });
+      return pr;
+    },
+
+    async uncommitted(conversationId) {
+      const meta = await conversationStore.get(conversationId);
+      return meta?.worktree ? uncommittedFiles(meta.worktree) : 0;
+    },
+
+    async commitBranch(conversationId, message) {
+      const meta = await conversationStore.get(conversationId);
+      return meta?.worktree ? commitAll(meta.worktree, message) : false;
+    },
+
+    async conversationArchived(conversationId, archived) {
+      const meta = await conversationStore.get(conversationId);
+      const repo = meta?.worktree ? await repoOf(meta) : null;
+      if (!meta?.worktree || !repo) return;
+      if (archived) await unlockWorktree(repo, meta.worktree);
+      else await lockWorktree(repo, meta.worktree);
+    },
+
+    async branchOf(conversationId) {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta?.worktree || !meta.branch || !meta.base) return null;
+      return { name: meta.branch, base: meta.base, worktree: meta.worktree, ...(await branchStatus(meta.worktree, meta.base)) };
     },
 
     changes: {

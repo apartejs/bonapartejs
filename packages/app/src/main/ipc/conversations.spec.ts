@@ -36,6 +36,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
       status: async (id: string) => (id === 'c-1' ? { memory: 'saved' as const, waiting: true } : null),
     },
     conversationDocument: (id: string) => store.loadDocument(id),
+    branchOf: async () => null,
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
       removed.push(id);

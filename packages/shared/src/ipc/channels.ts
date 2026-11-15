@@ -21,6 +21,7 @@ import {
   conversationsSaveDraft,
   conversationsUnarchive,
   conversationsUnpin,
+  conversationsOpenFolder,
 } from './conversations.js';
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { changesList, changesRevert } from './changes.js';
@@ -40,6 +41,7 @@ export const CHANNELS = [
   filesChanged,
   changesList,
   changesRevert,
+  conversationsOpenFolder,
   pluginsInvoke,
   pluginsAck,
   engineState,

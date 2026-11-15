@@ -82,6 +82,30 @@ export async function unlockWorktree(repo: string, dir: string): Promise<void> {
   await git(['worktree', 'unlock', dir], repo);
 }
 
+/** Holds it again (a conversation taken out of the archive). */
+export async function lockWorktree(repo: string, dir: string): Promise<void> {
+  await git(['worktree', 'lock', '--reason', 'bonaparte: a conversation works here', dir], repo);
+}
+
+/** What is not committed in a worktree: its files. */
+export async function uncommittedFiles(dir: string): Promise<number> {
+  const result = await git(['status', '--porcelain'], dir);
+  return result.code === 0 ? result.stdout.split('\n').filter(Boolean).length : 0;
+}
+
+/** Everything committed, with a message — « Commiter d'abord ». */
+export async function commitAll(dir: string, message: string): Promise<boolean> {
+  if ((await git(['add', '-A'], dir)).code !== 0) return false;
+  return (await git(['commit', '-q', '-m', message], dir)).code === 0;
+}
+
+/** A worktree and its branch gone for good (an archived conversation, after its days). */
+export async function removeWorktree(repo: string, dir: string, branch: string): Promise<void> {
+  await git(['worktree', 'unlock', dir], repo);
+  await git(['worktree', 'remove', '--force', dir], repo);
+  await git(['branch', '-D', branch], repo);
+}
+
 const linesOf = (text: string): number => (text === '' ? 0 : text.replace(/\n$/, '').split('\n').length);
 
 export async function branchStatus(dir: string, base: string): Promise<BranchStatus> {

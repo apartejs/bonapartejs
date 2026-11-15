@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { tempRepo, type TempRepo } from '../testing/temp-repo.js';
 import { git } from './git.js';
-import { branchStatus, createWorktree, repoRoot } from './worktrees.js';
+import { branchStatus, commitAll, createWorktree, removeWorktree, repoRoot, uncommittedFiles } from './worktrees.js';
 
 let repos: TempRepo[] = [];
 afterEach(async () => {
@@ -57,6 +57,22 @@ describe('a conversation on its own branch', () => {
     await writeFile(join(made.dir, 'new.ts'), 'x\ny\n');
     expect(await branchStatus(made.dir, 'main')).toEqual({ ahead: 1, added: 5, removed: 2, files: 3 });
     expect(existsSync(join(dir, 'new.ts'))).toBe(false);
+  });
+
+  it('archiving: what is not committed is counted; « Commiter d’abord » commits it; after its days, the worktree and its branch go', async () => {
+    const { dir } = await repo({ 'a.ts': 'a\n' });
+    const made = await createWorktree({ repo: dir, name: 'heures', base: 'main', prefix: 'bonaparte/' });
+    expect(await uncommittedFiles(made.dir)).toBe(0);
+    await writeFile(join(made.dir, 'a.ts'), 'A\n');
+    await writeFile(join(made.dir, 'new.ts'), 'new\n');
+    expect(await uncommittedFiles(made.dir)).toBe(2);
+    expect(await commitAll(made.dir, 'Work of the conversation')).toBe(true);
+    expect(await uncommittedFiles(made.dir)).toBe(0);
+    expect((await git(['log', '-1', '--format=%s'], made.dir)).stdout.trim()).toBe('Work of the conversation');
+
+    await removeWorktree(dir, made.dir, made.branch);
+    expect(existsSync(made.dir)).toBe(false);
+    expect((await git(['branch', '--list', made.branch], dir)).stdout.trim()).toBe('');
   });
 
   it('a folder that is not a repository has no root', async () => {

@@ -367,6 +367,21 @@ export interface Messages {
     close: { files: string; changes: string; terminal: string };
     closeTip: string;
   };
+  /** A conversation on its own branch (board « Branches et conversations », task 6.7). */
+  branches: {
+    where: string;
+    inFolder: string;
+    inFolderNote: string;
+    ownBranch: string;
+    ownBranchNote: string;
+    branch: string;
+    base: string;
+    folderNote(name: string): string;
+    /** The mark of a row: « sur sa branche, 3 fichiers changés ». */
+    mark(files: number): string;
+    ahead(count: number, base: string): string;
+    openFolder: string;
+  };
   /** The terminal (task 6.6): its tabs, the agent's, a shell that ended. */
   terminal: {
     tabs: string;

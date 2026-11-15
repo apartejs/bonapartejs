@@ -19,6 +19,8 @@ export interface ConversationRunnerOptions {
   picked?: () => boolean;
   /** The project a new conversation starts in (the core takes it at its first turn only). */
   project?: () => string | null;
+  /** On its own branch: its name and its base (the core takes them at its first turn only). */
+  branch?: () => { branch: string; base: string } | null;
   /** Tests only. */
   fetch?: typeof globalThis.fetch;
 }
@@ -32,6 +34,12 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
       if (options.picked?.()) query.set('picked', '1');
       const project = options.project?.();
       if (project) query.set('project', project);
+      const branch = options.branch?.();
+      if (project && branch) {
+        query.set('worksIn', 'branch');
+        query.set('branch', branch.branch);
+        query.set('base', branch.base);
+      }
       const said = query.toString();
       return said ? `${at}?${said}` : at;
     },

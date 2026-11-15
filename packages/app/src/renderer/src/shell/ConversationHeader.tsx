@@ -29,6 +29,8 @@ export interface ConversationHeaderProps {
   panels?: ReactNode;
   /** The lines the conversation changed (« +4 −4 »): a click opens « Changements ». */
   counts?: { added: number; removed: number; onOpen(): void } | null;
+  /** Its own branch (task 6.7): its name, its commits ahead of its base, its folder. */
+  branch?: { name: string; base: string; ahead: number; onOpenFolder(): void } | null;
 }
 
 type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'delete';
@@ -100,6 +102,15 @@ export function ConversationHeader(props: ConversationHeaderProps) {
           {props.project}
         </span>
       ) : null}
+      {props.branch ? (
+        <>
+          <span className="conversation-header__chip conversation-header__branch">
+            <Icon name="branch" />
+            {props.branch.name}
+          </span>
+          {props.branch.ahead > 0 ? <span className="conversation-header__ahead">{props.messages.branches.ahead(props.branch.ahead, props.branch.base)}</span> : null}
+        </>
+      ) : null}
       {props.counts ? (
         <button
           type="button"
@@ -145,6 +156,11 @@ export function ConversationHeader(props: ConversationHeaderProps) {
             </button>
           </div>
         </span>
+      ) : null}
+      {props.branch ? (
+        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.branch.onOpenFolder}>
+          {props.messages.branches.openFolder}
+        </button>
       ) : null}
       {props.panels ? (
         <>

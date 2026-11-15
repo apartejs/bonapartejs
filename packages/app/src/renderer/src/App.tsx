@@ -15,6 +15,8 @@ import {
   changesList,
   type AppliedChangeView,
   pluginsInvoke,
+  projectsDetect,
+  conversationsOpenFolder,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -28,6 +30,7 @@ import { speakAsBonaparte } from './aparte/words';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
+import { WhereItWorks, type Place } from './chat/WhereItWorks';
 import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
 import { addComment, clearPending, editComment, markSent, pendingOf, reviewMessage, type ReviewComment } from './diff/comments-store';
 import { appliedCards, ChangesPanel, useProposedCards } from './panels/ChangesPanel';
@@ -249,12 +252,22 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     readProjects();
     window.dispatchEvent(new CustomEvent(ENGINE_CHANGED));
   }, [settingsPage]);
+  // Where a new conversation of a git project works (task 6.7): its folder, or its own branch.
+  const [placeShown, setPlaceShown] = useState<Place | null>(null);
+  const place = useRef<Place | null>(null);
+  place.current = placeShown;
   // Where each conversation born here was started: until its first turn tells the core.
   const bornIn = useRef(new Map<string, string | null>());
 
   const streamRunner = useMemo(
     () =>
-      createConversationRunner({ mode: () => chosen.current, picked: () => picked.current, project: () => project.current?.id ?? null }),
+      createConversationRunner({
+        mode: () => chosen.current,
+        picked: () => picked.current,
+        project: () => project.current?.id ?? null,
+        // Its own branch, chosen before its first message (task 6.7).
+        branch: () => (place.current?.worksIn === 'branch' && place.current.branch.trim() ? { branch: place.current.branch.trim(), base: place.current.base.trim() || 'HEAD' } : null),
+      }),
     [],
   );
   // The core decides every call; what it asks about waits here for the person's answer on the card.
@@ -284,6 +297,36 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     window.addEventListener('aparte-message-done', ended);
     return () => window.removeEventListener('aparte-message-done', ended);
   }, []);
+  // A new conversation in a git project offers its own branch; the default is the setting's.
+  useEffect(() => {
+    if (conversationId || !activeProject?.roots[0]) {
+      if (!conversationId) setPlaceShown(null);
+      return;
+    }
+    let current = true;
+    void Promise.all([
+      bridge.invoke(projectsDetect, { folder: activeProject.roots[0] }),
+      bridge.invoke(settingsGet, { key: 'newConversationWorksIn' }).catch(() => 'folder'),
+      bridge.invoke(settingsGet, { key: 'branchPrefix' }).catch(() => 'bonaparte/'),
+    ])
+      .then(([facts, worksIn, prefix]) => {
+        if (!current) return;
+        if (!facts.git) {
+          setPlaceShown(null);
+          return;
+        }
+        const stamp = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '');
+        setPlaceShown({
+          worksIn: worksIn === 'branch' ? 'branch' : 'folder',
+          branch: `${typeof prefix === 'string' ? prefix : 'bonaparte/'}conversation-${stamp}`,
+          base: facts.git.branch ?? 'HEAD',
+        });
+      })
+      .catch(() => current && setPlaceShown(null));
+    return () => {
+      current = false;
+    };
+  }, [conversationId, activeProject]);
   // The terminal pane opens on a shell: its first tab, on the machine's default shell.
   const terminalOpen = panes.includes('terminal');
   useEffect(() => {
@@ -532,7 +575,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           activeId={conversationId ?? null}
           projects={projects}
           projectOf={projectOf}
-          memoryOf={(id) => statuses[id]?.memory ?? null}
+          marksOf={(id) => ({
+            memory: statuses[id]?.memory ?? null,
+            ...(statuses[id]?.branch ? { branchFiles: statuses[id]!.branch!.files } : {}),
+          })}
           grouping={grouping}
           onCollapse={toggleSidebar}
           onNewConversation={newConversation}
@@ -602,6 +648,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             ? { ...changeCounts, onOpen: () => setPanes((was) => opened(was, 'changes')) }
             : null
         }
+        branch={
+          openConversation && statuses[openConversation.id]?.branch
+            ? {
+                ...statuses[openConversation.id]!.branch!,
+                onOpenFolder: () => void bridge.invoke(conversationsOpenFolder, { id: openConversation.id }).catch(() => undefined),
+              }
+            : null
+        }
         panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
@@ -636,6 +690,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             />
           ) : memory ? (
             <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} />
+          ) : !conversationId && placeShown ? (
+            <WhereItWorks messages={messages} place={placeShown} onChange={setPlaceShown} />
           ) : undefined
         }
         toolbar={

@@ -146,6 +146,16 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
       const failed = await shell.openPath(dataDir);
       if (failed) throw new Error(failed);
     },
+    // A conversation's own folder, which the core named.
+    openFolder: async (path) => {
+      if (options.e2e) {
+        const record = globalThis as { __openedFolders?: string[] };
+        (record.__openedFolders ??= []).push(path);
+        return;
+      }
+      const failed = await shell.openPath(path);
+      if (failed) throw new Error(failed);
+    },
   });
 
   window = createMainWindow({ devServerUrl, e2e: options.e2e });

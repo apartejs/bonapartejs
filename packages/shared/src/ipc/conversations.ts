@@ -67,6 +67,10 @@ export const conversationStatusSchema = z.object({
   projectId: z.string().nullable(),
   memory: z.enum(['engine', 'saved', 'reread']).nullable(),
   waiting: z.boolean(),
+  /** On its own branch (task 6.7): its name and what it counts against its base; absent without one. */
+  branch: z
+    .object({ name: z.string(), base: z.string(), ahead: z.number(), added: z.number(), removed: z.number(), files: z.number() })
+    .optional(),
 });
 export type ConversationStatusView = z.infer<typeof conversationStatusSchema>;
 
@@ -100,3 +104,5 @@ export const conversationsSaveDraft = defineChannel(
   z.void(),
 );
 
+/** « Ouvrir le dossier »: the conversation's own folder — its worktree —, never one the window names. */
+export const conversationsOpenFolder = defineChannel('conversations.openFolder', z.object({ id: z.string().min(1).max(128) }), z.void());

@@ -4,7 +4,7 @@
  * the contract's (`CHANNELS`); a test checks they agree.
  */
 
-import { appInfo, type Locale } from '@aparte/bonaparte-shared';
+import { appInfo, conversationsOpenFolder, type Locale } from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
 import { registerConversationChannels } from './conversations.js';
 import { registerChangeChannels } from './changes.js';
@@ -25,12 +25,18 @@ export interface AppFacts {
   chooseFolder: ChooseFolder;
   /** Opens the data folder in the system's file manager (in a test run, only notes it). */
   openDataFolder(): Promise<void>;
+  /** Opens a folder the core named (a conversation's worktree) in the system's file manager. */
+  openFolder(path: string): Promise<void>;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
   ipc.handle(appInfo, () => ({ version: facts.version(), locale: facts.locale() }));
   registerEngineChannels(ipc, core);
   registerConversationChannels(ipc, core);
+  ipc.handle(conversationsOpenFolder, async ({ id }) => {
+    const branch = await core.branchOf(id);
+    if (branch) await facts.openFolder(branch.worktree);
+  });
   registerModeChannels(ipc, core);
   registerFileChannels(ipc, core);
   registerChangeChannels(ipc, core);

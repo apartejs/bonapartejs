@@ -87,6 +87,7 @@ export {
   conversationsRename,
   conversationsPin,
   conversationsUnpin,
+  conversationsOpenFolder,
   conversationsArchive,
   conversationsUnarchive,
   conversationsLoadDraft,

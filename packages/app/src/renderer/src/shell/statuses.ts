@@ -72,6 +72,27 @@ export function memoryMarkOf(memory: Memory, words: Messages['shell']['memory'])
   return { memory, name: memory ? words[memory] : null };
 }
 
+/** The marks of a row: its memory (drawn before the title), its branch and its files (after it). */
+export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages): HTMLElement {
+  const marks = document.createElement('span');
+  marks.className = 'conv-marks';
+  marks.append(memoryMark(memory, words.shell.memory));
+  if (branchFiles !== undefined) {
+    const branch = document.createElement('span');
+    branch.className = 'conv-branch';
+    branch.setAttribute('role', 'img');
+    branch.setAttribute('aria-label', words.branches.mark(branchFiles));
+    branch.innerHTML = BRANCH_GLYPH;
+    branch.append(String(branchFiles));
+    marks.append(branch);
+  }
+  return marks;
+}
+
+/** A git branch, the shell's own glyph (constant markup). */
+const BRANCH_GLYPH =
+  '<svg class="aparte-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9a6 6 0 0 1-6 6H8"/></svg>';
+
 /** The mark itself; a row without memory keeps its place, with nothing to read. */
 export function memoryMark(memory: Memory, words: Messages['shell']['memory']): HTMLElement {
   const mark = memoryMarkOf(memory, words);
