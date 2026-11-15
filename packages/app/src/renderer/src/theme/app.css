@@ -732,6 +732,123 @@ body {
   overflow: auto;
 }
 
+/* « Fichiers » (task 6.3): the tree, then the preview, read-only, with its line numbers. */
+.files-pane {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  background: var(--aparte-bg);
+}
+
+.files-pane__tree {
+  flex: none;
+  box-sizing: border-box;
+  width: 176px;
+  padding: var(--aparte-space-4) 6px;
+  overflow: auto;
+  border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
+  font-size: 13px;
+}
+
+.files-pane__row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding-inline-end: 6px;
+  border-radius: 5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.files-pane__row:hover {
+  background: var(--aparte-surface-1);
+}
+
+.files-pane__row[aria-selected='true'] {
+  background: var(--bonaparte-accent-soft);
+  font-weight: var(--aparte-font-weight-medium);
+}
+
+.files-pane__row:focus-visible {
+  outline: var(--aparte-focus-outline-width) solid var(--aparte-primary);
+  outline-offset: -2px;
+}
+
+.files-pane__chevron {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  --aparte-icon-size: 12px;
+}
+
+.files-pane__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.files-pane__mark {
+  flex: none;
+  font-size: 11px;
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.files-pane__mark--modified {
+  color: var(--aparte-success-ink);
+}
+
+.files-pane__mark--proposed {
+  color: var(--aparte-warning-ink);
+}
+
+.files-pane__preview {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+}
+
+.files-pane__code {
+  display: flex;
+  padding: var(--aparte-space-4) 0;
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+  line-height: 22px;
+}
+
+.files-pane__gutter,
+.files-pane__text {
+  margin: 0;
+  font: inherit;
+}
+
+.files-pane__gutter {
+  flex: none;
+  box-sizing: border-box;
+  width: 40px;
+  padding-inline-end: 12px;
+  color: var(--aparte-text-muted);
+  text-align: end;
+  user-select: none;
+}
+
+.files-pane__text {
+  flex: 1;
+  color: var(--aparte-text);
+}
+
+.files-pane__note {
+  margin: 0;
+  padding: var(--aparte-space-6);
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+}
+
+.files-pane__choose {
+  flex: 1;
+}
+
 /* Under 1 100 px (board « Fenêtre étroite »): the pane over the conversation, behind a scrim. */
 .bonaparte-panes__scrim {
   position: absolute;

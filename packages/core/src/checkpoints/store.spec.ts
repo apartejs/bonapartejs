@@ -104,4 +104,56 @@ describe('CheckpointStore', () => {
     await store.forget('conv');
     expect(await store.changes('conv', 't')).toBeUndefined();
   });
+
+  /** A tool's write, as the registry wraps it. */
+  async function write(store: CheckpointStore, turn: string, path: string, display: string, content: string): Promise<void> {
+    await store.before('conv', turn, path, display);
+    await writeFile(path, content, 'utf8');
+    await store.after('conv', turn, path);
+  }
+
+  it('lists what a conversation changed, across its turns: each file once, created or not, its original from before the first', async () => {
+    const { store, repo } = await rig();
+    const edited = join(repo, 'a.ts');
+    const created = join(repo, 'new.ts');
+    await writeFile(edited, 'v0', 'utf8');
+    await write(store, 'turn-1', edited, 'a.ts', 'v1');
+    await write(store, 'turn-2', edited, 'a.ts', 'v2');
+    await write(store, 'turn-2', created, 'new.ts', 'fresh');
+    expect(await store.files('conv')).toEqual([
+      { path: edited, display: 'a.ts', created: false },
+      { path: created, display: 'new.ts', created: true },
+    ]);
+    expect((await store.original('conv', edited))?.toString('utf8')).toBe('v0');
+    expect(await store.original('conv', created)).toBeNull();
+    expect(await store.original('conv', join(repo, 'untouched.ts'))).toBeUndefined();
+    // A turn undone: what it alone wrote is no longer listed.
+    await store.undo('conv', 'turn-2');
+    expect((await store.files('conv')).map((file) => file.display)).toEqual(['a.ts']);
+  });
+
+  it('« Revenir » on one file: back to before the conversation, the others untouched; a file changed since is named, not touched', async () => {
+    const { store, repo } = await rig();
+    const a = join(repo, 'a.ts');
+    const b = join(repo, 'b.ts');
+    const created = join(repo, 'new.ts');
+    await writeFile(a, 'a0', 'utf8');
+    await writeFile(b, 'b0', 'utf8');
+    await write(store, 'turn-1', a, 'a.ts', 'a1');
+    await write(store, 'turn-1', b, 'b.ts', 'b1');
+    await write(store, 'turn-2', a, 'a.ts', 'a2');
+    await write(store, 'turn-2', created, 'new.ts', 'fresh');
+
+    expect(await store.revertFile('conv', a)).toEqual({ restored: ['a.ts'], conflicts: [] });
+    expect(await readFile(a, 'utf8')).toBe('a0');
+    expect(await readFile(b, 'utf8')).toBe('b1');
+    expect((await store.files('conv')).map((file) => file.display)).toEqual(['b.ts', 'new.ts']);
+
+    expect(await store.revertFile('conv', created)).toEqual({ restored: ['new.ts'], conflicts: [] });
+    expect(existsSync(created)).toBe(false);
+
+    await writeFile(b, 'changed by the person', 'utf8');
+    expect(await store.revertFile('conv', b)).toEqual({ restored: [], conflicts: ['b.ts'] });
+    expect(await readFile(b, 'utf8')).toBe('changed by the person');
+  });
 });

@@ -368,6 +368,17 @@ export const en: Messages = {
     cancel: 'Cancel',
     confirmDelete: 'Delete',
   },
+  files: {
+    tree: 'Project files',
+    preview: (path) => `Preview of ${path}`,
+    modified: 'changed by the conversation',
+    proposed: 'proposed, waiting for your approval',
+    binary: 'This file is not text: no preview.',
+    truncated: 'Preview cut: the file is longer.',
+    choose: 'Pick a file to see it.',
+    unreadable: 'This file cannot be read.',
+    home: 'Home folder',
+  },
   panels: {
     group: 'Panes',
     region: 'Panes',

@@ -77,7 +77,7 @@ import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { toolsFor } from './prompt/system-prompt.js';
 import { builtinTools } from './tools/builtin/index.js';
-import { CheckpointStore } from './checkpoints/store.js';
+import { CheckpointStore, type ChangedFile } from './checkpoints/store.js';
 import { detectProject, type ProjectFacts } from './project/detect.js';
 import { readProjectInstructions } from './project/instructions.js';
 import { openJournal } from './journal/journal.js';
@@ -89,12 +89,19 @@ import {
   type Project,
   type ProjectChanges,
 } from './project/store.js';
+import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
 import { PluginHost } from './plugins/host.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
 import { KvStore } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
+
+/** Whose perimeter a pane browses: a conversation's, else a project's, else the home folder. */
+export interface FileScope {
+  conversationId?: string;
+  projectId?: string;
+}
 
 export interface CoreDeps {
   /** The folder bonaparte keeps everything in (see `bonaparteDataDir`). */
@@ -199,6 +206,13 @@ export interface Core {
   readonly plugins: PluginHost;
   /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
   readonly checkpoints: CheckpointStore;
+  /** The « Fichiers » pane: a perimeter listed and read — a conversation's, a project's, or the home folder. */
+  readonly files: {
+    list(scope: FileScope, dir: string | null): Promise<FileEntry[]>;
+    read(scope: FileScope, path: string): Promise<FileText>;
+    /** What the conversation changed and still stands. */
+    changed(conversationId: string): Promise<ChangedFile[]>;
+  };
   /** The page's document of a conversation; rebuilt from its journal when the page's is missing; null for none. */
   conversationDocument(id: string): Promise<unknown>;
   /** « Rechercher »: the conversations where the words were said, and the files of the open conversation's project. */
@@ -818,6 +832,12 @@ export function createCore(deps: CoreDeps): Core {
       return { mode: modeAfterRestart(mode), reconfirm: true };
     return { mode, reconfirm: false };
   }
+  // The perimeter a pane browses: a conversation's, else a project's, else the home folder.
+  async function scopeRoots(scope: FileScope): Promise<string[]> {
+    if (scope.conversationId && (await conversationStore.get(scope.conversationId))) return (await rootsOf(scope.conversationId)).roots;
+    const project = scope.projectId ? await projectStore.get(scope.projectId) : undefined;
+    return project ? project.roots : perimeter();
+  }
   // The plugins (task 6.1): their tools join the one registry; each core tool one of them uses is
   // judged by the one policy, in its conversation's mode and perimeter. A project may turn one off.
   const plugins = new PluginHost({
@@ -991,6 +1011,12 @@ export function createCore(deps: CoreDeps): Core {
     permissions,
     plugins,
     checkpoints,
+
+    files: {
+      list: async (scope, dir) => listEntries(await scopeRoots(scope), dir, deps.home),
+      read: async (scope, path) => readText(await scopeRoots(scope), path, undefined, deps.home),
+      changed: (conversationId) => checkpoints.files(conversationId),
+    },
 
     projects: {
       detect: (folder) => detectProject(folder),

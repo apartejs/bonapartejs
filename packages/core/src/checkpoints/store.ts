@@ -13,7 +13,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 interface Entry {
@@ -25,12 +25,24 @@ interface Entry {
   blob?: string;
   /** Hash of the content the turn left — what undo expects to find. */
   afterHash?: string;
+  /** Put back on its own (« Revenir »): no longer a change of the conversation. */
+  reverted?: boolean;
 }
 
 interface Manifest {
   version: 1;
   entries: Entry[];
   undone: boolean;
+  /** The turn's place among the conversation's turns, the first being 1. */
+  seq?: number;
+}
+
+/** A file the conversation changed, across its turns. */
+export interface ChangedFile {
+  path: string;
+  display: string;
+  /** It did not exist before the conversation first wrote it. */
+  created: boolean;
 }
 
 export interface TurnChanges {
@@ -74,14 +86,57 @@ export class CheckpointStore {
   }
 
   private async write(conversationId: string, turnId: string, manifest: Manifest): Promise<void> {
-    const dir = this.turnDir(conversationId, turnId);
+    await this.writeAt(this.turnDir(conversationId, turnId), manifest);
+  }
+
+  private async writeAt(dir: string, manifest: Manifest): Promise<void> {
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
   }
 
+  /** The conversation's turns that changed something, in their order. */
+  private async turns(conversationId: string): Promise<{ dir: string; manifest: Manifest }[]> {
+    const base = join(this.dir, segment(conversationId));
+    let names: string[];
+    try {
+      names = await readdir(base);
+    } catch {
+      return [];
+    }
+    const found: { dir: string; manifest: Manifest }[] = [];
+    for (const name of names) {
+      try {
+        found.push({ dir: join(base, name), manifest: JSON.parse(await readFile(join(base, name, 'manifest.json'), 'utf8')) as Manifest });
+      } catch {
+        // Not a turn's folder.
+      }
+    }
+    return found.sort((a, b) => (a.manifest.seq ?? 0) - (b.manifest.seq ?? 0));
+  }
+
+  /** The changes of a file that still stand: turns not undone, the file not put back on its own. */
+  private async standing(conversationId: string): Promise<Map<string, { dir: string; manifest: Manifest; entry: Entry }[]>> {
+    const byPath = new Map<string, { dir: string; manifest: Manifest; entry: Entry }[]>();
+    for (const turn of await this.turns(conversationId)) {
+      if (turn.manifest.undone) continue;
+      for (const entry of turn.manifest.entries) {
+        if (entry.reverted) continue;
+        const list = byPath.get(entry.path) ?? [];
+        list.push({ ...turn, entry });
+        byPath.set(entry.path, list);
+      }
+    }
+    return byPath;
+  }
+
   /** Before a tool writes `path`: keeps its original (or notes its absence), once per turn. */
   async before(conversationId: string, turnId: string, path: string, display: string): Promise<void> {
-    const manifest = (await this.read(conversationId, turnId)) ?? { version: 1, entries: [], undone: false };
+    const manifest = (await this.read(conversationId, turnId)) ?? {
+      version: 1,
+      entries: [],
+      undone: false,
+      seq: (await this.turns(conversationId)).length + 1,
+    };
     if (manifest.entries.some((entry) => entry.path === path)) return;
     const original = await readBytes(path);
     const entry: Entry = { path, display, existed: original !== undefined };
@@ -119,6 +174,7 @@ export class CheckpointStore {
     const restored: string[] = [];
     const conflicts: string[] = [];
     for (const entry of manifest.entries) {
+      if (entry.reverted) continue;
       const now = await readBytes(entry.path);
       const nowHash = now === undefined ? undefined : hash(now);
       if (nowHash !== entry.afterHash) {
@@ -136,6 +192,39 @@ export class CheckpointStore {
     manifest.undone = true;
     await this.write(conversationId, turnId, manifest);
     return { restored, conflicts };
+  }
+
+  /** What the conversation changed and still stands, each file once, in the order it was first written. */
+  async files(conversationId: string): Promise<ChangedFile[]> {
+    return [...(await this.standing(conversationId)).values()].map((changes) => {
+      const first = changes[0]!.entry;
+      return { path: first.path, display: first.display, created: !first.existed };
+    });
+  }
+
+  /** A file as it was before the conversation first wrote it; null if it did not exist, undefined if not changed. */
+  async original(conversationId: string, path: string): Promise<Buffer | null | undefined> {
+    const first = (await this.standing(conversationId)).get(path)?.[0];
+    if (!first) return undefined;
+    if (!first.entry.existed || !first.entry.blob) return null;
+    return readFile(join(first.dir, first.entry.blob));
+  }
+
+  /** « Revenir »: one file back to before the conversation wrote it — unless it changed since its last write. */
+  async revertFile(conversationId: string, path: string): Promise<UndoResult> {
+    const changes = (await this.standing(conversationId)).get(path);
+    if (!changes || changes.length === 0) return { restored: [], conflicts: [] };
+    const first = changes[0]!;
+    const last = changes[changes.length - 1]!.entry;
+    const now = await readBytes(path);
+    if ((now === undefined ? undefined : hash(now)) !== last.afterHash) return { restored: [], conflicts: [last.display] };
+    if (first.entry.existed && first.entry.blob) await writeFile(path, await readFile(join(first.dir, first.entry.blob)));
+    else await rm(path, { force: true });
+    for (const change of changes) {
+      change.entry.reverted = true;
+      await this.writeAt(change.dir, change.manifest);
+    }
+    return { restored: [first.entry.display], conflicts: [] };
   }
 
   /** A deleted conversation takes its checkpoints with it. */

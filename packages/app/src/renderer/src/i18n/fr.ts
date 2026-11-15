@@ -369,6 +369,17 @@ export const fr: Messages = {
     cancel: 'Annuler',
     confirmDelete: 'Supprimer',
   },
+  files: {
+    tree: 'Fichiers du projet',
+    preview: (path) => `Aperçu de ${path}`,
+    modified: 'modifié par la conversation',
+    proposed: 'proposé, attend ton accord',
+    binary: 'Ce fichier n’est pas du texte : pas d’aperçu.',
+    truncated: 'Aperçu coupé : le fichier est plus long.',
+    choose: 'Choisis un fichier pour le voir.',
+    unreadable: 'Ce fichier ne se lit pas.',
+    home: 'Dossier personnel',
+  },
   panels: {
     group: 'Volets',
     region: 'Volets',

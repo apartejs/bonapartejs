@@ -26,6 +26,7 @@ import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
+import { FilesPanel } from './panels/FilesPanel';
 import { PanelDock } from './panels/PanelDock';
 import { PanelToggles } from './panels/PanelToggles';
 import { close as closePane, opened, opensByItself, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
@@ -239,6 +240,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => {
     if (changesWaiting > 0 && autoOpen.current) setPanes((was) => opened(was, 'changes'));
   }, [changesWaiting, conversationId]);
+  // Where those changes would write, as the model named the files: « P » in the tree.
+  const pendingPaths = approvals
+    .list(conversationId ?? null)
+    .flatMap((one) => (typeof one.input['path'] === 'string' && (one.name === 'edit_file' || one.name === 'write_file') ? [one.input['path']] : []));
+  // A turn ended: what the panes show may have changed.
+  const [turnsEnded, setTurnsEnded] = useState(0);
+  useEffect(() => {
+    const ended = (): void => setTurnsEnded((count) => count + 1);
+    window.addEventListener('aparte-message-done', ended);
+    return () => window.removeEventListener('aparte-message-done', ended);
+  }, []);
   // What the core says of each conversation, as the sidebar shows it — read by the deck too.
   const statusesNow = useRef<Statuses>({});
   // A chat lives on while it works or waits for the person: a reply written, a question, an approval.
@@ -566,7 +578,20 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         messages={messages}
         shown={shownPanes(panes, narrow)}
         narrow={narrow}
-        content={{}}
+        content={{
+          files: {
+            meta: activeProject?.name ?? messages.files.home,
+            body: (
+              <FilesPanel
+                messages={messages}
+                scope={conversationId ? { conversationId } : activeProject ? { projectId: activeProject.id } : {}}
+                conversationId={conversationId}
+                pending={pendingPaths}
+                refresh={turnsEnded + asked}
+              />
+            ),
+          },
+        }}
         onClose={(pane) => setPanes((was) => closePane(was, pane))}
       />
       </div>

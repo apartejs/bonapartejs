@@ -367,6 +367,21 @@ export interface Messages {
     close: { files: string; changes: string; terminal: string };
     closeTip: string;
   };
+  /** The « Fichiers » pane (task 6.3): the tree, the preview, the marks. */
+  files: {
+    tree: string;
+    preview(path: string): string;
+    /** « M »: the conversation changed it. */
+    modified: string;
+    /** « P »: a change waits on it. */
+    proposed: string;
+    binary: string;
+    truncated: string;
+    choose: string;
+    unreadable: string;
+    /** The pane's meta without a project. */
+    home: string;
+  };
   /** « Rechercher » (board « Rechercher (Ctrl K) »), and its opener. */
   search: {
     open: string;
