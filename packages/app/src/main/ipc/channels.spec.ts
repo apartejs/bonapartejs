@@ -43,7 +43,11 @@ describe('the channels of the bridge', () => {
   it('the main process serves exactly the channels the contract declares', () => {
     const served: string[] = [];
     const ipcMain: IpcMainLike = { handle: (name) => void served.push(name) };
-    registerAllChannels(createIpcRegistry({ ipcMain, isTrusted: () => true }), anyCore, { version: () => '0', locale: () => 'fr' });
+    registerAllChannels(createIpcRegistry({ ipcMain, isTrusted: () => true }), anyCore, {
+      version: () => '0',
+      locale: () => 'fr',
+      chooseFolder: async () => null,
+    });
     expect([...served].sort()).toEqual(CHANNELS.map((channel) => channel.name).sort());
   });
 

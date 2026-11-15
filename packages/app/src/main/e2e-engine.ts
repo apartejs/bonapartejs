@@ -34,3 +34,15 @@ export function e2eEngineDeps(
   deps.llamaReleases = releases && /^http:\/\/127\.0\.0\.1:\d+\//.test(releases) ? releases : null;
   return deps;
 }
+
+/**
+ * The folder « Choisir un dossier… » gives in a test run: the test's own
+ * (`BONAPARTE_E2E_PICK_FOLDER`), or none — never the system's dialog, a
+ * window on the screen. `undefined` outside a test run: the system asks.
+ */
+export function e2ePickedFolder(env: Record<string, string | undefined>, e2e: boolean): string | null | undefined {
+  if (!e2e) return undefined;
+  const folder = env['BONAPARTE_E2E_PICK_FOLDER'];
+  return folder && (win32.isAbsolute(folder) || posix.isAbsolute(folder)) ? folder : null;
+}
+

@@ -68,5 +68,15 @@ describe('createConversationRunner', () => {
     await runner(turn('c-1'));
     expect(posted).toEqual(['bonaparte://app/agent/c/c-1?mode=lecture', 'bonaparte://app/agent/c/c-1?mode=plume']);
   });
+
+  it('tells the core the project a new conversation starts in, beside the mode', async () => {
+    const { fetch, posted } = answering([{ type: 'run-start' }, { type: 'run-done' }]);
+    let project: string | null = 'p-1';
+    const runner = createConversationRunner({ fetch, mode: () => 'plume', project: () => project });
+    await runner(turn('c-1'));
+    project = null;
+    await runner(turn('c-2'));
+    expect(posted).toEqual(['bonaparte://app/agent/c/c-1?mode=plume&project=p-1', 'bonaparte://app/agent/c/c-2?mode=plume']);
+  });
 });
 

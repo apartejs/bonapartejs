@@ -9,11 +9,14 @@ import type { Core } from '@aparte/bonaparte-core';
 import { registerConversationChannels } from './conversations.js';
 import { registerEngineChannels } from './engine.js';
 import { registerModeChannels } from './modes.js';
+import { registerProjectChannels, type ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
 
 export interface AppFacts {
   version(): string;
   locale(): Locale;
+  /** The system's folder dialog (or a test's folder). */
+  chooseFolder: ChooseFolder;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -21,4 +24,5 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerEngineChannels(ipc, core);
   registerConversationChannels(ipc, core);
   registerModeChannels(ipc, core);
+  registerProjectChannels(ipc, core, facts.chooseFolder);
 }

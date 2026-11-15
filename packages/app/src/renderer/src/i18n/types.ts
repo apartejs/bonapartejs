@@ -149,6 +149,35 @@ export interface Messages {
   };
   /** aparté's own words that bonaparte says its way (« tu », the board's wording): the question, the list. */
   aparteWords: Record<AparteWord, string>;
+  /** The dialog « Nouveau projet » (board « Nouveau projet »), and its opener. */
+  newProject: {
+    open: string;
+    /** The project new conversations start in. */
+    active(name: string): string;
+    title: string;
+    close: string;
+    empty: string;
+    choose: string;
+    change: string;
+    folderHint: string;
+    found: string;
+    git(branch: string): string;
+    gitDetached(commit: string): string;
+    scripts(manager: string, scripts: readonly string[]): string;
+    instructions(file: string): string;
+    services(names: readonly string[]): string;
+    nothing: string;
+    name: string;
+    others: string;
+    addFolder: string;
+    removeFolder: string;
+    remove: string;
+    mode: string;
+    modeNotes: Record<'lecture' | 'repetition' | 'plume' | 'impro', string>;
+    note: string;
+    cancel: string;
+    create: string;
+  };
 }
 
 /** The words of aparté's locale that bonaparte says its own way. */

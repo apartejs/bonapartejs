@@ -8,6 +8,7 @@ import {
   type EngineStateView,
   type Locale,
   type PlayMode,
+  type ProjectView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
@@ -23,6 +24,7 @@ import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { ModeSwitch } from './chat/ModeSwitch';
+import { NewProject } from './dialogs/NewProject';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
 import { EngineCard } from './shell/EngineCard';
@@ -43,7 +45,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   // The mode the switch shows, read at each turn: a conversation the turn creates runs in it.
   const chosen = useRef<PlayMode>('repetition');
-  const streamRunner = useMemo(() => createConversationRunner({ mode: () => chosen.current }), []);
+  // The project new conversations start in (task 5.3; the sidebar's projects come with 5.6).
+  const [activeProject, setActiveProject] = useState<ProjectView | null>(null);
+  const project = useRef<ProjectView | null>(null);
+  useEffect(() => {
+    project.current = activeProject;
+  }, [activeProject]);
+  const [creatingProject, setCreatingProject] = useState(false);
+  const streamRunner = useMemo(
+    () => createConversationRunner({ mode: () => chosen.current, project: () => project.current?.id ?? null }),
+    [],
+  );
   // The core decides every call; what it asks about waits here for the person's answer on the card.
   // The resolver owns the decision: aparté's page policy is never consulted.
   const approvals = useMemo(() => createApprovalsStore(), []);
@@ -81,9 +93,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     chosen.current = mode;
   }, [mode]);
   useEffect(() => {
-    // A new conversation starts where the product does: asking before every change.
+    // A new conversation starts in its project's default mode, else where the product does.
     if (!conversationId) {
-      setMode('repetition');
+      setMode(project.current?.defaultMode ?? 'repetition');
       return;
     }
     let current = true;
@@ -166,6 +178,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         >
           {messages.conversations.new}
         </button>
+        <button type="button" className="aparte-btn aparte-btn--surface bonaparte-new-project" onClick={() => setCreatingProject(true)}>
+          {messages.newProject.open}
+        </button>
+        {activeProject ? <p className="bonaparte-active-project">{messages.newProject.active(activeProject.name)}</p> : null}
         <AparteConversationList
           className="bonaparte-conversations"
           conversations={activeConversations}
@@ -174,6 +190,20 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         />
         <EngineCard engine={engine} messages={messages} />
       </aside>
+      <NewProject
+        open={creatingProject}
+        messages={messages}
+        onClose={() => setCreatingProject(false)}
+        onCreated={(made) => {
+          setCreatingProject(false);
+          project.current = made;
+          setActiveProject(made);
+          // A fresh conversation, in the project and its mode.
+          chosen.current = made.defaultMode;
+          setMode(made.defaultMode);
+          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+        }}
+      />
       <AparteChat
         onConversationCreated={(id) => bornHere.current.add(id)}
         className="bonaparte-chat"

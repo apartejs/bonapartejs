@@ -15,6 +15,8 @@ type StreamRunner = ReturnType<typeof createAgentStreamRunner>;
 export interface ConversationRunnerOptions {
   /** The mode the switch shows now: read at each turn. */
   mode?: () => PlayMode;
+  /** The project a new conversation starts in (the core takes it at its first turn only). */
+  project?: () => string | null;
   /** Tests only. */
   fetch?: typeof globalThis.fetch;
 }
@@ -23,7 +25,12 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
   const runner = createAgentStreamRunner({
     endpoint: ({ conversationId }) => {
       const at = `${AGENT_ENDPOINT}/c/${encodeURIComponent(conversationId ?? '')}`;
-      return options.mode ? `${at}?mode=${options.mode()}` : at;
+      const query = new URLSearchParams();
+      if (options.mode) query.set('mode', options.mode());
+      const project = options.project?.();
+      if (project) query.set('project', project);
+      const said = query.toString();
+      return said ? `${at}?${said}` : at;
     },
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });

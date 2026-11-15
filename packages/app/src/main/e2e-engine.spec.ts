@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { e2eEngineDeps } from './e2e-engine.js';
+import { e2eEngineDeps, e2ePickedFolder } from './e2e-engine.js';
 
 describe('e2eEngineDeps', () => {
   const env = {
@@ -47,3 +47,17 @@ describe('e2eEngineDeps', () => {
     expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ llamaReleases: null });
   });
 });
+
+describe('e2ePickedFolder', () => {
+  it("is the test's folder in a test run — never the system's dialog, which would put a window on the screen", () => {
+    expect(e2ePickedFolder({ BONAPARTE_E2E_PICK_FOLDER: 'C:\\tmp\\e2e\\spanwise' }, true)).toBe('C:\\tmp\\e2e\\spanwise');
+    // A test run that names none closes the dialog: nothing chosen, nothing shown.
+    expect(e2ePickedFolder({}, true)).toBeNull();
+    expect(e2ePickedFolder({ BONAPARTE_E2E_PICK_FOLDER: 'relative' }, true)).toBeNull();
+  });
+
+  it('is nothing outside a test run: the system asks the person', () => {
+    expect(e2ePickedFolder({ BONAPARTE_E2E_PICK_FOLDER: 'C:\\tmp\\x' }, false)).toBeUndefined();
+  });
+});
+
