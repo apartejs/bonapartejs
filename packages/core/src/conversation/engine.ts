@@ -26,7 +26,7 @@ import type { MeasureStore } from '../engine/measures.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
-import type { Journal, JournalEntry, PendingCall, Usage } from '../journal/types.js';
+import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
@@ -101,6 +101,8 @@ export interface TurnInput {
   text?: string;
   /** The tool rounds: the model's calls are answered, and the turn goes on, in the same slot. */
   tools?: TurnTools;
+  /** A paused turn goes on: its calls were answered; no message of the person, the model's answer continues. */
+  resume?: true;
   messageId?: string;
   thinking?: boolean;
   /**
@@ -236,6 +238,37 @@ export class ConversationEngine {
     return this.exclusive.run(id, () => this.runTurn(id, input, sink, signal));
   }
 
+  /** What a paused turn waits for: its last entry, when it is a pause. */
+  async paused(id: string): Promise<Extract<JournalEntry, { kind: 'pending' }> | null> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) return null;
+    const last = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries().at(-1);
+    return last?.kind === 'pending' ? last : null;
+  }
+
+  /**
+   * The answers to a pause, kept in the journal: the outcomes as they came,
+   * the results the model reads (rendered — and disarmed — by the family),
+   * and a new pause when one of the calls must wait again.
+   */
+  recordAnswers(
+    id: string,
+    answers: { outcomes: Record<string, Outcome>; results: readonly ToolResult[]; pending?: { calls: PendingCall[]; ticket: string } },
+  ): Promise<void> {
+    return this.exclusive.run(id, async () => {
+      const meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      const engine = await this.deps.engine();
+      if (!engine) throw new NoEngineError();
+      const journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+      await journal.append({ kind: 'outcomes', outcomes: answers.outcomes, rendered: '' });
+      if (answers.results.length > 0) {
+        await journal.append({ kind: 'tool-results', results: [...answers.results], rendered: engine.family.renderToolResults(answers.results) });
+      }
+      if (answers.pending) await journal.append({ kind: 'pending', calls: answers.pending.calls, ticket: answers.pending.ticket, rendered: '' });
+    });
+  }
+
   /** Saves the conversations whose state changed (the app closes). */
   async flush(): Promise<void> {
     // Only an engine that keeps a memory is asked which server it is: a remote one is never joined to close.
@@ -317,7 +350,7 @@ export class ConversationEngine {
     const frozen = frozenPrompt(entries);
     // Answering the last message again appends no message.
     const userRendered = input.text === undefined ? '' : family.renderUser(input.text);
-    const opening = family.beginAssistant({ thinking: input.thinking ?? true });
+    const opening = family.beginAssistant({ thinking: input.thinking ?? true, ...(input.resume ? { continuing: true } : {}) });
 
     // Never a context shift: what does not fit is refused before anything is sent.
     const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;

@@ -13,7 +13,8 @@
  * loads a model: with none loaded, it is refused.
  */
 
-import type { ClientTool, Core, Engine } from '../api.js';
+import type { StreamRunEvent } from '@aparte/engine';
+import type { Core, Engine } from '../api.js';
 import { ContextFullError, EngineFailedError, type TurnEvent, type TurnInput, type TurnResult } from '../conversation/engine.js';
 import { openJournal } from '../journal/journal.js';
 import { agentBodySchema, type AgentBody } from './body.js';
@@ -89,6 +90,17 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
     } catch (error) {
       return jsonError(400, error instanceof Error ? error.message : String(error));
     }
+    const { messageId, clientTools, resume } = body.data;
+    if (resume) {
+      // A paused turn goes on: its ticket checked, its calls answered — the history the window sends is not read.
+      const check = await core.checkResume(conversationId, { messageId, ticket: resume.ticket, outcomes: resume.outcomes });
+      if (!check.ok) return jsonError(check.status, check.message);
+      return streamTurn(
+        core,
+        (emit, onTurnEvent, signal) => core.resumeTurn(conversationId, check, { messageId, clientTools, signal }, emit, onTurnEvent),
+        request.signal,
+      );
+    }
     const entries = (await openJournal(core.conversationStore.dir, conversationId, meta.branchId)).entries();
     const divergence = compareWithJournal(body.data.request.messages, entries);
     if (divergence.kind === 'mismatch') {
@@ -98,9 +110,13 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       divergence.kind === 'append'
         ? { text: divergence.text, messageId: body.data.messageId }
         : divergence.kind === 'retry'
-          ? { forkAfter: divergence.afterEntryId }
+          ? { forkAfter: divergence.afterEntryId, messageId: body.data.messageId }
           : { text: divergence.text, forkAfter: divergence.afterEntryId, messageId: body.data.messageId };
-    return streamTurn(core, conversationId, input, request.signal, body.data.clientTools);
+    return streamTurn(
+      core,
+      (emit, onTurnEvent, signal) => core.agentTurn(conversationId, input, { clientTools, signal }, emit, onTurnEvent),
+      request.signal,
+    );
   };
 }
 
@@ -120,18 +136,15 @@ function toWire(event: TurnEvent, rereading: { on: boolean }): WireLine | null {
         ? { type: 'activity', id: 'reread', activityType: 'reread', content: { done: event.done, total: event.total } }
         : null;
     default:
-      // A tool call has nobody to run it yet (phase 4).
+      // A tool call: the loop says it, as it decides it (tool-start).
       return null;
   }
 }
 
-function streamTurn(
-  core: Core,
-  conversationId: string,
-  input: TurnInput,
-  signal: AbortSignal,
-  clientTools: readonly ClientTool[],
-): Response {
+/** What leads a turn: a new one, or a pause resumed. */
+type TurnRunner = (emit: (event: StreamRunEvent) => void, onTurnEvent: (event: TurnEvent) => void, signal: AbortSignal) => Promise<TurnResult>;
+
+function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Response {
   const encoder = new TextEncoder();
   // Stops the generation: when the window cuts its request, or stops reading.
   const stop = new AbortController();
@@ -158,15 +171,13 @@ function streamTurn(
         write({ type: 'run-start' });
         write({ type: 'turn-start' });
         const rereading = { on: false };
-        const result: TurnResult = await core.agentTurn(
-          conversationId,
-          input,
-          { clientTools, signal: stop.signal },
+        const result: TurnResult = await runTurn(
           (event) => write(event),
           (event) => {
             const line = toWire(event, rereading);
             if (line) write(line);
           },
+          stop.signal,
         );
         if (result.stopped === 'user') {
           // A stop ends the run cleanly: the reply is over, not failed.

@@ -29,9 +29,10 @@ import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
 import { defaultScanRoots, scanModels, type ModelSource, type ScanRoot } from './models/inventory.js';
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
-import { randomUUID } from 'node:crypto';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn } from './agent/loop.js';
+import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
+import { createTickets, installationSecret, type Tickets } from './agent/tickets.js';
 import { ConversationEngine, type EngineView, type TurnEvent, type TurnInput, type TurnResult } from './conversation/engine.js';
 import { PermissionEngine } from './permissions/engine.js';
 import { toolsFor } from './prompt/system-prompt.js';
@@ -120,6 +121,16 @@ export interface Core {
     conversationId: string,
     input: Omit<TurnInput, 'tools'>,
     options: { clientTools: readonly ClientTool[]; signal: AbortSignal },
+    emit: (event: StreamRunEvent) => void,
+    onTurnEvent: (event: TurnEvent) => void,
+  ): Promise<TurnResult>;
+  /** Is this the resume of the pause the conversation waits on: its ticket, its answers? */
+  checkResume(conversationId: string, resume: { messageId: string; ticket: string; outcomes: Record<string, unknown> }): Promise<ResumeCheck>;
+  /** A pause answered: its calls run or refused as answered, then the turn goes on — or pauses again. */
+  resumeTurn(
+    conversationId: string,
+    check: Extract<ResumeCheck, { ok: true }>,
+    options: { messageId: string; clientTools: readonly ClientTool[]; signal: AbortSignal },
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult>;
@@ -467,6 +478,9 @@ export function createCore(deps: CoreDeps): Core {
   const tools = new ToolRegistry();
   for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
   const permissions = new PermissionEngine({ roots: () => [], dataDir: deps.dataDir });
+  // The tickets of paused turns, signed with this installation's secret (made at the first turn).
+  let ticketsReady: Promise<Tickets> | undefined;
+  const tickets = (): Promise<Tickets> => (ticketsReady ??= installationSecret(deps.dataDir).then((secret) => createTickets(secret)));
   const conversations = new ConversationEngine({
     store: conversationStore,
     kv,
@@ -511,6 +525,42 @@ export function createCore(deps: CoreDeps): Core {
       return { client, family: loaded.layer };
   }
 
+  async function agentTurn(
+    conversationId: string,
+    input: Omit<TurnInput, 'tools'>,
+    options: { clientTools: readonly ClientTool[]; signal: AbortSignal },
+    emit: (event: StreamRunEvent) => void,
+    onTurnEvent: (event: TurnEvent) => void,
+  ): Promise<TurnResult> {
+    const meta = await conversationStore.get(conversationId);
+    const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
+      name: tool.name,
+      description: typeof tool.description === 'string' ? tool.description : '',
+      inputSchema: typeof tool.inputSchema === 'object' && tool.inputSchema !== null ? (tool.inputSchema as Record<string, unknown>) : {},
+      effect: 'ui',
+      source: 'builtin',
+      where: 'window',
+    }));
+    const signer = await tickets();
+    return runAgentTurn(
+      {
+        conversationId,
+        input,
+        mode: meta?.mode ?? 'repetition',
+        registry: tools,
+        permissions,
+        conversations,
+        roots: [],
+        nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
+        windowTools,
+        ticket: (pending) => signer.signTicket({ messageId: input.messageId ?? '', calls: pending.map((call) => call.toolCallId) }),
+        signal: options.signal,
+      },
+      emit,
+      onTurnEvent,
+    );
+  }
+
   return {
     engine: currentEngine,
     engineState,
@@ -544,34 +594,36 @@ export function createCore(deps: CoreDeps): Core {
     tools,
     permissions,
 
-    async agentTurn(conversationId, input, options, emit, onTurnEvent) {
+    agentTurn,
+
+    async checkResume(conversationId, resume) {
+      return checkResume(await conversations.paused(conversationId), resume, await tickets());
+    },
+
+    async resumeTurn(conversationId, check, options, emit, onTurnEvent) {
       const meta = await conversationStore.get(conversationId);
-      const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
-        name: tool.name,
-        description: typeof tool.description === 'string' ? tool.description : '',
-        inputSchema: typeof tool.inputSchema === 'object' && tool.inputSchema !== null ? (tool.inputSchema as Record<string, unknown>) : {},
-        effect: 'ui',
-        source: 'builtin',
-        where: 'window',
-      }));
-      return runAgentTurn(
+      const { results, waiting } = await answerPause(
         {
           conversationId,
-          input,
           mode: meta?.mode ?? 'repetition',
           registry: tools,
           permissions,
-          conversations,
           roots: [],
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
-          windowTools,
-          // Signed with the resume (task 4.5).
-          ticket: () => `ticket-${randomUUID()}`,
           signal: options.signal,
         },
+        check.pause,
+        check.outcomes,
         emit,
-        onTurnEvent,
       );
+      if (waiting.length > 0) {
+        // A call queued behind must be asked about in its turn: the turn pauses again.
+        const ticket = (await tickets()).signTicket({ messageId: options.messageId, calls: waiting.map((call) => call.toolCallId) });
+        await conversations.recordAnswers(conversationId, { outcomes: check.outcomes, results, pending: { calls: waiting, ticket } });
+        return { usage: { inputTokens: 0, outputTokens: 0 }, suspended: { pending: waiting, ticket } };
+      }
+      await conversations.recordAnswers(conversationId, { outcomes: check.outcomes, results });
+      return agentTurn(conversationId, { resume: true, messageId: options.messageId }, options, emit, onTurnEvent);
     },
     llamaCpp,
     installLlamaCpp,
