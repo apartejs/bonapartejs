@@ -7,12 +7,10 @@
 import { app, ipcMain } from 'electron';
 import { join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore } from '@aparte/bonaparte-core';
-import { appInfo, type Locale } from '@aparte/bonaparte-shared';
+import type { Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
 import { e2eEngineDeps } from './e2e-engine.js';
-import { registerConversationChannels } from './ipc/conversations.js';
-import { registerModeChannels } from './ipc/modes.js';
-import { registerEngineChannels } from './ipc/engine.js';
+import { registerAllChannels } from './ipc/index.js';
 import { createIpcRegistry } from './ipc/register.js';
 import { stopEngineBeforeQuit } from './quit.js';
 import { devServerUrlFrom, isTrustedOrigin } from './security.js';
@@ -44,10 +42,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   });
 
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
-  ipc.handle(appInfo, () => ({ version: app.getVersion(), locale: interfaceLocale() }));
-  registerEngineChannels(ipc, core);
-  registerConversationChannels(ipc, core);
-  registerModeChannels(ipc, core);
+  registerAllChannels(ipc, core, { version: () => app.getVersion(), locale: interfaceLocale });
 
   createMainWindow({ devServerUrl, e2e: options.e2e });
 

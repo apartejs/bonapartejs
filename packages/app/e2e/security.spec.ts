@@ -76,3 +76,18 @@ test('the bridge refuses a channel that does not exist', async ({ launch }) => {
   });
   expect(outcome).toBe('refused');
 });
+
+test('the page carries its Content-Security-Policy: nothing loads from elsewhere', async ({ launch }) => {
+  const { page } = await launch();
+  const policy = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') ?? '');
+  expect(policy).toContain("default-src 'none'");
+  expect(policy).toContain("script-src 'self'");
+  expect(policy).toContain("frame-src 'none'");
+});
+
+test('the window opens no other window', async ({ launch }) => {
+  const { app, page } = await launch();
+  const opened = await page.evaluate(() => window.open('https://example.com/') === null);
+  expect(opened).toBe(true);
+  expect(app.windows()).toHaveLength(1);
+});
