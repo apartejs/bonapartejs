@@ -10,6 +10,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
+import { diffView } from './fixtures/diff.js';
 
 const Q = '<|"|>';
 const EDIT = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}first${Q},new_string:${Q}second${Q}}<tool_call|>`;
@@ -60,4 +61,17 @@ test('a change that waits for the person is there, « Proposé », with what it 
   await expect(notes).toContainText('Proposé');
   await expect(pane.locator('aparte-diff')).toContainText('second');
   await expect(pane.getByRole('button', { name: /^Revenir/ })).toHaveCount(0);
+});
+
+test('an unchanged line’s two numbers, the old file’s and the new one’s, are set apart — never read as one', async ({ launch }) => {
+  const { page, home } = await launch({ engine: { responder: model }, settings: { defaultMode: 'plume' } });
+  await writeFile(join(home, 'notes.txt'), 'first\nkept\n');
+  await chat(page).send('Change la note');
+  await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
+  await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Changements', exact: true }).click();
+  const notes = diffView(page.getByRole('region', { name: 'Changements', exact: true }).getByRole('region', { name: 'notes.txt', exact: true }));
+  await expect(notes.lineNumber('new', 2)).toBeVisible();
+  // « 2 » and « 2 » side by side, with nothing between them, read as « 22 »: a rule sets them apart.
+  const rule = await notes.lineNumber('old', 2).evaluate((element) => getComputedStyle(element).borderInlineEndWidth);
+  expect(Number.parseFloat(rule)).toBeGreaterThan(0);
 });
