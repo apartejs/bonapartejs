@@ -177,7 +177,8 @@ function streamTurn(core: Core, conversationId: string, input: TurnInput, signal
             cacheReadTokens: usage.cacheReadTokens ?? 0,
             durationMs: Date.now() - started,
           },
-          finishReason: 'stop',
+          // Cut off by the context: aparté says so under the answer.
+          finishReason: result.truncated ? 'length' : 'stop',
         });
       };
 

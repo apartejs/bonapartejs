@@ -89,6 +89,8 @@ export interface TurnInput {
 export interface TurnResult {
   usage: Usage;
   stopped?: 'user';
+  /** The context ran out in the middle of the answer: it is incomplete. */
+  truncated?: true;
 }
 
 /** No model is loaded: nothing is loaded in silence (the window offers to). */
@@ -316,6 +318,7 @@ export class ConversationEngine {
           const demux = family.createDemux();
           let raw = '';
           let usage: Usage = { inputTokens: 0, outputTokens: 0 };
+          let truncated = false;
           let finished = false;
           const finishReread = (): void => {
             if (!turning.rereading) return;
@@ -347,6 +350,7 @@ export class ConversationEngine {
                 };
                 this.measure(engine, stats.promptUncachedTokens, stats.promptMs);
                 this.lastRun.set(key, { engine, tokens: stats.contextTokens || used });
+                truncated = stats.truncated === true;
               }
             }
             for (const piece of demux.flush()) sink(piece);
@@ -375,8 +379,14 @@ export class ConversationEngine {
             this.scheduler.evict(owner);
             throw new EngineFailedError(error);
           }
-          await journal.append({ kind: 'assistant', raw, usage, rendered: opening + raw + family.endAssistant(raw) });
-          return { usage };
+          await journal.append({
+            kind: 'assistant',
+            raw,
+            usage,
+            ...(truncated ? { truncated: true as const } : {}),
+            rendered: opening + raw + family.endAssistant(raw),
+          });
+          return truncated ? { usage, truncated: true as const } : { usage };
         },
         signal ? { signal } : {},
       );

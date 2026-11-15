@@ -87,6 +87,15 @@ describe('ConversationEngine — a turn', () => {
     expect(await engine.open(meta.id)).toBeNull();
   });
 
+  it('an answer the context cut off is kept marked as such, and the turn says so', async () => {
+    const { store, conversation, say } = await rig({ server: { truncate: true } });
+    const meta = await conversation();
+    const { result } = await say(meta.id, 'Bonjour');
+    expect(result.truncated).toBe(true);
+    const journal = await openJournal(store.dir, meta.id);
+    expect(journal.entries().at(-1)).toMatchObject({ kind: 'assistant', truncated: true });
+  });
+
   it('streams what the model writes, and gives the usage of the turn', async () => {
     const { conversation, say } = await rig();
     const meta = await conversation();

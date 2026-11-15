@@ -58,7 +58,8 @@ interface Common {
 export type JournalBody =
   | { kind: 'system' }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
-  | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine' }
+  /** `truncated`: the context ran out in the middle of it — the answer is incomplete. */
+  | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true }
   | { kind: 'tool-results'; results: ToolResult[] }
   | { kind: 'pending'; calls: PendingCall[]; ticket: string }
   | { kind: 'outcomes'; outcomes: Record<string, Outcome> }

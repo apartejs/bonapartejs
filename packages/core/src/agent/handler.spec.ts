@@ -151,6 +151,18 @@ describe('the agent handler, streaming a turn', () => {
     expect(last['usage'].outputTokens).toBeGreaterThan(0);
   });
 
+  it('an answer the context cut off ends as such (length), never as finished', async () => {
+    const { handler } = await setup({ responder: () => 'Une réponse coupée', truncate: true });
+    const lines = await linesOf(await handler(post(turn(user('Bonjour')))));
+    expect(lines.at(-1)).toMatchObject({ type: 'run-done', finishReason: 'length' });
+  });
+
+  it('a whole answer ends as finished (stop)', async () => {
+    const { handler } = await setup({ responder: () => 'Bonjour Paul' });
+    const lines = await linesOf(await handler(post(turn(user('Bonjour')))));
+    expect(lines.at(-1)).toMatchObject({ type: 'run-done', finishReason: 'stop' });
+  });
+
   it('sends reasoning as thinking-delta, apart from the answer', async () => {
     const { handler } = await setup({ responder: () => '<|channel>thought\nje compte<channel|>Bonjour' });
     const lines = await linesOf(await handler(post(turn(user('Bonjour')))));
