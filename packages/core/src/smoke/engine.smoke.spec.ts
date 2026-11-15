@@ -31,6 +31,8 @@
  * llama.cpp binary, else found on the PATH) · BONAPARTE_SMOKE_CTX (8192).
  */
 
+import { createAgentStreamRunner } from '@aparte/core';
+import type { StreamRunEvent, StreamUsage } from '@aparte/engine';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -75,6 +77,7 @@ const READ_FILE: ToolDef = {
 
 describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
   let dataDir: string;
+  let home: string;
   let core: Core;
   let engine: Engine;
 
@@ -109,8 +112,12 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     dataDir = await mkdtemp(join(tmpdir(), 'bonaparte-smoke-'));
     await mkdir(join(dataDir, 'config'), { recursive: true });
     await writeFile(join(dataDir, 'config', 'global.json'), JSON.stringify({ engine: { nCtx: N_CTX } }));
+    // The tools' folder: the smoke's own, never the person's.
+    home = join(dataDir, 'home');
+    await mkdir(home, { recursive: true });
     core = createCore({
       dataDir,
+      home,
       port: PORT,
       modelRoots: [{ dir: dirname(MODEL!), source: 'manual' }],
       env: { ...process.env, ...(LLAMA ? { BONAPARTE_LLAMA_BIN: LLAMA } : {}) },
@@ -347,4 +354,73 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     // The whole seed, but the tail after llama.cpp's last checkpoint.
     expect(fresh.usage.cacheReadTokens ?? 0).toBeGreaterThanOrEqual(seed.promptTokenCount - CHECKPOINT_TAIL);
   }, TIMEOUT);
+
+  // ── The agent: through aparté's stock runner and the handler, as the window's turns go ──
+
+  type Runner = ReturnType<typeof createAgentStreamRunner>;
+  type RunnerOptions = Parameters<Runner>[0];
+
+  /** aparté's runner, wired to the handler the way `protocol.handle` wires it in the app. */
+  function runnerFor(id: string): Runner {
+    const handler = createAgentHandler(core);
+    return createAgentStreamRunner({
+      endpoint: `${AGENT_ENDPOINT}/c/${id}`,
+      fetch: (input, init) => handler(new Request(input as string, init)),
+    });
+  }
+
+  /** What the client hands its runner for one turn. */
+  function turnOf(messageId: string, text: string, events: StreamRunEvent[]): RunnerOptions {
+    return {
+      messageId,
+      baseRequest: { messages: [{ role: 'user', content: text }], modelId: '' },
+      emitter: (event: StreamRunEvent) => events.push(event),
+      signal: new AbortController().signal,
+    } as unknown as RunnerOptions;
+  }
+
+  const textOf = (events: StreamRunEvent[]): string => events.map((event) => (event.type === 'text-delta' ? event.delta : '')).join('');
+
+  it('a real call through the runner: the model reads a file, the result comes back, it answers from it — and the prefix is kept', async () => {
+    await writeFile(join(home, 'notes.txt'), 'The code word is PERIWINKLE.\n');
+    await core.conversationStore.ensure('smoke-agent-read', { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    const events: StreamRunEvent[] = [];
+    const usage = (await runnerFor('smoke-agent-read')(
+      turnOf('m-read', 'Use the read_file tool to read notes.txt, then reply with the code word it contains and nothing else.', events),
+    )) as StreamUsage | undefined;
+    const started = events.find((event) => event.type === 'tool-start');
+    const answer = textOf(events).trim();
+    console.log(
+      `[smoke] agent: ${started?.type === 'tool-start' ? `${started.name} ${JSON.stringify(started.input)}` : 'no call'} → « ${answer.slice(-60)} »; ` +
+        `last round: ${usage?.cacheReadTokens} of ${usage?.inputTokens} tokens served by the cache`,
+    );
+    expect(started).toMatchObject({ type: 'tool-start', name: 'read_file' });
+    expect(events.map((event) => event.type)).toContain('tool-resolved');
+    expect(answer.toUpperCase()).toContain('PERIWINKLE');
+    // Case 4 of v0: after the round trip the prompt is the first round's, the call and its result —
+    // all but the result (and llama.cpp's checkpoint tail) served by the cache.
+    expect((usage?.inputTokens ?? 0) - (usage?.cacheReadTokens ?? 0)).toBeLessThan(100);
+  }, TIMEOUT);
+
+  it('a real edit pauses for the person; their answer resumes the turn, and only then is the file written', async () => {
+    await writeFile(join(home, 'todo.txt'), 'buy milk\n');
+    await core.conversationStore.ensure('smoke-agent-edit', { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    const runner = runnerFor('smoke-agent-edit');
+    const ask = 'Use the edit_file tool on todo.txt to replace "buy milk" with "buy bread". Then reply with DONE.';
+    const first: StreamRunEvent[] = [];
+    await runner(turnOf('m-edit', ask, first));
+    const suspended = first.at(-1) as Extract<StreamRunEvent, { type: 'run-suspended' }> & { ticket?: string };
+    console.log(`[smoke] agent paused: ${JSON.stringify(suspended.type === 'run-suspended' ? suspended.pending : suspended)}`);
+    expect(suspended.type).toBe('run-suspended');
+    expect(suspended.pending).toMatchObject([{ name: 'edit_file', reason: 'approval' }]);
+    expect(await readFile(join(home, 'todo.txt'), 'utf8')).toBe('buy milk\n');
+
+    const second: StreamRunEvent[] = [];
+    const outcomes = { [suspended.pending[0]!.toolCallId]: { kind: 'decision', approved: true } };
+    await runner({ ...turnOf('m-edit', ask, second), deferral: { token: suspended.ticket, outcomes } } as unknown as RunnerOptions);
+    console.log(`[smoke] agent resumed: ${second.map((event) => event.type).join(', ')} → « ${textOf(second).trim().slice(-60)} »`);
+    expect(second.map((event) => event.type)).toEqual(expect.arrayContaining(['tool-approved', 'tool-resolved', 'run-done']));
+    expect(await readFile(join(home, 'todo.txt'), 'utf8')).toBe('buy bread\n');
+  }, TIMEOUT);
 });
+
