@@ -207,7 +207,8 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
         body: JSON.stringify({
           v: 1,
           messageId: 'm1',
-          request: { messages: [{ role: 'user', content: 'Count from 1 to 500, one number per line.' }], modelId: '' },
+          // Every turn has its tools since phase 4: the model is told to answer in text, not to run a counter.
+          request: { messages: [{ role: 'user', content: 'Without using any tool, write the numbers from 1 to 500 in your reply, one per line.' }], modelId: '' },
           clientTools: [],
         }),
         signal: controller.signal,
@@ -220,6 +221,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     const decoder = new TextDecoder();
     let buffered = '';
     let pieces = 0;
+    const seen: string[] = [];
     while (pieces < 20) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -228,10 +230,11 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
       buffered = lines.pop() ?? '';
       for (const line of lines) {
         const type = line ? (JSON.parse(line) as { type: string }).type : '';
+        if (type && !seen.includes(type)) seen.push(type);
         if (type === 'text-delta' || type === 'thinking-delta') pieces += 1;
       }
     }
-    expect(pieces).toBe(20);
+    expect(pieces, `the stream said: ${seen.join(', ')}`).toBe(20);
     expect((await engine.client.slots()).some((slot) => slot.processing)).toBe(true);
 
     controller.abort();
