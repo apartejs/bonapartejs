@@ -44,6 +44,20 @@ describe('compareWithJournal', () => {
     expect(compareWithJournal([user('Salut')], JOURNAL)).toEqual({ kind: 'edit', afterEntryId: JOURNAL[1]!.id, text: 'Salut' });
   });
 
+  it('a message whose answer failed comes back joined to the next one: the journal kept the next one, and the history goes on', () => {
+    // aparté 1.9 drops a message whose answer failed from the next request, then joins it to the
+    // following message (two messages of the person in a row become one, with a blank line).
+    // The journal never kept it (refused before anything ran), or kept it on a branch an edit left.
+    const messages = [
+      user('Bonjour'),
+      assistant('Bonjour Paul.'),
+      user('Un message trop long\n\nEt ensuite ?'),
+      assistant('On continue.'),
+      user('Merci'),
+    ];
+    expect(compareWithJournal(messages, JOURNAL)).toEqual({ kind: 'append', text: 'Merci' });
+  });
+
   it('a history that is not this conversation is a mismatch', () => {
     expect(compareWithJournal([user('Autre'), assistant('x'), user('y')], JOURNAL)).toEqual({ kind: 'mismatch' });
     expect(compareWithJournal([user('a'), assistant('b'), user('c')], JOURNAL.slice(0, 2))).toEqual({ kind: 'mismatch' });
