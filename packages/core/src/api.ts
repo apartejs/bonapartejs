@@ -51,6 +51,8 @@ import {
 } from './models/inventory.js';
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
+import { SettingsStore } from './settings/store.js';
+import { exportConversations } from './conversation/export.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
@@ -173,6 +175,16 @@ export interface Core {
   ): Promise<SearchResult>;
   /** Deletes a conversation: its card, its journal, its memory — and the originals its turns kept. */
   removeConversation(id: string): Promise<void>;
+  /**
+   * « Exporter les conversations… »: one Markdown file per conversation, in a folder of its own
+   * made inside `into`. The labels are the window's words, in its language.
+   */
+  exportConversations(
+    into: string,
+    labels: { person: string; assistant: string; untitled: string },
+  ): Promise<{ folder: string; count: number }>;
+  /** The app's settings as the person left them (global scope): read, written, listened to. */
+  readonly settings: SettingsStore;
   /** The projects: made from a folder (what it says read first), each with its folders and its default mode. */
   readonly projects: {
     detect(folder: string): Promise<ProjectFacts>;
@@ -292,6 +304,8 @@ export function createCore(deps: CoreDeps): Core {
   // The KV states live where the managed server saves its slots.
   const kvDir = join(deps.dataDir, 'kv-slots');
   const measures = new MeasureStore(join(engineDir, 'measures.json'));
+  // The app's settings live in the same file, under `settings`, beside the engine's.
+  const settings = new SettingsStore(configFile);
   // Where the core says what went wrong without failing: the supervisor's own default.
   const log = deps.logger ?? ((line: string) => console.log(line));
   const supervisor = new EngineSupervisor({
@@ -916,6 +930,19 @@ export function createCore(deps: CoreDeps): Core {
       // Copies of the person's files never outlive the conversation that kept them.
       await checkpoints.forget(id);
     },
+
+    exportConversations(into, labels) {
+      const day = new Date();
+      const pad = (value: number) => String(value).padStart(2, '0');
+      return exportConversations({
+        store: conversationStore,
+        family: () => loaded?.layer ?? remoteFamily ?? familyLayer('gemma'),
+        into,
+        labels,
+        date: `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`,
+      });
+    },
+    settings,
 
     agentTurn,
     modeOf,
