@@ -5,10 +5,9 @@
  * the person's secrets, and it is stopped with its whole tree.
  */
 
+import { withoutSecrets } from '../process/env.js';
 import { spawnHidden, type SpawnedProcess, type SpawnFn } from '../process/spawn.js';
 
-/** Names that hold a secret: an API key, a token, a password. */
-const SECRET_NAME = /(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUTH)(?:_|$)/i;
 
 /**
  * The environment of the server: the parent's, without anything that looks
@@ -16,13 +15,7 @@ const SECRET_NAME = /(?:^|_)(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?|AUT
  * could print it — security rule 10), plus its own key.
  */
 export function serverEnvironment(base: Record<string, string | undefined>, key: string): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [name, value] of Object.entries(base)) {
-    if (value === undefined || SECRET_NAME.test(name)) continue;
-    env[name] = value;
-  }
-  env['LLAMA_API_KEY'] = key;
-  return env;
+  return { ...withoutSecrets(base), LLAMA_API_KEY: key };
 }
 
 export interface ServerProcess {
