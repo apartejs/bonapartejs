@@ -18,10 +18,12 @@ export interface TipButtonProps {
   /** A mark on the button's corner (a conversation that waits). */
   badge?: ReactNode;
   current?: boolean;
+  /** A toggle: whether what it opens is open. */
+  pressed?: boolean;
   onClick(): void;
 }
 
-export function TipButton({ label, tip, icon, side = 'bottom', className, badge, current, onClick }: TipButtonProps) {
+export function TipButton({ label, tip, icon, side = 'bottom', className, badge, current, pressed, onClick }: TipButtonProps) {
   return (
     <span className="aparte-tooltip-anchor aparte-tooltip-anchor--hover bonaparte-tip" data-side={side}>
       <button
@@ -29,6 +31,7 @@ export function TipButton({ label, tip, icon, side = 'bottom', className, badge,
         className={`aparte-btn aparte-btn--icon aparte-btn--ghost bonaparte-icon-button${className ? ` ${className}` : ''}`}
         aria-label={label}
         {...(current ? { 'aria-current': 'page' as const } : {})}
+        {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
         onClick={onClick}
       >
         <Icon name={icon} />

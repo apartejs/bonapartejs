@@ -7,7 +7,7 @@
  */
 
 import type { ConversationStatusView } from '@aparte/bonaparte-shared';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useMenu } from '../aparte/kit';
 import type { Messages } from '../i18n/index';
 import { Icon } from './icons';
@@ -25,6 +25,8 @@ export interface ConversationHeaderProps {
   onUnpin(): void;
   onArchive(): void;
   onDelete(): void;
+  /** The icons of the panes, at the end of the header. */
+  panels?: ReactNode;
 }
 
 type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'delete';
@@ -130,6 +132,12 @@ export function ConversationHeader(props: ConversationHeaderProps) {
             </button>
           </div>
         </span>
+      ) : null}
+      {props.panels ? (
+        <>
+          <span className="conversation-header__divider" aria-hidden="true" />
+          {props.panels}
+        </>
       ) : null}
       <dialog ref={dialog} className="aparte-dialog conversation-delete" aria-labelledby={questionId} onClose={() => setDeleting(false)}>
         <header className="aparte-dialog__header">

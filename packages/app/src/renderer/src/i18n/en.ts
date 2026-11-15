@@ -368,6 +368,17 @@ export const en: Messages = {
     cancel: 'Cancel',
     confirmDelete: 'Delete',
   },
+  panels: {
+    group: 'Panes',
+    region: 'Panes',
+    files: 'Files',
+    changes: 'Changes',
+    changesWaiting: (count) => `Changes, ${count} waiting`,
+    terminal: 'Terminal',
+    over: (name) => `${name}, over the conversation`,
+    close: { files: 'Close the files', changes: 'Close the changes', terminal: 'Close the terminal' },
+    closeTip: 'Close',
+  },
   search: {
     open: 'Search',
     shortcut: 'Ctrl K',

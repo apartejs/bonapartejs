@@ -369,6 +369,17 @@ export const fr: Messages = {
     cancel: 'Annuler',
     confirmDelete: 'Supprimer',
   },
+  panels: {
+    group: 'Volets',
+    region: 'Volets',
+    files: 'Fichiers',
+    changes: 'Changements',
+    changesWaiting: (count) => `Changements, ${count} en attente`,
+    terminal: 'Terminal',
+    over: (name) => `${name}, par-dessus la conversation`,
+    close: { files: 'Fermer les fichiers', changes: 'Fermer les changements', terminal: 'Fermer le terminal' },
+    closeTip: 'Fermer',
+  },
   search: {
     open: 'Rechercher',
     shortcut: 'Ctrl K',

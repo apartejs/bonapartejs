@@ -9,6 +9,8 @@ import {
   chevronRightIcon,
   closeIcon,
   cpuIcon,
+  editIcon,
+  fileIcon,
   folderIcon,
   messageSquareIcon,
   moreHorizontalIcon,
@@ -16,6 +18,7 @@ import {
   plusIcon,
   searchIcon,
   settingsIcon,
+  terminalIcon,
 } from '@aparte/core/icons';
 
 const ICONS = {
@@ -30,6 +33,9 @@ const ICONS = {
   more: moreHorizontalIcon,
   conversation: messageSquareIcon,
   close: closeIcon,
+  file: fileIcon,
+  edit: editIcon,
+  terminal: terminalIcon,
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -644,9 +644,135 @@ body {
 }
 
 .bonaparte-main {
+  position: relative;
+  display: flex;
+  /* The kit's main area is a column: the panes go beside the conversation. */
+  flex-direction: row;
   grid-column: 2;
   grid-row: 2;
   min-width: 0;
+  min-height: 0;
+}
+
+/* The conversation, and the panes beside it (task 6.2, board « Conversation au travail »). */
+.bonaparte-conversation {
+  display: flex;
+  flex: 999 1 520px;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.bonaparte-panes {
+  display: flex;
+  flex: 1 1 460px;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-inline-start: var(--aparte-border-width) solid var(--aparte-border);
+  background: color-mix(in srgb, var(--aparte-surface-1) 50%, var(--aparte-bg));
+}
+
+.bonaparte-pane {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 260px;
+  border-block-end: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.bonaparte-pane:last-child {
+  border-block-end: 0;
+}
+
+/* The terminal fills the column alone, and keeps 300 px under another pane. */
+.bonaparte-pane--terminal {
+  flex: 1 1 auto;
+  min-height: 300px;
+}
+
+.bonaparte-pane--fixed {
+  flex: none;
+  height: 300px;
+  min-height: 0;
+}
+
+.bonaparte-pane__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--aparte-space-4);
+  box-sizing: border-box;
+  height: 44px;
+  padding: 0 var(--aparte-space-4) 0 16px;
+  border-block-end: var(--aparte-border-width) solid var(--aparte-border);
+  background: var(--aparte-bg);
+}
+
+.bonaparte-pane__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.bonaparte-pane__meta {
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+.bonaparte-pane__spacer {
+  flex: 1;
+}
+
+.bonaparte-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Under 1 100 px (board « Fenêtre étroite »): the pane over the conversation, behind a scrim. */
+.bonaparte-panes__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: color-mix(in srgb, var(--aparte-text) 32%, transparent);
+}
+
+.bonaparte-panes--over {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 5;
+  width: 400px;
+  max-width: 92%;
+  border-inline-start: 0;
+  background: var(--aparte-bg);
+  box-shadow: -12px 0 32px color-mix(in srgb, var(--aparte-text) 16%, transparent);
+}
+
+/* The icons of the panes in the header: pressed while their pane is open. */
+.conversation-header__divider {
+  width: var(--aparte-border-width);
+  height: 20px;
+  background: var(--aparte-border);
+}
+
+.panel-toggles {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.panel-toggles .bonaparte-icon-button[aria-pressed='true'] {
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text);
+}
+
+.panel-toggles__mark {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
 }
 
 .bonaparte-icon {

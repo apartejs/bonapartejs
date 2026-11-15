@@ -351,6 +351,22 @@ export interface Messages {
     cancel: string;
     confirmDelete: string;
   };
+  /** The panes beside the conversation (board « Conversation au travail »): their icons and frames. */
+  panels: {
+    /** The group of the icons in the header. */
+    group: string;
+    /** The column of the panes. */
+    region: string;
+    files: string;
+    changes: string;
+    /** The icon of Changements while changes wait for the person. */
+    changesWaiting(count: number): string;
+    terminal: string;
+    /** A pane over the conversation, in a narrow window. */
+    over(name: string): string;
+    close: { files: string; changes: string; terminal: string };
+    closeTip: string;
+  };
   /** « Rechercher » (board « Rechercher (Ctrl K) »), and its opener. */
   search: {
     open: string;

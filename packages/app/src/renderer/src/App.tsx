@@ -26,6 +26,9 @@ import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
+import { PanelDock } from './panels/PanelDock';
+import { PanelToggles } from './panels/PanelToggles';
+import { close as closePane, opened, opensByItself, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { ComposerToolbar } from './chat/ComposerToolbar';
@@ -180,6 +183,23 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     window.addEventListener(SETTING_CHANGED, follow);
     return () => window.removeEventListener(SETTING_CHANGED, follow);
   }, []);
+  // The panes beside the conversation (task 6.2), and whether Changements opens by itself.
+  const [panes, setPanes] = useState<OpenPanes>([]);
+  const autoOpen = useRef(true);
+  useEffect(() => {
+    bridge
+      .invoke(settingsGet, { key: 'autoOpenPanel' })
+      .then((value) => {
+        autoOpen.current = opensByItself(value);
+      })
+      .catch(() => undefined);
+    const follow = (event: Event): void => {
+      const { key, value } = (event as CustomEvent<{ key: string; value: unknown }>).detail;
+      if (key === 'autoOpenPanel') autoOpen.current = opensByItself(value);
+    };
+    window.addEventListener(SETTING_CHANGED, follow);
+    return () => window.removeEventListener(SETTING_CHANGED, follow);
+  }, []);
   // The settings, over the shell: null for the conversations.
   const [settingsPage, setSettingsPage] = useState<SettingsPageName | null>(null);
   // The settings closed, by any way (back, Ctrl K, Ctrl B): what they may have changed is read again —
@@ -213,6 +233,12 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const [asked, setAsked] = useState(0);
   useEffect(() => approvals.subscribe(() => setAsked((count) => count + 1)), [approvals]);
   const request = approvals.list(conversationId ?? null)[0];
+  // The changes that wait for the person in the conversation open: a mark on Changements, which
+  // opens by itself unless the person said never.
+  const changesWaiting = approvals.list(conversationId ?? null).filter((one) => one.name === 'edit_file' || one.name === 'write_file').length;
+  useEffect(() => {
+    if (changesWaiting > 0 && autoOpen.current) setPanes((was) => opened(was, 'changes'));
+  }, [changesWaiting, conversationId]);
   // What the core says of each conversation, as the sidebar shows it — read by the deck too.
   const statusesNow = useRef<Statuses>({});
   // A chat lives on while it works or waits for the person: a reply written, a question, an approval.
@@ -482,8 +508,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           void remove(openConversation.id);
           setDeck((was) => forget(was, openConversation.id));
         }}
+        panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
+      <div className="bonaparte-conversation">
       <ChatDeck
         deck={deck}
         messages={messages}
@@ -532,6 +560,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             }
           />
         }
+      />
+      </div>
+      <PanelDock
+        messages={messages}
+        shown={shownPanes(panes, narrow)}
+        narrow={narrow}
+        content={{}}
+        onClose={(pane) => setPanes((was) => closePane(was, pane))}
       />
       </div>
     </div>
