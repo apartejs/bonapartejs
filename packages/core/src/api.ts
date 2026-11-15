@@ -242,7 +242,7 @@ export interface Core {
   /** What going back before a message would move — said before the person decides; nothing moved. */
   rewindPreview(conversationId: string, target: RewindTarget): Promise<RewindPreview>;
   /** Going back before a message (task 7.1): what it put back, the branch shown from now on. */
-  rewind(conversationId: string, target: RewindTarget, what: RewindWhat): Promise<RewindResult>;
+  rewind(conversationId: string, target: RewindTarget, what: RewindWhat, options?: { messageId?: string }): Promise<RewindResult>;
   /** The branches of a conversation (« Brancher », task 7.2): listed, one shown, the sibling picked followed. */
   readonly branches: Branches;
   /** « Annuler le retour »: until the conversation's next turn begins; null when nothing is left to undo. */
@@ -1171,7 +1171,7 @@ export function createCore(deps: CoreDeps): Core {
 
     branches,
     rewindPreview: (conversationId, target) => rewinds.preview(conversationId, target),
-    rewind: (conversationId, target, what) => rewinds.rewind(conversationId, target, what),
+    rewind: (conversationId, target, what, options) => rewinds.rewind(conversationId, target, what, options),
     undoRewind: (conversationId) => rewinds.undo(conversationId),
 
     async conversationArchived(conversationId, archived) {

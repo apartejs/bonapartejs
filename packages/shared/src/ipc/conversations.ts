@@ -149,7 +149,8 @@ export const conversationsRewindPreview = defineChannel(
 /** « Revenir »: the files, the conversation, or both, back to before the message. */
 export const conversationsRewind = defineChannel(
   'conversations.rewind',
-  z.object({ ...rewindTarget, what: rewindWhat }),
+  // `messageId`: the window's id of the message — its document of the new branch is cut there.
+  z.object({ ...rewindTarget, what: rewindWhat, messageId: z.string().max(256).optional() }),
   z.object({
     branchId: z.string(),
     fromBranchId: z.string(),

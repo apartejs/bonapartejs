@@ -52,6 +52,13 @@ type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt'>>;
 
 /** The window's document of a conversation, beside its journal. */
 const DOCUMENT = 'aparte.json';
+/** What cutting a window's document reads of it: aparté's messages and tree, the rest kept as it is. */
+interface CutDocument {
+  messages?: { id: string }[];
+  tree?: { headId: string | null; messages: { message: { id: string }; parentId: string | null }[] };
+  [key: string]: unknown;
+}
+
 /** The document of a branch not shown: `aparte.<branch>.json` — a branch id is ours, never a path. */
 const branchDocument = (branchId: string): string => {
   if (!/^[\w-]{1,64}$/.test(branchId)) throw new Error(`Not a branch: ${branchId}`);
@@ -216,6 +223,46 @@ export class ConversationStore {
       }
       await writeFile(join(this.dir, idOf(id), DOCUMENT), text, 'utf8');
       return true;
+    });
+  }
+
+  /**
+   * The window's document cut before one of its messages (going back, task 7.2): that message and what came
+   * after it — every sibling below it included — gone, the head the message before it. aparté's export
+   * format (`{ messages, tree: { headId, messages: [{ message, parentId }] } }`). Without the message in it,
+   * no document: the journal is read again.
+   */
+  async cutDocument(id: string, messageId: string): Promise<void> {
+    await this.writes.run(idOf(id), async () => {
+      const path = join(this.dir, idOf(id), DOCUMENT);
+      const document = (await readJsonFile(path).catch(() => null)) as CutDocument | null;
+      const nodes = document?.tree?.messages ?? [];
+      const at = nodes.find((node) => node.message?.id === messageId);
+      const flatAt = document?.messages?.findIndex((message) => message.id === messageId) ?? -1;
+      if (!document || (!at && flatAt < 0)) {
+        await rm(path, { force: true });
+        return;
+      }
+      const gone = new Set([messageId]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const node of nodes) {
+          if (node.parentId !== null && gone.has(node.parentId) && !gone.has(node.message.id)) {
+            gone.add(node.message.id);
+            grew = true;
+          }
+        }
+      }
+      const messages = flatAt >= 0 ? (document.messages ?? []).slice(0, flatAt) : (document.messages ?? []).filter((message) => !gone.has(message.id));
+      const cut: CutDocument = { ...document, messages };
+      if (document.tree) {
+        cut.tree = {
+          ...document.tree,
+          headId: at?.parentId ?? messages.at(-1)?.id ?? null,
+          messages: nodes.filter((node) => !gone.has(node.message.id)),
+        };
+      }
+      await writeJsonFile(path, cut);
     });
   }
 

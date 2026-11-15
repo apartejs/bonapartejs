@@ -100,7 +100,9 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   });
   // Going back before a message (task 7.1): the core checks the message is the branch's, then moves.
   ipc.handle(conversationsRewindPreview, ({ id, userIndex, text }) => core.rewindPreview(id, { userIndex, text }));
-  ipc.handle(conversationsRewind, ({ id, userIndex, text, what }) => core.rewind(id, { userIndex, text }, what));
+  ipc.handle(conversationsRewind, ({ id, userIndex, text, what, messageId }) =>
+    core.rewind(id, { userIndex, text }, what, messageId ? { messageId } : {}),
+  );
   ipc.handle(conversationsUndoRewind, ({ id }) => core.undoRewind(id));
   // « Brancher » (task 7.2), and the sibling the person picks in the chat.
   ipc.handle(conversationsBranches, ({ id }) => core.branches.list(id));

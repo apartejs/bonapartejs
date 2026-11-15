@@ -132,15 +132,38 @@ export function useRewind(deps: RewindDeps) {
     return () => window.removeEventListener('aparte-message-start', started);
   }, []);
 
-  /**
-   * A branch the core now shows, read again: the chat taken down first — so that nothing of the one left is
-   * written back —, the manager given the branch, the chat mounted on it.
-   */
-  const reload = async (id: string): Promise<void> => {
-    reloading.current += 1;
-    try {
-      latest.current.unmount(id);
+  /** The chat of a conversation once mounted with its composer — a few frames at most; null when it never comes. */
+  const chatOf = async (id: string): Promise<AparteChatImperativeApi | null> => {
+    for (let frame = 0; frame < 60; frame += 1) {
+      for (const handle of latest.current.handles.values()) {
+        if (handle.getConversationId() === id && handle.getComposer()) {
+          await settled();
+          return handle;
+        }
+      }
       await settled();
+    }
+    return null;
+  };
+
+  /**
+   * The conversation's chat taken down before the core moves its branch: a chat leaving writes its thread
+   * back — to the manager and, through the bridge, to the core —, which must land before the core swaps
+   * the branches' documents, never after.
+   */
+  const takeDown = async (id: string): Promise<void> => {
+    reloading.current += 1;
+    latest.current.unmount(id);
+    for (let frame = 0; frame < 60 && [...latest.current.handles.values()].some((handle) => handle.getConversationId() === id); frame += 1) {
+      await settled();
+    }
+    await settled();
+    await settled();
+  };
+
+  /** The branch the core shows now, read again: the manager given it, the chat mounted on it. */
+  const bringBack = async (id: string): Promise<void> => {
+    try {
       const document = (await bridge.invoke(conversationsLoadFull, { id })) as { messages?: unknown[]; tree?: unknown } | null;
       if (document) await latest.current.replaceMessages(id, document.messages ?? [], document.tree);
       latest.current.mount(id);
@@ -155,21 +178,29 @@ export function useRewind(deps: RewindDeps) {
     if (!asked) return;
     setBusy(true);
     try {
-      const result = await bridge.invoke(conversationsRewind, { id: asked.conversationId, userIndex: asked.userIndex, text: asked.text, what });
-      const handle = latest.current.handles.get(asked.chatKey);
-      if (what !== 'code' && handle) {
-        // The message and what followed leave the thread — kept so, the branch shown now —; the message comes back to the composer.
-        reloading.current += 1;
-        try {
-          handle.truncateFrom(asked.messageId);
-          const viewport = handle.getViewport() as { exportTree?(): unknown } | null;
-          await latest.current.replaceMessages(asked.conversationId, handle.getMessages(), viewport?.exportTree?.());
-          await settled();
-        } finally {
-          reloading.current -= 1;
+      // The new branch is the core's cut of the window's document (the message and what followed gone): the
+      // chat is taken down first and mounted on it afresh — never cut in place, where its own saving could
+      // write the old thread back.
+      if (what !== 'code') await takeDown(asked.conversationId);
+      let result;
+      try {
+        result = await bridge.invoke(conversationsRewind, {
+          id: asked.conversationId,
+          userIndex: asked.userIndex,
+          text: asked.text,
+          what,
+          messageId: asked.messageId,
+        });
+      } finally {
+        if (what !== 'code') await bringBack(asked.conversationId);
+      }
+      if (what !== 'code') {
+        // The message comes back to the composer of the chat mounted, once it has one.
+        const mounted = await chatOf(asked.conversationId);
+        if (mounted) {
+          (mounted.getComposer() as { setValue?(text: string): void } | null)?.setValue?.(result.text);
+          mounted.focusInput();
         }
-        (handle.getComposer() as { setValue?(text: string): void } | null)?.setValue?.(result.text);
-        handle.focusInput();
       }
       setRewound({
         conversationId: asked.conversationId,
@@ -191,12 +222,11 @@ export function useRewind(deps: RewindDeps) {
     if (!done) return;
     setBusy(true);
     try {
-      const result = await bridge.invoke(conversationsUndoRewind, { id: done.conversationId });
-      if (result && done.what !== 'code') {
-        for (const handle of latest.current.handles.values()) {
-          if (handle.getConversationId() === done.conversationId) (handle.getComposer() as { setValue?(text: string): void } | null)?.setValue?.('');
-        }
-        await reload(done.conversationId);
+      if (done.what !== 'code') await takeDown(done.conversationId);
+      try {
+        await bridge.invoke(conversationsUndoRewind, { id: done.conversationId });
+      } finally {
+        if (done.what !== 'code') await bringBack(done.conversationId);
       }
       latest.current.changed();
     } finally {
@@ -207,9 +237,13 @@ export function useRewind(deps: RewindDeps) {
 
   /** « Brancher »: another branch shown. */
   const showBranch = async (conversationId: string, branchId: string): Promise<void> => {
-    await bridge.invoke(conversationsSwitchBranch, { id: conversationId, branchId });
     setRewound(null);
-    await reload(conversationId);
+    await takeDown(conversationId);
+    try {
+      await bridge.invoke(conversationsSwitchBranch, { id: conversationId, branchId });
+    } finally {
+      await bringBack(conversationId);
+    }
     latest.current.changed();
   };
 

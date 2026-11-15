@@ -189,6 +189,31 @@ describe('going back before a message', { timeout: 30_000 }, () => {
     expect(await store.loadDocument(id)).toEqual({ id, messages: ['three turns, as shown'] });
   });
 
+  it('gives the new branch the window’s document cut before the message: the message and what followed gone, the head before it', async () => {
+    const { id, rewind, store, target } = await rig();
+    const message = (id: string, role: string) => ({ id, role, content: id });
+    const tree = {
+      headId: 'a3',
+      messages: [
+        { message: message('u1', 'user'), parentId: null },
+        { message: message('a1', 'assistant'), parentId: 'u1' },
+        { message: message('u2', 'user'), parentId: 'a1' },
+        { message: message('a2', 'assistant'), parentId: 'u2' },
+        { message: message('u3', 'user'), parentId: 'a2' },
+        { message: message('a3', 'assistant'), parentId: 'u3' },
+        // A sibling answer of the message gone back before: gone with it.
+        { message: message('a3b', 'assistant'), parentId: 'u3' },
+      ],
+    };
+    const flat = tree.messages.slice(0, 6).map((node) => node.message);
+    await store.saveDocument(id, { id, messages: flat, tree });
+    await rewind.rewind(id, target, 'both', { messageId: 'u3' });
+    const cut = (await store.loadDocument(id)) as { messages: { id: string }[]; tree: typeof tree };
+    expect(cut.messages.map((one) => one.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+    expect(cut.tree.headId).toBe('a2');
+    expect(cut.tree.messages.map((node) => node.message.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+  });
+
   it('says beforehand what going back would move — the files, the commands — and moves nothing', async () => {
     const { id, rewind, a, target, branchOf } = await rig();
     const before = await branchOf();

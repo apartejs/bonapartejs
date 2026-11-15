@@ -121,8 +121,11 @@ export function createRewind(deps: RewindDeps) {
       };
     },
 
-    /** Going back before the person's message the window names; its text checked, nothing moved otherwise. */
-    async rewind(id: string, target: RewindTarget, what: RewindWhat): Promise<RewindResult> {
+    /**
+     * Going back before the person's message the window names; its text checked, nothing moved otherwise.
+     * `messageId`: the window's id of that message — the document of the new branch is the window's cut there.
+     */
+    async rewind(id: string, target: RewindTarget, what: RewindWhat, options: { messageId?: string } = {}): Promise<RewindResult> {
       const look: RewindLook = await deps.engine.lookBefore(id, target);
       const memory = what === 'code' ? null : await deps.engine.rewindMemory(id, target);
       const commands = commandsRun(look.after, deps.family());
@@ -143,7 +146,12 @@ export function createRewind(deps: RewindDeps) {
         throw error;
       }
       // The window's document of the branch left, kept for when it is shown again (« Annuler le retour », « Brancher »).
-      if (what !== 'code') await deps.store.keepDocument(id, moved.fromBranchId);
+      if (what !== 'code') {
+        await deps.store.keepDocument(id, moved.fromBranchId);
+        // The new branch's document: the window's, cut before the message — or read again from the journal.
+        if (options.messageId) await deps.store.cutDocument(id, options.messageId);
+        else await deps.store.takeDocument(id, moved.branchId);
+      }
       await deps.store.update(id, { rewound: { what, fromBranchId: moved.fromBranchId, branchId: moved.branchId, asTurn } });
       return { ...moved, text: look.message.text, filesRestored: files.restored, conflicts: files.conflicts, commandsNotUndone: commands, memory };
     },
