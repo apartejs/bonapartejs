@@ -449,6 +449,7 @@ export class ConversationEngine {
         rendered: family.renderSystem(prompt.stable),
         replyLanguage: asked.replyLanguage,
         perimeter: [...asked.perimeter],
+        tools: [...asked.tools],
       });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
       if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
@@ -461,6 +462,13 @@ export class ConversationEngine {
       const delta = renderInstructionsDelta(meta.instructions ?? '', instructions);
       if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       meta = await this.deps.store.update(id, { instructions });
+    }
+    if (!input.resume) {
+      // The core's tools changed (a plugin came or went, or was turned off for the project): told by a note.
+      const current = [...this.deps.prompt(meta).tools];
+      const told = lastToldTools(journal.entries());
+      const delta = told === undefined ? null : renderInventoryDelta(told, current);
+      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, tools: current }, rendered: family.renderSystemNote(delta.text) });
     }
     if (!input.resume && input.tools) {
       // The tools the window runs (ask_user) are not in the frozen prompt: told by a note when they change.
@@ -757,6 +765,16 @@ function lastToldReplyLanguage(entries: readonly JournalEntry[]): string | undef
 }
 
 /** The window's tools the model last read of in this branch: the last note of them, else none. */
+/** The core's tools the model last read: undefined for a journal older than the record (nothing told then). */
+function lastToldTools(entries: readonly JournalEntry[]): ToolDef[] | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'delta' && entry.delta.tools) return entry.delta.tools;
+    if (entry.kind === 'system' && entry.tools) return entry.tools;
+  }
+  return undefined;
+}
+
 function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;

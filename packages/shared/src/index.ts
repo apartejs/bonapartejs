@@ -6,6 +6,26 @@
 
 export type { PlayMode, ToolEffect, Verdict } from './modes.js';
 export { AGENT_ENDPOINT, APP_ORIGIN, APP_SCHEME } from './agent.js';
+export { localize, parseManifest, PLUGIN_EFFECTS, pluginManifestSchema, usableEffects } from './plugins.js';
+export type {
+  LocalizedText,
+  PluginCommandHandler,
+  PluginEffect,
+  PluginInstanceChannel,
+  PluginManifest,
+  PluginNodeContext,
+  PluginNodeModule,
+  PluginPaneContribution,
+  PluginProcess,
+  PluginSettingField,
+  PluginSignal,
+  PluginStatus,
+  PluginToolContribution,
+  PluginToolHandler,
+  PluginToolInvocation,
+  PluginToolResult,
+  PluginToolUse,
+} from './plugins.js';
 export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';

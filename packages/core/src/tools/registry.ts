@@ -38,6 +38,13 @@ export interface ToolInventoryDelta {
   removed: string[];
 }
 
+/** What a turn sees of the registry: the tools of its conversation (a plugin a project turned off is not there). */
+export interface ToolSet {
+  list(): ToolDef[];
+  get(name: string): RegisteredTool | undefined;
+  run(call: ToolCall, ctx: ToolContext): Promise<ToolResult>;
+}
+
 /** Reads and what only the window runs never wait for a write. */
 const WAITS_FOR_NOTHING = new Set(['read', 'network', 'ui']);
 
@@ -45,7 +52,7 @@ function failed(call: ToolCall, content: string): ToolResult {
   return { toolCallId: call.id, name: call.name, content, failed: true };
 }
 
-export class ToolRegistry {
+export class ToolRegistry implements ToolSet {
   private readonly tools = new Map<string, RegisteredTool>();
   private readonly listeners = new Set<(delta: ToolInventoryDelta) => void>();
   /** The writes and runs of each conversation, one at a time. */
@@ -85,6 +92,20 @@ export class ToolRegistry {
     return {
       added: now.filter((def) => !before.has(def.name)),
       removed: previous.names.filter((name) => !this.tools.has(name)),
+    };
+  }
+
+  /** The tools `visible` lets through, read at each call: the view follows the registry. */
+  view(visible: (def: ToolDef) => boolean): ToolSet {
+    const shown = (name: string): RegisteredTool | undefined => {
+      const tool = this.tools.get(name);
+      return tool && visible(tool.def) ? tool : undefined;
+    };
+    return {
+      list: () => this.list().filter(visible),
+      get: shown,
+      run: (call, ctx) =>
+        shown(call.name) ? this.run(call, ctx) : Promise.resolve(failed(call, `There is no tool named ${call.name}.`)),
     };
   }
 

@@ -43,6 +43,7 @@ async function rig(
     mode?: () => Promise<PlayMode>;
     replyLanguage?: () => string;
     perimeter?: () => string[];
+    tools?: () => ToolDef[];
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
@@ -73,7 +74,7 @@ async function rig(
       engineCalls += 1;
       return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
     },
-    prompt: () => ({ kind: 'code', tools: [], perimeter: options.perimeter?.() ?? [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
+    prompt: () => ({ kind: 'code', tools: options.tools?.() ?? [], perimeter: options.perimeter?.() ?? [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
   });
   const conversation = () => store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
   const say = async (id: string, text: string, signal?: AbortSignal) => {
@@ -305,6 +306,38 @@ describe('ConversationEngine — the folders of the project', () => {
     expect(told.slice(frozen.length)).toContain('spanwise-docs');
     await say(meta.id, 'Encore ?');
     expect(prompts.at(-1)!.split('[project update]').length - 1).toBe(1);
+  });
+});
+
+describe('ConversationEngine — the tools of the core', () => {
+  const tool = (name: string): ToolDef => ({
+    name,
+    description: `The tool ${name}.`,
+    inputSchema: { type: 'object', properties: {} },
+    effect: 'read',
+    source: 'plugin',
+    where: 'core',
+  });
+
+  it('a tool that arrives, or leaves, after the first message is told at the next one, once; the frozen text stays as it was', async () => {
+    let tools = [tool('read_file')];
+    const { say, conversation, prompts } = await rig({ tools: () => tools });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const frozen = prompts[0]!.slice(0, prompts[0]!.indexOf('Bonjour'));
+    expect(prompts[0]).not.toContain('[tool inventory update]');
+    tools = [tool('read_file'), tool('changelog')];
+    await say(meta.id, 'Et maintenant ?');
+    const told = prompts.at(-1)!;
+    expect(told.startsWith(frozen)).toBe(true);
+    expect(told.slice(frozen.length)).toContain('Tools now available:');
+    expect(told.slice(frozen.length)).toContain('changelog');
+    await say(meta.id, 'Encore ?');
+    expect(prompts.at(-1)!.split('[tool inventory update]').length - 1).toBe(1);
+    tools = [tool('read_file')];
+    await say(meta.id, 'Sans lui ?');
+    expect(prompts.at(-1)!).toContain('Tools removed (do not call them): changelog');
+    expect(prompts.at(-1)!.startsWith(frozen)).toBe(true);
   });
 });
 

@@ -48,6 +48,8 @@ export interface Delta {
   mode?: PlayMode;
   /** A note of the window's tools: all of them, as the model knows them after it. */
   windowTools?: ToolDef[];
+  /** A note of the core's tools (a plugin came, or went): all of them, as the model knows them after it. */
+  tools?: ToolDef[];
   /** A note of the reply language: the language it told. */
   language?: string;
   /** A note of the project's folders: the folders it told. */
@@ -69,7 +71,8 @@ interface Common {
 export type JournalBody =
   /** `replyLanguage`: the language the frozen prompt asks the replies in (the first system turn). */
   /** `perimeter`: the folders the frozen prompt names (the first system turn). */
-  | { kind: 'system'; replyLanguage?: string; perimeter?: string[] }
+  /** `tools`: the core's tools the frozen prompt lists (the first system turn). */
+  | { kind: 'system'; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[] }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   /** `truncated`: the context ran out in the middle of it — the answer is incomplete. */
   | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true }

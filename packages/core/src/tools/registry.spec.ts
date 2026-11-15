@@ -179,3 +179,20 @@ describe('ToolRegistry — running a tool', () => {
     await slow;
   });
 });
+
+describe('ToolRegistry — a view of it', () => {
+  it('a view shows only the tools it lets through: not listed, not found, and a call to a hidden one is refused', async () => {
+    const registry = new ToolRegistry();
+    registry.register(def('read_file'), ok);
+    registry.register(def('count_notes', 'read', { source: 'plugin' }), ok);
+    const view = registry.view((tool) => tool.source !== 'plugin');
+    expect(view.list().map((tool) => tool.name)).toEqual(['read_file']);
+    expect(view.get('count_notes')).toBeUndefined();
+    const refused = await view.run({ id: 't1', name: 'count_notes', input: {} }, context());
+    expect(refused).toMatchObject({ failed: true, content: 'There is no tool named count_notes.' });
+    expect((await view.run({ id: 't2', name: 'read_file', input: {} }, context())).content).toBe('ok');
+    // The view follows the registry: a tool added later is seen through it.
+    registry.register(def('search'), ok);
+    expect(view.list().map((tool) => tool.name)).toEqual(['read_file', 'search']);
+  });
+});
