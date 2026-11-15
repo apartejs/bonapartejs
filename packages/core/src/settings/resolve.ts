@@ -22,7 +22,7 @@ export type SettingsLayer = 'default' | SettingScope;
 
 export interface SettingField {
   key: string;
-  type: 'string' | 'number' | 'boolean' | 'select';
+  type: 'string' | 'number' | 'boolean' | 'select' | 'list';
   /** Scopes where the setting can be changed — at least one. */
   scopes: SettingScope[];
   default?: unknown;

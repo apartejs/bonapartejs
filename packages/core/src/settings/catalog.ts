@@ -8,8 +8,10 @@
  * - **Sampling** (`global`, `project`, `conversation`): live, with no effect
  *   on the prefix of the prompt, hence none on the cache.
  *
- * Phase 5 adds the settings of the app; the names and help texts the window
- * shows are in its language files.
+ * - **The app** (task 5.2): the interface, the conversations, the
+ *   notifications — global, a few also by project.
+ *
+ * The names and help texts the window shows are in its language files.
  */
 
 import type { SettingField } from './resolve.js';
@@ -52,7 +54,44 @@ export const ENGINE_SETTINGS: SettingField[] = [
   { key: 'maxToolRounds', type: 'number', scopes: ['global'], default: 25, min: 1, max: 200, step: 1, integer: true },
 ];
 
-export const SETTINGS: SettingField[] = [...ENGINE_SETTINGS, ...SAMPLING_SETTINGS];
+const GLOBAL = ['global'] as SettingField['scopes'];
+const BY_PROJECT = ['global', 'project'] as SettingField['scopes'];
+const NOTIFY = ['banner', 'badge', 'off'];
+
+export const APP_SETTINGS: SettingField[] = [
+  // « Comme Windows » by default: French when the system speaks it, English otherwise.
+  { key: 'language', type: 'select', scopes: GLOBAL, default: 'system', options: ['system', 'fr', 'en'] },
+  { key: 'profile', type: 'select', scopes: GLOBAL, default: 'code', options: ['code', 'chat'] },
+  { key: 'sidebarGrouping', type: 'select', scopes: GLOBAL, default: 'project', options: ['project', 'single'] },
+  { key: 'autoOpenPanel', type: 'select', scopes: GLOBAL, default: 'approval', options: ['never', 'approval', 'always'] },
+  { key: 'newConversationWorksIn', type: 'select', scopes: BY_PROJECT, default: 'folder', options: ['folder', 'branch'] },
+  { key: 'branchPrefix', type: 'string', scopes: BY_PROJECT, default: 'bonaparte/' },
+  // In parallel, the engine runs one slot per sub-agent: a restart, announced (task 8.3).
+  { key: 'subagentsOnBuiltin', type: 'select', scopes: GLOBAL, default: 'sequential', options: ['sequential', 'parallel'], requiresRestart: true },
+  // The conversation's own engine, or a provider's id (task 9.2).
+  { key: 'subagentsEngine', type: 'string', scopes: GLOBAL, default: 'conversation' },
+  { key: 'askBeforeNetwork', type: 'boolean', scopes: BY_PROJECT, default: true },
+  { key: 'closeToTray', type: 'boolean', scopes: GLOBAL, default: true },
+  { key: 'launchAtLogin', type: 'boolean', scopes: GLOBAL, default: false },
+  { key: 'reopenLast', type: 'boolean', scopes: GLOBAL, default: true },
+  { key: 'theme', type: 'select', scopes: GLOBAL, default: 'system', options: ['system', 'light', 'dark'] },
+  { key: 'accent', type: 'select', scopes: GLOBAL, default: 'blue', options: ['blue', 'teal', 'violet', 'orange'] },
+  { key: 'textSize', type: 'select', scopes: GLOBAL, default: 'normal', options: ['small', 'normal', 'large'] },
+  { key: 'listDensity', type: 'select', scopes: GLOBAL, default: 'comfortable', options: ['comfortable', 'compact'] },
+  { key: 'codeFont', type: 'string', scopes: GLOBAL, default: 'JetBrains Mono' },
+  // None: the person chooses (task 5.7).
+  { key: 'defaultModel', type: 'string', scopes: GLOBAL, default: '' },
+  { key: 'modelFolders', type: 'list', scopes: GLOBAL, default: [] },
+  // Derived from the free space (task 3.4) until the person sets one.
+  { key: 'kvBudgetBytes', type: 'number', scopes: GLOBAL, default: null, min: 0, step: 1, integer: true, advanced: true },
+  { key: 'autoUpdateApp', type: 'boolean', scopes: GLOBAL, default: true },
+  { key: 'notifications.replyDone', type: 'select', scopes: GLOBAL, default: 'banner', options: NOTIFY },
+  { key: 'notifications.approval', type: 'select', scopes: GLOBAL, default: 'banner', options: NOTIFY },
+  { key: 'notifications.question', type: 'select', scopes: GLOBAL, default: 'badge', options: NOTIFY },
+  { key: 'notifications.failure', type: 'select', scopes: GLOBAL, default: 'banner', options: NOTIFY },
+];
+
+export const SETTINGS: SettingField[] = [...ENGINE_SETTINGS, ...SAMPLING_SETTINGS, ...APP_SETTINGS];
 
 export function settingDefault(key: string): unknown {
   return SETTINGS.find((field) => field.key === key)?.default;

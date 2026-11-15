@@ -6,6 +6,8 @@ export { spawnHidden } from './process/spawn.js';
 export type { SpawnFn, SpawnHiddenOptions, SpawnedProcess } from './process/spawn.js';
 export { KeyedQueue, readJsonFile, writeJsonFile } from './fs/json-file.js';
 export { bonaparteDataDir } from './paths.js';
+export { isSecretName } from './providers/secrets.js';
+export type { SecretStore } from './providers/secrets.js';
 export { LlamaCppHttpClient, LlamaCppHttpError } from './backend/llamacpp/http-client.js';
 export type * from './backend/types.js';
 export { createCore, ModelNotListedError } from './api.js';

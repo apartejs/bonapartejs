@@ -6,6 +6,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { ENGINE_SETTINGS, SAMPLING_SETTINGS, SETTINGS, settingDefault } from './catalog.js';
+import { resolveSettings } from './resolve.js';
+import { validateSettingValue } from './validate.js';
 
 describe('the catalog', () => {
   it('has the defaults of the engine', () => {
@@ -42,5 +44,68 @@ describe('the catalog', () => {
       expect(Object.keys(field)).not.toContain('label');
       expect(Object.keys(field)).not.toContain('description');
     }
+  });
+});
+
+describe('the settings of the app (task 5.2)', () => {
+  it('has the defaults of the plan and of the boards', () => {
+    const defaults: Record<string, unknown> = {
+      language: 'system',
+      sidebarGrouping: 'project',
+      autoOpenPanel: 'approval',
+      newConversationWorksIn: 'folder',
+      subagentsOnBuiltin: 'sequential',
+      subagentsEngine: 'conversation',
+      askBeforeNetwork: true,
+      maxToolRounds: 25,
+      idleUnloadMinutes: 15,
+      closeToTray: true,
+      launchAtLogin: false,
+      reopenLast: true,
+      theme: 'system',
+      accent: 'blue',
+      textSize: 'normal',
+      listDensity: 'comfortable',
+      codeFont: 'JetBrains Mono',
+      defaultModel: '',
+      modelFolders: [],
+      profile: 'code',
+      branchPrefix: 'bonaparte/',
+      autoUpdateApp: true,
+      'notifications.replyDone': 'banner',
+      'notifications.approval': 'banner',
+      'notifications.question': 'badge',
+      'notifications.failure': 'banner',
+      gpuLayers: 'all',
+    };
+    for (const [key, value] of Object.entries(defaults)) expect(settingDefault(key), key).toEqual(value);
+    // The disk budget is derived from the free space (task 3.4) until the person sets one.
+    expect(SETTINGS.find((field) => field.key === 'kvBudgetBytes')).toMatchObject({ type: 'number', default: null });
+  });
+
+  it('the choices the boards offer, and nothing else', () => {
+    const options = (key: string) => SETTINGS.find((field) => field.key === key)?.options;
+    expect(options('accent')).toEqual(['blue', 'teal', 'violet', 'orange']);
+    expect(options('autoOpenPanel')).toEqual(['never', 'approval', 'always']);
+    expect(options('textSize')).toEqual(['small', 'normal', 'large']);
+    expect(options('listDensity')).toEqual(['comfortable', 'compact']);
+    expect(options('theme')).toEqual(['system', 'light', 'dark']);
+    expect(options('notifications.question')).toEqual(['banner', 'badge', 'off']);
+  });
+
+  it("a project's setting comes before the global one", () => {
+    const resolved = resolveSettings(SETTINGS, { global: { newConversationWorksIn: 'folder' }, project: { newConversationWorksIn: 'branch' } }, 'project');
+    expect(resolved.find((setting) => setting.key === 'newConversationWorksIn')).toMatchObject({ value: 'branch', from: 'project' });
+  });
+
+  it('an API key is never written to a settings file: a secret goes to the vault', () => {
+    const fields = [...SETTINGS, { key: 'providerKey', type: 'string' as const, scopes: ['global' as const], secret: true }];
+    expect(() => validateSettingValue(fields, 'global', 'providerKey', 'sk-live-123')).toThrow(/vault/);
+  });
+
+  it('a list of folders is a list of paths, and nothing else', () => {
+    expect(() => validateSettingValue(SETTINGS, 'global', 'modelFolders', ['D:/models'])).not.toThrow();
+    expect(() => validateSettingValue(SETTINGS, 'global', 'modelFolders', 'D:/models')).toThrow();
+    expect(() => validateSettingValue(SETTINGS, 'global', 'modelFolders', [3])).toThrow();
   });
 });

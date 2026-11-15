@@ -8,12 +8,17 @@
 import type { SettingField, SettingScope } from './resolve.js';
 
 const MAX_STRING = 4096;
+const MAX_ITEMS = 64;
 
 export function validateSettingValue(fields: SettingField[], scope: SettingScope, key: string, value: unknown): void {
   const field = fields.find((candidate) => candidate.key === key);
   if (!field) throw new Error(`Unknown setting: ${key}`);
   if (!field.scopes.includes(scope)) throw new Error(`Setting ${key} has no ${scope} scope`);
+  // A key, a token, a password: kept in the system's vault, never in a settings file (security rule 10).
+  if (field.secret) throw new Error(`Setting ${key} is a secret: it is kept in the vault, never in a settings file`);
   if (value === undefined) return;
+  // `null`: a value derived by the app (the disk budget from the free space) until the person sets one.
+  if (value === null && field.default === null) return;
   switch (field.type) {
     case 'number': {
       if (field.allowAll && value === 'all') return;
@@ -37,6 +42,11 @@ export function validateSettingValue(fields: SettingField[], scope: SettingScope
     case 'string':
       if (typeof value !== 'string') throw new Error(`Setting ${key} expects a string`);
       if (value.length > MAX_STRING) throw new Error(`Setting ${key} is too long`);
+      return;
+    case 'list':
+      if (!Array.isArray(value) || value.length > MAX_ITEMS || !value.every((item) => typeof item === 'string' && item.length <= MAX_STRING)) {
+        throw new Error(`Setting ${key} expects a list of at most ${MAX_ITEMS} strings`);
+      }
       return;
   }
 }
