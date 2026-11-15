@@ -1700,23 +1700,45 @@ body {
   color: var(--aparte-error-ink);
 }
 
-/* The model the engine runs, in the composer's toolbar, pushed to its end with the gauge. */
-.composer-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
+/* The model, aparté's selector in the composer's toolbar, pushed to its end with the gauge. */
+.composer-model-picker {
   margin-inline-start: auto;
-  padding: 0 10px;
-  border-radius: 15px;
-  background: var(--aparte-surface-2);
-  color: var(--aparte-text-muted);
+  min-width: 0;
+}
+
+/* « Passer à … ? »: what changing model costs, a label and its figure on each line (board « Coûts annoncés », 3). */
+.model-switch-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.model-switch-dialog__costs {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 24px;
+  margin: 0;
   font-size: 13px;
 }
 
-.composer-model .bonaparte-icon svg {
-  width: 14px;
-  height: 14px;
+.model-switch-dialog__costs dt {
+  color: var(--aparte-text-muted);
+}
+
+.model-switch-dialog__costs dd {
+  margin: 0;
+  font-weight: 500;
+  text-align: end;
+}
+
+.model-switch-dialog__note {
+  margin: var(--aparte-space-4) 0 0;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.model-switch-dialog__refused {
+  margin: var(--aparte-space-3) 0 0;
+  font-size: 13px;
+  color: var(--aparte-error-ink);
 }
 
 /* The shell stays mounted under the settings (a reply goes on): hidden, whatever the kit's display. */

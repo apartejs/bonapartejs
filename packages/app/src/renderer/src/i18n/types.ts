@@ -442,6 +442,30 @@ export interface Messages {
     refused: Record<'pending' | 'not-worth' | 'no-room' | 'cut' | 'empty' | 'failed', string>;
   };
   /** A branch's pull request, and archiving a conversation on its branch (task 6.8). */
+  /** Changing model (task 7.4; board « Coûts annoncés », 3): the composer's picker and its dialog. */
+  modelSwitch: {
+    /** The picker's name. */
+    picker: string;
+    /** The group the models are listed under. */
+    provider: string;
+    /** Under a model's name in the list: its size and the video memory it takes. */
+    line(size: string, vram: string): string;
+    title(name: string): string;
+    reload: string;
+    /** A duration announced: about that long. */
+    about(duration: string): string;
+    reread(tokens: string): string;
+    vram: string;
+    vramAfter(after: string, now: string | null): string;
+    kept(name: string): string;
+    estimated: string;
+    reading: string;
+    cancel: string;
+    branch: string;
+    change: string;
+    loading: string;
+    refused: Record<'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
+  };
   pr: {
     /** The mark of a row, said whole: « pull request 42 ouverte, CI réussie ». */
     markOpen(number: number, ci: 'success' | 'failure' | 'pending' | null): string;

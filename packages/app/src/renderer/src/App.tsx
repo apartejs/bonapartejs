@@ -3,6 +3,7 @@ import { setupCommands } from '@aparte/plugin-triggers/commands';
 import { useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
 import {
   conversationsMemory,
+  engineModels,
   engineState,
   modesGet,
   modesSet,
@@ -53,6 +54,9 @@ import { MemoryBanner } from './chat/MemoryBanner';
 import { RewindBanner } from './chat/RewindBanner';
 import { ContextBanner } from './chat/ContextBanner';
 import { useCompaction } from './chat/useCompaction';
+import { useModelSwitch } from './chat/useModelSwitch';
+import { catalogueOf, showCatalogue } from './aparte/model-catalogue';
+import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
 import { useRewind } from './chat/useRewind';
 import { setupMessageActions } from './aparte/message-actions';
@@ -589,6 +593,35 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     changed: () => setAsked((count) => count + 1),
   });
 
+  // The composer's picker lists the core's models, the one that runs shown chosen (task 7.4).
+  const runningModel = engine.model?.path;
+  useEffect(() => {
+    if (!runningModel) return;
+    let live = true;
+    void bridge
+      .invoke(engineModels, undefined)
+      .then((found) => {
+        if (live) showCatalogue(catalogueOf(found, messages, { locale, units: messages.units }), messages.modelSwitch.provider, runningModel);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [runningModel, messages, locale]);
+
+  // Changing model (task 7.4): its cost said in a dialog first; a copy made is listed again, then shown.
+  const modelSwitch = useModelSwitch({
+    handles,
+    conversationId,
+    showCopy: async (id) => {
+      await conversationManager.manager?.init();
+      goToRef.current(id);
+    },
+    onSwitched: (id) => {
+      if (id === shownIdRef.current) setMemory(null);
+    },
+  });
+
   // Compaction (task 7.3): the context nearly full said, « Compacter », « / compact », « Restaurer ».
   const compaction = useCompaction({
     handles,
@@ -690,6 +723,15 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         busy={rewinding.busy}
         onCancel={rewinding.cancel}
         onRewind={rewinding.rewind}
+      />
+      <ModelSwitchDialog
+        messages={messages}
+        style={style}
+        asking={modelSwitch.asking}
+        busy={modelSwitch.busy}
+        refused={modelSwitch.refused}
+        onCancel={modelSwitch.cancel}
+        onSwitch={modelSwitch.change}
       />
       <ArchiveConversation
         messages={messages}
@@ -871,6 +913,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             scope={() =>
               conversationId ? { conversationId } : project.current ? { projectId: project.current.id } : {}
             }
+            onPickModel={modelSwitch.ask}
           />
         }
       />

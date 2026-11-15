@@ -94,13 +94,13 @@ try {
     ...(prefillPaceMs !== undefined ? { prefillPaceMs } : {}),
     ...(paceMs !== undefined ? { paceMs } : {}),
     // FAKE_LLAMA_REQUESTS: one line per completion asked, in that file — its prompt's length,
-    // the tokens the server counts in it, and n_predict.
+    // the tokens the server counts in it, n_predict, and how the prompt opens (its family's first turn).
     ...(requests
       ? {
           onCompletion: (body) => {
             const prompt = typeof body['prompt'] === 'string' ? body['prompt'] : '';
             const nPredict = typeof body['n_predict'] === 'number' ? body['n_predict'] : null;
-            const line = { promptChars: prompt.length, promptTokens: fakeTokenize(prompt).length, nPredict };
+            const line = { promptChars: prompt.length, promptTokens: fakeTokenize(prompt).length, nPredict, opens: prompt.slice(0, 24) };
             appendFileSync(requests, `${JSON.stringify(line)}\n`);
           },
         }

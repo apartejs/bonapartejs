@@ -87,6 +87,8 @@ export interface EngineRequest {
   promptTokens: number;
   /** 0 is a reading without writing: a seed being prepared, a prefill. */
   nPredict: number | null;
+  /** How the prompt opens: its first characters, which say the family it was rendered by. */
+  opens: string;
 }
 
 export interface LaunchedApp {

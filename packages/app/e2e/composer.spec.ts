@@ -56,5 +56,6 @@ test('the composer names the model the engine runs', async ({ launch }) => {
   const { page } = await launch({ managed: { models: { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } } } });
   await page.getByRole('button', { name: 'Démarrer' }).click();
   await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator('aparte-composer-toolbar').getByText('gemma-4-e2e')).toBeVisible();
+  // aparté's model selector (task 7.4): its button names the model that runs.
+  await expect(page.locator('aparte-composer-toolbar').getByRole('combobox', { name: 'Modèle' })).toContainText('gemma-4-e2e');
 });
