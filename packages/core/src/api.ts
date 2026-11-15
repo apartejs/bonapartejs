@@ -55,6 +55,7 @@ import { SettingsStore } from './settings/store.js';
 import type { MemoryRow } from './conversation/engine.js';
 import type { SeedStats } from './kv/kv-store.js';
 import { exportConversations } from './conversation/export.js';
+import { createBranches, type Branches } from './conversation/branches.js';
 import { createRewind, type RewindPreview, type RewindResult, type RewindTarget, type RewindWhat } from './conversation/rewind.js';
 import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
@@ -242,6 +243,8 @@ export interface Core {
   rewindPreview(conversationId: string, target: RewindTarget): Promise<RewindPreview>;
   /** Going back before a message (task 7.1): what it put back, the branch shown from now on. */
   rewind(conversationId: string, target: RewindTarget, what: RewindWhat): Promise<RewindResult>;
+  /** The branches of a conversation (« Brancher », task 7.2): listed, one shown, the sibling picked followed. */
+  readonly branches: Branches;
   /** « Annuler le retour »: until the conversation's next turn begins; null when nothing is left to undo. */
   undoRewind(conversationId: string): Promise<{ branchId: string; filesRestored: string[]; conflicts: string[] } | null>;
   /** The « Changements » pane: what the conversation changed, before and now; « Revenir » on one file. */
@@ -1000,6 +1003,12 @@ export function createCore(deps: CoreDeps): Core {
         `[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`,
       ),
   });
+  // The branches of a conversation (task 7.2): « Brancher », and the sibling the person picks in the chat.
+  const branches = createBranches({
+    engine: conversations,
+    store: conversationStore,
+    family: () => loaded?.layer ?? remoteFamily ?? familyLayer('gemma'),
+  });
   // Going back before a message (task 7.1): the files by the checkpoints, the conversation by a branch.
   const rewinds = createRewind({
     engine: conversations,
@@ -1160,6 +1169,7 @@ export function createCore(deps: CoreDeps): Core {
       return meta?.worktree ? commitAll(meta.worktree, message) : false;
     },
 
+    branches,
     rewindPreview: (conversationId, target) => rewinds.preview(conversationId, target),
     rewind: (conversationId, target, what) => rewinds.rewind(conversationId, target, what),
     undoRewind: (conversationId) => rewinds.undo(conversationId),

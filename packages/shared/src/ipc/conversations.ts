@@ -167,3 +167,31 @@ export const conversationsUndoRewind = defineChannel(
   z.object({ id: conversationId }),
   z.object({ branchId: z.string(), filesRestored: z.array(z.string()), conflicts: z.array(z.string()) }).nullable(),
 );
+
+const branchView = z.object({
+  branchId: z.string(),
+  active: z.boolean(),
+  at: z.string(),
+  userIndex: z.number(),
+  startsWith: z.enum(['message', 'answer', 'nothing']),
+  label: z.string(),
+  messages: z.number(),
+});
+export type BranchView = z.infer<typeof branchView>;
+
+/** « Brancher »: the branches of the conversation, where each parts and what it says there (task 7.2). */
+export const conversationsBranches = defineChannel('conversations.branches', z.object({ id: conversationId }), z.array(branchView));
+
+/** Another branch shown: the window's document of the one left kept, the other's given back (the page loads it again). */
+export const conversationsSwitchBranch = defineChannel(
+  'conversations.switchBranch',
+  z.object({ id: conversationId, branchId: z.string().regex(/^[\w-]{1,64}$/) }),
+  z.void(),
+);
+
+/** The sibling answer the person picked in the chat: the window's messages of the path shown; the branch followed, or null. */
+export const conversationsFollowPath = defineChannel(
+  'conversations.followPath',
+  z.object({ id: conversationId, messageIds: z.array(z.string().max(256)).max(100_000) }),
+  z.string().nullable(),
+);

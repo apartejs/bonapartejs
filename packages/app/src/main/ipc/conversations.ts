@@ -19,6 +19,9 @@ import {
   conversationsRewindPreview,
   conversationsRewind,
   conversationsUndoRewind,
+  conversationsBranches,
+  conversationsSwitchBranch,
+  conversationsFollowPath,
   conversationsLoadDraft,
   conversationsSaveDraft,
   conversationsDelete,
@@ -52,6 +55,7 @@ interface ConversationCore {
   rewindPreview: Core['rewindPreview'];
   rewind: Core['rewind'];
   undoRewind: Core['undoRewind'];
+  branches: Core['branches'];
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
@@ -98,6 +102,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsRewindPreview, ({ id, userIndex, text }) => core.rewindPreview(id, { userIndex, text }));
   ipc.handle(conversationsRewind, ({ id, userIndex, text, what }) => core.rewind(id, { userIndex, text }, what));
   ipc.handle(conversationsUndoRewind, ({ id }) => core.undoRewind(id));
+  // « Brancher » (task 7.2), and the sibling the person picks in the chat.
+  ipc.handle(conversationsBranches, ({ id }) => core.branches.list(id));
+  ipc.handle(conversationsSwitchBranch, ({ id, branchId }) => core.branches.switchTo(id, branchId));
+  ipc.handle(conversationsFollowPath, ({ id, messageIds }) => core.branches.follow(id, messageIds));
   ipc.handle(conversationsRename, async ({ id, title }) => void (await store.rename(id, title)));
   ipc.handle(conversationsLoadDraft, ({ id }) => store.loadDraft(id));
   ipc.handle(conversationsSaveDraft, ({ id, text }) => store.saveDraft(id, text));

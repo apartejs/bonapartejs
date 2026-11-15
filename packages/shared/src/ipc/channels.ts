@@ -29,6 +29,9 @@ import {
   conversationsRewindPreview,
   conversationsRewind,
   conversationsUndoRewind,
+  conversationsBranches,
+  conversationsSwitchBranch,
+  conversationsFollowPath,
 } from './conversations.js';
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { changesList, changesRevert } from './changes.js';
@@ -56,6 +59,9 @@ export const CHANNELS = [
   conversationsRewindPreview,
   conversationsRewind,
   conversationsUndoRewind,
+  conversationsBranches,
+  conversationsSwitchBranch,
+  conversationsFollowPath,
   pluginsInvoke,
   pluginsAck,
   engineState,
