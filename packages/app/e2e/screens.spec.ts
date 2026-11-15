@@ -405,3 +405,38 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// Settings, Engine and memory, and Models (task 5.7): a managed engine, two conversations.
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the engine and the models, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = locale === 'fr'
+        ? { start: 'Démarrer', composer: 'Réponds, ou demande autre chose…', new: 'Nouvelle conversation', open: 'Réglages', engine: 'Moteur et mémoire', models: 'Modèles', first: 'Corriger les heures décimales', second: 'Migrer le parseur vers zod' }
+        : { start: 'Start', composer: 'Reply, or ask something else…', new: 'New conversation', open: 'Settings', engine: 'Engine and memory', models: 'Models', first: 'Fix the decimal hours', second: 'Move the parser to zod' };
+      const { page } = await launch({ locale, managed: { models: { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 }, 'gemma-4-31B-it-Q4_K_M': { blockCount: 60, embeddingLength: 5376, headCount: 32, headCountKv: 48 } } } });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.getByRole('button', { name: words.start }).first().click();
+      await expect(chat(page).composer(words.composer)).toBeVisible({ timeout: 20_000 });
+      for (const [index, text] of [words.first, words.second].entries()) {
+        if (index > 0) {
+          await page.getByRole('button', { name: words.new }).first().click();
+          await expect(chat(page).userMessages).toHaveCount(0);
+        }
+        await chat(page).send(text);
+        await expect(chat(page).streamingReplies).toHaveCount(0, { timeout: 15_000 });
+        await expect(chat(page).replies).toHaveCount(1, { timeout: 15_000 });
+      }
+      await page.getByRole('button', { name: words.open, exact: true }).click();
+      const nav = page.getByRole('navigation', { name: words.open });
+      await nav.getByRole('link', { name: words.engine }).click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `settings-engine-${locale}-${scheme}.png`), animations: 'disabled' });
+      await nav.getByRole('link', { name: words.models }).click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `settings-models-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}

@@ -309,6 +309,38 @@ describe('ConversationEngine — the reply language', () => {
   });
 });
 
+describe('ConversationEngine — the memory of each conversation (Settings, Engine and memory)', () => {
+  it('says where each memory is, its tokens and its size; one released by the person is to read again, with its cost', async () => {
+    const { engine, kv, conversation, say } = await rig();
+    const a = await conversation();
+    const b = await conversation();
+    await conversation();
+    await say(a.id, 'Bonjour');
+    await say(b.id, 'Salut');
+    const rows = await engine.memory();
+    expect(rows.map((row) => row.id).sort()).toEqual([a.id, b.id].sort());
+    expect(rows.find((row) => row.id === b.id)).toMatchObject({ state: 'engine' });
+    const saved = rows.find((row) => row.id === a.id)!;
+    expect(saved).toMatchObject({ state: 'saved' });
+    expect(saved.tokens).toBeGreaterThan(0);
+    expect(saved.bytes).toBeGreaterThan(0);
+
+    await engine.release(a.id);
+    const released = (await engine.memory()).find((row) => row.id === a.id)!;
+    expect(released).toMatchObject({ state: 'released', bytes: null });
+    expect(released.rereadSeconds).toBeGreaterThan(0);
+    expect(await kv.evicted(`${a.id}_main`)).toMatchObject({ byPerson: true });
+    await expect(engine.release(b.id)).rejects.toThrow(/in the engine/);
+  });
+
+  it('with a server that keeps no memory, there is none to show', async () => {
+    const { engine, conversation, say } = await rig({ live: null });
+    const a = await conversation();
+    await say(a.id, 'Bonjour');
+    expect(await engine.memory()).toEqual([]);
+  });
+});
+
 describe('ConversationEngine — what the sidebar shows', () => {
   it('the conversation in the slot is in the engine; the one that left it is saved; one let go is to read again', async () => {
     const { engine, kv, conversation, say } = await rig();

@@ -4,12 +4,22 @@
  * window; the search of the whole disk is started, followed and cancelled.
  */
 
-import { modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from '@aparte/bonaparte-shared';
+import {
+  engineMemory,
+  engineReleaseMemory,
+  engineRestart,
+  engineUnload,
+  modelsAddFolder,
+  modelsScanCancel,
+  modelsScanDisk,
+  modelsScanState,
+} from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
 import type { ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
 
 export type ModelsCore = Pick<Core, 'addModelFolder'> & { diskScan: Pick<Core['diskScan'], 'start' | 'state' | 'cancel'> };
+export type MemoryCore = Pick<Core, 'memory' | 'releaseMemory' | 'unloadModel' | 'restartEngine'>;
 
 export function registerModelChannels(ipc: IpcRegistry, core: ModelsCore, chooseFolder: ChooseFolder): void {
   ipc.handle(modelsAddFolder, async () => {
@@ -25,4 +35,12 @@ export function registerModelChannels(ipc: IpcRegistry, core: ModelsCore, choose
     core.diskScan.cancel();
     return core.diskScan.state();
   });
+}
+
+/** « Moteur et mémoire »: the overview, a memory let go, the model unloaded or restarted. */
+export function registerMemoryChannels(ipc: IpcRegistry, core: MemoryCore): void {
+  ipc.handle(engineMemory, () => core.memory());
+  ipc.handle(engineReleaseMemory, ({ id }) => core.releaseMemory(id));
+  ipc.handle(engineUnload, () => core.unloadModel());
+  ipc.handle(engineRestart, () => core.restartEngine());
 }

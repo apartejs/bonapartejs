@@ -11,7 +11,7 @@
  */
 
 import { statfs } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
@@ -52,6 +52,8 @@ import {
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
 import { SettingsStore } from './settings/store.js';
+import type { MemoryRow } from './conversation/engine.js';
+import type { SeedStats } from './kv/kv-store.js';
 import { exportConversations } from './conversation/export.js';
 import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
@@ -126,6 +128,25 @@ export interface EngineState {
   model?: { path: string; name: string; family: FamilyId | null; nCtx: number };
 }
 
+/** « Moteur et mémoire » (Settings): the engine, and the memory every conversation keeps on disk. */
+export interface MemoryOverview {
+  engine: {
+    running: boolean;
+    /** When the model became ready (ISO date); null when none runs. */
+    since: string | null;
+    model: { name: string; path: string } | null;
+    nCtx: number;
+    cacheType: string;
+    slots: number;
+  };
+  /** The disk budget of the memories: the person's, else derived from the free space. */
+  budgetBytes: number;
+  usedBytes: number;
+  rows: MemoryRow[];
+  /** The shared prefix a new conversation starts from: its tokens, its restore time, the conversations it served. */
+  seed: SeedStats | null;
+}
+
 export interface ModelChoice {
   path: string;
   name: string;
@@ -196,6 +217,14 @@ export interface Core {
   readonly diskScan: DiskScan;
   /** « Ajouter un dossier »: a folder joins the ones searched for models. */
   addModelFolder(folder: string): Promise<string[]>;
+  /** « Moteur et mémoire »: what runs, and what each conversation keeps on disk. */
+  memory(): Promise<MemoryOverview>;
+  /** « Libérer »: a saved memory let go; reopening its conversation will say what reading it again costs. */
+  releaseMemory(id: string): Promise<void>;
+  /** « Décharger »: the video memory freed; the memories on disk kept (the one in the engine saved first). */
+  unloadModel(): Promise<void>;
+  /** « Redémarrer »: the same model loaded again — announced by the window before. */
+  restartEngine(): Promise<void>;
   /** The projects: made from a folder (what it says read first), each with its folders and its default mode. */
   readonly projects: {
     detect(folder: string): Promise<ProjectFacts>;
@@ -346,7 +375,7 @@ export function createCore(deps: CoreDeps): Core {
   let config: GlobalConfig | undefined;
   let gpu: Promise<number | null> | undefined;
   let orphanChecked = false;
-  let loaded: { path: string; info: GgufInfo; layer: FamilyLayer } | undefined;
+  let loaded: { path: string; info: GgufInfo; layer: FamilyLayer; at: string } | undefined;
   let remoteFamily: FamilyLayer | undefined;
 
   /** The configuration, read once. An unreadable file says so — it is not taken for "nothing configured". */
@@ -704,7 +733,16 @@ export function createCore(deps: CoreDeps): Core {
   void statfs(deps.dataDir)
     .then((disk) => (kvBudget = defaultBudgetBytes(disk.bavail * disk.bsize)))
     .catch(() => undefined);
-  const kv = new KvStore(resolve(kvDir), { budgetBytes: () => kvBudget });
+  // The person's budget (Settings, Engine and memory), once read and as it changes.
+  let kvBudgetChosen: number | null = null;
+  void appSettings
+    .get('kvBudgetBytes')
+    .then((value) => (kvBudgetChosen = typeof value === 'number' ? value : null))
+    .catch(() => undefined);
+  appSettings.onChange((key, value) => {
+    if (key === 'kvBudgetBytes') kvBudgetChosen = typeof value === 'number' ? value : null;
+  });
+  const kv = new KvStore(resolve(kvDir), { budgetBytes: () => kvBudgetChosen ?? kvBudget });
   const conversationStore = new ConversationStore(
     join(deps.dataDir, 'conversations'),
   );
@@ -896,7 +934,7 @@ export function createCore(deps: CoreDeps): Core {
         await supervisor.killOrphan();
       }
       await supervisor.ensureLoaded(listed.path);
-      loaded = { path: listed.path, info, layer };
+      loaded = { path: listed.path, info, layer, at: new Date().toISOString() };
       return engineState();
     },
 
@@ -978,6 +1016,46 @@ export function createCore(deps: CoreDeps): Core {
     settings: appSettings,
     diskScan,
     addModelFolder: (folder) => addModelFolders([folder]),
+
+    async memory() {
+      const state = await engineState();
+      const running = state.status === 'ready' && loaded !== undefined;
+      const launch = await launchSettings();
+      const chosen = await appSettings.get('kvBudgetBytes').catch(() => null);
+      const usage = await kv.usage();
+      const newestSeed = usage.entries.filter((entry) => entry.kind === 'seed').sort((a, b) => b.usedAt - a.usedAt)[0];
+      return {
+        engine: {
+          running,
+          since: running ? loaded!.at : null,
+          model: running ? { name: basename(loaded!.path).replace(/\.gguf$/i, ''), path: loaded!.path } : null,
+          nCtx: launch.nCtx,
+          cacheType: launch.cacheType,
+          slots: 1,
+        },
+        budgetBytes: typeof chosen === 'number' ? chosen : kvBudget,
+        usedBytes: usage.totalBytes,
+        rows: await conversations.memory(),
+        seed: newestSeed ? await kv.seedStats(newestSeed.id) : null,
+      };
+    },
+
+    releaseMemory: (id) => conversations.release(id),
+
+    async unloadModel() {
+      await conversations
+        .flush()
+        .catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
+      await supervisor.stop();
+      loaded = undefined;
+    },
+
+    async restartEngine() {
+      if (!loaded) throw new Error('No model runs: there is nothing to restart.');
+      const path = loaded.path;
+      await this.unloadModel();
+      await this.loadModel(path);
+    },
 
     agentTurn,
     modeOf,

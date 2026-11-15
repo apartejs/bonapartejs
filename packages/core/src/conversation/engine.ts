@@ -118,6 +118,23 @@ export interface TurnInput {
   forkAfter?: string;
 }
 
+/** One conversation's memory on disk (Settings, Engine and memory): where it is, what it holds, what reading it again costs. */
+export interface MemoryRow {
+  id: string;
+  title: string;
+  projectId: string | null;
+  state: 'engine' | 'saved' | 'released';
+  tokens: number;
+  /** The slot file's size; null when none is kept. */
+  bytes: number | null;
+  /** When it was saved, or the conversation's last change. */
+  at: string;
+  /** Saved by another model than the one loaded: restored only under that one. */
+  otherModel: boolean;
+  /** For a released memory: what reading it again costs, in seconds. */
+  rereadSeconds: number | null;
+}
+
 /** What the sidebar shows of a conversation (§12): where its memory is, and whether it waits for the person. */
 export interface ConversationStatus {
   memory: 'engine' | 'saved' | 'reread' | null;
@@ -264,6 +281,57 @@ export class ConversationEngine {
     const manifest = await this.deps.kv.manifest(ownerKey(owner));
     const memory = manifest && canRestore(manifest, engine.live).ok ? 'saved' : 'reread';
     return { memory, waiting };
+  }
+
+  /**
+   * The memory of every conversation where something was said, read without touching the slot:
+   * none with a server that keeps no memory.
+   */
+  async memory(): Promise<MemoryRow[]> {
+    const engine = await this.deps.engine();
+    if (engine) this.follow(engine);
+    if (!engine?.live) return [];
+    const rows: MemoryRow[] = [];
+    for (const meta of await this.deps.store.list()) {
+      const entries = (await openJournal(this.deps.store.dir, meta.id, meta.branchId)).entries();
+      if (!entries.some((entry) => entry.kind === 'user')) continue;
+      const owner = this.ownerOf(meta);
+      const manifest = await this.deps.kv.manifest(ownerKey(owner));
+      const base = { id: meta.id, title: meta.title, projectId: meta.projectId ?? null, otherModel: false, rereadSeconds: null };
+      if (this.scheduler.isResident(owner)) {
+        rows.push({ ...base, state: 'engine', tokens: estimateTokens(frozenPrompt(entries)), bytes: manifest?.slotFileBytes ?? null, at: meta.updatedAt });
+      } else if (manifest) {
+        const verdict = canRestore(manifest, engine.live);
+        rows.push({
+          ...base,
+          state: 'saved',
+          tokens: manifest.promptTokenCount,
+          bytes: manifest.slotFileBytes,
+          at: manifest.savedAt,
+          otherModel: !verdict.ok && verdict.reason === 'other-model',
+        });
+      } else {
+        const announcement = await this.open(meta.id);
+        rows.push({
+          ...base,
+          state: 'released',
+          tokens: estimateTokens(frozenPrompt(entries)),
+          bytes: null,
+          at: meta.updatedAt,
+          rereadSeconds: announcement?.kind === 'reread' ? announcement.seconds : null,
+        });
+      }
+    }
+    return rows;
+  }
+
+  /** « Libérer »: a saved memory let go by the person; never the one in the engine. */
+  async release(id: string): Promise<void> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) throw new Error(`There is no conversation ${id}.`);
+    const owner = this.ownerOf(meta);
+    if (this.scheduler.isResident(owner)) throw new Error(`The memory of ${id} is in the engine: it is not released.`);
+    await this.deps.kv.release(ownerKey(owner));
   }
 
   turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> {

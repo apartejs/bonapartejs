@@ -13,6 +13,7 @@ import type { Messages } from '../i18n/index';
 import { applyAppearance } from '../theme/appearance';
 import { AppearancePage } from './Appearance';
 import { GeneralPage } from './General';
+import { EngineMemoryPage } from './EngineMemory';
 import { ModelsPage } from './Models';
 
 export type SettingsPageName = 'general' | 'appearance' | 'engine' | 'models' | 'permissions';
@@ -113,11 +114,12 @@ export function SettingsView({
         ))}
         {versions ? <span className="settings__versions">{words.versions(versions.app, versions.llama ?? words.llamaMissing)}</span> : null}
       </nav>
-      <div className="settings__page">
+      <div className={`settings__page${page === 'engine' ? ' settings__page--wide' : ''}`}>
         <h1 className="settings__heading">{words.pages[page]}</h1>
         {props && page === 'general' ? <GeneralPage {...props} /> : null}
         {props && page === 'appearance' ? <AppearancePage {...props} /> : null}
         {props && page === 'models' ? <ModelsPage {...props} /> : null}
+        {props && page === 'engine' ? <EngineMemoryPage {...props} onPage={onPage} /> : null}
       </div>
     </div>
   );

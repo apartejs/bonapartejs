@@ -77,6 +77,8 @@ export async function kvUsage(dir: string): Promise<KvUsage> {
 export interface EvictionNote {
   at: string;
   budgetBytes: number;
+  /** Released by the person (Settings, Engine and memory), not by the budget. */
+  byPerson?: true;
 }
 
 async function evict(dir: string, entry: KvEntry, budgetBytes: number): Promise<void> {

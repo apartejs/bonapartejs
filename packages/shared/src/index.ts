@@ -11,6 +11,8 @@ export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';
 export { diskScanStateSchema, modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from './ipc/models.js';
 export type { DiskScanStateView } from './ipc/models.js';
+export { engineMemory, engineReleaseMemory, engineRestart, engineUnload, memoryOverviewSchema, memoryRowSchema } from './ipc/memory.js';
+export type { MemoryOverviewView, MemoryRowView } from './ipc/memory.js';
 export { searchQuery, searchResultSchema } from './ipc/search.js';
 export { appOpenDataFolder, conversationsExport, settingsAll, settingsGet, settingsSet } from './ipc/settings.js';
 export type { SearchResultView } from './ipc/search.js';

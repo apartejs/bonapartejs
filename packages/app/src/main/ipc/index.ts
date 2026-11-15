@@ -12,7 +12,7 @@ import { registerModeChannels } from './modes.js';
 import { registerProjectChannels, type ChooseFolder } from './projects.js';
 import { searchQuery } from '@aparte/bonaparte-shared';
 import { registerExportChannel, registerSettingsChannels } from './settings.js';
-import { registerModelChannels } from './models.js';
+import { registerMemoryChannels, registerModelChannels } from './models.js';
 import type { IpcRegistry } from './register.js';
 
 export interface AppFacts {
@@ -36,4 +36,5 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerSettingsChannels(ipc, core, facts.openDataFolder);
   registerExportChannel(ipc, core, facts.chooseFolder);
   registerModelChannels(ipc, core, facts.chooseFolder);
+  registerMemoryChannels(ipc, core);
 }

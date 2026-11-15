@@ -62,7 +62,7 @@ export interface RereadAnnouncement {
   seconds: number;
   reason: RereadReason;
   /** A memory let go: when, and under which budget. */
-  evicted?: { at: string; budgetBytes: number };
+  evicted?: { at: string; budgetBytes: number; byPerson?: true };
   compactSeconds?: number;
   estimated: boolean;
 }
@@ -167,7 +167,7 @@ export interface OpenFacts {
   /** The engine died in the middle of the last answer, after the state was saved. */
   diedMidAnswer?: boolean;
   /** A missing state that the budget let go: when, and under which budget. */
-  evicted?: { at: string; budgetBytes: number } | null;
+  evicted?: { at: string; budgetBytes: number; byPerson?: true } | null;
   measures: { prefillTokensPerSecond?: number; restoreBytesPerSecond?: number };
 }
 

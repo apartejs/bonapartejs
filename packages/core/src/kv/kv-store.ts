@@ -19,7 +19,7 @@
 
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { copyFile, mkdir, rm, utimes } from 'node:fs/promises';
+import { copyFile, mkdir, rm, utimes, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
@@ -193,6 +193,16 @@ export class KvStore {
     return (await readManifest<KvManifest>(this.manifestPath(stateId)))?.promptTokenCount;
   }
 
+  /**
+   * « Libérer » (Settings, Engine and memory): the person lets a saved state go. It leaves the note a
+   * budget's eviction leaves, said as the person's, so that reopening the conversation says why.
+   */
+  async release(stateId: string): Promise<void> {
+    await this.forget(stateId);
+    const note: EvictionNote = { at: new Date().toISOString(), budgetBytes: this.options.budgetBytes?.() ?? 0, byPerson: true };
+    await writeFile(this.evictionPath(stateId), JSON.stringify(note));
+  }
+
   /** The slot file and its manifest, in this folder only. */
   async forget(stateId: string): Promise<void> {
     await rm(join(this.dir, this.slotFilename(stateId)), { force: true });
@@ -241,7 +251,7 @@ export class KvStore {
   async evicted(stateId: string): Promise<EvictionNote | null> {
     const note = await readManifest<Partial<EvictionNote>>(this.evictionPath(stateId));
     return note && typeof note.at === 'string' && typeof note.budgetBytes === 'number'
-      ? { at: note.at, budgetBytes: note.budgetBytes }
+      ? { at: note.at, budgetBytes: note.budgetBytes, ...(note.byPerson === true ? { byPerson: true as const } : {}) }
       : null;
   }
 

@@ -86,6 +86,8 @@ export interface Messages {
     >;
     /** A memory let go under the disk budget: on which day, under which budget. */
     rereadEvicted(date: string, budget: string): string;
+    /** A memory the person released (Settings, Engine and memory). */
+    rereadReleased(date: string): string;
     rereadContinue: string;
     /** After a figure no measure backs yet. */
     estimated: string;
@@ -224,6 +226,43 @@ export interface Messages {
       exported(count: number, folder: string): string;
       exportFailed: string;
       exportLabels: { person: string; assistant: string; untitled: string };
+    };
+    engine: {
+      intro: string;
+      engine: string;
+      runningSince(duration: string): string;
+      stopped: string;
+      model: string;
+      llama: string;
+      llamaManaged(build: string): string;
+      context: string;
+      contextLine(tokens: string, slots: number, cacheType: string): string;
+      unload: string;
+      restart: string;
+      restartQuestion: string;
+      restartCost(seconds: string): string;
+      restartNow: string;
+      cancel: string;
+      changeModel: string;
+      memories: string;
+      memoriesIntro: string;
+      budget: string;
+      budgetLine(used: string, budget: string): string;
+      budgetEdit: string;
+      budgetField: string;
+      budgetApply: string;
+      budgetFrees(titles: string): string;
+      budgetFreeAndApply: string;
+      columns: { conversation: string; project: string; tokens: string; disk: string; last: string; state: string; action: string };
+      inEngine: string;
+      saved: string;
+      savedOther: string;
+      released(duration: string): string;
+      release: string;
+      noMemory: string;
+      seed: string;
+      seedLine(tokens: string, restore: string, served: number): string;
+      noSeed: string;
     };
     models: {
       intro: string;

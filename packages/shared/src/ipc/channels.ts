@@ -25,6 +25,7 @@ import {
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
 import { projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
+import { engineMemory, engineReleaseMemory, engineRestart, engineUnload } from './memory.js';
 import { modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from './models.js';
 import { searchQuery } from './search.js';
 import { appOpenDataFolder, conversationsExport, settingsAll, settingsGet, settingsSet } from './settings.js';
@@ -69,4 +70,8 @@ export const CHANNELS = [
   modelsScanDisk,
   modelsScanState,
   modelsScanCancel,
+  engineMemory,
+  engineReleaseMemory,
+  engineUnload,
+  engineRestart,
 ] as const;

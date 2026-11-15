@@ -46,7 +46,9 @@ export function MemoryBanner({ announcement, messages, style, onContinue }: Memo
           {text.rereadTitle(formatTokens(announcement.tokens, locale), formatDuration(announcement.seconds, locale)) + estimated}
         </p>
         <p className="aparte-alert__message">
-          {announcement.reason === 'evicted' && announcement.evicted
+          {announcement.reason === 'evicted' && announcement.evicted?.byPerson
+            ? text.rereadReleased(new Date(announcement.evicted.at).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }))
+            : announcement.reason === 'evicted' && announcement.evicted
             ? text.rereadEvicted(
                 new Date(announcement.evicted.at).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }),
                 formatBytes(announcement.evicted.budgetBytes, style),

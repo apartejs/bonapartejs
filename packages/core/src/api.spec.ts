@@ -157,6 +157,35 @@ describe('createCore — the managed engine', () => {
     expect((await engine!.client.props()).modelPath).toBe(gemma);
   });
 
+  it('« Moteur et mémoire »: the engine since when, the memories under the budget, unloaded and restarted', async () => {
+    const { core, gemma } = await setup();
+    expect((await core.memory()).engine).toMatchObject({ running: false, since: null });
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    const running = await core.memory();
+    expect(running.engine).toMatchObject({ running: true, model: { name: 'gemma-4-test' }, cacheType: 'f16', slots: 1 });
+    expect(running.engine.since).not.toBeNull();
+    expect(running.rows).toEqual([expect.objectContaining({ id: 'c1', state: 'engine' })]);
+    expect(running.budgetBytes).toBeGreaterThan(0);
+
+    await core.settings.set('kvBudgetBytes', 3 * 1024 ** 3);
+    expect((await core.memory()).budgetBytes).toBe(3 * 1024 ** 3);
+
+    await core.unloadModel();
+    expect(await core.engineState()).toMatchObject({ status: 'stopped' });
+    const unloaded = await core.memory();
+    expect(unloaded.engine.running).toBe(false);
+    // Unloading kept the memory on disk.
+    await core.loadModel(gemma);
+    expect((await core.memory()).rows).toEqual([expect.objectContaining({ id: 'c1', state: 'saved' })]);
+    const before = (await core.memory()).engine.since;
+    await core.restartEngine();
+    const after = await core.memory();
+    expect(after.engine.running).toBe(true);
+    expect(after.engine.since).not.toBe(before);
+  });
+
   it('switching models saves first the memory of the conversation the engine holds', async () => {
     const { core, dir, gemma, qwen } = await setup();
     await core.loadModel(gemma);

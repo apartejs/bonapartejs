@@ -1378,3 +1378,120 @@ body {
   background: var(--bonaparte-accent-soft);
 }
 
+/* Settings, Engine and memory: the engine's facts, the budget, the memory of each conversation. */
+.settings__sections--wide {
+  max-width: 1040px;
+}
+
+.engine-facts__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.engine-facts__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--aparte-radius-full);
+  background: var(--aparte-text-muted);
+}
+
+.engine-facts__dot--running {
+  background: var(--aparte-success);
+}
+
+.engine-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.engine-facts dt {
+  color: var(--aparte-text-muted);
+}
+
+.engine-facts dd {
+  margin: 0;
+}
+
+.engine-facts__model {
+  font-weight: var(--aparte-font-weight-medium);
+}
+
+.memory-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.memory-head > div:first-child {
+  flex: 1 1 360px;
+}
+
+.memory-head__intro {
+  margin-top: 6px;
+}
+
+.memory-budget {
+  display: flex;
+  flex: 0 1 300px;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.memory-budget__label {
+  color: var(--aparte-text-muted);
+}
+
+.memory-budget__bar {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--aparte-primary);
+}
+
+.memory-budget__edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.memory-budget__edit .aparte-field {
+  width: 120px;
+}
+
+.memory-state {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: var(--aparte-font-weight-medium);
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text);
+}
+
+.memory-state--engine {
+  background: var(--aparte-success-surface);
+  color: var(--aparte-success-ink);
+}
+
+.memory-state--released {
+  background: var(--aparte-warning-surface);
+  color: var(--aparte-warning-ink);
+}
+
+.setting-section--quiet {
+  background: var(--aparte-surface-1);
+}
+
+
+.settings__page--wide .settings__heading {
+  max-width: 1040px;
+}
