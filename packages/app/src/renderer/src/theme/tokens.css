@@ -25,6 +25,13 @@
   --aparte-error: #A1281F;
   --aparte-info: #1F5FA8;
 
+  /*
+   * The two state surfaces aparté does not derive yet (it derives success and error only:
+   * apartejs/aparte#228), with its own recipe. Remove them when the kit has them.
+   */
+  --aparte-warning-surface: color-mix(in oklch, var(--aparte-warning) 12%, transparent);
+  --aparte-info-surface: color-mix(in oklch, var(--aparte-info) 12%, transparent);
+
   /* What aparté does not name. */
   --bonaparte-accent-soft: color-mix(in srgb, var(--bonaparte-accent) 10%, var(--aparte-bg));
   --bonaparte-merged: #7A4BC2;

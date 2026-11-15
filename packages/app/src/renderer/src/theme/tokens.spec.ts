@@ -131,3 +131,46 @@ describe('colours outside the tokens file', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('the tokens a rule reads', () => {
+  const appDir = join(here, '..', '..', '..', '..');
+
+  /** Every `--aparte-*` and `--bonaparte-*` name declared in `text`. */
+  function declared(text: string): Set<string> {
+    return new Set([...text.matchAll(/(--(?:aparte|bonaparte)-[\w-]+)\s*:/g)].map((match) => match[1]!));
+  }
+
+  function files(dir: string, keep: (path: string) => boolean): string[] {
+    return readdirSync(dir).flatMap((entry) => {
+      const path = join(dir, entry);
+      if (statSync(path).isDirectory()) return entry === 'node_modules' ? [] : files(path, keep);
+      return keep(path) ? [path] : [];
+    });
+  }
+
+  it('is declared, by aparté or by the tokens file — an undeclared one paints nothing, silently', () => {
+    const aparte = join(appDir, 'node_modules', '@aparte');
+    const known = new Set<string>();
+    for (const name of readdirSync(aparte)) {
+      const dist = join(aparte, name, 'dist');
+      try {
+        statSync(dist);
+      } catch {
+        continue;
+      }
+      for (const file of files(dist, (path) => /\.(css|js)$/.test(path))) {
+        for (const token of declared(readFileSync(file, 'utf8'))) known.add(token);
+      }
+    }
+    expect(known.has('--aparte-error-surface')).toBe(true);
+    const sources = files(rendererSrc, (path) => /\.(css|tsx?)$/.test(path) && !/\.spec\.tsx?$/.test(path));
+    for (const file of sources) for (const token of declared(readFileSync(file, 'utf8'))) known.add(token);
+    const unknown = new Set<string>();
+    for (const file of sources) {
+      for (const match of readFileSync(file, 'utf8').matchAll(/var\((--(?:aparte|bonaparte)-[\w-]+)\s*[,)]/g)) {
+        if (!known.has(match[1]!)) unknown.add(`${relative(appDir, file)}: ${match[1]}`);
+      }
+    }
+    expect([...unknown]).toEqual([]);
+  });
+});
