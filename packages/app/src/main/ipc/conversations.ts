@@ -20,6 +20,7 @@ import {
   conversationsLoadFull,
   conversationsMemory,
   conversationsSave,
+  conversationsStatus,
   type ConversationDocument,
   type ConversationMemoryView,
 } from '@aparte/bonaparte-shared';
@@ -34,7 +35,7 @@ interface ConversationCore {
     'ensure' | 'get' | 'list' | 'loadDocument' | 'saveDocument' | 'mark' | 'rename' | 'loadDraft' | 'saveDraft'
   >;
   conversationDocument: Core['conversationDocument'];
-  conversations: Pick<Core['conversations'], 'open'>;
+  conversations: Pick<Core['conversations'], 'open' | 'status'>;
   removeConversation: Core['removeConversation'];
 }
 
@@ -82,5 +83,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsMemory, async ({ id }): Promise<ConversationMemoryView> => {
     const announcement = await core.conversations.open(id);
     return { announcement: announcement?.kind === 'restore' || announcement?.kind === 'reread' ? announcement : null };
+  });
+
+  ipc.handle(conversationsStatus, async ({ ids }) => {
+    const found = await Promise.all(ids.map(async (id) => [id, await core.conversations.status(id)] as const));
+    return Object.fromEntries(found.filter(([, status]) => status !== null));
   });
 }

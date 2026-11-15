@@ -118,6 +118,12 @@ export interface TurnInput {
   forkAfter?: string;
 }
 
+/** What the sidebar shows of a conversation (§12): where its memory is, and whether it waits for the person. */
+export interface ConversationStatus {
+  memory: 'engine' | 'saved' | 'reread' | null;
+  waiting: boolean;
+}
+
 export interface TurnResult {
   usage: Usage;
   stopped?: 'user';
@@ -238,6 +244,26 @@ export class ConversationEngine {
       evicted: manifest ? null : await this.deps.kv.evicted(key),
       measures: prefill === undefined ? {} : { prefillTokensPerSecond: prefill },
     });
+  }
+
+  /**
+   * What the sidebar shows of a conversation (§12), read without touching the slot: its memory —
+   * in the engine, saved on disk, or to read again; none where nothing was said or with a server
+   * that keeps no memory — and whether its last turn waits for the person.
+   */
+  async status(id: string): Promise<ConversationStatus | null> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) return null;
+    const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
+    const waiting = entries.at(-1)?.kind === 'pending';
+    const engine = await this.deps.engine();
+    if (engine) this.follow(engine);
+    if (!engine?.live || !entries.some((entry) => entry.kind === 'user')) return { memory: null, waiting };
+    const owner = this.ownerOf(meta);
+    if (this.scheduler.isResident(owner)) return { memory: 'engine', waiting };
+    const manifest = await this.deps.kv.manifest(ownerKey(owner));
+    const memory = manifest && canRestore(manifest, engine.live).ok ? 'saved' : 'reread';
+    return { memory, waiting };
   }
 
   turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> {

@@ -31,7 +31,10 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
   registerConversationChannels(ipc, {
     conversationStore: store,
-    conversations: { open: open as never },
+    conversations: {
+      open: open as never,
+      status: async (id: string) => (id === 'c-1' ? { memory: 'saved' as const, waiting: true } : null),
+    },
     conversationDocument: (id: string) => store.loadDocument(id),
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
@@ -101,6 +104,12 @@ describe('the conversation channels', () => {
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBeNull();
     await call('conversations.saveDraft', { id: 'c-1', text: 'Une idée' });
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBe('Une idée');
+  });
+
+  it("say what the sidebar shows of each conversation asked: its memory, and whether it waits — nothing for one that is gone", async () => {
+    const { call } = await setup();
+    await expect(call('conversations.status', { ids: ['c-1', 'gone'] })).resolves.toEqual({ 'c-1': { memory: 'saved', waiting: true } });
+    await expect(call('conversations.status', { ids: Array.from({ length: 501 }, (_, n) => `c-${n}`) })).rejects.toThrow();
   });
 });
 

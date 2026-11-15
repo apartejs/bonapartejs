@@ -57,6 +57,23 @@ export const conversationsDelete = defineChannel('conversations.delete', idInput
 
 export const conversationsMemory = defineChannel('conversations.memory', idInput, conversationMemorySchema);
 
+/**
+ * What the sidebar shows of each conversation (§12), for the ids the window lists: its memory — in
+ * the engine, saved on disk, to read again, or none — and whether its last turn waits for the person.
+ * A conversation that is gone is left out.
+ */
+export const conversationStatusSchema = z.object({
+  memory: z.enum(['engine', 'saved', 'reread']).nullable(),
+  waiting: z.boolean(),
+});
+export type ConversationStatusView = z.infer<typeof conversationStatusSchema>;
+
+export const conversationsStatus = defineChannel(
+  'conversations.status',
+  z.object({ ids: z.array(z.string().min(1).max(128)).max(500) }),
+  z.record(z.string(), conversationStatusSchema),
+);
+
 /** The card of a conversation, as aparté's list reads it: no message, so the sidebar never loads a document. */
 export const conversationCardSchema = z.object({
   id: z.string(),

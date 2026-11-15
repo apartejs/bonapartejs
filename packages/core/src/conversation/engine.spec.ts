@@ -289,6 +289,46 @@ describe('ConversationEngine — the memory', () => {
   });
 });
 
+describe('ConversationEngine — what the sidebar shows', () => {
+  it('the conversation in the slot is in the engine; the one that left it is saved; one let go is to read again', async () => {
+    const { engine, kv, conversation, say } = await rig();
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    expect(await engine.status(a.id)).toEqual({ memory: 'engine', waiting: false });
+    await say(b.id, 'Salut');
+    expect(await engine.status(a.id)).toEqual({ memory: 'saved', waiting: false });
+    expect(await engine.status(b.id)).toEqual({ memory: 'engine', waiting: false });
+    await kv.forget(`${a.id}_main`);
+    expect(await engine.status(a.id)).toEqual({ memory: 'reread', waiting: false });
+  });
+
+  it('shows no memory where nothing was said, nor with a server that keeps none', async () => {
+    const fresh = await rig();
+    const empty = await fresh.conversation();
+    expect(await fresh.engine.status(empty.id)).toEqual({ memory: null, waiting: false });
+
+    const remote = await rig({ live: null });
+    const said = await remote.conversation();
+    await remote.say(said.id, 'Bonjour');
+    expect(await remote.engine.status(said.id)).toEqual({ memory: null, waiting: false });
+  });
+
+  it('a conversation whose last turn waits for the person is waiting', async () => {
+    const { engine, store, conversation, say } = await rig();
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const journal = await openJournal(store.dir, meta.id, meta.branchId);
+    await journal.append({ kind: 'pending', calls: [{ toolCallId: 'c1', name: 'edit_file', input: {}, reason: 'approval' }], ticket: 't' });
+    expect(await engine.status(meta.id)).toMatchObject({ waiting: true });
+  });
+
+  it('a conversation that does not exist has no state', async () => {
+    const { engine } = await rig();
+    expect(await engine.status('nope')).toBeNull();
+  });
+});
+
 describe('ConversationEngine — when it does not go well', () => {
   it('never shifts the context: a message that does not fit is refused before anything is sent', async () => {
     const { store, server, conversation, say } = await rig({ live: { ...LIVE, nCtx: 1300 } });

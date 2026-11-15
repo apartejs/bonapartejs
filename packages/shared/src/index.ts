@@ -62,9 +62,10 @@ export {
   conversationsLoadAll,
   conversationsLoadFull,
   conversationsMemory,
+  conversationsStatus,
   conversationsSave,
 } from './ipc/conversations.js';
 export type { ConversationCard } from './ipc/conversations.js';
-export type { ConversationDocument, ConversationMemoryView } from './ipc/conversations.js';
+export type { ConversationDocument, ConversationMemoryView, ConversationStatusView } from './ipc/conversations.js';
 export { modesGet, modesSet, modeViewSchema, playModeSchema, toolPreviewSchema, toolsPreview } from './ipc/modes.js';
 export type { ModeView, ToolPreviewView } from './ipc/modes.js';
