@@ -4,6 +4,7 @@ import {
   engineState,
   modesGet,
   modesSet,
+  settingsGet,
   type ConversationMemoryView,
   type EngineStateView,
   type Locale,
@@ -123,10 +124,28 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     };
   }, [conversationId, asked]);
 
+  const [listed, setListed] = useState(false);
   useEffect(() => {
     // One manager and one storage for the life of the window.
-    void init(createStorageAdapter(bridge));
+    void init(createStorageAdapter(bridge)).then(() => setListed(true));
   }, [init]);
+  // Once the list is read: the last conversation again, unless the person said otherwise (5.9).
+  const reopened = useRef(false);
+  useEffect(() => {
+    if (!listed || reopened.current) return;
+    reopened.current = true;
+    const last = activeConversations[0];
+    if (!last || conversationId) return;
+    bridge
+      .invoke(settingsGet, { key: 'reopenLast' })
+      .then((reopen) => {
+        // Not over a conversation the person opened, or started, meanwhile.
+        if (reopen === true && open.current === null) {
+          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: last.id } }));
+        }
+      })
+      .catch(() => undefined);
+  }, [listed, activeConversations, conversationId]);
 
   useEffect(() => registerStepLabels(messages), [messages]);
   useEffect(() => registerToolLines(messages), [messages]);

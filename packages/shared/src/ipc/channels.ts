@@ -25,6 +25,7 @@ import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState 
 import { modesGet, modesSet, toolsPreview } from './modes.js';
 import { projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
 import { searchQuery } from './search.js';
+import { conversationsExport, settingsGet } from './settings.js';
 
 export const CHANNELS = [
   appInfo,
@@ -56,4 +57,6 @@ export const CHANNELS = [
   projectsUpdate,
   projectsRemove,
   searchQuery,
+  settingsGet,
+  conversationsExport,
 ] as const;

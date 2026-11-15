@@ -165,6 +165,7 @@ export const fr: Messages = {
     elicitationAnswerLabel: 'Ta réponse',
     questionDeclined: 'Tu l’as laissé choisir.',
     conversationWaiting: 'Attend ta réponse',
+    deleteConversationConfirm: 'Supprimer « {title} » ? Ses messages, sa mémoire et les copies des fichiers gardées pour revenir en arrière partent avec elle.',
   },
   search: {
     open: 'Rechercher',

@@ -209,7 +209,9 @@ export type AparteWord =
   | 'elicitationOtherLabel'
   | 'elicitationAnswerLabel'
   | 'questionDeclined'
-  | 'conversationWaiting';
+  | 'conversationWaiting'
+  // The question before a conversation is deleted: what goes with it (task 5.9).
+  | 'deleteConversationConfirm';
 
 /** The tools of the core whose calls have a line of their own. */
 export type ToolLineName = 'read_file' | 'list_files' | 'search' | 'edit_file' | 'write_file' | 'run_command' | 'web_fetch';

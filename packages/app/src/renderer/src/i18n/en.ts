@@ -165,6 +165,7 @@ export const en: Messages = {
     elicitationAnswerLabel: 'Your answer',
     questionDeclined: 'You left it the choice.',
     conversationWaiting: 'Waiting for your answer',
+    deleteConversationConfirm: 'Delete “{title}”? Its messages, its memory and the copies of the files kept to go back go with it.',
   },
   search: {
     open: 'Search',

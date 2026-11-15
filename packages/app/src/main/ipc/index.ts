@@ -11,6 +11,7 @@ import { registerEngineChannels } from './engine.js';
 import { registerModeChannels } from './modes.js';
 import { registerProjectChannels, type ChooseFolder } from './projects.js';
 import { searchQuery } from '@aparte/bonaparte-shared';
+import { registerExportChannel, registerSettingsChannels } from './settings.js';
 import type { IpcRegistry } from './register.js';
 
 export interface AppFacts {
@@ -27,4 +28,6 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerModeChannels(ipc, core);
   registerProjectChannels(ipc, core, facts.chooseFolder);
   ipc.handle(searchQuery, ({ query, conversationId }) => core.search(query, conversationId ? { conversationId } : {}));
+  registerSettingsChannels(ipc, core);
+  registerExportChannel(ipc, core, facts.chooseFolder);
 }

@@ -18,6 +18,8 @@ import {
   type FakeLlamaServer,
   type FakeLlamaServerOptions,
 } from '@aparte/bonaparte-core/testing';
+import { spawnHidden } from '@aparte/bonaparte-core';
+import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { _electron as electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -71,6 +73,8 @@ export interface LaunchOptions {
   dataDir?: string;
   /** Keep the data folder when this launch closes, for a later one (the fixture removes it at the end of the test). */
   keepData?: boolean;
+  /** The app's settings as the person would have left them (`settings` in the configuration file). */
+  settings?: Record<string, unknown>;
 }
 
 /** One completion the managed engine was asked for. */
@@ -99,6 +103,11 @@ export interface LaunchedApp {
   navigations(): Promise<string[]>;
   /** What the app wrote to its console, main process and window. */
   output(): string;
+  /**
+   * Launches the app a second time, on the same data folder, as the person would by
+   * clicking its icon again: resolves with that second process's exit code.
+   */
+  launchAgain(): Promise<number | null>;
   close(): Promise<void>;
 }
 
@@ -178,24 +187,24 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
         BONAPARTE_E2E_ENGINE_PORT: String(enginePort),
         FAKE_LLAMA_REQUESTS: requestsFile,
       });
-    } else {
+    }
+    const settings = options.settings ? { settings: options.settings } : {};
+    if (!options.managed) {
       await writeFile(
         join(dataDir, 'config', 'global.json'),
-        JSON.stringify({ backend: { mode: 'remote', url: server.url } }),
+        JSON.stringify({ backend: { mode: 'remote', url: server.url }, ...settings }),
       );
+    } else if (options.settings) {
+      await writeFile(join(dataDir, 'config', 'global.json'), JSON.stringify(settings));
     }
 
-    app = await electron.launch({
-      args: [entry],
-      cwd: appRoot,
-      env: appEnvironment(process.env, {
-        dataDir,
-        locale: options.locale ?? 'fr',
-        home,
-        extra: { ...managedEnv, ...options.env },
-      }),
-      timeout: 30_000,
+    const env = appEnvironment(process.env, {
+      dataDir,
+      locale: options.locale ?? 'fr',
+      home,
+      extra: { ...managedEnv, ...options.env },
     });
+    app = await electron.launch({ args: [entry], cwd: appRoot, env, timeout: 30_000 });
     const child = app.process();
     child.stdout?.on('data', (chunk: Buffer) => lines.push(`[main] ${chunk.toString()}`));
     child.stderr?.on('data', (chunk: Buffer) => lines.push(`[main] ${chunk.toString()}`));
@@ -232,12 +241,30 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
     const navigations = (): Promise<string[]> =>
       running.evaluate(() => (globalThis as { __navigations?: string[] }).__navigations ?? []);
 
+    // Electron itself, the program Playwright launched: run again on the same entry and folder.
+    const electronPath = createRequire(import.meta.url)('electron') as string;
+    const launchAgain = (): Promise<number | null> =>
+      new Promise((resolve, reject) => {
+        const second = spawnHidden(electronPath, [entry], { cwd: appRoot, env });
+        second.stdout?.on('data', (chunk: Buffer) => lines.push(`[second] ${chunk.toString()}`));
+        second.stderr?.on('data', (chunk: Buffer) => lines.push(`[second] ${chunk.toString()}`));
+        const timer = setTimeout(() => {
+          second.kill();
+          reject(new Error('The second launch did not quit within 20 s.'));
+        }, 20_000);
+        second.once('exit', (code) => {
+          clearTimeout(timer);
+          resolve(code);
+        });
+      });
+
     return {
       app,
       page,
       server,
       dataDir,
       home,
+      launchAgain,
       ...(enginePort !== undefined ? { enginePort } : {}),
       ...(releases ? { releases } : {}),
       navigations,
