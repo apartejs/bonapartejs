@@ -6,7 +6,7 @@
  * `@file` imports (a CLAUDE.md that says `@AGENTS.md`), and caps the text.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -80,4 +80,18 @@ describe('readProjectInstructions', () => {
     const escaping = await root({ 'AGENTS.md': '@../../../etc/passwd' });
     expect((await readProjectInstructions([escaping]))?.text ?? '').not.toContain('root:');
   });
+
+  it('never reads a file that a link takes out of the project: the instructions stay inside the perimeter', async () => {
+    const project = await root({ 'AGENTS.md': 'Inside.\n' });
+    const outside = await root({ 'instructions.md': 'A secret from elsewhere.\n' });
+    try {
+      await symlink(outside, join(project, '.bonaparte'), 'junction');
+    } catch {
+      return;
+    }
+    const read = await readProjectInstructions([project]);
+    expect(read?.text).not.toContain('A secret from elsewhere.');
+    expect(read?.text).toContain('Inside.');
+  });
 });
+

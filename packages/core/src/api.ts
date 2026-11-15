@@ -41,6 +41,9 @@ import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { toolsFor } from './prompt/system-prompt.js';
 import { builtinTools } from './tools/builtin/index.js';
 import { CheckpointStore } from './checkpoints/store.js';
+import { detectProject, type ProjectFacts } from './project/detect.js';
+import { readProjectInstructions } from './project/instructions.js';
+import { ProjectStore, type NewProject, type Project, type ProjectChanges } from './project/store.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
@@ -123,6 +126,15 @@ export interface Core {
   readonly checkpoints: CheckpointStore;
   /** Deletes a conversation: its card, its journal, its memory — and the originals its turns kept. */
   removeConversation(id: string): Promise<void>;
+  /** The projects: made from a folder (what it says read first), each with its folders and its default mode. */
+  readonly projects: {
+    detect(folder: string): Promise<ProjectFacts>;
+    list(): Promise<Project[]>;
+    get(id: string): Promise<Project | undefined>;
+    create(input: NewProject): Promise<Project>;
+    update(id: string, changes: ProjectChanges): Promise<Project>;
+    remove(id: string): Promise<void>;
+  };
   /**
    * A turn of the agent: the model's calls decided by the policy, run by the
    * registry, the window's own tools (its `clientTools`) paused for it.
@@ -498,7 +510,21 @@ export function createCore(deps: CoreDeps): Core {
   for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
   // Without a project the perimeter is the home folder — a test run's own, when it gives one.
   const perimeter = (): string[] => (deps.home ? [deps.home] : []);
-  const permissions = new PermissionEngine({ roots: () => perimeter(), dataDir: deps.dataDir });
+  // The projects (task 5.3): a conversation of a project works in its folders. Their roots are read
+  // before a turn, a preview or a resume (rootsOf), so the policy — which decides at once — finds them.
+  const projectStore = new ProjectStore(deps.dataDir);
+  const projectRoots = new Map<string, string[]>();
+  async function rootsOf(conversationId: string): Promise<{ roots: string[]; projectId?: string }> {
+    const projectId = (await conversationStore.get(conversationId))?.projectId;
+    const project = projectId ? await projectStore.get(projectId) : undefined;
+    if (!project) return { roots: perimeter() };
+    projectRoots.set(project.id, project.roots);
+    return { roots: project.roots, projectId: project.id };
+  }
+  const permissions = new PermissionEngine({
+    roots: (projectId) => (projectId ? (projectRoots.get(projectId) ?? perimeter()) : perimeter()),
+    dataDir: deps.dataDir,
+  });
   // Before a tool writes, the file as it was, kept per turn (the turn is its message).
   const checkpoints = new CheckpointStore(join(deps.dataDir, 'checkpoints'));
   const keepOriginals = (conversationId: string, turnId: string) => ({
@@ -536,9 +562,15 @@ export function createCore(deps: CoreDeps): Core {
     prompt: (meta) => ({
       kind: meta.kind,
       tools: toolsFor(meta.kind, tools.list()),
-      perimeter: [],
+      perimeter: meta.projectId ? (projectRoots.get(meta.projectId) ?? []) : [],
       replyLanguage: deps.replyLanguage?.() ?? 'English',
     }),
+    // The project's instructions (.bonaparte/instructions.md, AGENTS.md or CLAUDE.md), read at each turn:
+    // frozen at the first, a change told by a note (task 4.7).
+    instructions: async (meta) => {
+      const project = meta.projectId ? await projectStore.get(meta.projectId) : undefined;
+      return project ? ((await readProjectInstructions(project.roots))?.text ?? '') : undefined;
+    },
     // The person learns it when the conversation opens again (« not saved »); the log keeps why.
     onSaveError: (error, conversationId) =>
       log(`[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`),
@@ -577,15 +609,17 @@ export function createCore(deps: CoreDeps): Core {
       where: 'window',
     }));
     const signer = await tickets();
+    const { roots, projectId } = await rootsOf(conversationId);
     return runAgentTurn(
       {
         conversationId,
         input,
         mode: (await modeOf(conversationId)).mode,
+        ...(projectId ? { projectId } : {}),
         registry: tools,
         permissions,
         conversations,
-        roots: perimeter(),
+        roots,
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
         windowTools,
         ...keepOriginals(conversationId, input.messageId ?? 'turn'),
@@ -631,6 +665,15 @@ export function createCore(deps: CoreDeps): Core {
     permissions,
     checkpoints,
 
+    projects: {
+      detect: (folder) => detectProject(folder),
+      list: () => projectStore.list(),
+      get: (id) => projectStore.get(id),
+      create: (input) => projectStore.create(input),
+      update: (id, changes) => projectStore.update(id, changes),
+      remove: (id) => projectStore.remove(id),
+    },
+
     async removeConversation(id) {
       await conversations.remove(id);
       // Copies of the person's files never outlive the conversation that kept them.
@@ -646,9 +689,8 @@ export function createCore(deps: CoreDeps): Core {
       else improConfirmed.delete(conversationId);
     },
 
-    async previewCall(_conversationId, call) {
-      // No project yet: the perimeter is the home folder (the projects reach the conversations in 5.3).
-      const roots = perimeter();
+    async previewCall(conversationId, call) {
+      const { roots } = await rootsOf(conversationId);
       const preview = await previewToolCall(call, {
         resolve: (requested) => {
           try {
@@ -667,13 +709,15 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async resumeTurn(conversationId, check, options, emit, onTurnEvent) {
+      const place = await rootsOf(conversationId);
       const { results, waiting } = await answerPause(
         {
           conversationId,
           mode: (await modeOf(conversationId)).mode,
+          ...(place.projectId ? { projectId: place.projectId } : {}),
           registry: tools,
           permissions,
-          roots: perimeter(),
+          roots: place.roots,
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
           signal: options.signal,
           windowTools: new Set(options.clientTools.map((tool) => tool.name)),

@@ -4,7 +4,7 @@
  * asked, and a turn then runs on that engine, in the model's family.
  */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -373,6 +373,30 @@ describe('createCore — the modes and the previews of the window', () => {
     await core.removeConversation('c1');
     expect(await core.checkpoints.changes('c1', 'm1')).toBeUndefined();
     expect(await core.conversationStore.get('c1')).toBeNull();
+  });
+
+  it('a project is made from a folder: what the folder says, its name, its folders, its mode — nothing written in the folder', async () => {
+    const { core } = await setup();
+    const folder = await mkdtemp(join(tmpdir(), 'bp-core-project-'));
+    dirs.push(folder);
+    await writeFile(join(folder, 'AGENTS.md'), 'Use pnpm.\n');
+    const facts = await core.projects.detect(folder);
+    expect(facts).toMatchObject({ instructions: 'AGENTS.md', git: null });
+    const project = await core.projects.create({ name: 'spanwise', roots: [folder], defaultMode: 'plume' });
+    expect(project).toMatchObject({ name: 'spanwise', roots: [folder], defaultMode: 'plume' });
+    expect(await core.projects.list()).toEqual([project]);
+    expect(await readdir(folder)).toEqual(['AGENTS.md']);
+  });
+
+  it("a conversation of a project works in the project's folders, not in the home folder", async () => {
+    const { core } = await setup();
+    const folder = await mkdtemp(join(tmpdir(), 'bp-core-project-'));
+    dirs.push(folder);
+    await writeFile(join(folder, 'notes.txt'), 'old line\n');
+    const project = await core.projects.create({ name: 'p', roots: [folder] });
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition', projectId: project.id });
+    const preview = await core.previewCall('c1', { name: 'edit_file', input: { path: 'notes.txt', old_string: 'old line', new_string: 'new line' } });
+    expect(preview).toMatchObject({ kind: 'diff', before: 'old line\n', after: 'new line\n' });
   });
 
   it("without a project, and outside a test run, the tools work in the person's home folder", async () => {

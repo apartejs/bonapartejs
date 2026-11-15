@@ -594,6 +594,40 @@ describe('ConversationEngine — the tools', () => {
     expect(next.indexOf('<turn|>', answered)).toBeLessThan(next.indexOf('<|turn>user', answered));
   });
 
+  it('a change of the instructions during a pause is told at the next message, never inside the resumed answer', async () => {
+    let instructions = 'Indent with tabs.';
+    const { engine, prompts, conversation } = await rig({ server: { responder: agent }, instructions: async () => instructions });
+    const meta = await conversation();
+    await engine.turn(
+      meta.id,
+      {
+        text: 'Lis a.ts',
+        tools: {
+          defs: [READ_FILE],
+          onCalls: async (calls) => ({
+            suspend: { pending: calls.map((one) => ({ toolCallId: one.id, name: one.name, input: one.input, reason: 'approval' as const })), ticket: 't' },
+          }),
+        },
+      },
+      () => undefined,
+    );
+    instructions = 'Indent with two spaces.';
+    const call = (await engine.paused(meta.id))!.calls[0]!;
+    await engine.recordAnswers(meta.id, {
+      outcomes: { [call.toolCallId]: { kind: 'decision', approved: true } },
+      results: [{ toolCallId: call.toolCallId, name: call.name, content: 'export const a = 1;' }],
+    });
+    await engine.turn(meta.id, { resume: true, tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
+    const resumed = prompts.at(-1)!;
+    expect(resumed.slice(resumed.lastIndexOf('<tool_response|>'))).not.toContain('[project update]');
+
+    await engine.turn(meta.id, { text: 'Et ensuite ?', tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
+    const next = prompts.find((prompt) => prompt.includes('Et ensuite ?'))!;
+    const note = next.lastIndexOf('[project update]');
+    expect(note).toBeGreaterThan(next.lastIndexOf('<turn|>', note));
+    expect(next.indexOf('Indent with two spaces.')).toBeGreaterThan(next.lastIndexOf('Done.'));
+  });
+
   it('a turn the loop stops at its limit ends there', async () => {
     const { engine, prompts, conversation } = await rig({ server: { responder: agent } });
     const meta = await conversation();

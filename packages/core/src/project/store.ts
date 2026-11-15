@@ -7,6 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { PlayMode } from '@aparte/bonaparte-shared';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
@@ -125,6 +126,8 @@ export class ProjectStore {
   private mutate(change: (projects: Project[]) => Project[]): Promise<void> {
     return this.writes.run(this.file, async () => {
       const file: ProjectsFile = { version: 1, projects: change(await this.list()) };
+      // The data folder of a fresh install is made by its first write.
+      await mkdir(this.dir, { recursive: true });
       await writeJsonFile(this.file, file);
     });
   }

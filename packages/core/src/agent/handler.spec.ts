@@ -461,5 +461,22 @@ describe('the agent handler — the mode of a new conversation', () => {
     await (await handler(at('/c/bold?mode=impro', turn(user('Bonjour'))))).text();
     expect(await core.modeOf('bold')).toEqual({ mode: 'impro', reconfirm: false });
   });
+
+  it("a conversation started in a project belongs to it, runs in its default mode, and reads its instructions", async () => {
+    const prompts: string[] = [];
+    const { core, handler } = await setup({ responder: () => 'ok', onCompletion: (body) => prompts.push(String(body['prompt'])) });
+    const folder = await mkdtemp(join(tmpdir(), 'bp-handler-project-'));
+    await writeFile(join(folder, 'AGENTS.md'), 'Always answer with tabs.\n');
+    const project = await core.projects.create({ name: 'p', roots: [folder], defaultMode: 'plume' });
+    await (await handler(at(`/c/in-project?project=${project.id}`, turn(user('Bonjour'))))).text();
+    expect(await core.conversationStore.get('in-project')).toMatchObject({ projectId: project.id, mode: 'plume' });
+    expect(prompts.find((prompt) => prompt.includes('Bonjour'))).toContain('Always answer with tabs.');
+    // The mode the person chose before the first message comes before the project's.
+    await (await handler(at(`/c/chosen?project=${project.id}&mode=lecture`, turn(user('Bonjour'))))).text();
+    expect((await core.conversationStore.get('chosen'))?.mode).toBe('lecture');
+    // A project that does not exist is no project.
+    await (await handler(at('/c/nowhere?project=ghost', turn(user('Bonjour'))))).text();
+    expect((await core.conversationStore.get('nowhere'))?.projectId).toBeUndefined();
+  });
 });
 

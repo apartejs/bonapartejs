@@ -107,7 +107,13 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
     // A conversation's first turn runs in the mode the person chose before it had any — the page may
     // have saved the conversation already, made in the default mode. After that, the core's mode stands.
     const chosen = playModeSchema.safeParse(url.searchParams.get('mode'));
-    if (entries.length === 0 && chosen.success) await core.setMode(conversationId, chosen.data);
+    if (entries.length === 0) {
+      // Started in a project: it belongs to it, and runs in its default mode unless the person chose one.
+      const project = await core.projects.get(url.searchParams.get('project') ?? '');
+      if (project) await core.conversationStore.update(conversationId, { projectId: project.id });
+      const mode = chosen.success ? chosen.data : project?.defaultMode;
+      if (mode) await core.setMode(conversationId, mode);
+    }
     const divergence = compareWithJournal(body.data.request.messages, entries);
     if (divergence.kind === 'mismatch') {
       return jsonError(409, 'This history is not the one of this conversation: open it again.');

@@ -352,14 +352,16 @@ export class ConversationEngine {
       await journal.append({ kind: 'system', rendered: family.renderSystem(prompt.stable) });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
       if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
-    } else if (instructions !== undefined && instructions !== (meta.instructions ?? '')) {
+    }
+    // A model turn left open by calls nobody answered (a limit, a pause given up): closed before any note.
+    if (!input.resume) await closeOpenTurn(journal, family);
+    if (!input.resume && instructions !== undefined && instructions !== (meta.instructions ?? '')) {
       // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
+      // Never on a resume: the answer it continues is still open.
       const delta = renderInstructionsDelta(meta.instructions ?? '', instructions);
       if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       meta = await this.deps.store.update(id, { instructions });
     }
-    // A model turn left open by calls nobody answered (a limit, a pause given up): closed before anything else.
-    if (!input.resume) await closeOpenTurn(journal, family);
     if (!input.resume && input.tools) {
       // The tools the window runs (ask_user) are not in the frozen prompt: told by a note when they change.
       const windowTools = input.tools.defs.filter((tool) => tool.where === 'window');

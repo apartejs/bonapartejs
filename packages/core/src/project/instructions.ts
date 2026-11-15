@@ -12,6 +12,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, relative, resolve, isAbsolute, join } from 'node:path';
+import { realLocation } from './paths.js';
 
 export const INSTRUCTION_FILES = ['.bonaparte/instructions.md', 'AGENTS.md', 'CLAUDE.md'] as const;
 
@@ -25,8 +26,9 @@ export interface ProjectInstructions {
   sources: string[];
 }
 
+/** Inside the root where it really stands: a link that takes it elsewhere is outside (security rule 6). */
 function inside(root: string, path: string): boolean {
-  const rel = relative(resolve(root), resolve(path));
+  const rel = relative(realLocation(resolve(root)), realLocation(resolve(path)));
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
@@ -57,6 +59,7 @@ export async function readProjectInstructions(roots: string[]): Promise<ProjectI
   for (const root of roots) {
     for (const name of INSTRUCTION_FILES) {
       const file = join(root, name);
+      if (!inside(root, file)) continue;
       const content = await readIfFile(file);
       if (content === undefined || content.trim() === '') continue;
       const text = (await followImports(root, file, content)).trim();
