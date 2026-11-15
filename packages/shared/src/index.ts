@@ -30,6 +30,8 @@ export type {
 export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';
+export { appliedChangeSchema, changesList, changesRevert, revertResultSchema } from './ipc/changes.js';
+export type { AppliedChangeView, RevertResultView } from './ipc/changes.js';
 export { changedFileSchema, fileEntrySchema, fileScopeSchema, filesChanged, filesList, filesRead, fileTextSchema } from './ipc/files.js';
 export type { ChangedFileView, FileEntryView, FileScopeView, FileTextView } from './ipc/files.js';
 export { diskScanStateSchema, modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from './ipc/models.js';

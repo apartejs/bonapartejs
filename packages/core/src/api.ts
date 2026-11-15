@@ -77,7 +77,8 @@ import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { toolsFor } from './prompt/system-prompt.js';
 import { builtinTools } from './tools/builtin/index.js';
-import { CheckpointStore, type ChangedFile } from './checkpoints/store.js';
+import { appliedChanges, type AppliedChange } from './checkpoints/changes.js';
+import { CheckpointStore, type ChangedFile, type UndoResult } from './checkpoints/store.js';
 import { detectProject, type ProjectFacts } from './project/detect.js';
 import { readProjectInstructions } from './project/instructions.js';
 import { openJournal } from './journal/journal.js';
@@ -212,6 +213,11 @@ export interface Core {
     read(scope: FileScope, path: string): Promise<FileText>;
     /** What the conversation changed and still stands. */
     changed(conversationId: string): Promise<ChangedFile[]>;
+  };
+  /** The « Changements » pane: what the conversation changed, before and now; « Revenir » on one file. */
+  readonly changes: {
+    list(conversationId: string): Promise<AppliedChange[]>;
+    revert(conversationId: string, path: string): Promise<UndoResult>;
   };
   /** The page's document of a conversation; rebuilt from its journal when the page's is missing; null for none. */
   conversationDocument(id: string): Promise<unknown>;
@@ -1016,6 +1022,11 @@ export function createCore(deps: CoreDeps): Core {
       list: async (scope, dir) => listEntries(await scopeRoots(scope), dir, deps.home),
       read: async (scope, path) => readText(await scopeRoots(scope), path, undefined, deps.home),
       changed: (conversationId) => checkpoints.files(conversationId),
+    },
+
+    changes: {
+      list: (conversationId) => appliedChanges(checkpoints, conversationId),
+      revert: (conversationId, path) => checkpoints.revertFile(conversationId, path),
     },
 
     projects: {

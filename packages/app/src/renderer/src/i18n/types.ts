@@ -367,6 +367,22 @@ export interface Messages {
     close: { files: string; changes: string; terminal: string };
     closeTip: string;
   };
+  /** The « Changements » pane (task 6.4), and the header's counts that open it. */
+  changes: {
+    files(count: number): string;
+    proposed: string;
+    applied: string;
+    revert: string;
+    revertNamed(path: string): string;
+    /** « Revenir » found the file changed since: nothing put back. */
+    conflict(path: string): string;
+    binary: string;
+    none: string;
+    headerCounts(added: number, removed: number): string;
+    /** « +4 », « −4 ». */
+    added(count: number): string;
+    removed(count: number): string;
+  };
   /** The « Fichiers » pane (task 6.3): the tree, the preview, the marks. */
   files: {
     tree: string;

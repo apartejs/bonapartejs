@@ -27,6 +27,8 @@ export interface ConversationHeaderProps {
   onDelete(): void;
   /** The icons of the panes, at the end of the header. */
   panels?: ReactNode;
+  /** The lines the conversation changed (« +4 −4 »): a click opens « Changements ». */
+  counts?: { added: number; removed: number; onOpen(): void } | null;
 }
 
 type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'delete';
@@ -97,6 +99,17 @@ export function ConversationHeader(props: ConversationHeaderProps) {
           <Icon name="folder" />
           {props.project}
         </span>
+      ) : null}
+      {props.counts ? (
+        <button
+          type="button"
+          className="aparte-btn aparte-btn--ghost aparte-btn--sm conversation-header__counts"
+          aria-label={props.messages.changes.headerCounts(props.counts.added, props.counts.removed)}
+          onClick={props.counts.onOpen}
+        >
+          <span className="changes-pane__added">{props.messages.changes.added(props.counts.added)}</span>
+          <span className="changes-pane__removed">{props.messages.changes.removed(props.counts.removed)}</span>
+        </button>
       ) : null}
       <span className="conversation-header__spacer" />
       {props.memory ? (

@@ -23,6 +23,7 @@ import {
   conversationsUnpin,
 } from './conversations.js';
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
+import { changesList, changesRevert } from './changes.js';
 import { filesChanged, filesList, filesRead } from './files.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
 import { projectsAddFolder, projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
@@ -36,6 +37,8 @@ export const CHANNELS = [
   filesList,
   filesRead,
   filesChanged,
+  changesList,
+  changesRevert,
   engineState,
   engineModels,
   engineLoad,

@@ -12,6 +12,8 @@ import {
   type Locale,
   type PlayMode,
   type ProjectView,
+  changesList,
+  type AppliedChangeView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -26,6 +28,8 @@ import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
+import { appliedCards, ChangesPanel, useProposedCards } from './panels/ChangesPanel';
+import { countLines, total } from './panels/changes';
 import { FilesPanel } from './panels/FilesPanel';
 import { PanelDock } from './panels/PanelDock';
 import { PanelToggles } from './panels/PanelToggles';
@@ -251,6 +255,29 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     window.addEventListener('aparte-message-done', ended);
     return () => window.removeEventListener('aparte-message-done', ended);
   }, []);
+  // « Changements »: what waits for the person, then what the conversation changed (task 6.4).
+  const [reverted, setReverted] = useState(0);
+  const [applied, setApplied] = useState<AppliedChangeView[]>([]);
+  useEffect(() => {
+    if (!conversationId) {
+      setApplied([]);
+      return;
+    }
+    let current = true;
+    bridge
+      .invoke(changesList, { id: conversationId })
+      .then((list) => current && setApplied(list))
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, [conversationId, turnsEnded, asked, reverted]);
+  const writesWaiting = approvals
+    .list(conversationId ?? null)
+    .filter((one) => one.name === 'edit_file' || one.name === 'write_file');
+  const proposedCards = useProposedCards(conversationId, writesWaiting);
+  const changeCards = [...proposedCards, ...appliedCards(applied)];
+  const changeCounts = total(changeCards.map((card) => countLines(card.before, card.after)));
   // What the core says of each conversation, as the sidebar shows it — read by the deck too.
   const statusesNow = useRef<Statuses>({});
   // A chat lives on while it works or waits for the person: a reply written, a question, an approval.
@@ -520,6 +547,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           void remove(openConversation.id);
           setDeck((was) => forget(was, openConversation.id));
         }}
+        counts={
+          changeCards.length > 0 && changeCounts.added + changeCounts.removed > 0
+            ? { ...changeCounts, onOpen: () => setPanes((was) => opened(was, 'changes')) }
+            : null
+        }
         panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
@@ -579,6 +611,23 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         shown={shownPanes(panes, narrow)}
         narrow={narrow}
         content={{
+          changes: {
+            meta: (
+              <>
+                {`${messages.changes.files(changeCards.length)} · `}
+                <span className="changes-pane__added">{messages.changes.added(changeCounts.added)}</span>{' '}
+                <span className="changes-pane__removed">{messages.changes.removed(changeCounts.removed)}</span>
+              </>
+            ),
+            body: (
+              <ChangesPanel
+                messages={messages}
+                conversationId={conversationId}
+                cards={changeCards}
+                onReverted={() => setReverted((count) => count + 1)}
+              />
+            ),
+          },
           files: {
             meta: activeProject?.name ?? messages.files.home,
             body: (

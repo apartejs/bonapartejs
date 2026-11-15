@@ -7,6 +7,7 @@
 import { appInfo, type Locale } from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
 import { registerConversationChannels } from './conversations.js';
+import { registerChangeChannels } from './changes.js';
 import { registerEngineChannels } from './engine.js';
 import { registerFileChannels } from './files.js';
 import { registerModeChannels } from './modes.js';
@@ -31,6 +32,7 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerConversationChannels(ipc, core);
   registerModeChannels(ipc, core);
   registerFileChannels(ipc, core);
+  registerChangeChannels(ipc, core);
   registerProjectChannels(ipc, core, facts.chooseFolder);
   ipc.handle(searchQuery, ({ query, conversationId, projectId }) =>
     core.search(query, { ...(conversationId ? { conversationId } : {}), ...(projectId ? { projectId } : {}) }),
