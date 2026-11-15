@@ -17,6 +17,7 @@
  *   nothing is saved, restored, or announced.
  */
 
+import { randomUUID } from 'node:crypto';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
 import { announceOpen, DEFAULT_PREFILL_TOKENS_PER_SECOND, type Announcement } from '../costs/announce.js';
@@ -25,9 +26,10 @@ import type { MeasureStore } from '../engine/measures.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
-import type { Journal, JournalEntry, Usage } from '../journal/types.js';
+import type { Journal, JournalEntry, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
+import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
 
 /** A rough count, for the checks made before the server's: about three characters a token. */
@@ -74,9 +76,30 @@ export type TurnEvent =
   /** The prompt being read, as the server counts it. */
   | { type: 'progress'; done: number; total: number };
 
+/** A call the model wrote, given an id: what the tool rounds answer. */
+export interface ModelCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+/** What answers the calls of a round: their results, a pause for a person, or the end of the turn. */
+export type CallsAnswer =
+  | { results: ToolResult[] }
+  | { suspend: { pending: PendingCall[]; ticket: string } }
+  | { stop: 'limit' };
+
+export interface TurnTools {
+  /** The tools the model may call: their grammar goes with each completion. */
+  defs: readonly ToolDef[];
+  onCalls(calls: readonly ModelCall[]): Promise<CallsAnswer>;
+}
+
 export interface TurnInput {
   /** The person's message; absent: the last one is answered again (with `forkAfter`). */
   text?: string;
+  /** The tool rounds: the model's calls are answered, and the turn goes on, in the same slot. */
+  tools?: TurnTools;
   messageId?: string;
   thinking?: boolean;
   /**
@@ -91,6 +114,10 @@ export interface TurnResult {
   stopped?: 'user';
   /** The context ran out in the middle of the answer: it is incomplete. */
   truncated?: true;
+  /** The turn waits for a person, or for the window: its calls, and the ticket that resumes it. */
+  suspended?: { pending: PendingCall[]; ticket: string };
+  /** The tool rounds reached their limit. */
+  limited?: true;
 }
 
 /** No model is loaded: nothing is loaded in silence (the window offers to). */
@@ -327,79 +354,105 @@ export class ConversationEngine {
         owner,
         async (slot) => {
           if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
-          const prompt = frozen + userRendered + opening;
-          const demux = family.createDemux();
-          let raw = '';
+          const grammar = input.tools ? family.toolGrammar(input.tools.defs) : null;
+          let prompt = frozen + userRendered + opening;
+          let roundOpening = opening;
           let usage: Usage = { inputTokens: 0, outputTokens: 0 };
-          let truncated = false;
-          let finished = false;
           const finishReread = (): void => {
             if (!turning.rereading) return;
             turning.rereading = false;
             sink({ type: 'step', name: 'reread', phase: 'end' });
           };
-          try {
-            for await (const event of client.complete({
-              prompt,
-              idSlot: slot.id,
-              cachePrompt: true,
-              returnProgress: true,
-              sampling: { stop: [...family.stop] },
-              ...(signal ? { signal } : {}),
-            })) {
-              if (event.type === 'token') {
-                finishReread();
-                raw += event.text;
-                for (const piece of demux.push(event.text)) sink(piece);
-              } else if (event.type === 'progress') {
-                sink({ type: 'progress', done: event.progress.processed, total: event.progress.total });
-              } else {
-                finished = true;
-                const { stats } = event;
-                usage = {
-                  inputTokens: stats.progress?.total ?? stats.promptUncachedTokens,
-                  outputTokens: stats.predictedTokens,
-                  cacheReadTokens: stats.progress?.cache ?? 0,
-                };
-                this.measure(engine, stats.promptUncachedTokens, stats.promptMs);
-                this.lastRun.set(key, { engine, tokens: stats.contextTokens || used });
-                truncated = stats.truncated === true;
+          // One completion a round; a round that ends on calls is answered, and the next round reads the results.
+          for (let round = 0; ; round += 1) {
+            const demux = family.createDemux();
+            let raw = '';
+            let truncated = false;
+            let finished = false;
+            const calls: ModelCall[] = [];
+            const take = (piece: DemuxEvent): void => {
+              if (piece.type === 'tool-call') calls.push({ id: `call-${randomUUID()}`, name: piece.name, input: piece.input });
+              sink(piece);
+            };
+            try {
+              for await (const event of client.complete({
+                prompt,
+                idSlot: slot.id,
+                cachePrompt: true,
+                returnProgress: true,
+                sampling: { stop: [...family.stop] },
+                ...(grammar ?? {}),
+                ...(signal ? { signal } : {}),
+              })) {
+                if (event.type === 'token') {
+                  finishReread();
+                  raw += event.text;
+                  for (const piece of demux.push(event.text)) take(piece);
+                } else if (event.type === 'progress') {
+                  sink({ type: 'progress', done: event.progress.processed, total: event.progress.total });
+                } else {
+                  finished = true;
+                  const { stats } = event;
+                  usage = {
+                    inputTokens: stats.progress?.total ?? stats.promptUncachedTokens,
+                    outputTokens: stats.predictedTokens,
+                    cacheReadTokens: stats.progress?.cache ?? 0,
+                  };
+                  this.measure(engine, stats.promptUncachedTokens, stats.promptMs);
+                  this.lastRun.set(key, { engine, tokens: stats.contextTokens || used });
+                  truncated = stats.truncated === true;
+                }
               }
+              for (const piece of demux.flush()) take(piece);
+              finishReread();
+              // The stream ended without its final event: the person stopped it (it may end quietly then),
+              // or the engine went away.
+              if (!finished) {
+                throw signal?.aborted
+                  ? new DOMException('The answer was stopped.', 'AbortError')
+                  : new Error('The engine ended its answer before finishing it.');
+              }
+            } catch (error) {
+              finishReread();
+              if (signal?.aborted) {
+                await journal.append({ kind: 'assistant', raw, stopped: 'user', rendered: roundOpening + raw + family.endAssistant(raw) });
+                return { usage, stopped: 'user' as const };
+              }
+              if (refusedAsTooLong(error)) {
+                // The server read nothing of it: the slot holds what it held. The person's message is taken
+                // back when it is what did not fit; after tool rounds, what they gave stays.
+                slot.unchanged();
+                if (user && round === 0) await journal.append({ kind: 'withdrawn', entryId: user.id });
+                throw new ContextFullError(this.contextFull(engine, round === 0 ? used : estimateTokens(prompt), window));
+              }
+              await journal.append({ kind: 'assistant', raw, stopped: 'engine', rendered: roundOpening + raw + family.endAssistant(raw) });
+              // What the slot held is gone with the engine: nothing of it is saved.
+              this.scheduler.evict(owner);
+              throw new EngineFailedError(error);
             }
-            for (const piece of demux.flush()) sink(piece);
-            finishReread();
-            // The stream ended without its final event: the person stopped it (it may end quietly then),
-            // or the engine went away.
-            if (!finished) {
-              throw signal?.aborted
-                ? new DOMException('The answer was stopped.', 'AbortError')
-                : new Error('The engine ended its answer before finishing it.');
+            await journal.append({
+              kind: 'assistant',
+              raw,
+              usage,
+              ...(truncated ? { truncated: true as const } : {}),
+              rendered: roundOpening + raw + family.endAssistant(raw),
+            });
+            if (!input.tools || calls.length === 0 || truncated) {
+              return truncated ? { usage, truncated: true as const } : { usage };
             }
-          } catch (error) {
-            finishReread();
-            if (signal?.aborted) {
-              await journal.append({ kind: 'assistant', raw, stopped: 'user', rendered: opening + raw + family.endAssistant(raw) });
-              return { usage, stopped: 'user' as const };
+
+            const answer = await input.tools.onCalls(calls);
+            if ('stop' in answer) return { usage, limited: true as const };
+            if ('suspend' in answer) {
+              // Nothing enters the prompt until the calls are answered (task 4.5 resumes from here).
+              await journal.append({ kind: 'pending', calls: answer.suspend.pending, ticket: answer.suspend.ticket, rendered: '' });
+              return { usage, suspended: answer.suspend };
             }
-            if (refusedAsTooLong(error)) {
-              // The server read nothing of it: the slot holds what it held, and the message is taken back.
-              slot.unchanged();
-              if (user) await journal.append({ kind: 'withdrawn', entryId: user.id });
-              throw new ContextFullError(this.contextFull(engine, used, window));
-            }
-            await journal.append({ kind: 'assistant', raw, stopped: 'engine', rendered: opening + raw + family.endAssistant(raw) });
-            // What the slot held is gone with the engine: nothing of it is saved.
-            this.scheduler.evict(owner);
-            throw new EngineFailedError(error);
+            // The results, disarmed by the family as it renders them, then the model's answer goes on.
+            await journal.append({ kind: 'tool-results', results: answer.results, rendered: family.renderToolResults(answer.results) });
+            roundOpening = family.beginAssistant({ thinking: input.thinking ?? true, continuing: true });
+            prompt = frozenPrompt(journal.entries()) + roundOpening;
           }
-          await journal.append({
-            kind: 'assistant',
-            raw,
-            usage,
-            ...(truncated ? { truncated: true as const } : {}),
-            rendered: opening + raw + family.endAssistant(raw),
-          });
-          return truncated ? { usage, truncated: true as const } : { usage };
         },
         signal ? { signal } : {},
       );
