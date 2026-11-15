@@ -1,0 +1,36 @@
+{
+  "name": "@aparte/bonaparte-plugin-terminal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "bonaparte — the built-in terminal: a pseudo-terminal per tab, the agent's commands in their own tab",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": [
+      "scope:plugin"
+    ]
+  }
+}

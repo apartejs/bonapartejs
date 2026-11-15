@@ -27,6 +27,9 @@ export type {
   PluginNodeModule,
   PluginPaneContribution,
   PluginProcess,
+  PluginPty,
+  PluginPtyOptions,
+  PluginShell,
   PluginSettingField,
   PluginSignal,
   PluginStatus,
@@ -35,6 +38,7 @@ export type {
   PluginToolInvocation,
   PluginToolResult,
   PluginToolUse,
+  TerminalService,
 } from '@aparte/bonaparte-shared';
 
 /** The Node half of a plugin: its `activate`, given its context. */
