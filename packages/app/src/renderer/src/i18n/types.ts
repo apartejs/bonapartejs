@@ -69,4 +69,26 @@ export interface Messages {
       failed: { title: string; digest: string; failed: string };
     };
   };
+  conversations: {
+    new: string;
+    list: string;
+  };
+  /** What the window says while a turn waits: the core's steps, by key. */
+  steps: Record<'slot-wait' | 'restore' | 'seed' | 'reread', string>;
+  memory: {
+    restoreTitle(tokens: string): string;
+    restoreLine(seconds: string, instead: string): string;
+    restoreSaved(date: string, time: string, size: string): string;
+    rereadTitle(tokens: string, duration: string): string;
+    rereadReason: Record<'evicted' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died', string>;
+    rereadContinue: string;
+    /** After a figure no measure backs yet. */
+    estimated: string;
+    rereadProgress(done: string, total: string): string;
+    rereadProgressLabel: string;
+  };
+  engineCard: {
+    ready: string;
+    line(context: string): string;
+  };
 }

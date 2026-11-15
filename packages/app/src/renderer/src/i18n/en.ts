@@ -63,4 +63,35 @@ export const en: Messages = {
       },
     },
   },
+  conversations: {
+    new: 'New conversation',
+    list: 'Conversations',
+  },
+  steps: {
+    'slot-wait': 'Waiting for the engine',
+    restore: 'Restoring the memory',
+    seed: 'Preparing the start of the conversation',
+    reread: 'Reading the conversation again',
+  },
+  memory: {
+    restoreTitle: (tokens) => `Memory saved: ${tokens} tokens`,
+    restoreLine: (seconds, instead) => `Resumes in ~${seconds} instead of ~${instead} of re-reading.`,
+    restoreSaved: (date, time, size) => `Saved on ${date} at ${time} · ${size} on disk`,
+    rereadTitle: (tokens, duration) => `To re-read: ${tokens} tokens, ~${duration}`,
+    rereadReason: {
+      evicted: 'Its memory was let go to stay under the disk budget.',
+      'other-model': 'Its memory was made for another model.',
+      'cache-types': 'Its memory was made with other cache settings.',
+      'context-too-small': 'Its memory no longer fits the current context.',
+      'engine-died': 'The engine stopped during the last answer.',
+    },
+    rereadContinue: 'Re-read and continue',
+    estimated: '(estimated)',
+    rereadProgress: (done, total) => `Read: ${done} of ${total} tokens`,
+    rereadProgressLabel: 'Re-reading the conversation',
+  },
+  engineCard: {
+    ready: 'Engine ready',
+    line: (context) => `Ready · context ${context} · 1 slot`,
+  },
 };

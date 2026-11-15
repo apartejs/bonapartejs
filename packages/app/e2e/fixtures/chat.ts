@@ -1,15 +1,12 @@
 /**
- * How a test finds its way in aparté's chat.
- *
- * The library documents no hook for tests (apartejs/aparte#203). These
- * selectors were read in its source (1.7.0) and checked against the installed
- * build; they live here, in one place, so that a release that moves one breaks
- * one file. When the library names the hooks a test may rely on, use those.
- *
- * Everything is in the light DOM. `<AparteChat>` renders a
- * `div[data-aparte-chat]`; each message is an `<aparte-chat-bubble>`; the
- * composer's field is a `contenteditable` whose accessible name is its
- * placeholder; and one button both sends and stops (`data-act`).
+ * How a test finds its way in aparté's chat: the stable contract aparté
+ * documents since 1.9 (« Testing your chat », apartejs/aparte#203) — the
+ * chat's root `[data-aparte-chat]`, the field by its role and its name (the
+ * placeholder), `aparte-composer-send[data-act]` for Send and Stop,
+ * `aparte-chat-bubble[data-role]` for a message, `[aria-busy="true"]` inside
+ * a reply still being written, `[data-error-code]` for a turn that failed.
+ * One thing reads past it: the text of a reply's answer, without its
+ * reasoning, is the text segment's content.
  */
 
 import type { Locator, Page } from '@playwright/test';
@@ -34,23 +31,22 @@ export interface ChatDriver {
 }
 
 export function chat(page: Page): ChatDriver {
-  const editor = page.locator('aparte-composer-input .aparte-ci-editor');
-  const sendButton = page.locator('aparte-composer-send button[data-act="send"]');
+  const root = page.locator('[data-aparte-chat]');
+  const editor = root.getByRole('textbox');
+  const sendButton = root.locator('aparte-composer-send[data-act="send"] button');
+  const replies = root.locator('aparte-chat-bubble[data-role="assistant"]');
   return {
-    composer: (name) => page.getByRole('textbox', { name }),
+    composer: (name) => root.getByRole('textbox', { name }),
     editor,
-    composerBox: page.locator('aparte-composer .aparte-composer-shell'),
+    composerBox: root.locator('aparte-composer .aparte-composer-shell'),
     sendButton,
-    stopButton: page.locator('aparte-composer-send button[data-act="stop"]'),
-    userMessages: page.locator('aparte-chat-bubble[data-role="user"]'),
-    replies: page.locator('aparte-chat-bubble[data-role="assistant"]'),
-    replyText: page
-      .locator('aparte-chat-bubble[data-role="assistant"] .aparte-segment-text .aparte-segment-content')
-      .last(),
-    streamingReplies: page.locator(
-      'aparte-chat-bubble[data-role="assistant"] .aparte-message[data-streaming="true"]',
-    ),
-    errors: page.locator('.aparte-segment-error'),
+    stopButton: root.locator('aparte-composer-send[data-act="stop"] button'),
+    userMessages: root.locator('aparte-chat-bubble[data-role="user"]'),
+    replies,
+    // Outside the contract: the answer's text alone, apart from the reasoning.
+    replyText: replies.locator('.aparte-segment-text .aparte-segment-content').last(),
+    streamingReplies: replies.locator('[aria-busy="true"]'),
+    errors: root.locator('[data-error-code]'),
 
     async send(text) {
       await editor.fill(text);

@@ -341,8 +341,8 @@ export function EngineSetup({ messages, locale, onReady }: EngineSetupProps) {
             aria-busy={loading}
             onClick={() => void start()}
           >
-            {/* The kit's aria-busy only changes the cursor: the spinner is placed by hand (apartejs/aparte#206). */}
-            {loading ? <span className="aparte-spinner aparte-spinner--sm" aria-hidden="true" /> : null}
+            {/* A busy kit button lays out its spinner, at its icon's size and in its ink (aparté 1.9). */}
+            {loading ? <span className="aparte-spinner" aria-hidden="true" /> : null}
             {loading ? text.starting : text.start}
           </button>
         </footer>

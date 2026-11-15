@@ -57,20 +57,20 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 1.8.0
-        version: 1.8.0
+        specifier: 1.9.0
+        version: 1.9.0
       '@aparte/locales':
-        specifier: 1.8.0
-        version: 1.8.0(@aparte/core@1.8.0)
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
       '@aparte/plugin-shiki':
-        specifier: 1.8.0
-        version: 1.8.0(@aparte/core@1.8.0)(shiki@4.6.0)
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)(shiki@4.6.0)
       '@aparte/plugin-streaming-markdown':
-        specifier: 1.8.0
-        version: 1.8.0(@aparte/core@1.8.0)
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
       '@aparte/react':
-        specifier: 1.8.0
-        version: 1.8.0(@aparte/core@1.8.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       react:
         specifier: ^19.3.1
         version: 19.3.1
@@ -124,15 +124,15 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/engine':
-        specifier: 1.8.0
-        version: 1.8.0(@aparte/core@1.8.0)
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
       zod:
         specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
       '@aparte/core':
-        specifier: 1.8.0
-        version: 1.8.0
+        specifier: 1.9.0
+        version: 1.9.0
       '@huggingface/jinja':
         specifier: 0.5.13
         version: 0.5.13
@@ -170,12 +170,12 @@ importers:
 
 packages:
 
-  '@aparte/core@1.8.0':
-    resolution: {integrity: sha512-dwhU42oQBhohZmkh5ErH4qk5rOJN0UleEQr9FhyIbQ8esXkRGVAm3jrpRPSf5PySmmKrfqdCJ50EZz75A8tS2A==}
+  '@aparte/core@1.9.0':
+    resolution: {integrity: sha512-gQCvUIULTeNAscQ1lYsr3H64rVywZjp6Rd6+jsWB2szx+ho8bbSHNKE6bBd+MLXBRIwCHjnoLgyg0LcVLFV25g==}
     engines: {node: '>=18'}
 
-  '@aparte/engine@1.8.0':
-    resolution: {integrity: sha512-zZmL5IPWQJY0IL2csvVAT8PHjNLQq9zc66B+Oo16WWUPD/nY5ia8vXaiJRMVdtVlMd1HPg77u7RMp3dAuQAQag==}
+  '@aparte/engine@1.9.0':
+    resolution: {integrity: sha512-TBXiiBgsljCkpYOhnc80pMf7zBQKiatpMs96efL2zKiqwGnT0Tqu1zHMkuI8iPnlDBi7vjO8naM8lMd7GPO7iw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': '*'
@@ -183,30 +183,30 @@ packages:
       '@aparte/core':
         optional: true
 
-  '@aparte/locales@1.8.0':
-    resolution: {integrity: sha512-vNa4fsSsclAQXC0hq+T+u1qel4XSVq0gsCXXrF8olaCX8NIBSBiDP2NyQe7qQq95+5KtlgsjMcWl+IglCkcCNA==}
+  '@aparte/locales@1.9.0':
+    resolution: {integrity: sha512-6X5AdKy2YTbSV8F/5Vp/r5MV6PCm8aXI3fSQkeKue+J3Ms4hQbz/aterQVB1SBLhEXLil4Q/6Z31d6D2ZjpbmA==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.8.0 <2.0.0'
+      '@aparte/core': '>=1.9.0 <2.0.0'
 
-  '@aparte/plugin-shiki@1.8.0':
-    resolution: {integrity: sha512-w1iaMWRbVF67Kv1OnB1n9qXTacK1qhmregAsu/tmeph+NW/atqDgoZkWhMGa+ikZaQ3h2ykQOmazmbr0JoQP9Q==}
+  '@aparte/plugin-shiki@1.9.0':
+    resolution: {integrity: sha512-3pi9F07EUhRE/5XSXrmI3MvzhMpk5y+uVPaFqhLRmWQGNnzrvaEbDzQWsZ8cp+6DgMenSEpqpff53+cUaqJRKQ==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.8.0 <2.0.0'
+      '@aparte/core': '>=1.9.0 <2.0.0'
       shiki: ^4.0.0
 
-  '@aparte/plugin-streaming-markdown@1.8.0':
-    resolution: {integrity: sha512-PNJe0WiGMJYWuwaOEKtfEDteuvaygCfs4wqh0hnUsmeUJ9hZzobOEIptjyuTGjV1BxdNab4fRgyJkW5PxSIM7A==}
+  '@aparte/plugin-streaming-markdown@1.9.0':
+    resolution: {integrity: sha512-kZX4GJ8o/XOHjvR0AUgMQ2TX2BBjMuk/8a0XnGwYaFhOmYT56Mf7hfi53YlBs88Z/FDFTRKPgkAO/200SUy/Zw==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.8.0 <2.0.0'
+      '@aparte/core': '>=1.9.0 <2.0.0'
 
-  '@aparte/react@1.8.0':
-    resolution: {integrity: sha512-IY0A/C4mva13mlBchTMW+yB9ulTvW+RjBjuieuC/esBSmJZhj2+hTCxgC14xMYd5l2pSHFqChLQGiraCYvcBvw==}
+  '@aparte/react@1.9.0':
+    resolution: {integrity: sha512-ReAgqyThb+t0HDHgiU5mIlwdvT7EITrjky8gVPh3Y3lgYsJKgse4d4KCQF1kf/Yo6/PKEsQGdQG21OxxekieBQ==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.8.0 <2.0.0'
+      '@aparte/core': '>=1.9.0 <2.0.0'
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -3353,31 +3353,31 @@ packages:
 
 snapshots:
 
-  '@aparte/core@1.8.0':
+  '@aparte/core@1.9.0':
     dependencies:
-      '@aparte/engine': 1.8.0(@aparte/core@1.8.0)
+      '@aparte/engine': 1.9.0(@aparte/core@1.9.0)
 
-  '@aparte/engine@1.8.0(@aparte/core@1.8.0)':
+  '@aparte/engine@1.9.0(@aparte/core@1.9.0)':
     optionalDependencies:
-      '@aparte/core': 1.8.0
+      '@aparte/core': 1.9.0
 
-  '@aparte/locales@1.8.0(@aparte/core@1.8.0)':
+  '@aparte/locales@1.9.0(@aparte/core@1.9.0)':
     dependencies:
-      '@aparte/core': 1.8.0
+      '@aparte/core': 1.9.0
 
-  '@aparte/plugin-shiki@1.8.0(@aparte/core@1.8.0)(shiki@4.6.0)':
+  '@aparte/plugin-shiki@1.9.0(@aparte/core@1.9.0)(shiki@4.6.0)':
     dependencies:
-      '@aparte/core': 1.8.0
+      '@aparte/core': 1.9.0
       shiki: 4.6.0
 
-  '@aparte/plugin-streaming-markdown@1.8.0(@aparte/core@1.8.0)':
+  '@aparte/plugin-streaming-markdown@1.9.0(@aparte/core@1.9.0)':
     dependencies:
-      '@aparte/core': 1.8.0
+      '@aparte/core': 1.9.0
       '@paulrichez/streaming-markdown': 0.3.2
 
-  '@aparte/react@1.8.0(@aparte/core@1.8.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@aparte/react@1.9.0(@aparte/core@1.9.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@aparte/core': 1.8.0
+      '@aparte/core': 1.9.0
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 

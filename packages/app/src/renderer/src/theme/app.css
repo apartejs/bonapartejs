@@ -133,12 +133,10 @@ body {
 
 .engine-setup__footer .aparte-btn {
   margin-inline-start: auto;
+  /* « Démarrer » becomes « Chargement… » while busy: the button does not jump. */
+  min-inline-size: 9rem;
 }
 
-/* No model, nothing to start: the kit's footer is a flex box, which `hidden` alone would not hide (apartejs/aparte#207). */
-.engine-setup__footer[hidden] {
-  display: none;
-}
 
 /* The llama.cpp a load runs, and keeping it up to date: a box like the choices below it. */
 .llama-status {
@@ -188,5 +186,102 @@ body {
 
 .llama-status__progress .aparte-field-hint {
   margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The conversations beside the chat — provisional until the shell (5.6).
+ * aparté draws the list, the chat and the gauge; this only places them.
+ */
+.bonaparte-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.bonaparte-sidebar {
+  flex: 0 0 264px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-4);
+  min-height: 0;
+  padding: var(--aparte-space-5) var(--aparte-space-4);
+  background: var(--aparte-surface-1);
+  border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.bonaparte-conversations {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.bonaparte-layout .bonaparte-chat {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The engine at the foot of the sidebar (canvas « Conversation au travail »). */
+.engine-card {
+  padding: var(--aparte-space-5);
+  gap: var(--aparte-space-2);
+}
+
+.engine-card__name {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-3);
+  font-weight: var(--aparte-font-weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.engine-card__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--aparte-radius-full);
+  background: var(--aparte-success);
+}
+
+.engine-card__line {
+  margin: 0;
+  font-size: var(--aparte-font-size-sm);
+  color: var(--aparte-text-muted);
+}
+
+/* What opening a conversation costs, above the composer. */
+.memory-banner {
+  margin-block-end: var(--aparte-space-4);
+}
+
+.memory-banner__detail {
+  margin: var(--aparte-space-1) 0 0;
+  font-size: var(--aparte-font-size-xs);
+  color: var(--aparte-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.memory-banner__actions {
+  display: flex;
+  gap: var(--aparte-space-3);
+  margin-block-start: var(--aparte-space-4);
+}
+
+/* A conversation read again: the kit's bar, and how far it went. */
+.reread-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-2);
+  max-inline-size: 360px;
+}
+
+.reread-progress .aparte-progress {
+  max-inline-size: none;
+}
+
+.reread-progress__text {
+  margin: 0;
+  font-size: var(--aparte-font-size-xs);
+  color: var(--aparte-text-muted);
   font-variant-numeric: tabular-nums;
 }

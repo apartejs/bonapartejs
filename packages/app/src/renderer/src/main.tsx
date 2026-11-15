@@ -3,7 +3,6 @@ import '@aparte/core/styles.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { keepLinksInTheWindow } from './aparte/links';
 import { setupAparte } from './aparte/setup';
 import { bridge } from './bridge';
 import { messagesFor } from './i18n/index';
@@ -25,7 +24,6 @@ async function start(): Promise<void> {
   const info = await bridge.invoke(appInfo, undefined);
   document.documentElement.lang = info.locale;
   setupAparte(info.locale);
-  keepLinksInTheWindow();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App messages={messagesFor(info.locale)} locale={info.locale} />

@@ -36,3 +36,24 @@ export function formatBytes(bytes: number, style: NumberStyle): string {
 export function formatSeconds(seconds: number): string {
   return String(Math.max(1, Math.round(seconds)));
 }
+
+/**
+ * A wait as the person reads it: to the tenth under ten seconds (« 0,6 s »),
+ * to the second under a minute, then in minutes (« 2 min 50 », « 4 min »).
+ * Never zero: what is announced is paid.
+ */
+export function formatDuration(seconds: number, locale: string): string {
+  if (seconds < 10) {
+    const tenth = Math.max(0.1, Math.round(seconds * 10) / 10);
+    return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(tenth)} s`;
+  }
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds - minutes * 60);
+  return rest === 0 ? `${minutes} min` : `${minutes} min ${String(rest).padStart(2, '0')}`;
+}
+
+/** A count of tokens, its thousands grouped as the language groups them. */
+export function formatTokens(tokens: number, locale: string): string {
+  return new Intl.NumberFormat(locale).format(Math.round(tokens));
+}

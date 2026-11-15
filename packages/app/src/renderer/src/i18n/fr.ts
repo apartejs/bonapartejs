@@ -63,4 +63,35 @@ export const fr: Messages = {
       },
     },
   },
+  conversations: {
+    new: 'Nouvelle conversation',
+    list: 'Conversations',
+  },
+  steps: {
+    'slot-wait': 'Attend le moteur',
+    restore: 'Reprend la mémoire',
+    seed: 'Prépare le début de la conversation',
+    reread: 'Relit la conversation',
+  },
+  memory: {
+    restoreTitle: (tokens) => `Mémoire sauvée : ${tokens} jetons`,
+    restoreLine: (seconds, instead) => `Reprise en ~${seconds} au lieu de ~${instead} de relecture.`,
+    restoreSaved: (date, time, size) => `Sauvée le ${date} à ${time} · ${size} sur disque`,
+    rereadTitle: (tokens, duration) => `À relire : ${tokens} jetons, ~${duration}`,
+    rereadReason: {
+      evicted: 'Sa mémoire a été libérée pour rester sous le budget disque.',
+      'other-model': 'Sa mémoire a été faite pour un autre modèle.',
+      'cache-types': 'Sa mémoire a été faite avec d’autres réglages du cache.',
+      'context-too-small': 'Sa mémoire ne tient plus dans le contexte actuel.',
+      'engine-died': 'Le moteur s’est arrêté pendant la dernière réponse.',
+    },
+    rereadContinue: 'Relire et continuer',
+    estimated: '(estimé)',
+    rereadProgress: (done, total) => `Relu : ${done} sur ${total} jetons`,
+    rereadProgressLabel: 'Relecture de la conversation',
+  },
+  engineCard: {
+    ready: 'Moteur prêt',
+    line: (context) => `Prêt · contexte ${context} · 1 slot`,
+  },
 };
