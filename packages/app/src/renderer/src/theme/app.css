@@ -189,40 +189,6 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/*
- * The conversations beside the chat — provisional until the shell (5.6).
- * aparté draws the list, the chat and the gauge; this only places them.
- */
-.bonaparte-layout {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-.bonaparte-sidebar {
-  flex: 0 0 264px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--aparte-space-4);
-  min-height: 0;
-  /* Its width is its own: a long title is cut in its row, never stretches the column. */
-  min-width: 0;
-  padding: var(--aparte-space-5) var(--aparte-space-4);
-  background: var(--aparte-surface-1);
-  border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
-}
-
-.bonaparte-conversations {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-.bonaparte-layout .bonaparte-chat {
-  flex: 1;
-  min-width: 0;
-}
-
 /* The engine at the foot of the sidebar (canvas « Conversation au travail »). */
 .engine-card {
   padding: var(--aparte-space-5);
@@ -571,12 +537,6 @@ body {
   color: var(--aparte-text-muted);
 }
 
-.bonaparte-active-project {
-  margin: 0;
-  font-size: 12px;
-  color: var(--aparte-text-muted);
-}
-
 /* « Rechercher » (board « Rechercher (Ctrl K) »): one field, three groups, the words marked. */
 .search-palette {
   width: min(640px, calc(100vw - 32px));
@@ -658,7 +618,255 @@ body {
   margin-inline-start: auto;
 }
 
-.bonaparte-search {
-  justify-content: space-between;
+/*
+ * The shell (board « Conversation au travail », §8.1): aparté's app shell —
+ * the sidebar, or its column of icons, beside the main area.
+ */
+.bonaparte-shell {
+  flex: 1;
+  min-height: 0;
 }
 
+.bonaparte-main {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  min-width: 0;
+}
+
+.bonaparte-icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.bonaparte-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* An icon's name beside it, on hover and on keyboard focus (apartejs/aparte#230). */
+.bonaparte-tip .aparte-tooltip {
+  position: absolute;
+  visibility: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity var(--aparte-duration-fast, 120ms) ease;
+}
+
+.bonaparte-tip:hover > .aparte-tooltip,
+.bonaparte-tip:focus-within > .aparte-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.bonaparte-tip[data-side='bottom'] > .aparte-tooltip {
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+}
+
+.bonaparte-tip[data-side='end'] > .aparte-tooltip {
+  inset-block-start: 50%;
+  inset-inline-start: calc(100% + 8px);
+  transform: translateY(-50%);
+}
+
+.bonaparte-icon-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--aparte-text-muted);
+}
+
+.bonaparte-bordered {
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  background: var(--aparte-bg);
+}
+
+/* The sidebar, open. */
+.bonaparte-sidebar {
+  --aparte-sidebar-width: 264px;
+  gap: 16px;
+  padding: 16px 12px;
+  background: var(--aparte-surface-1);
+}
+
+.bonaparte-sidebar__top {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-2);
+  padding: 0 var(--aparte-space-2);
+}
+
+.bonaparte-wordmark {
+  flex: 1;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 17px;
+  line-height: 24px;
+}
+
+.bonaparte-search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-3);
+  height: 36px;
+  padding: 0 var(--aparte-space-4);
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 8px;
+  background: var(--aparte-bg);
+  color: var(--aparte-text-muted);
+  font: inherit;
+  cursor: text;
+}
+
+.bonaparte-search-field__text {
+  flex: 1;
+  text-align: start;
+}
+
+.bonaparte-sidebar__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.bonaparte-sidebar .bonaparte-conversations {
+  display: block;
+  min-width: 0;
+}
+
+.bonaparte-sidebar .engine-card {
+  box-sizing: border-box;
+  flex: none;
+  width: 100%;
+}
+
+.bonaparte-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--aparte-space-3) var(--aparte-space-2);
+}
+
+.bonaparte-section__title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: var(--aparte-font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aparte-text-muted);
+}
+
+.bonaparte-section__head .bonaparte-icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.bonaparte-project__header {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-3);
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--aparte-space-3);
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--aparte-font-weight-medium);
+  cursor: pointer;
+}
+
+.bonaparte-project__header:hover {
+  background: var(--aparte-surface-2);
+}
+
+.bonaparte-project__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+
+.bonaparte-project__count {
+  font-size: 12px;
+  font-weight: var(--aparte-font-weight-normal);
+  color: var(--aparte-text-muted);
+}
+
+.bonaparte-project .bonaparte-conversations {
+  margin-inline-start: 22px;
+}
+
+/*
+ * A row's memory (§12): a dot before the title, its name read after it. The
+ * state's rule comes from the page (shell/statuses.ts, apartejs/aparte#229);
+ * a row without memory keeps the place, empty.
+ */
+.bonaparte-sidebar .aparte-conv-item__select::after {
+  content: '';
+  order: -1;
+  flex: none;
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: var(--aparte-space-3);
+  border: 1.5px solid transparent;
+  border-radius: var(--aparte-radius-full);
+}
+
+/* The sidebar folded into icons (Ctrl B, or a narrow window). */
+.bonaparte-rail {
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--aparte-space-3);
+  width: 56px;
+  padding: 14px 0;
+  background: var(--aparte-surface-1);
+  border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.bonaparte-rail .bonaparte-icon-button {
+  width: 36px;
+  height: 36px;
+}
+
+.bonaparte-rail .bonaparte-icon-button[aria-current='page'] {
+  background: var(--bonaparte-accent-soft);
+  color: var(--aparte-text);
+}
+
+.bonaparte-rail__separator {
+  width: 24px;
+  height: 1px;
+  margin: 6px 0;
+  background: var(--aparte-border);
+}
+
+.bonaparte-rail__spacer {
+  flex: 1;
+}
+
+.bonaparte-rail__badge {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+}
+
+
+/* The kit keeps the sidebar's children at its full width while it folds; ours has margins, and never folds that way. */
+.bonaparte-sidebar.aparte-sidebar > * {
+  min-width: 0;
+}

@@ -149,6 +149,29 @@ export interface Messages {
   };
   /** aparté's own words that bonaparte says its way (« tu », the board's wording): the question, the list. */
   aparteWords: Record<AparteWord, string>;
+  /** The shell (board « Conversation au travail »): the sidebar, open and folded into icons. */
+  shell: {
+    brand: string;
+    nav: string;
+    navCollapsed: string;
+    collapse: string;
+    collapseTip: string;
+    expand: string;
+    expandTip: string;
+    newConversation: string;
+    search: string;
+    searchLabel: string;
+    searchTip: string;
+    projects: string;
+    discussions: string;
+    /** A project's row: its name and how many conversations it holds. */
+    project(name: string, count: number): string;
+    /** Where a conversation's memory is (§12): said by a name, never by a colour alone. */
+    memory: { engine: string; saved: string; reread: string };
+    /** A conversation in the folded sidebar: its title, and that it waits for the person. */
+    railConversation(title: string, waiting: boolean): string;
+    engine(model: string): string;
+  };
   /** « Rechercher » (board « Rechercher (Ctrl K) »), and its opener. */
   search: {
     open: string;

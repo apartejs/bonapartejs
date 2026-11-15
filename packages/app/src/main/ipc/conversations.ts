@@ -86,7 +86,14 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   });
 
   ipc.handle(conversationsStatus, async ({ ids }) => {
-    const found = await Promise.all(ids.map(async (id) => [id, await core.conversations.status(id)] as const));
-    return Object.fromEntries(found.filter(([, status]) => status !== null));
+    const found = await Promise.all(
+      ids.map(async (id) => {
+        const status = await core.conversations.status(id);
+        if (!status) return null;
+        const meta = await store.get(id);
+        return [id, { projectId: meta?.projectId ?? null, ...status }] as const;
+      }),
+    );
+    return Object.fromEntries(found.filter((entry) => entry !== null));
   });
 }

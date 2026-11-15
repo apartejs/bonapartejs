@@ -1,9 +1,10 @@
-import { AparteChat, AparteContext, AparteConversationList, useAparteClient, useConversationManager } from '@aparte/react';
+import { AparteChat, AparteContext, useAparteClient, useConversationManager } from '@aparte/react';
 import {
   conversationsMemory,
   engineState,
   modesGet,
   modesSet,
+  projectsList,
   settingsGet,
   type ConversationMemoryView,
   type EngineStateView,
@@ -29,7 +30,9 @@ import { NewProject } from './dialogs/NewProject';
 import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
-import { EngineCard } from './shell/EngineCard';
+import { Rail } from './shell/Rail';
+import { Sidebar } from './shell/Sidebar';
+import { useConversationStatuses, useMemoryMarks, useWaitingMarks } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
 
@@ -39,6 +42,9 @@ type Announcement = ConversationMemoryView['announcement'];
  * turn posted by aparté's runner to the conversation it belongs to.
  * Provisional layout: the shell of the canvas comes with task 5.6.
  */
+/** Under 1 100 px, the sidebar folds into icons (board « Fenêtre étroite »). */
+const NARROW = '(max-width: 1099px)';
+
 function Workspace({ messages, locale, engine }: { messages: Messages; locale: Locale; engine: EngineStateView }) {
   // The conversation open is the manager's: the chat is not driven by an id the page gives it back
   // (apartejs/aparte#212 — that reloads the conversation in the middle of its first reply).
@@ -66,6 +72,55 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  // The sidebar folded into icons: by the person (Ctrl B), or by a narrow window (under 1 100 px).
+  const [foldedByPerson, setFoldedByPerson] = useState(false);
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  const [openedWhileNarrow, setOpenedWhileNarrow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia(NARROW);
+    const follow = (): void => {
+      setNarrow(query.matches);
+      setOpenedWhileNarrow(false);
+    };
+    query.addEventListener('change', follow);
+    return () => query.removeEventListener('change', follow);
+  }, []);
+  const folded = narrow ? !openedWhileNarrow : foldedByPerson;
+  const toggleSidebar = (): void => {
+    if (narrow) setOpenedWhileNarrow((was) => !was);
+    else setFoldedByPerson((was) => !was);
+  };
+  const toggleRef = useRef(toggleSidebar);
+  toggleRef.current = toggleSidebar;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault();
+        toggleRef.current();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  // The projects, and how the sidebar groups the conversations (the setting « sidebarGrouping »).
+  const [projects, setProjects] = useState<ProjectView[]>([]);
+  const readProjects = (): void => {
+    bridge
+      .invoke(projectsList, undefined)
+      .then(setProjects)
+      .catch(() => undefined);
+  };
+  useEffect(readProjects, []);
+  const [grouping, setGrouping] = useState<'project' | 'single'>('project');
+  useEffect(() => {
+    bridge
+      .invoke(settingsGet, { key: 'sidebarGrouping' })
+      .then((value) => setGrouping(value === 'single' ? 'single' : 'project'))
+      .catch(() => undefined);
+  }, []);
+  // Where each conversation born here was started: until its first turn tells the core.
+  const bornIn = useRef(new Map<string, string | null>());
+
   const streamRunner = useMemo(
     () => createConversationRunner({ mode: () => chosen.current, project: () => project.current?.id ?? null }),
     [],
@@ -90,6 +145,23 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const [asked, setAsked] = useState(0);
   useEffect(() => approvals.subscribe(() => setAsked((count) => count + 1)), [approvals]);
   const request = approvals.list(conversationId ?? null)[0];
+  // aparté's gesture for « a new conversation »: the chat closes the one open.
+  const newConversation = (): void => {
+    window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+  };
+  const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
+  const statuses = useConversationStatuses(listedIds, asked);
+  useMemoryMarks(statuses, messages.shell.memory);
+  useWaitingMarks(statuses);
+  const projectOf = (id: string): string | null => statuses[id]?.projectId ?? bornIn.current.get(id) ?? null;
+  // A new conversation starts in the project of the conversation open.
+  useEffect(() => {
+    if (!conversationId) return;
+    const id = statuses[conversationId]?.projectId ?? bornIn.current.get(conversationId) ?? null;
+    const found = projects.find((candidate) => candidate.id === id) ?? null;
+    project.current = found;
+    setActiveProject(found);
+  }, [conversationId, statuses, projects]);
 
   // The mode the conversation runs in: read again when a request comes, which it explains.
   const [mode, setMode] = useState<PlayMode>('repetition');
@@ -200,32 +272,34 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   const style = { locale, units: messages.units };
   return (
-    <div className="bonaparte-layout">
-      <aside className="bonaparte-sidebar" aria-label={messages.conversations.list}>
-        <button
-          type="button"
-          className="aparte-btn aparte-btn--surface bonaparte-new"
-          // aparté's gesture for « a new conversation »: the chat closes the one open.
-          onClick={() => window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }))}
-        >
-          {messages.conversations.new}
-        </button>
-        <button type="button" className="aparte-btn aparte-btn--surface bonaparte-search" onClick={() => setSearching(true)}>
-          <span>{messages.search.open}</span>
-          <kbd className="aparte-kbd">{messages.search.shortcut}</kbd>
-        </button>
-        <button type="button" className="aparte-btn aparte-btn--surface bonaparte-new-project" onClick={() => setCreatingProject(true)}>
-          {messages.newProject.open}
-        </button>
-        {activeProject ? <p className="bonaparte-active-project">{messages.newProject.active(activeProject.name)}</p> : null}
-        <AparteConversationList
-          className="bonaparte-conversations"
+    <div className="aparte-app-shell bonaparte-shell">
+      {folded ? (
+        <Rail
+          messages={messages}
+          engine={engine}
           conversations={activeConversations}
-          active-id={conversationId}
-          manage
+          activeId={conversationId ?? null}
+          statuses={statuses}
+          onExpand={toggleSidebar}
+          onNewConversation={newConversation}
+          onSearch={() => setSearching(true)}
+          onOpen={(id) => window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id } }))}
         />
-        <EngineCard engine={engine} messages={messages} />
-      </aside>
+      ) : (
+        <Sidebar
+          messages={messages}
+          engine={engine}
+          conversations={activeConversations}
+          activeId={conversationId ?? null}
+          projects={projects}
+          projectOf={projectOf}
+          grouping={grouping}
+          onCollapse={toggleSidebar}
+          onNewConversation={newConversation}
+          onSearch={() => setSearching(true)}
+          onNewProject={() => setCreatingProject(true)}
+        />
+      )}
       <SearchPalette
         open={searching}
         messages={messages}
@@ -252,6 +326,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         onClose={() => setCreatingProject(false)}
         onCreated={(made) => {
           setCreatingProject(false);
+          readProjects();
           project.current = made;
           setActiveProject(made);
           // A fresh conversation, in the project and its mode.
@@ -260,8 +335,12 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
         }}
       />
+      <div className="aparte-app-shell__main bonaparte-main">
       <AparteChat
-        onConversationCreated={(id) => bornHere.current.add(id)}
+        onConversationCreated={(id) => {
+          bornHere.current.add(id);
+          bornIn.current.set(id, project.current?.id ?? null);
+        }}
         className="bonaparte-chat"
         centerWhenEmpty
         placeholder={messages.composer.placeholder}
@@ -304,6 +383,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           </>
         }
       />
+      </div>
     </div>
   );
 }

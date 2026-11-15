@@ -107,8 +107,11 @@ describe('the conversation channels', () => {
   });
 
   it("say what the sidebar shows of each conversation asked: its memory, and whether it waits — nothing for one that is gone", async () => {
-    const { call } = await setup();
-    await expect(call('conversations.status', { ids: ['c-1', 'gone'] })).resolves.toEqual({ 'c-1': { memory: 'saved', waiting: true } });
+    const { call, store } = await setup();
+    await call('conversations.save', { document: DOC });
+    await expect(call('conversations.status', { ids: ['c-1', 'gone'] })).resolves.toEqual({ 'c-1': { projectId: null, memory: 'saved', waiting: true } });
+    await store.update('c-1', { projectId: 'p-1' });
+    await expect(call('conversations.status', { ids: ['c-1'] })).resolves.toEqual({ 'c-1': { projectId: 'p-1', memory: 'saved', waiting: true } });
     await expect(call('conversations.status', { ids: Array.from({ length: 501 }, (_, n) => `c-${n}`) })).rejects.toThrow();
   });
 });

@@ -58,11 +58,13 @@ export const conversationsDelete = defineChannel('conversations.delete', idInput
 export const conversationsMemory = defineChannel('conversations.memory', idInput, conversationMemorySchema);
 
 /**
- * What the sidebar shows of each conversation (§12), for the ids the window lists: its memory — in
+ * What the sidebar shows of each conversation (§12), for the ids the window lists: its project, its memory — in
  * the engine, saved on disk, to read again, or none — and whether its last turn waits for the person.
  * A conversation that is gone is left out.
  */
 export const conversationStatusSchema = z.object({
+  /** The project the conversation works in, once its first turn bound it; null for none. */
+  projectId: z.string().nullable(),
   memory: z.enum(['engine', 'saved', 'reread']).nullable(),
   waiting: z.boolean(),
 });

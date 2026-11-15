@@ -330,3 +330,56 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// The shell (task 5.6): a project with two conversations, one without project, the memory of each said.
+const SHELL = {
+  fr: { start: 'Démarrer', composer: 'Réponds, ou demande autre chose…', newProject: 'Nouveau projet', choose: 'Choisir un dossier…', create: 'Créer le projet', fold: 'Réduire la barre latérale', first: 'Corriger les heures décimales', second: 'Migrer le parseur vers zod', other: 'Les slots de llama.cpp', new: 'Nouvelle conversation' },
+  en: { start: 'Start', composer: 'Reply, or ask something else…', newProject: 'New project', choose: 'Choose a folder…', create: 'Create the project', fold: 'Fold the sidebar', first: 'Fix the decimal hours', second: 'Move the parser to zod', other: 'The slots of llama.cpp', new: 'New conversation' },
+};
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the shell, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = SHELL[locale];
+      const project = join(into, `spanwise-${locale}-${scheme}`);
+      await rm(project, { recursive: true, force: true });
+      await mkdir(project, { recursive: true });
+      const { app, page } = await launch({
+        locale,
+        managed: { models: { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } } },
+        env: { BONAPARTE_E2E_PICK_FOLDER: project },
+      });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.getByRole('button', { name: words.start }).click();
+      await expect(chat(page).composer(words.composer)).toBeVisible({ timeout: 20_000 });
+      const ask = async (text: string): Promise<void> => {
+        const before = await chat(page).replies.count();
+        await chat(page).send(text);
+        await expect(chat(page).replies).toHaveCount(before + 1, { timeout: 15_000 });
+        await expect(chat(page).streamingReplies).toHaveCount(0, { timeout: 15_000 });
+      };
+      await ask(words.other);
+      await page.getByRole('button', { name: words.newProject }).click();
+      await page.getByRole('button', { name: words.choose }).click();
+      await page.getByRole('button', { name: words.create }).click();
+      await expect(chat(page).userMessages).toHaveCount(0);
+      await ask(words.second);
+      await page.getByRole('button', { name: words.new }).first().click();
+      await expect(chat(page).userMessages).toHaveCount(0);
+      await ask(words.first);
+      await page.waitForTimeout(600);
+      const shot = (name: string) => page.screenshot({ path: join(into, `${name}-${locale}-${scheme}.png`), animations: 'disabled' });
+      await shot('shell');
+      await page.keyboard.press('Control+B');
+      await page.waitForTimeout(300);
+      await shot('shell-folded');
+      await page.keyboard.press('Control+B');
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(820, 760));
+      await page.waitForTimeout(400);
+      await shot('shell-narrow');
+    });
+  }
+}
