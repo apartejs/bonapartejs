@@ -26,13 +26,6 @@
   --aparte-info: #1F5FA8;
 
   /*
-   * The two state surfaces aparté does not derive yet (it derives success and error only:
-   * apartejs/aparte#228), with its own recipe. Remove them when the kit has them.
-   */
-  --aparte-warning-surface: color-mix(in oklch, var(--aparte-warning) 12%, transparent);
-  --aparte-info-surface: color-mix(in oklch, var(--aparte-info) 12%, transparent);
-
-  /*
    * The four accents as swatches, and the two themes as miniatures (Settings, Appearance): the
    * same in either theme, since they show what each choice looks like.
    */

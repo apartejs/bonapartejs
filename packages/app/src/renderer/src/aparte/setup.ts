@@ -15,7 +15,8 @@ export function setupAparte(locale: Locale): void {
   setupStreamingMarkdownProvider();
   setupShikiProvider({ theme: { light: 'github-light', dark: 'github-dark' } });
   // The model's question to the person: a tool the window runs, its receipt left in the thread.
-  // No keys for it yet (1, 2, 3, Escape) nor « changer » on its receipt: apartejs/aparte#223.
+  // Its options answer to 1 to 9 and Escape is « Laisse-le choisir » (aparté 1.10); an answer is
+  // changed by the next message, not on its receipt (apartejs/aparte#223).
   setupAskUser();
   setAparteLocale(locale);
 }

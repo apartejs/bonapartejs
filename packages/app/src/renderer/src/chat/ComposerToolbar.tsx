@@ -50,8 +50,8 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope }: Compo
     ],
     [],
   );
-  // One object for the life of the toolbar: <AparteUi> gives the element its props again whenever it
-  // gets a new object, and the element's `triggers` setter closes an open list (apartejs/aparte#232).
+  // One object while the triggers stay: <AparteUi> gives the element its props again for a new
+  // object (since aparté 1.10, re-setting the same triggers keeps an open list open).
   const elementProps = useMemo(() => ({ triggers }), [triggers]);
   return (
     <>

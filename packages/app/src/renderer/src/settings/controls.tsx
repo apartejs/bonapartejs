@@ -2,9 +2,8 @@
  * The pieces of a settings page (board « Réglages · Général »): a section
  * card, a row — its label and description on the left, its control on the
  * right —, a switch, a choice among a few values. Native controls in the
- * kit's classes, so they keep their keyboard (`.aparte-switch`); the kit has
- * no segmented choice of a value (apartejs/aparte#225): native radios in its
- * segmented track.
+ * kit's classes, so they keep their keyboard (`.aparte-switch`, and the
+ * segmented choice of a value, `.aparte-segmented`).
  */
 
 import { useId, type ReactNode } from 'react';
@@ -60,7 +59,7 @@ export interface Option<T extends string> {
   label: string;
 }
 
-/** A choice among a few values: radios in the kit's segmented track. */
+/** A choice among a few values: native radios in the kit's segmented row. */
 export function Choice<T extends string>({
   label,
   options,
@@ -76,16 +75,10 @@ export function Choice<T extends string>({
 }) {
   const name = useId();
   return (
-    <div role="radiogroup" aria-label={label} className={`aparte-tabs aparte-tabs--segmented setting-choice${small ? ' setting-choice--small' : ''}`}>
+    <div role="radiogroup" aria-label={label} className={`aparte-segmented setting-choice${small ? ' aparte-segmented--sm' : ''}`}>
       {options.map((option) => (
-        <label key={option.value} className="aparte-tabs__tab setting-choice__option">
-          <input
-            type="radio"
-            className="setting-radio"
-            name={name}
-            checked={option.value === value}
-            onChange={() => onChange(option.value)}
-          />
+        <label key={option.value} className="aparte-segmented__item">
+          <input type="radio" name={name} checked={option.value === value} onChange={() => onChange(option.value)} />
           {option.label}
         </label>
       ))}

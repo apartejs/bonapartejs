@@ -3,7 +3,9 @@
  * than 1 100 px — board « Fenêtre étroite », §8.1): unfold, a new
  * conversation, « Rechercher »; the conversation open and those that wait for
  * the person; the engine. Each icon is named, and shows its name on hover.
- * aparté's sidebar has no such form (apartejs/aparte#230): kit buttons.
+ * aparté's rail (`collapsed="rail"`) folds the sidebar's own children; this
+ * one shows others (the conversations that wait, the engine's mark): kit
+ * buttons.
  */
 
 import type { EngineStateView } from '@aparte/bonaparte-shared';
@@ -54,7 +56,7 @@ export function Rail(props: RailProps) {
       <span className="bonaparte-rail__spacer" />
       {props.engine.model ? (
         // A mark, not a button, until « Moteur et mémoire » (5.7) gives it a page to open.
-        <span className="aparte-tooltip-anchor bonaparte-tip" data-side="end">
+        <span className="aparte-tooltip-anchor aparte-tooltip-anchor--hover bonaparte-tip" data-side="end">
           <span className="bonaparte-icon-button bonaparte-rail__engine" role="img" aria-label={words.engine(props.engine.model.name)}>
             <Icon name="engine" />
             <span className="aparte-badge aparte-badge--dot aparte-badge--success bonaparte-rail__badge" aria-hidden="true" />

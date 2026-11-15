@@ -330,9 +330,19 @@ body {
   margin-inline-end: auto;
 }
 
-/* The line of a tool's call: its target is a path, a pattern or a command — code, as the
-   board draws it, where aparté's quiet line sets it in the chat's font (apartejs/aparte#220). */
-.aparte-segment-tool-call[data-quiet] .aparte-tool-target:not(.aparte-tool-target--words) {
+/* The line of a core tool's call: its target is a path, a pattern, a command or an address —
+   code, as the board draws it. aparté sets a quiet line's target in the chat's font; its tool
+   display guide gives a rule per tool for the others. */
+.aparte-segment-tool-call:is(
+    [data-tool-name='read_file'],
+    [data-tool-name='list_files'],
+    [data-tool-name='search'],
+    [data-tool-name='edit_file'],
+    [data-tool-name='write_file'],
+    [data-tool-name='run_command'],
+    [data-tool-name='web_fetch']
+  )[data-quiet]
+  .aparte-tool-target {
   font-family: var(--aparte-code-font-family);
 }
 
@@ -643,19 +653,10 @@ body {
   height: 16px;
 }
 
-/* An icon's name beside it, on hover and on keyboard focus (apartejs/aparte#230). */
+/* An icon's name beside it, on hover and on keyboard focus: where it shows (the kit shows it). */
 .bonaparte-tip .aparte-tooltip {
   position: absolute;
-  visibility: hidden;
-  opacity: 0;
   white-space: nowrap;
-  transition: opacity var(--aparte-duration-fast, 120ms) ease;
-}
-
-.bonaparte-tip:hover > .aparte-tooltip,
-.bonaparte-tip:focus-within > .aparte-tooltip {
-  visibility: visible;
-  opacity: 1;
 }
 
 .bonaparte-tip[data-side='bottom'] > .aparte-tooltip {
@@ -809,20 +810,37 @@ body {
 }
 
 /*
- * A row's memory (§12): a dot before the title, its name read after it. The
- * state's rule comes from the page (shell/statuses.ts, apartejs/aparte#229);
- * a row without memory keeps the place, empty.
+ * A row's memory (§12): a dot before the title, its name read after it — a
+ * mark of the row (aparté's `renderMeta`, after the title button), drawn
+ * first. A row without memory keeps the place, empty.
  */
-.bonaparte-sidebar .aparte-conv-item__select::after {
-  content: '';
+.bonaparte-sidebar .aparte-conv-item__meta:has(> .conv-memory) {
   order: -1;
+  padding-inline-start: var(--aparte-space-4);
+  margin-inline-end: calc(-1 * var(--aparte-space-3));
+}
+
+.conv-memory {
   flex: none;
   box-sizing: border-box;
   width: 7px;
   height: 7px;
-  margin-inline-end: var(--aparte-space-3);
   border: 1.5px solid transparent;
   border-radius: var(--aparte-radius-full);
+}
+
+.conv-memory[data-memory='engine'] {
+  background: var(--aparte-success);
+  border-color: var(--aparte-success);
+}
+
+.conv-memory[data-memory='saved'] {
+  background: var(--aparte-text-muted);
+  border-color: var(--aparte-text-muted);
+}
+
+.conv-memory[data-memory='reread'] {
+  border-color: var(--aparte-text-muted);
 }
 
 /* The sidebar folded into icons (Ctrl B, or a narrow window). */
@@ -864,7 +882,6 @@ body {
   inset-block-start: 5px;
   inset-inline-end: 5px;
 }
-
 
 /* The kit keeps the sidebar's children at its full width while it folds; ours has margins, and never folds that way. */
 .bonaparte-sidebar.aparte-sidebar > * {
@@ -1159,27 +1176,6 @@ body {
   gap: 8px;
 }
 
-/* A choice among a few values: radios in the kit's segmented track (apartejs/aparte#225). */
-.setting-choice__option {
-  cursor: pointer;
-}
-
-.setting-choice__option:has(input:checked) {
-  background: var(--aparte-bg);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--aparte-text) 8%, transparent);
-  color: var(--aparte-text);
-  font-weight: var(--aparte-font-weight-semibold);
-}
-
-.setting-choice__option:has(input:focus-visible) {
-  outline: var(--aparte-focus-outline-width, 2px) solid var(--aparte-primary);
-  outline-offset: 1px;
-}
-
-.setting-choice--small {
-  font-size: 12px;
-}
-
 /* The themes, each with its miniature; the accents as swatches. */
 .theme-cards {
   display: flex;
@@ -1273,9 +1269,7 @@ body {
   --aparte-conv-item-padding: var(--aparte-space-2) var(--aparte-space-4);
 }
 
-
 /* A radio drawn by its label: transparent over the whole label, so a click and the keyboard reach it. */
-.setting-choice__option,
 .theme-card,
 .accent-swatch {
   position: relative;

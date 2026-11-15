@@ -37,13 +37,20 @@ describe('stopping a process tree', () => {
     const detached = process.platform === 'win32';
     const parent = spawnTree(process.execPath, [
       '-e',
-      `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true, detached: ${detached} }); console.log(c.pid); setInterval(() => {}, 1000);`,
+      `const c = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true, detached: ${detached} }); process.stdout.write(String(c.pid) + String.fromCharCode(10)); setInterval(() => {}, 1000);`,
     ]);
-    const childPid = await new Promise<number>((resolve) => {
-      parent.stdout!.once('data', (chunk: Buffer) => resolve(Number.parseInt(chunk.toString(), 10)));
+    // The pid's whole line, uncoloured (a test runner may force colours on its children).
+    const said = await new Promise<string>((resolve) => {
+      let text = '';
+      parent.stdout!.on('data', (chunk: Buffer) => {
+        text += chunk.toString();
+        if (text.includes('\n')) resolve(text);
+      });
     });
+    const childPid = Number.parseInt(said, 10);
     strays.push(childPid, parent.pid!);
-    expect(alive(childPid)).toBe(true);
+    expect(Number.isInteger(childPid), `the parent said: ${JSON.stringify(said)}`).toBe(true);
+    expect(await until(() => alive(childPid), 3_000)).toBe(true);
 
     await stopProcessTree(parent);
 

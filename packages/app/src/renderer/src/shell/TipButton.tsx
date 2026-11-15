@@ -1,8 +1,7 @@
 /**
  * An icon button with its name: the accessible name, and the same words shown
- * beside it on hover and on keyboard focus — aparté's kit tooltip
- * (`.aparte-tooltip`), shown by a rule of ours, the kit's being CSS only
- * (apartejs/aparte#230).
+ * beside it on hover and on keyboard focus — aparté's kit tooltip, shown by
+ * the kit itself (`.aparte-tooltip-anchor--hover`).
  */
 
 import type { ReactNode } from 'react';
@@ -24,7 +23,7 @@ export interface TipButtonProps {
 
 export function TipButton({ label, tip, icon, side = 'bottom', className, badge, current, onClick }: TipButtonProps) {
   return (
-    <span className="aparte-tooltip-anchor bonaparte-tip" data-side={side}>
+    <span className="aparte-tooltip-anchor aparte-tooltip-anchor--hover bonaparte-tip" data-side={side}>
       <button
         type="button"
         className={`aparte-btn aparte-btn--icon aparte-btn--ghost bonaparte-icon-button${className ? ` ${className}` : ''}`}

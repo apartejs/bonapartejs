@@ -74,8 +74,14 @@ test('each row says where its memory is — in the engine, or saved — by its n
   await ask(page, 'Deuxième question');
 
   const list = conversationList(page);
-  await expect(list.row('Deuxième question').getByRole('button', { name: /^Deuxième question.*Contexte dans le moteur/ })).toBeVisible();
-  await expect(list.row('Première question').getByRole('button', { name: /^Première question.*Mémoire sauvée/ })).toBeVisible();
+  // A mark of the row (aparté's renderMeta), named, read after the title and drawn before it.
+  await expect(list.row('Deuxième question').getByRole('img', { name: 'Contexte dans le moteur', exact: true })).toBeVisible();
+  await expect(list.row('Première question').getByRole('img', { name: 'Mémoire sauvée', exact: true })).toBeVisible();
+  const [mark, title] = await Promise.all([
+    list.row('Première question').getByRole('img', { name: 'Mémoire sauvée', exact: true }).boundingBox(),
+    list.row('Première question').getByRole('button', { name: /^Première question/ }).boundingBox(),
+  ]);
+  expect(mark!.x).toBeLessThan(title!.x + 16);
 });
 
 const Q = '<|"|>';

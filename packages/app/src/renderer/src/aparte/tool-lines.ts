@@ -7,9 +7,8 @@
  * code). An edit or a write keeps its change behind its line, opened
  * (aparté's `setupDiff`); a command keeps what it printed.
  *
- * aparté holds one tool-line provider per config (apartejs/aparte#219): the
- * one this sets answers for the core's tools only, and hands every other call
- * to the one it found.
+ * Everything goes through each tool's own display (its `note` too, aparté
+ * 1.10): the tool-line providers a plugin registers are left alone.
  */
 
 import { aparteGlobalConfig, type AparteConfig, type AparteToolCallSegment } from '@aparte/core';
@@ -104,6 +103,8 @@ export function registerToolLines(messages: Messages, config: AparteConfig = apa
       label: (segment) => (segment.status === 'pending' ? words.running : segment.status === 'resolved' ? words.done : words.name),
       icon: ICONS[name],
       summary: (segment) => TARGETS[name](inputOf(segment)),
+      // Empty: nothing to say yet, and the line is left to the providers.
+      note: (segment) => toolNote(segment, messages) ?? '',
       details: name === 'run_command' ? printed : false,
     });
   }
@@ -118,15 +119,8 @@ export function registerToolLines(messages: Messages, config: AparteConfig = apa
     config,
   );
 
-  const previous = config.getToolLineProvider();
-  config.setToolLineProvider((segment) => {
-    const note = toolNote(segment, messages);
-    return note !== undefined ? { note } : (previous?.(segment) ?? undefined);
-  });
-
   return () => {
     stopDiff();
     for (const name of NAMES) config.unregisterToolDisplay(name);
-    config.setToolLineProvider(previous);
   };
 }

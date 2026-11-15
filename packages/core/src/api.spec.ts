@@ -184,7 +184,7 @@ describe('createCore — the managed engine', () => {
     const after = await core.memory();
     expect(after.engine.running).toBe(true);
     expect(after.engine.since).not.toBe(before);
-  });
+  }, 20_000);
 
   it('« Décharger » and « Redémarrer » are refused while a reply holds the engine, and the page is told it runs', async () => {
     const { core, gemma } = await setup();

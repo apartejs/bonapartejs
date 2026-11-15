@@ -5,8 +5,8 @@
  * settle on the way — and, while the conversation is in Lecture, its three
  * actions: « Lancer en Plume », « Lancer en Répétition », « Modifier le
  * plan… ». The two cards are one section: aparté's renderer is wrapped, not
- * replaced (`overrideToolRenderer` stacks) — aparté's card has no place for
- * them (apartejs/aparte#222).
+ * replaced (`overrideToolRenderer` stacks) — the composition aparté documents
+ * for what one kind of agent adds to a plan (apartejs/aparte#222).
  */
 
 import type { PlayMode } from '@aparte/bonaparte-shared';

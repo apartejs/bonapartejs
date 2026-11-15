@@ -1,6 +1,6 @@
 /**
  * Two pieces the pages « Permissions » and « Projet » share: the four modes
- * as cards (the kit's `.aparte-field-choice`, apartejs/aparte#225), and the
+ * as cards (the kit's `.aparte-field-choice`), and the
  * list of what is always asked — the files that run later, fixed, and the
  * ones the person adds, each with its « Retirer ».
  */

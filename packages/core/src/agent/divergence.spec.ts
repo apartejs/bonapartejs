@@ -44,10 +44,24 @@ describe('compareWithJournal', () => {
     expect(compareWithJournal([user('Salut')], JOURNAL)).toEqual({ kind: 'edit', afterEntryId: JOURNAL[1]!.id, text: 'Salut' });
   });
 
-  it('a message whose answer failed comes back joined to the next one: the journal kept the next one, and the history goes on', () => {
-    // aparté 1.9 drops a message whose answer failed from the next request, then joins it to the
-    // following message (two messages of the person in a row become one, with a blank line).
-    // The journal never kept it (refused before anything ran), or kept it on a branch an edit left.
+  it('a message whose answer failed goes joined to the next one: the journal keeps it as it was sent', () => {
+    // Since aparté 1.10 a message whose answer failed goes with the next one, joined with a blank
+    // line, in every later request: the history no longer changes from one request to the next.
+    const joined = 'Un message trop long\n\nEt ensuite ?';
+    const before = JOURNAL.slice(0, 4);
+    expect(compareWithJournal([user('Bonjour'), assistant('Bonjour Paul.'), user(joined)], before)).toEqual({
+      kind: 'append',
+      text: joined,
+    });
+    const after = [...before, entry({ kind: 'user', text: joined }), entry({ kind: 'assistant', raw: 'On continue.' })];
+    const messages = [user('Bonjour'), assistant('Bonjour Paul.'), user(joined), assistant('On continue.'), user('Merci')];
+    expect(compareWithJournal(messages, after)).toEqual({ kind: 'append', text: 'Merci' });
+  });
+
+  it("an earlier message that is not the journal's, even ending as the journal's does, is a mismatch", () => {
+    // aparté 1.9 dropped a failed message from one request and joined it to the next in the one
+    // after (apartejs/aparte#213): the history changed under the journal. 1.10 sends it the same
+    // way every time, so an earlier message that differs is not this conversation's history.
     const messages = [
       user('Bonjour'),
       assistant('Bonjour Paul.'),
@@ -55,7 +69,7 @@ describe('compareWithJournal', () => {
       assistant('On continue.'),
       user('Merci'),
     ];
-    expect(compareWithJournal(messages, JOURNAL)).toEqual({ kind: 'append', text: 'Merci' });
+    expect(compareWithJournal(messages, JOURNAL)).toEqual({ kind: 'mismatch' });
   });
 
   it('a paragraph added in front of the last message is an edit of it, not the same message', () => {

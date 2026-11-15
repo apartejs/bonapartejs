@@ -1,32 +1,17 @@
 /**
- * The memory dots of the sidebar's rows: one rule per conversation that has a
- * memory, its name given as CSS alt text, its id escaped — none for a
- * conversation without memory.
+ * The memory mark of a sidebar's row: its state and its name, or nothing to
+ * name — the row keeps its place.
  */
 
 import { describe, expect, it } from 'vitest';
 import { fr } from '../i18n/fr';
-import { memoryMarksCss } from './statuses';
+import { memoryMarkOf } from './statuses';
 
-describe('the memory dots', () => {
-  it('give each state its name, and draw none where there is no memory', () => {
-    const css = memoryMarksCss(
-      {
-        a: { projectId: null, memory: 'engine', waiting: false },
-        b: { projectId: null, memory: 'saved', waiting: false },
-        c: { projectId: 'p', memory: 'reread', waiting: true },
-        d: { projectId: null, memory: null, waiting: false },
-      },
-      fr.shell.memory,
-    );
-    expect(css).toContain('[data-conv-id="a"] .aparte-conv-item__select::after { content: "" / "Contexte dans le moteur";');
-    expect(css).toContain('"Mémoire sauvée"');
-    expect(css).toContain('"À relire"; background: transparent;');
-    expect(css).not.toContain('"d"');
-  });
-
-  it('escapes an id that is not a plain word', () => {
-    const css = memoryMarksCss({ '1"x': { projectId: null, memory: 'saved', waiting: false } }, fr.shell.memory);
-    expect(css).toContain('[data-conv-id="1\\"x"]');
+describe('the memory marks', () => {
+  it('give each state its name, and name nothing where there is no memory', () => {
+    expect(memoryMarkOf('engine', fr.shell.memory)).toEqual({ memory: 'engine', name: 'Contexte dans le moteur' });
+    expect(memoryMarkOf('saved', fr.shell.memory)).toEqual({ memory: 'saved', name: 'Mémoire sauvée' });
+    expect(memoryMarkOf('reread', fr.shell.memory)).toEqual({ memory: 'reread', name: 'À relire' });
+    expect(memoryMarkOf(null, fr.shell.memory)).toEqual({ memory: null, name: null });
   });
 });

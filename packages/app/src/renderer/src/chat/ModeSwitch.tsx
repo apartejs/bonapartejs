@@ -6,18 +6,23 @@
  * the window's approval resolver owns every decision.
  *
  * aparté's modes ↔ bonaparte's: plan ↔ Lecture, ask ↔ Répétition,
- * auto-edit ↔ Plume, auto ↔ Impro. No React wrapper: the element is made as
- * it is (apartejs/aparte#216).
+ * auto-edit ↔ Plume, auto ↔ Impro. The element comes through React as a
+ * component made from its spec (`createAparteElement`, aparté 1.10).
  */
 
 import { aparteGlobalConfig } from '@aparte/core';
-import { getApprovalController, setupApproval, type ApprovalMode } from '@aparte/plugin-approval';
+import { approvalModeElement, getApprovalController, setupApproval, type ApprovalMode } from '@aparte/plugin-approval';
+import { createAparteElement } from '@aparte/react';
 import type { PlayMode } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { Messages } from '../i18n/index';
+
+const ApprovalModeSwitch = createAparteElement(approvalModeElement);
 
 const TO_APARTE: Record<PlayMode, ApprovalMode> = { lecture: 'plan', repetition: 'ask', plume: 'auto-edit', impro: 'auto' };
 const FROM_APARTE: Record<ApprovalMode, PlayMode> = { plan: 'lecture', ask: 'repetition', 'auto-edit': 'plume', auto: 'impro' };
+// The event's detail says `mode: string` (apartejs/aparte#234): only aparté's four are read.
+const isApprovalMode = (mode: string): mode is ApprovalMode => Object.hasOwn(FROM_APARTE, mode);
 
 /** What the element needs to enable itself; the classification is never read (the resolver decides). */
 const CLASSIFY = {
@@ -33,23 +38,15 @@ export interface ModeSwitchProps {
 }
 
 export function ModeSwitch({ mode, messages, onChange }: ModeSwitchProps) {
-  const element = useRef<HTMLElement & { labels: Partial<Record<ApprovalMode, string>> }>(null);
-  const changed = useRef(onChange);
-  useEffect(() => {
-    changed.current = onChange;
-  }, [onChange]);
-
   const controller = useMemo(
     () => getApprovalController(aparteGlobalConfig) ?? setupApproval({ classify: CLASSIFY, mode: TO_APARTE[mode], commands: false }, aparteGlobalConfig),
     // One controller for the window, made once: the mode it shows follows the conversation below.
     [],
   );
 
-  useEffect(() => {
-    if (element.current) {
-      const names = messages.modes;
-      element.current.labels = { plan: names.lecture, ask: names.repetition, 'auto-edit': names.plume, auto: names.impro };
-    }
+  const labels = useMemo(() => {
+    const names = messages.modes;
+    return { plan: names.lecture, ask: names.repetition, 'auto-edit': names.plume, auto: names.impro };
   }, [messages]);
 
   // The conversation's mode, shown; set this way, the element says nothing back.
@@ -58,16 +55,7 @@ export function ModeSwitch({ mode, messages, onChange }: ModeSwitchProps) {
   }, [controller, mode]);
 
   // The person's choice.
-  useEffect(() => {
-    const node = element.current;
-    if (!node) return;
-    const listener = (event: Event): void => {
-      const next = (event as CustomEvent<{ mode: ApprovalMode }>).detail.mode;
-      changed.current(FROM_APARTE[next]);
-    };
-    node.addEventListener('aparte-approval-mode-change', listener);
-    return () => node.removeEventListener('aparte-approval-mode-change', listener);
-  }, []);
-
-  return createElement('aparte-approval-mode', { ref: element, className: 'mode-switch' });
+  return <ApprovalModeSwitch className="mode-switch" labels={labels} onApprovalModeChange={(detail) => {
+        if (isApprovalMode(detail.mode)) onChange(FROM_APARTE[detail.mode]);
+      }} />;
 }

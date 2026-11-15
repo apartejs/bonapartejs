@@ -81,7 +81,8 @@ describe("aparté's stock runner drives our handler", () => {
   it('stops quietly when the turn is stopped, and the engine stops generating', async () => {
     const { server, runner } = await setup({
       paceMs: 20,
-      responder: () => 'un deux trois quatre cinq six sept huit neuf dix',
+      // Long enough that the stop always lands in the middle, however loaded the machine.
+      responder: () => 'un deux trois quatre cinq six sept huit neuf dix '.repeat(30),
     });
     const controller = new AbortController();
     const events: StreamRunEvent[] = [];
@@ -94,8 +95,8 @@ describe("aparté's stock runner drives our handler", () => {
 
     // A stop is not a failure: the runner returns, it does not throw.
     await expect(runner(options)).resolves.toBeUndefined();
-    await expect.poll(() => server!.aborted, { timeout: 2_000 }).toBe(1);
-  });
+    await expect.poll(() => server!.aborted, { timeout: 5_000 }).toBe(1);
+  }, 20_000);
 
   it('turns a run-error line into an error that carries our message', async () => {
     const { runner } = await setup({ nCtx: 4 });

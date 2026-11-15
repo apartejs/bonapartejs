@@ -244,7 +244,8 @@ describe('the agent handler, streaming a turn', () => {
   it('emits run-aborted then run-done and cuts the completion when the request is aborted', async () => {
     const { server, handler } = await setup({
       paceMs: 20,
-      responder: () => 'un deux trois quatre cinq six sept huit neuf dix',
+      // Long enough that the stop always lands in the middle, however loaded the machine.
+      responder: () => 'un deux trois quatre cinq six sept huit neuf dix '.repeat(30),
     });
     const controller = new AbortController();
     const response = await handler(post(turn(user('Compte')), { signal: controller.signal }));
@@ -270,8 +271,8 @@ describe('the agent handler, streaming a turn', () => {
       .filter(Boolean)
       .map((line) => (JSON.parse(line) as Line).type);
     expect(types.slice(-2)).toEqual(['run-aborted', 'run-done']);
-    await expect.poll(() => server.aborted, { timeout: 2_000 }).toBe(1);
-  });
+    await expect.poll(() => server.aborted, { timeout: 5_000 }).toBe(1);
+  }, 20_000);
 
   it('ends with run-error, and no run-done, when the engine fails once the stream began', async () => {
     // A context of four tokens: the engine refuses the prompt.

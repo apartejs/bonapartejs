@@ -4,11 +4,9 @@
  * pushes nothing, so the page asks again when something may have changed it:
  * the end of a reply, a conversation loaded or chosen, an approval answered.
  *
- * Two marks follow from it on aparté's rows, which accept nothing of ours
- * (apartejs/aparte#229):
- * - the memory: a dot drawn by a stylesheet regenerated here, keyed on the
- *   row's `data-conv-id`, its name given as CSS alt text — read after the
- *   title, drawn before it;
+ * Two marks follow from it on aparté's rows:
+ * - the memory: a mark of the row (aparté's `renderMeta`), named, read after
+ *   the title and drawn before it;
  * - the wait: aparté's own `waiting` state of a row, told on the window as
  *   aparté's controller tells it, for the conversations the core says wait
  *   (after a restart, aparté knows nothing of a pause).
@@ -67,46 +65,26 @@ export function useConversationStatuses(ids: readonly string[], pulse: number): 
   return statuses;
 }
 
-/** A CSS string: quoted, its quotes and backslashes escaped, no line break. */
-function cssString(value: string): string {
-  return `"${value.replace(/[\\"]/g, '\\$&').replace(/[\n\r\f]/g, ' ')}"`;
+export type Memory = ConversationStatusView['memory'];
+
+/** What a row's memory mark says: its state and its name, or nothing to name. */
+export function memoryMarkOf(memory: Memory, words: Messages['shell']['memory']): { memory: Memory; name: string | null } {
+  return { memory, name: memory ? words[memory] : null };
 }
 
-/** The memory dots: one rule per conversation that has a memory, its name as alt text. */
-export function memoryMarksCss(statuses: Statuses, words: Messages['shell']['memory']): string {
-  const look = {
-    engine: 'background: var(--aparte-success); border-color: var(--aparte-success);',
-    saved: 'background: var(--aparte-text-muted); border-color: var(--aparte-text-muted);',
-    reread: 'background: transparent; border-color: var(--aparte-text-muted);',
-  } as const;
-  return Object.entries(statuses)
-    .flatMap(([id, status]) =>
-      status.memory
-        ? [
-            `.bonaparte-sidebar [data-conv-id=${cssString(id)}] .aparte-conv-item__select::after { content: "" / ${cssString(
-              words[status.memory],
-            )}; ${look[status.memory]} }`,
-          ]
-        : [],
-    )
-    .join('\n');
-}
-
-export function useMemoryMarks(statuses: Statuses, words: Messages['shell']['memory']): void {
-  const sheet = useRef<HTMLStyleElement | null>(null);
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset['bonaparte'] = 'memory-marks';
-    document.head.append(style);
-    sheet.current = style;
-    return () => {
-      style.remove();
-      sheet.current = null;
-    };
-  }, []);
-  useEffect(() => {
-    if (sheet.current) sheet.current.textContent = memoryMarksCss(statuses, words);
-  }, [statuses, words]);
+/** The mark itself; a row without memory keeps its place, with nothing to read. */
+export function memoryMark(memory: Memory, words: Messages['shell']['memory']): HTMLElement {
+  const mark = memoryMarkOf(memory, words);
+  const element = document.createElement('span');
+  element.className = 'conv-memory';
+  if (mark.memory && mark.name) {
+    element.dataset['memory'] = mark.memory;
+    element.setAttribute('role', 'img');
+    element.setAttribute('aria-label', mark.name);
+  } else {
+    element.setAttribute('aria-hidden', 'true');
+  }
+  return element;
 }
 
 /** aparté's `waiting` state, for the conversations the core says wait; taken back only where it was told here. */

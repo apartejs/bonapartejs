@@ -49,3 +49,24 @@ test('« Laisse-le choisir »: the model is told the person left it the choice',
   await question.getByRole('button', { name: 'Laisse-le choisir' }).click();
   await expect(ui.replyText).toHaveText('Je choisis la virgule.', { timeout: 15_000 });
 });
+
+test('the keys answer it: 2 is the second choice, Escape leaves the choice to the model', async ({ launch }) => {
+  // aparté 1.10's keys (apartejs/aparte#223), while one of the choices has the focus.
+  const prompts: string[] = [];
+  const { page } = await launch({ engine: { responder: model, onCompletion: (body) => prompts.push(String(body['prompt'])) } });
+  const ui = chat(page);
+  await ui.send('Choisis le séparateur avec moi');
+  await expect(ui.question).toContainText('Quel séparateur pour le CSV ?', { timeout: 15_000 });
+  await ui.question.getByRole('button', { name: 'Point-virgule', exact: true }).focus();
+  await page.keyboard.press('2');
+  await expect(ui.replyText).toHaveText('Noté.', { timeout: 15_000 });
+  const answered = prompts.at(-1)!.slice(prompts.at(-1)!.lastIndexOf('<|tool_response>'));
+  expect(answered).toContain('Virgule');
+  expect(answered).not.toContain('Point-virgule');
+
+  await ui.send('Choisis le séparateur avec moi');
+  await expect(ui.question).toContainText('Quel séparateur pour le CSV ?', { timeout: 15_000 });
+  await ui.question.getByRole('button', { name: 'Virgule', exact: true }).focus();
+  await page.keyboard.press('Escape');
+  await expect(ui.replyText).toHaveText('Je choisis la virgule.', { timeout: 15_000 });
+});

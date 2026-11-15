@@ -1,5 +1,5 @@
 import { setupCommands } from '@aparte/plugin-triggers/commands';
-import { AparteChat, useAparteClient, useConversationManager } from '@aparte/react';
+import { AparteChat, useAparteClient, useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
 import {
   conversationsMemory,
   engineState,
@@ -14,7 +14,7 @@ import {
   type ProjectView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { allowAndSwitch, createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
+import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
 import { focusComposer, prefill, sendWhenFree } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
@@ -36,7 +36,7 @@ import { Rail } from './shell/Rail';
 import { ENGINE_CHANGED } from './settings/EngineMemory';
 import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
 import { Sidebar } from './shell/Sidebar';
-import { useConversationStatuses, useMemoryMarks, useWaitingMarks } from './shell/statuses';
+import { useConversationStatuses, useWaitingMarks } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
 
@@ -201,18 +201,12 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // The resolver owns the decision: aparté's page policy is never consulted.
   const approvals = useMemo(() => createApprovalsStore(), []);
   const open = useRef<string | null>(null);
+  const chat = useRef<AparteChatImperativeApi>(null);
   useEffect(() => {
     open.current = conversationId ?? null;
   }, [conversationId]);
-  // A call paused before a reload is asked again as its conversation loads, before React hears of it.
-  useEffect(
-    () =>
-      followLoadedConversation(window, (id) => {
-        open.current = id;
-      }),
-    [],
-  );
-  const approvalResolver = useMemo(() => createApprovalResolver(approvals, () => open.current), [approvals]);
+  // A call paused before a reload is asked again as its conversation loads: aparté names its turn.
+  const approvalResolver = useMemo(() => createApprovalResolver(approvals), [approvals]);
   useAparteClient({ streamRunner, approvalResolver });
   const [asked, setAsked] = useState(0);
   useEffect(() => approvals.subscribe(() => setAsked((count) => count + 1)), [approvals]);
@@ -229,7 +223,6 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => setupCommands({ onNew: () => startOver.current() }), []);
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
-  useMemoryMarks(statuses, messages.shell.memory);
   useWaitingMarks(statuses);
   const projectOf = (id: string): string | null => statuses[id]?.projectId ?? bornIn.current.get(id) ?? null;
   // A new conversation starts in the project of the conversation open — as the projects now are.
@@ -320,7 +313,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         // and only into the conversation of the plan.
         void (id ? bridge.invoke(modesSet, { id, mode: next }) : Promise.resolve())
           .catch(() => undefined)
-          .then(() => sendWhenFree(messages.plan.goAhead, () => open.current === id));
+          // The chat's own conversation, as it holds it now: React may not have drawn the one just loaded.
+          .then(() => sendWhenFree(messages.plan.goAhead, () => (chat.current?.getConversationId() ?? null) === id));
       },
       adjust: () => focusComposer(),
     });
@@ -381,6 +375,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           activeId={conversationId ?? null}
           projects={projects}
           projectOf={projectOf}
+          memoryOf={(id) => statuses[id]?.memory ?? null}
           grouping={grouping}
           onCollapse={toggleSidebar}
           onNewConversation={newConversation}
@@ -448,6 +443,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       />
       <div className="aparte-app-shell__main bonaparte-main">
       <AparteChat
+        ref={chat}
         onConversationCreated={(id) => {
           bornHere.current.add(id);
           bornIn.current.set(id, project.current?.id ?? null);

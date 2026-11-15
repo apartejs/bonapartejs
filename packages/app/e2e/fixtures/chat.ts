@@ -31,10 +31,7 @@ export interface ChatDriver {
   toolLine(name: string): Locator;
   /** A question in the composer's place: the panel aparté's composer stamps `data-aparte-panel`. */
   question: Locator;
-  /**
-   * The mode the switch shows. Its combobox's text holds every option too (a hidden sizer that
-   * keeps its width): read the label, never the combobox's whole text (apartejs/aparte#224).
-   */
+  /** The mode the switch shows: its combobox, whose text is the shown value (aparté's testing guide). */
   modeShown: Locator;
   send(text: string): Promise<void>;
 }
@@ -58,7 +55,7 @@ export function chat(page: Page): ChatDriver {
     errors: root.locator('[data-error-code]'),
     toolLine: (name) => replies.locator(`[data-tool-name="${name}"]`),
     question: root.locator('aparte-composer [data-aparte-panel]'),
-    modeShown: root.page().locator('aparte-approval-mode .aparte-select-label-text'),
+    modeShown: root.page().locator('aparte-approval-mode aparte-select [role="combobox"]'),
 
     async send(text) {
       await editor.fill(text);

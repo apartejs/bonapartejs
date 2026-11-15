@@ -33,7 +33,11 @@ const label = (s: AparteToolCallSegment): string => {
   return typeof shown === 'function' ? shown(s) : String(shown);
 };
 const summary = (s: AparteToolCallSegment): string => String(aparteGlobalConfig.getToolDisplay(s.toolCall.name)?.summary?.(s));
-const note = (s: AparteToolCallSegment): string | undefined => aparteGlobalConfig.getToolLineProvider()?.(s)?.note;
+// The note of a tool's own display (aparté 1.10): an empty one leaves the line to the providers.
+const note = (s: AparteToolCallSegment): string | undefined => {
+  const shown = aparteGlobalConfig.getToolDisplay(s.toolCall.name)?.note;
+  return (typeof shown === 'function' ? shown(s) : shown) || undefined;
+};
 
 describe('registerToolLines', () => {
   it('says what a call does in the tense of the call: running, done, or by its name while it waits', () => {
@@ -84,13 +88,17 @@ describe('registerToolLines', () => {
     expect(aparteGlobalConfig.getToolDisplay('read_file')?.details).toBe(false);
   });
 
-  it('takes everything back when asked, and gives back the line provider it found', () => {
-    const before = (): undefined => undefined;
-    aparteGlobalConfig.setToolLineProvider(before);
-    registerToolLines(fr)();
+  it('takes everything back when asked, and leaves the tool-line providers as it found them', () => {
+    const plugin = (): undefined => undefined;
+    const remove = aparteGlobalConfig.registerToolLineProvider(plugin);
+    const providers = aparteGlobalConfig.getToolLineProviders();
+    release = registerToolLines(fr);
+    expect(aparteGlobalConfig.getToolLineProviders()).toEqual(providers);
+    release();
+    release = undefined;
     expect(aparteGlobalConfig.getToolDisplay('read_file')).toBeUndefined();
     expect(aparteGlobalConfig.getToolDisplay('edit_file')).toBeUndefined();
-    expect(aparteGlobalConfig.getToolLineProvider()).toBe(before);
-    aparteGlobalConfig.setToolLineProvider(null);
+    expect(aparteGlobalConfig.getToolLineProviders()).toEqual(providers);
+    remove();
   });
 });
