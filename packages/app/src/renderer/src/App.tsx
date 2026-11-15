@@ -22,6 +22,7 @@ import {
   conversationsCommitBranch,
   conversationsOpenPr,
   conversationsShowPr,
+  conversationsBranches,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -49,9 +50,14 @@ import { PanelToggles } from './panels/PanelToggles';
 import { close as closePane, opened, opensByItself, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
+import { RewindBanner } from './chat/RewindBanner';
+import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
+import { useRewind } from './chat/useRewind';
+import { setupMessageActions } from './aparte/message-actions';
 import { ComposerToolbar } from './chat/ComposerToolbar';
 import { NewProject } from './dialogs/NewProject';
 import { ArchiveConversation } from './dialogs/ArchiveConversation';
+import { RewindDialog } from './dialogs/RewindDialog';
 import { OpenPr } from './dialogs/OpenPr';
 import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
@@ -90,7 +96,8 @@ const NARROW = '(max-width: 1099px)';
 function Workspace({ messages, locale, engine }: { messages: Messages; locale: Locale; engine: EngineStateView }) {
   // One manager for every chat; its single `activeId` names whichever chat moved last, so the
   // conversation open is the shown chat's (aparté's « several live chats »).
-  const { init, activeConversations, updateTitle, pin, unpin, archive, delete: remove } = useConversationManager();
+  const conversationManager = useConversationManager();
+  const { init, activeConversations, updateTitle, pin, unpin, archive, delete: remove } = conversationManager;
   const [deck, setDeck] = useState<Deck>(newDeck);
   const conversationId = shownConversation(deck);
   // Each live chat's handle: what it holds, whether it works, its composer.
@@ -561,6 +568,24 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, [messages]);
   useEffect(() => plans.current?.refresh(), [mode]);
   useEffect(() => registerRereadProgress(messages, locale), [messages, locale]);
+  // A message's buttons: aparté's « Modifier », « Copier », « Réessayer », and « Revenir avant », « Brancher » (task 7.2).
+  useEffect(() => setupMessageActions(messages.rewind), [messages]);
+  // Going back before a message, and the branches of a conversation (task 7.2).
+  const forks = useRef<ConversationBranchesHandle>(null);
+  const shownIdRef = useRef(conversationId);
+  shownIdRef.current = conversationId;
+  const rewinding = useRewind({
+    handles,
+    replaceMessages: async (id, shown, tree) => {
+      await conversationManager.manager?.updateMessages(id, shown as Parameters<NonNullable<typeof conversationManager.manager>['updateMessages']>[1], tree as Parameters<NonNullable<typeof conversationManager.manager>['updateMessages']>[2]);
+    },
+    unmount: (id) => setDeck((was) => forget(was, id)),
+    mount: (id) => setDeck((was) => openIn(was, id)),
+    openBranchesAt: (id, userIndex) => {
+      if (id === shownIdRef.current) forks.current?.openAt(userIndex);
+    },
+    changed: () => setAsked((count) => count + 1),
+  });
 
   // What opening the conversation will cost, said before anything is paid.
   useEffect(() => {
@@ -642,6 +667,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           setSearching(false);
           prefill(text);
         }}
+      />
+      <RewindDialog
+        messages={messages}
+        locale={locale}
+        asking={rewinding.asking}
+        busy={rewinding.busy}
+        onCancel={rewinding.cancel}
+        onRewind={rewinding.rewind}
       />
       <ArchiveConversation
         messages={messages}
@@ -741,6 +774,16 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           const branch = openConversation ? statuses[openConversation.id]?.branch : undefined;
           if (openConversation && branch) setOpeningPr({ id: openConversation.id, branch: branch.name, base: branch.base, failed: false });
         }}
+        forks={
+          openConversation ? (
+            <ConversationBranches
+              ref={forks}
+              messages={messages}
+              load={() => bridge.invoke(conversationsBranches, { id: openConversation.id })}
+              onPick={(branchId) => rewinding.showBranch(openConversation.id, branchId)}
+            />
+          ) : null
+        }
         panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
@@ -773,6 +816,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
                 });
               }}
             />
+          ) : rewinding.rewound && rewinding.rewound.conversationId === conversationId ? (
+            <RewindBanner rewound={rewinding.rewound} messages={messages} locale={locale} busy={rewinding.busy} onUndo={rewinding.undo} />
           ) : memory ? (
             <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} />
           ) : !conversationId && placeShown ? (

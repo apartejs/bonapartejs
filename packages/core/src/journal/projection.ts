@@ -16,6 +16,8 @@ export interface ProjectedMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** An answer's text, as a segment: how the page draws one. */
+  segments?: { id: string; type: 'text'; content: string }[];
 }
 
 export interface ProjectedConversation {
@@ -24,6 +26,8 @@ export interface ProjectedConversation {
   createdAt: number;
   updatedAt: number;
   messages: ProjectedMessage[];
+  /** aparté's tree of the messages: one branch, the last one its head. */
+  tree: { headId: string | null; messages: { message: ProjectedMessage; parentId: string | null }[] };
 }
 
 /** The text an answer showed: what the family's demux reads as text, nothing else. */
@@ -45,7 +49,7 @@ export function projectToAparte(
     const timestamp = Date.parse(entry.at) || 0;
     if (entry.kind === 'user') {
       if (withdrawn.has(entry.id)) continue;
-      messages.push({ id: entry.messageId ?? entry.id, role: 'user', content: entry.text, timestamp });
+      messages.push({ id: entry.id, role: 'user', content: entry.text, timestamp });
     } else if (entry.kind === 'assistant') {
       const text = textOf(entry.raw, family);
       const last = messages.at(-1);
@@ -54,12 +58,22 @@ export function projectToAparte(
       else messages.push({ id: entry.messageId ?? entry.id, role: 'assistant', content: text, timestamp });
     }
   }
-  for (const message of messages) message.content = message.content.trim();
+  for (const message of messages) {
+    message.content = message.content.trim();
+    // An answer is drawn as the page draws one: its text a segment.
+    if (message.role === 'assistant') message.segments = [{ id: `${message.id}-text`, type: 'text', content: message.content }];
+  }
+  const shown = messages.filter((message) => message.role === 'user' || message.content !== '');
   return {
     id: meta.id,
     title: meta.title,
     createdAt: Date.parse(meta.createdAt) || 0,
     updatedAt: Date.parse(meta.updatedAt) || 0,
-    messages: messages.filter((message) => message.role === 'user' || message.content !== ''),
+    messages: shown,
+    // One branch: the page's tree of it, so that no older tree it kept is drawn instead.
+    tree: {
+      headId: shown.at(-1)?.id ?? null,
+      messages: shown.map((message, index) => ({ message, parentId: index === 0 ? null : shown[index - 1]!.id })),
+    },
   };
 }

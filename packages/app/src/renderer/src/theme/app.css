@@ -244,6 +244,72 @@ body {
   margin-block-start: var(--aparte-space-4);
 }
 
+/* Going back before a message (board « Revenir en arrière », task 7.2): three choices, what would move. */
+.rewind-dialog {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.rewind-dialog__choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rewind-dialog__lines {
+  margin: var(--aparte-space-4) 0 0;
+  padding-inline-start: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.rewind-dialog__warning {
+  color: var(--aparte-warning-ink);
+}
+
+/* After it: one line, and « Annuler le retour » beside it. */
+.rewind-banner {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--aparte-message-max-width, 800px);
+  margin: 0 auto var(--aparte-space-4);
+  align-items: center;
+}
+
+.rewind-banner .aparte-alert__body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* « Brancher » (task 7.2): each branch, what it says where it parts, and how long it is. */
+.conversation-branches__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 360px;
+}
+
+.conversation-branches__label {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-branches__meta,
+.conversation-branches__none {
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.conversation-branches__none {
+  margin: 0;
+  padding: var(--aparte-space-2) var(--aparte-space-3);
+}
+
 /* A conversation read again: the kit's bar, and how far it went. */
 .reread-progress {
   display: flex;

@@ -20,9 +20,9 @@ describe('projectToAparte', () => {
     const gemma = familyLayer('gemma');
     const entries = [
       entry({ kind: 'system' }),
-      entry({ kind: 'user', text: 'Bonjour', messageId: 'u1' }),
+      entry({ kind: 'user', text: 'Bonjour', messageId: 'a1' }),
       entry({ kind: 'assistant', raw: '<|channel>thought\nIl salue.<channel|>Bonjour Paul.', messageId: 'a1' }),
-      entry({ kind: 'user', text: 'Lis a.ts', messageId: 'u2' }),
+      entry({ kind: 'user', text: 'Lis a.ts', messageId: 'a2' }),
       entry({ kind: 'assistant', raw: '<|tool_call>call:read_file{path:<|"|>a.ts<|"|>}<tool_call|>', messageId: 'a2' }),
       entry({ kind: 'tool-results', results: [{ toolCallId: 'c', name: 'read_file', content: 'x' }] }),
       entry({ kind: 'assistant', raw: 'Le fichier exporte a.', messageId: 'a2' }),
@@ -35,7 +35,16 @@ describe('projectToAparte', () => {
       ['user', 'Lis a.ts'],
       ['assistant', 'Le fichier exporte a.'],
     ]);
-    expect(document.messages[0]!.id).toBe('u1');
+    // A turn is named by its answer's message: the answer keeps that name (a sibling picked is found by it),
+    // the person's message its own — never the same, or the page takes one for the other.
+    expect(document.messages[1]!.id).toBe('a1');
+    expect(new Set(document.messages.map((message) => message.id)).size).toBe(document.messages.length);
+    // And its tree, one branch: what the page draws when the journal is read again — never an older tree kept.
+    expect(document.tree.headId).toBe(document.messages.at(-1)!.id);
+    expect(document.tree.messages.map((node) => node.parentId)).toEqual([null, ...document.messages.slice(0, -1).map((message) => message.id)]);
+    // An answer is drawn as the page draws one: its text a segment.
+    expect(document.messages[1]).toMatchObject({ segments: [{ type: 'text', content: 'Bonjour Paul.' }] });
+    expect(document.messages[0]).not.toHaveProperty('segments');
   });
 
   it('a message withdrawn is not shown again', () => {

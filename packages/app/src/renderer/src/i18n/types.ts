@@ -382,6 +382,51 @@ export interface Messages {
     ahead(count: number, base: string): string;
     openFolder: string;
   };
+  /** Going back before a message (board « Revenir en arrière », task 7.2). */
+  rewind: {
+    /** The message's buttons. */
+    action: string;
+    branchesAction: string;
+    title(excerpt: string): string;
+    whatGroup: string;
+    both: string;
+    bothHint: string;
+    conversation: string;
+    conversationHint: string;
+    code: string;
+    codeHint: string;
+    reading: string;
+    filesBack(names: readonly string[]): string;
+    filesStay(names: readonly string[]): string;
+    memoryKept: string;
+    memoryReread(tokens: string, duration: string): string;
+    memoryStill: string;
+    kept: string;
+    commands(list: string, count: number): string;
+    cancel: string;
+    confirm: string;
+    /** The banner after it. */
+    banner(excerpt: string): string;
+    bannerCode(excerpt: string): string;
+    bannerFiles(count: number): string;
+    bannerConversationOnly: string;
+    bannerMemoryKept: string;
+    bannerMemoryReread(duration: string): string;
+    bannerConflicts(names: string): string;
+    undo: string;
+    failed: string;
+  };
+  /** The branches of a conversation (« Brancher », task 7.2) — not git's. */
+  forks: {
+    button: string;
+    menu: string;
+    shown: string;
+    none: string;
+    message(label: string): string;
+    answer(label: string): string;
+    wentBack: string;
+    count(messages: number): string;
+  };
   /** A branch's pull request, and archiving a conversation on its branch (task 6.8). */
   pr: {
     /** The mark of a row, said whole: « pull request 42 ouverte, CI réussie ». */

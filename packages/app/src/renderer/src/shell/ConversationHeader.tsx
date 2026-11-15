@@ -27,6 +27,8 @@ export interface ConversationHeaderProps {
   onDelete(): void;
   /** The icons of the panes, at the end of the header. */
   panels?: ReactNode;
+  /** « Brancher » (task 7.2): the conversation's branches. */
+  forks?: ReactNode;
   /** The lines the conversation changed (« +4 −4 »): a click opens « Changements ». */
   counts?: { added: number; removed: number; onOpen(): void } | null;
   /** Its own branch (task 6.7): its name, its commits ahead of its base, its folder. */
@@ -129,6 +131,7 @@ export function ConversationHeader(props: ConversationHeaderProps) {
         <span className={`conversation-header__pr conversation-header__pr--${props.pr.ci ?? 'none'}`}>{props.messages.pr.pill(props.pr.number, props.pr.ci)}</span>
       ) : null}
       <span className="conversation-header__spacer" />
+      {props.conversationId && props.forks ? props.forks : null}
       {props.memory ? (
         <span className={`conversation-header__memory conversation-header__memory--${props.memory}`}>
           <span className="conversation-header__memory-dot" aria-hidden="true" />
