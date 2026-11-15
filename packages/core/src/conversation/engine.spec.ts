@@ -524,6 +524,50 @@ describe('ConversationEngine — the tools', () => {
     expect(last).toMatchObject({ kind: 'pending', ticket: 'ticket-1', calls: [{ name: 'read_file', reason: 'approval' }] });
   });
 
+  it('a model turn left open by calls nobody answered is closed before the next message: each call answered as not run', async () => {
+    const { store, engine, prompts, conversation } = await rig({ server: { responder: agent } });
+    const meta = await conversation();
+    await engine.turn(meta.id, { text: 'Lis a.ts', tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
+    await engine.turn(meta.id, { text: 'Autre chose', tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
+    const next = prompts.find((prompt) => prompt.includes('Autre chose'))!;
+    // The call, its answer, the model turn closed — then the person's message.
+    const call = next.indexOf('<tool_call|>');
+    const answered = next.indexOf('<|tool_response>', call);
+    const closed = next.indexOf('<turn|>', answered);
+    const user = next.indexOf('<|turn>user', call);
+    expect(call).toBeGreaterThan(0);
+    expect(answered).toBeGreaterThan(call);
+    expect(closed).toBeGreaterThan(answered);
+    expect(user).toBeGreaterThan(closed);
+    expect(next.slice(answered, closed)).toContain('Not run');
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    const kinds = entries.map((entry) => entry.kind);
+    expect(kinds.slice(kinds.indexOf('tool-results') - 1, kinds.indexOf('tool-results') + 3)).toEqual(['assistant', 'tool-results', 'assistant', 'user']);
+  });
+
+  it('a pause nobody answered is closed the same way when the person writes again', async () => {
+    const { store, engine, prompts, conversation } = await rig({ server: { responder: agent } });
+    const meta = await conversation();
+    await engine.turn(
+      meta.id,
+      {
+        text: 'Lis a.ts',
+        tools: {
+          defs: [READ_FILE],
+          onCalls: async (calls) => ({ suspend: { pending: calls.map((one) => ({ toolCallId: one.id, name: one.name, input: one.input, reason: 'approval' as const })), ticket: 't' } }),
+        },
+      },
+      () => undefined,
+    );
+    expect(await engine.paused(meta.id)).not.toBeNull();
+    await engine.turn(meta.id, { text: 'Laisse tomber', tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
+    const next = prompts.find((prompt) => prompt.includes('Laisse tomber'))!;
+    expect(next.indexOf('<turn|>', next.indexOf('<|tool_response>'))).toBeLessThan(next.indexOf('<|turn>user', next.indexOf('<tool_call|>')));
+    // The pause is answered: a late resume finds none.
+    expect(await engine.paused(meta.id)).toBeNull();
+    expect((await openJournal(store.dir, meta.id)).entries().some((entry) => entry.kind === 'tool-results')).toBe(true);
+  });
+
   it('a turn the loop stops at its limit ends there', async () => {
     const { engine, prompts, conversation } = await rig({ server: { responder: agent } });
     const meta = await conversation();
@@ -590,6 +634,26 @@ describe('ConversationEngine — the mode, as the model knows it', () => {
     await say(meta.id, 'Encore');
     const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
     expect(notes).toHaveLength(1);
+  });
+
+  it('leaving Lecture launches the plan: the note says so, and asks for update_plan with the first step in progress', async () => {
+    const { store, prompts, say } = await rig();
+    const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
+    await say(meta.id, 'Fais un plan');
+    await store.update(meta.id, { mode: 'plume' });
+    await say(meta.id, 'Lance le plan.');
+    const launched = prompts.at(-1)!;
+    const note = launched.slice(launched.lastIndexOf('[mode]'), launched.lastIndexOf('Lance le plan.'));
+    expect(note).toContain('Plume');
+    expect(note).toContain('launched your plan');
+    expect(note).toContain('update_plan');
+    expect(note).toContain('in-progress');
+    // From Répétition to Plume there is no plan to launch.
+    const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
+    await say(other.id, 'Bonjour');
+    await store.update(other.id, { mode: 'plume' });
+    await say(other.id, 'Encore');
+    expect(prompts.at(-1)!).not.toContain('launched your plan');
   });
 
   it('the mode the core runs in is the one told: Impro not confirmed again after a restart is told as Plume', async () => {

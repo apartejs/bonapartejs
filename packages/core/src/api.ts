@@ -40,6 +40,7 @@ import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { toolsFor } from './prompt/system-prompt.js';
 import { builtinTools } from './tools/builtin/index.js';
+import { CheckpointStore } from './checkpoints/store.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
@@ -118,6 +119,8 @@ export interface Core {
   /** The one registry of tools, and the one approval policy. */
   readonly tools: ToolRegistry;
   readonly permissions: PermissionEngine;
+  /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
+  readonly checkpoints: CheckpointStore;
   /**
    * A turn of the agent: the model's calls decided by the policy, run by the
    * registry, the window's own tools (its `clientTools`) paused for it.
@@ -494,6 +497,12 @@ export function createCore(deps: CoreDeps): Core {
   // Without a project the perimeter is the home folder — a test run's own, when it gives one.
   const perimeter = (): string[] => (deps.home ? [deps.home] : []);
   const permissions = new PermissionEngine({ roots: () => perimeter(), dataDir: deps.dataDir });
+  // Before a tool writes, the file as it was, kept per turn (the turn is its message).
+  const checkpoints = new CheckpointStore(join(deps.dataDir, 'checkpoints'));
+  const keepOriginals = (conversationId: string, turnId: string) => ({
+    beforeWrite: (absolute: string, shown: string) => checkpoints.before(conversationId, turnId, absolute, shown),
+    afterWrite: (absolute: string) => checkpoints.after(conversationId, turnId, absolute),
+  });
   // Impro confirmed by the person during this run of the app: a mode read from disk is not a confirmation.
   const improConfirmed = new Set<string>();
   async function modeOf(conversationId: string): Promise<{ mode: PlayMode; reconfirm: boolean }> {
@@ -577,6 +586,7 @@ export function createCore(deps: CoreDeps): Core {
         roots: perimeter(),
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
         windowTools,
+        ...keepOriginals(conversationId, input.messageId ?? 'turn'),
         ticket: (pending) => signer.signTicket({ messageId: input.messageId ?? '', calls: pending.map((call) => call.toolCallId) }),
         signal: options.signal,
       },
@@ -617,6 +627,7 @@ export function createCore(deps: CoreDeps): Core {
     conversationStore,
     tools,
     permissions,
+    checkpoints,
 
     agentTurn,
     modeOf,
@@ -657,6 +668,8 @@ export function createCore(deps: CoreDeps): Core {
           roots: perimeter(),
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
           signal: options.signal,
+          windowTools: new Set(options.clientTools.map((tool) => tool.name)),
+          ...keepOriginals(conversationId, options.messageId),
         },
         check.pause,
         check.outcomes,

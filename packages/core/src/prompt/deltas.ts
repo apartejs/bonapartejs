@@ -91,7 +91,13 @@ const MODE_NOTES: Record<PlayMode, string> = {
     'which are always asked.',
 };
 
-/** The mode the conversation runs in, when it is not the one the model was last told. */
-export function renderModeDelta(mode: PlayMode): Delta {
-  return { kind: 'mode', mode, text: `[mode] ${MODE_NOTES[mode]}` };
+/** Leaving Lecture for a mode that changes things is the person launching the plan the model presented. */
+const LAUNCHED =
+  'The person launched your plan: send update_plan again with its first step in-progress, then carry the plan out, ' +
+  'sending update_plan each time a step moves.';
+
+/** The mode the conversation runs in, when it is not the one the model was last told (`from`). */
+export function renderModeDelta(mode: PlayMode, from?: PlayMode): Delta {
+  const launched = from === 'lecture' && mode !== 'lecture' ? `\n${LAUNCHED}` : '';
+  return { kind: 'mode', mode, text: `[mode] ${MODE_NOTES[mode]}${launched}` };
 }

@@ -9,7 +9,7 @@
  * stops, and says so.
  */
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PlayMode } from '@aparte/bonaparte-shared';
@@ -163,5 +163,21 @@ describe('runAgentTurn', () => {
     const { events, result } = await turn([read, read, read, read], 'impro', { maxToolRounds: 3 });
     expect(events.filter((event) => event.type === 'turn-limit-exceeded')).toEqual([{ type: 'turn-limit-exceeded', scope: 'global', limit: 3 }]);
     expect(result.limited).toBe(true);
+  });
+});
+
+describe('runAgentTurn — after Stop', () => {
+  it('a call the model wrote before Stop never runs: answered as not run, the file untouched', async () => {
+    const stopped = new AbortController();
+    stopped.abort();
+    const { events, answers, root } = await turn(
+      [[{ name: 'edit_file', input: { path: 'a.ts', old_string: 'a = 1', new_string: 'a = 2' } }]],
+      'plume',
+      { signal: stopped.signal },
+    );
+    expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('export const a = 1;\n');
+    expect(types(events)).toEqual(['tool-start', 'tool-aborted']);
+    expect(events[1]).toMatchObject({ type: 'tool-aborted', cause: 'stopped' });
+    expect('results' in answers[0]! ? answers[0].results[0] : null).toMatchObject({ failed: true, content: expect.stringMatching(/stopped/) });
   });
 });

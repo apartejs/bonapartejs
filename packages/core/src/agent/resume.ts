@@ -17,10 +17,13 @@ import { toolRefusal, type StreamRunEvent } from '@aparte/engine';
 import type { JournalEntry, Outcome, PendingCall } from '../journal/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import type { ToolResult } from '../tools/types.js';
+import type { ToolContext, ToolResult } from '../tools/types.js';
 import type { Tickets } from './tickets.js';
 
 export type Pause = Extract<JournalEntry, { kind: 'pending' }>;
+
+/** What the model reads of a call the person stopped before it ran. */
+export const NOT_RUN_STOPPED = 'Not run: the person stopped the turn.';
 
 export type ResumeCheck =
   | { ok: true; pause: Pause; outcomes: Record<string, Outcome> }
@@ -81,6 +84,11 @@ export interface AnswerContext {
   roots: readonly string[];
   nCtx: number;
   signal: AbortSignal;
+  /** The tools the window runs (its `clientTools`): one queued waits for the window when its turn comes. */
+  windowTools?: ReadonlySet<string>;
+  /** Before and after a tool writes a file: its original kept for the turn (checkpoints). */
+  beforeWrite?: ToolContext['beforeWrite'];
+  afterWrite?: ToolContext['afterWrite'];
 }
 
 /** Answers the calls of a pause, in order: their results, and those that must wait again. */
@@ -97,7 +105,15 @@ export async function answerPause(
   const run = async (call: PendingCall, granted = false): Promise<void> => {
     const result = await ctx.registry.run(
       { id: call.toolCallId, name: call.name, input: call.input },
-      { conversationId: ctx.conversationId, roots: ctx.roots, nCtx: ctx.nCtx, signal: ctx.signal, ...(granted ? { granted } : {}) },
+      {
+        conversationId: ctx.conversationId,
+        roots: ctx.roots,
+        nCtx: ctx.nCtx,
+        signal: ctx.signal,
+        ...(granted ? { granted } : {}),
+        ...(ctx.beforeWrite ? { beforeWrite: ctx.beforeWrite } : {}),
+        ...(ctx.afterWrite ? { afterWrite: ctx.afterWrite } : {}),
+      },
     );
     emit(
       result.failed
@@ -117,6 +133,12 @@ export async function answerPause(
   };
 
   for (const call of pause.calls) {
+    if (ctx.signal.aborted) {
+      // Stopped while the pause was answered: nothing more runs.
+      emit({ type: 'tool-aborted', toolCallId: call.toolCallId, cause: 'stopped' });
+      results.push({ toolCallId: call.toolCallId, name: call.name, content: NOT_RUN_STOPPED, failed: true });
+      continue;
+    }
     if (waiting.length > 0) {
       waiting.push({ ...call, reason: 'queued' });
       continue;
@@ -158,7 +180,11 @@ export async function answerPause(
       }
       continue;
     }
-    // Queued behind another call: through the gate afresh.
+    // Queued behind another call: the window's own waits for the window; the core's goes through the gate afresh.
+    if (ctx.windowTools?.has(call.name)) {
+      waiting.push({ ...call, reason: 'external' });
+      continue;
+    }
     const tool = ctx.registry.get(call.name);
     if (!tool) {
       await run(call);

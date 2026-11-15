@@ -93,7 +93,63 @@ async function paused(handler: (request: Request) => Promise<Response>, body: Re
 
 const TOUCH = '<|tool_call>call:touch_test{}<tool_call|>';
 
+describe('what a turn wrote keeps its original (checkpoints)', () => {
+  it('an approved write keeps the file as it was, under the turn of the message — « Revenir » and the rewind read it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-resume-checkpoint-'));
+    dirs.push(dir);
+    const home = join(dir, 'project');
+    await mkdir(home, { recursive: true });
+    await writeFile(join(home, 'notes.txt'), 'old line\n');
+    const Q = '<|"|>';
+    const edit = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}old line${Q},new_string:${Q}new line${Q}}<tool_call|>`;
+    // The project beside bonaparte's data, never in it: bonaparte's data is always asked about.
+    const { core, handler } = await setup(edit, join(dir, 'data'), home);
+    const { ticket, pending } = await paused(handler);
+    await lines(await post(handler, { resume: { ticket, outcomes: { [pending[0]!.toolCallId]: { kind: 'decision', approved: true } } } }));
+    expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('new line\n');
+    expect(await core.checkpoints.changes('c1', 'm1')).toEqual({ files: ['notes.txt'], undone: false });
+    await core.checkpoints.undo('c1', 'm1');
+    expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+  });
+});
+
+describe('what an allowed write keeps', () => {
+  it('a write the mode lets through keeps its original too', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-loop-checkpoint-'));
+    dirs.push(dir);
+    const home = join(dir, 'project');
+    await mkdir(home, { recursive: true });
+    await writeFile(join(home, 'notes.txt'), 'old line\n');
+    const Q = '<|"|>';
+    const edit = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}old line${Q},new_string:${Q}new line${Q}}<tool_call|>`;
+    // The project beside bonaparte's data, never in it: bonaparte's data is always asked about.
+    const { core, handler } = await setup(edit, join(dir, 'data'), home);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'plume' });
+    await lines(await post(handler, {}));
+    expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('new line\n');
+    expect(await core.checkpoints.changes('c1', 'm1')).toEqual({ files: ['notes.txt'], undone: false });
+  });
+});
+
 describe('resuming a paused turn', () => {
+  it("a window's tool queued behind an approval waits for the window when its turn comes, never run as unknown", async () => {
+    const both = '<|tool_call>call:touch_test{}<tool_call|><|tool_call>call:ask_user{question:<|"|>Which one?<|"|>}<tool_call|>';
+    const { handler, touched } = await setup(both);
+    const clientTools = [{ name: 'ask_user', description: 'Ask the person.', inputSchema: { type: 'object' } }];
+    const { ticket, pending } = await paused(handler, { clientTools });
+    expect(pending.map((call) => [call.name, call.reason])).toEqual([
+      ['touch_test', 'approval'],
+      ['ask_user', 'queued'],
+    ]);
+    const outcomes = { [pending[0]!.toolCallId]: { kind: 'decision', approved: true } };
+    const resumed = await lines(await post(handler, { clientTools, resume: { ticket, outcomes } }));
+    expect(touched).toHaveLength(1);
+    const ended = resumed.at(-1)!;
+    expect(ended.type).toBe('run-suspended');
+    expect(ended['pending']).toMatchObject([{ name: 'ask_user', reason: 'external' }]);
+    expect(resumed.map((line) => line.type)).not.toContain('tool-failed');
+  });
+
   it('a write outside the project, asked and allowed, is written where the card showed it', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-resume-outside-'));
     dirs.push(dir);

@@ -358,6 +358,8 @@ export class ConversationEngine {
       if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       meta = await this.deps.store.update(id, { instructions });
     }
+    // A model turn left open by calls nobody answered (a limit, a pause given up): closed before anything else.
+    if (!input.resume) await closeOpenTurn(journal, family);
     if (!input.resume && input.tools) {
       // The tools the window runs (ask_user) are not in the frozen prompt: told by a note when they change.
       const windowTools = input.tools.defs.filter((tool) => tool.where === 'window');
@@ -369,7 +371,7 @@ export class ConversationEngine {
       const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
       const told = lastToldMode(journal.entries());
       if (running !== told) {
-        const delta = renderModeDelta(running);
+        const delta = renderModeDelta(running, told);
         await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       }
     }
@@ -620,5 +622,36 @@ function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
     if (entry.kind === 'delta' && entry.delta.windowTools) return entry.delta.windowTools;
   }
   return [];
+}
+
+/** What the model reads of a call its turn left unanswered: the conversation moved on without it. */
+export const NOT_RUN_UNANSWERED = 'Not run: the turn ended before this call was answered.';
+
+/**
+ * A model turn that ended on calls nobody answered — the round limit reached, a pause the person
+ * left — is closed before the next message: each call answered as not run, then the turn closed,
+ * so the prompt keeps the template's shape (a Gemma turn that ended on a call is still open).
+ */
+async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<void> {
+  const last = journal.entries().at(-1);
+  let open: { toolCallId: string; name: string }[];
+  if (last?.kind === 'pending') {
+    open = last.calls.map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
+  } else if (last?.kind === 'assistant' && family.endAssistant(last.raw) === '') {
+    const demux = family.createDemux();
+    open = [...demux.push(last.raw), ...demux.flush()]
+      .filter((piece): piece is Extract<DemuxEvent, { type: 'tool-call' }> => piece.type === 'tool-call')
+      .map((piece) => ({ toolCallId: `call-${randomUUID()}`, name: piece.name }));
+  } else {
+    return;
+  }
+  const results: ToolResult[] = open.map((call) => ({ ...call, content: NOT_RUN_UNANSWERED, failed: true }));
+  if (results.length > 0) await journal.append({ kind: 'tool-results', results, rendered: family.renderToolResults(results) });
+  await journal.append({
+    kind: 'assistant',
+    raw: '',
+    stopped: 'user',
+    rendered: family.beginAssistant({ thinking: false, continuing: true }) + family.endAssistant(''),
+  });
 }
 

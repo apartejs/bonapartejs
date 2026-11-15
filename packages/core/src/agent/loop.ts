@@ -22,7 +22,8 @@ import type { CallsAnswer, ModelCall, TurnEvent, TurnInput, TurnResult } from '.
 import type { PendingCall } from '../journal/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolRegistry } from '../tools/registry.js';
-import type { ToolDef, ToolResult } from '../tools/types.js';
+import type { ToolContext, ToolDef, ToolResult } from '../tools/types.js';
+import { NOT_RUN_STOPPED } from './resume.js';
 
 export const DEFAULT_MAX_TOOL_ROUNDS = 25;
 
@@ -45,6 +46,9 @@ export interface AgentTurnContext {
   /** What a paused turn is resumed with (signed, task 4.5). */
   ticket(pending: readonly PendingCall[]): string;
   signal: AbortSignal;
+  /** Before and after a tool writes a file: its original kept for the turn (checkpoints). */
+  beforeWrite?: ToolContext['beforeWrite'];
+  afterWrite?: ToolContext['afterWrite'];
 }
 
 /**
@@ -77,6 +81,12 @@ export async function runAgentTurn(
         continue;
       }
       emit({ type: 'tool-start', toolCallId: call.id, name: call.name, input: call.input });
+      if (ctx.signal.aborted) {
+        // The person stopped the turn: what the model wrote before is answered, never run.
+        emit({ type: 'tool-aborted', toolCallId: call.id, cause: 'stopped' });
+        results.push({ toolCallId: call.id, name: call.name, content: NOT_RUN_STOPPED, failed: true });
+        continue;
+      }
       if (windowTools.has(call.name)) {
         pending.push({ toolCallId: call.id, name: call.name, input: call.input, reason: 'external' });
         continue;
@@ -103,7 +113,14 @@ export async function runAgentTurn(
       }
       const result = await ctx.registry.run(
         { id: call.id, name: call.name, input: call.input },
-        { conversationId: ctx.conversationId, roots: ctx.roots, nCtx: ctx.nCtx, signal: ctx.signal },
+        {
+          conversationId: ctx.conversationId,
+          roots: ctx.roots,
+          nCtx: ctx.nCtx,
+          signal: ctx.signal,
+          ...(ctx.beforeWrite ? { beforeWrite: ctx.beforeWrite } : {}),
+          ...(ctx.afterWrite ? { afterWrite: ctx.afterWrite } : {}),
+        },
       );
       emit(
         result.failed
