@@ -59,10 +59,21 @@ A call to ask pauses the turn with a signed ticket; the pause survives a
 restart. The window shows what a call would change — its diff — before
 « Autoriser », draws each call's line (« Lu notes.txt · 2 lignes »,
 « Modifié » with its change behind it), switches the mode, presents a plan
-in Lecture and asks the agent's questions in the composer's place. A
-section below that names something not built yet says so: projects reach
-the conversations with phase 5 — until then the tools work in the home
-folder.
+in Lecture and asks the agent's questions in the composer's place.
+Phase 5 is done but its deck of live chats (5.5, waiting on aparté:
+apartejs/aparte#226): the shell. Projects are made from a folder (what it
+holds said first) and reach their conversations — their folders, their
+mode, their instructions. The sidebar lists them by project, then
+« Discussions », each row saying where its memory is and whether it waits
+for the person; Ctrl B, or a window under 1 100 px, folds it into named
+icons. The header says the title, the project and the memory, with
+« Plus d'actions » on aparté's keyboard. « / » and « @ » in the composer;
+« Rechercher » (Ctrl K). The settings: Général, Apparence, Moteur et
+mémoire, Modèles, Permissions, and a project's page. One app per data
+folder; closing the window keeps it in the notification area; the last
+conversation reopens; a conversation is deleted saying what goes, and the
+conversations export as Markdown. A section below that names something not
+built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -369,6 +380,33 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   states live under `<data>/kv-slots/`, the conversations under
   `<data>/conversations/<id>/` (`meta.json`, one `<branch>.jsonl` per branch,
   `branches.json`, aparté's `aparte.json`).
+- **The shell** (`renderer/src/shell/`): `.aparte-app-shell` holds the
+  sidebar (`Sidebar.tsx`) or its rail (`Rail.tsx`), the header
+  (`ConversationHeader.tsx`) and the chat. A project is a header of ours
+  above a `flat` aparté list of its conversations (aparté groups by date
+  only, apartejs/aparte#229). What each row shows comes from
+  `conversations.status` (project, memory, waiting), asked again when
+  something may have changed it — the bridge pushes nothing
+  (`shell/statuses.ts`); the memory dot is a stylesheet regenerated on the
+  rows' `data-conv-id`, its name CSS alt text read after the title. aparté's
+  list draws itself again for any new array, closing an open row menu: give
+  it the same array while nothing it draws changed. Menus and tabs get
+  aparté's keyboard through `aparte/kit.ts` (`useMenu`, which must be told
+  when its elements arrive).
+- **The settings** (`renderer/src/settings/`): over the shell, which stays
+  mounted and hidden (a reply goes on). The app's settings live in the
+  core's `SettingsStore` (`config/global.json`, under `settings`), checked
+  against `APP_SETTINGS`; a change is said on the window
+  (`bonaparte-setting`), the look is applied to the root
+  (`theme/appearance.ts`), the language by asking the main process again
+  (`bonaparte-locale`) — an open conversation hears it as a note at its next
+  message. The permission engine reads `askBeforeNetwork` and `alwaysAsk`
+  (global, and a project's own list).
+- **One app per data folder** (`main/startup.ts`): the window's profile is
+  `<data>/window`, and Electron's single-instance lock with it — a test run
+  never meets the person's app. A test run puts no icon in the notification
+  area (it gets `globalThis.__bonaparteTray`), never writes « launch at
+  login », and opens no folder (`__openedDataFolder`).
 - **Model families** (`packages/core/src/families/`): one layer per family —
   turns, control tokens, stop strings, the tool convention, the lazy tool
   grammar, the stream demux. **Gemma 4** is the default of the product,
@@ -506,12 +544,38 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `packages/app/out` holds: a change of the core needs the core built,
   then the app (`pnpm build`, or `test:e2e`, which builds). A test « seen
   red » by breaking the core without rebuilding the app proves nothing.
+- **The kit gives `.aparte-sidebar`'s children its full width** (for its
+  fold): a sidebar with margins overflows unless its children get
+  `min-width: 0`. And `display: grid` on `.aparte-app-shell` beats the
+  `hidden` attribute: hide it with a rule of ours.
+- **`<AparteUi props>` is compared by identity, and `aparte-triggers`
+  closes its list whenever `triggers` is set again** (apartejs/aparte#232):
+  an inline props object closes « @ » under the person's fingers. Memoize
+  it.
+- **A radio hidden by a screen-reader-only class is not clickable** for a
+  test (nor by any tool that targets it): draw it transparent over its
+  label instead.
+- **A test that relaunches on the same data folder** must keep what the app
+  wrote there: the fixture merges the settings it finds.
 
 ## Real-model smoke results
 
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
+- **2026-11-15, phase 5 — 12/12 green.** Same model and build (Gemma 4
+  26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`,
+  K/V f16, one slot), loaded in 14 s, after checking the free memory of
+  Windows (67.1 GiB, for 16.7 GiB announced). The ten cases of phase 4 again
+  (restore of 1,252 tokens in 1.8 s, all served by the cache; branch 1,276 of
+  1,284; seed 1,171 of 1,171; the agent's last round 1,275 of 1,298; Stop
+  63 ms), and two of phase 5: the reply language changed mid-conversation is
+  a note at the next message — the model answers « sept », then
+  « fourteen », 1,256 of the 1,306 tokens served by the cache (the frozen
+  prompt untouched); and the memory survives « Décharger » and
+  « Redémarrer » — unloaded, reloaded, the conversation is restored in
+  571 ms and still knows its code word; restarted in 10.1 s, restored in
+  1,045 ms.
 - **2026-11-15, phase 4 — 10/10 green.** Same model and build (Gemma 4
   26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`),
   loaded in 20 s, after checking the free memory of Windows (32.7 GiB, for

@@ -1600,3 +1600,12 @@ body {
   color: var(--aparte-text-muted);
 }
 
+
+/* The kit's header title takes the free width: ours is followed by its project, as the board draws it. */
+.conversation-header {
+  background: var(--aparte-bg);
+}
+
+.conversation-header .conversation-header__title {
+  flex: 0 1 auto;
+}

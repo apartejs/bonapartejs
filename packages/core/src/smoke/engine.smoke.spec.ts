@@ -80,6 +80,8 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
   let home: string;
   let core: Core;
   let engine: Engine;
+  // The language the replies are asked in: the interface's, changed by the person (Settings, General).
+  let replyLanguage = 'English';
 
   /** One answer under the lazy tool grammar, read by the family's demux. */
   async function answer(user: string, tools: readonly ToolDef[]): Promise<{ text: string; events: DemuxEvent[] }> {
@@ -120,6 +122,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
       home,
       port: PORT,
       modelRoots: [{ dir: dirname(MODEL!), source: 'manual' }],
+      replyLanguage: () => replyLanguage,
       env: { ...process.env, ...(LLAMA ? { BONAPARTE_LLAMA_BIN: LLAMA } : {}) },
       // Only what matters: the rest of llama.cpp's log would drown the verdict.
       logger: (line) => {
@@ -425,5 +428,46 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     expect(second.map((event) => event.type)).toEqual(expect.arrayContaining(['tool-approved', 'tool-resolved', 'run-done']));
     expect(await readFile(join(home, 'todo.txt'), 'utf8')).toBe('buy bread\n');
   }, TIMEOUT);
-});
 
+  it('a change of the reply language is a note at the next message: the answer follows it, the prefix is kept', async () => {
+    replyLanguage = 'French';
+    try {
+      const first = await turnIn('smoke-language', 'How many days are in a week? Answer with the number written in words, and nothing else.');
+      replyLanguage = 'English';
+      const second = await turnIn('smoke-language', 'And in two weeks? Answer with the number written in words, and nothing else.');
+      console.log(
+        `[smoke] reply language: « ${first.text.trim().slice(0, 40)} » then « ${second.text.trim().slice(0, 40)} »; ` +
+          `${second.usage.cacheReadTokens} of ${second.usage.inputTokens} tokens served by the cache`,
+      );
+      expect(first.text.toLowerCase()).toContain('sept');
+      expect(second.text.toLowerCase()).toContain('fourteen');
+      // The note is appended: everything read before is still the start of the prompt.
+      expect(second.usage.cacheReadTokens ?? 0).toBeGreaterThanOrEqual(first.usage.inputTokens - CHECKPOINT_TAIL);
+    } finally {
+      replyLanguage = 'English';
+    }
+  }, TIMEOUT);
+
+  it('unloading saves the memory in the engine; reloaded or restarted, the conversation is restored, not read again', async () => {
+    await turnIn('smoke-unload', 'Remember this code word: QUINCE. Reply with OK and nothing else.');
+    await core.unloadModel();
+    expect(await core.engineState()).toMatchObject({ status: 'stopped' });
+    await core.loadModel(MODEL!);
+    engine = (await core.engine())!;
+    const reloaded = await turnIn('smoke-unload', 'What is the code word I gave you? Reply with the word only.');
+    const started = Date.now();
+    await core.restartEngine();
+    const restartSeconds = (Date.now() - started) / 1000;
+    engine = (await core.engine())!;
+    const restarted = await turnIn('smoke-unload', 'Say the code word once more, the word only.');
+    console.log(
+      `[smoke] unload → reload: restored in ${reloaded.restoreMs?.toFixed(0)} ms, « ${reloaded.text.trim().slice(0, 30)} »; ` +
+        `restart in ${restartSeconds.toFixed(1)} s, restored in ${restarted.restoreMs?.toFixed(0)} ms, « ${restarted.text.trim().slice(0, 30)} »`,
+    );
+    for (const turned of [reloaded, restarted]) {
+      expect(turned.steps).toContain('restore:end');
+      expect(turned.steps.filter((step) => step.startsWith('reread'))).toEqual([]);
+      expect(turned.text.toUpperCase()).toContain('QUINCE');
+    }
+  }, TIMEOUT);
+});
