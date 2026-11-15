@@ -12,7 +12,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
-import { focusComposer, sendWhenFree } from './aparte/composer';
+import { focusComposer, prefill, sendWhenFree } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
@@ -25,6 +25,7 @@ import { ApprovalCard } from './chat/ApprovalCard';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { ModeSwitch } from './chat/ModeSwitch';
 import { NewProject } from './dialogs/NewProject';
+import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
 import { EngineCard } from './shell/EngineCard';
@@ -52,6 +53,18 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     project.current = activeProject;
   }, [activeProject]);
   const [creatingProject, setCreatingProject] = useState(false);
+  // « Rechercher » (Ctrl K): opened from anywhere in the window.
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearching(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const streamRunner = useMemo(
     () => createConversationRunner({ mode: () => chosen.current, project: () => project.current?.id ?? null }),
     [],
@@ -178,6 +191,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         >
           {messages.conversations.new}
         </button>
+        <button type="button" className="aparte-btn aparte-btn--surface bonaparte-search" onClick={() => setSearching(true)}>
+          <span>{messages.search.open}</span>
+          <kbd className="aparte-kbd">{messages.search.shortcut}</kbd>
+        </button>
         <button type="button" className="aparte-btn aparte-btn--surface bonaparte-new-project" onClick={() => setCreatingProject(true)}>
           {messages.newProject.open}
         </button>
@@ -190,6 +207,26 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         />
         <EngineCard engine={engine} messages={messages} />
       </aside>
+      <SearchPalette
+        open={searching}
+        messages={messages}
+        conversationId={conversationId ?? null}
+        onClose={() => setSearching(false)}
+        onOpenConversation={(id) => {
+          setSearching(false);
+          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id } }));
+        }}
+        onNewConversation={(text) => {
+          setSearching(false);
+          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+          // After the chat has cleared for the new conversation.
+          setTimeout(() => prefill(text), 0);
+        }}
+        onInsert={(text) => {
+          setSearching(false);
+          prefill(text);
+        }}
+      />
       <NewProject
         open={creatingProject}
         messages={messages}

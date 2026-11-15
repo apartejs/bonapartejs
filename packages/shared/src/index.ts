@@ -9,6 +9,8 @@ export { AGENT_ENDPOINT, APP_ORIGIN, APP_SCHEME } from './agent.js';
 export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';
+export { searchQuery, searchResultSchema } from './ipc/search.js';
+export type { SearchResultView } from './ipc/search.js';
 export {
   projectFactsSchema,
   projectSchema,

@@ -299,3 +299,34 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// « Rechercher » (Ctrl K): two conversations, the words found in the first one.
+const SEARCH = {
+  fr: { first: 'Le parseur des heures se trompe sur les fuseaux', second: 'Ajouter un export CSV', field: 'Rechercher partout', words: 'parseur', new: 'Nouvelle conversation' },
+  en: { first: 'The hour parser gets the time zones wrong', second: 'Add a CSV export', field: 'Search everywhere', words: 'parser', new: 'New conversation' },
+};
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`searching, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = SEARCH[locale];
+      const { page } = await launch({ locale, engine: { responder: () => 'ok' } });
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      await ui.send(words.first);
+      await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+      await page.getByRole('button', { name: words.new }).click();
+      await ui.send(words.second);
+      await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+
+      await page.keyboard.press('Control+K');
+      await page.getByRole('combobox', { name: words.field }).fill(words.words);
+      await expect(page.getByRole('option').locator('mark').first()).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `search-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}

@@ -50,6 +50,15 @@ describe('ConversationIndex', () => {
     expect(found.conversations[0]!.title).toBe('Les heures');
   });
 
+  it('keeps the passage inside the message where the words were said', async () => {
+    const store = new ConversationStore(await folder('bp-index-'));
+    await conversation(store, 'Les heures', [['Le parseur des heures se trompe', 'Je regarde.']]);
+    const index = new ConversationIndex(store, () => familyLayer('gemma'));
+    const excerpt = (await index.search('heures se')).conversations[0]!.excerpt;
+    expect(excerpt.before).toBe('Le parseur des ');
+    expect(excerpt.after).toBe(' trompe');
+  });
+
   it('a turn that ends is found at once', async () => {
     const store = new ConversationStore(await folder('bp-index-'));
     const meta = await conversation(store, 'Vide', []);

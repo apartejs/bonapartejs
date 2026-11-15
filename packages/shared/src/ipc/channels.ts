@@ -24,6 +24,7 @@ import {
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
 import { projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
+import { searchQuery } from './search.js';
 
 export const CHANNELS = [
   appInfo,
@@ -54,4 +55,5 @@ export const CHANNELS = [
   projectsCreate,
   projectsUpdate,
   projectsRemove,
+  searchQuery,
 ] as const;

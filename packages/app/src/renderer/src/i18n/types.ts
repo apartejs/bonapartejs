@@ -149,6 +149,27 @@ export interface Messages {
   };
   /** aparté's own words that bonaparte says its way (« tu », the board's wording): the question, the list. */
   aparteWords: Record<AparteWord, string>;
+  /** « Rechercher » (board « Rechercher (Ctrl K) »), and its opener. */
+  search: {
+    open: string;
+    shortcut: string;
+    title: string;
+    field: string;
+    escape: string;
+    results: string;
+    conversations: string;
+    files: string;
+    actions: string;
+    untitled: string;
+    inCode(words: string): string;
+    /** What a new conversation asks when the person searches the code. */
+    inCodeAsk(words: string): string;
+    newOn(words: string): string;
+    hintMove: string;
+    hintOpen: string;
+    hintClose: string;
+    scope: string;
+  };
   /** The dialog « Nouveau projet » (board « Nouveau projet »), and its opener. */
   newProject: {
     open: string;

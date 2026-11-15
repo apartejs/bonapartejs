@@ -60,13 +60,18 @@ export class ConversationIndex {
       const inText = text.toLowerCase().indexOf(needle);
       if (inTitle < 0 && inText < 0) continue;
       const [source, at] = inText >= 0 ? [text, inText] : [title, inTitle];
+      // The passage stays in its line: one message's words, never the next message's.
+      const lineStart = source.lastIndexOf('\n', at) + 1;
+      const end = at + words.length;
+      const lineEnd = source.indexOf('\n', end);
+      const stop = lineEnd < 0 ? source.length : lineEnd;
       conversations.push({
         id,
         title,
         excerpt: {
-          before: source.slice(Math.max(0, at - AROUND), at).replace(/\s+/g, ' ').trimStart(),
-          match: source.slice(at, at + words.length),
-          after: source.slice(at + words.length, at + words.length + AROUND).replace(/\s+/g, ' ').trimEnd(),
+          before: source.slice(Math.max(lineStart, at - AROUND), at).replace(/\s+/g, ' ').trimStart(),
+          match: source.slice(at, end),
+          after: source.slice(end, Math.min(stop, end + AROUND)).replace(/\s+/g, ' ').trimEnd(),
         },
       });
       if (conversations.length >= MAX_CONVERSATIONS) break;

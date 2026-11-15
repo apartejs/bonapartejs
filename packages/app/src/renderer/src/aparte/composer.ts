@@ -22,6 +22,15 @@ export function sendAsPerson(text: string): boolean {
   return true;
 }
 
+/** Puts a text in the composer, the cursor after it: the person sends it, or changes it first. */
+export function prefill(text: string): boolean {
+  const field = composer();
+  if (!field) return false;
+  field.setValue(text);
+  field.focus();
+  return true;
+}
+
 /** Gives the person the composer. */
 export function focusComposer(): void {
   composer()?.focus();
