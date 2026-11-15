@@ -1,5 +1,5 @@
 import { setupCommands } from '@aparte/plugin-triggers/commands';
-import { AparteChat, useAparteClient, useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
+import { useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
 import {
   conversationsMemory,
   engineState,
@@ -15,7 +15,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
-import { focusComposer, prefill, sendWhenFree } from './aparte/composer';
+import { focusComposer, prefill, sendWhenFree, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
@@ -25,6 +25,8 @@ import { speakAsBonaparte } from './aparte/words';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
+import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
+import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { ComposerToolbar } from './chat/ComposerToolbar';
 import { NewProject } from './dialogs/NewProject';
@@ -36,15 +38,15 @@ import { Rail } from './shell/Rail';
 import { ENGINE_CHANGED } from './settings/EngineMemory';
 import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
 import { Sidebar } from './shell/Sidebar';
-import { useConversationStatuses, useWaitingMarks } from './shell/statuses';
+import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
 
 /**
  * The conversations and the one open: aparté's conversation manager, kept by
- * the core through the bridge; aparté's chat on the conversation open, each
- * turn posted by aparté's runner to the conversation it belongs to.
- * Provisional layout: the shell of the canvas comes with task 5.6.
+ * the core through the bridge; a deck of aparté's chats, one per live
+ * conversation (task 5.5), each turn posted by its chat's runner to the
+ * conversation it belongs to. The conversation open is the shown chat's.
  */
 /**
  * The mode a new conversation starts in from a default: Impro read from a setting or a project is no
@@ -63,9 +65,13 @@ function playModeOf(value: unknown): PlayMode | null {
 const NARROW = '(max-width: 1099px)';
 
 function Workspace({ messages, locale, engine }: { messages: Messages; locale: Locale; engine: EngineStateView }) {
-  // The conversation open is the manager's: the chat is not driven by an id the page gives it back
-  // (apartejs/aparte#212 — that reloads the conversation in the middle of its first reply).
-  const { init, activeConversations, activeId: conversationId, updateTitle, pin, unpin, archive, delete: remove } = useConversationManager();
+  // One manager for every chat; its single `activeId` names whichever chat moved last, so the
+  // conversation open is the shown chat's (aparté's « several live chats »).
+  const { init, activeConversations, updateTitle, pin, unpin, archive, delete: remove } = useConversationManager();
+  const [deck, setDeck] = useState<Deck>(newDeck);
+  const conversationId = shownConversation(deck);
+  // Each live chat's handle: what it holds, whether it works, its composer.
+  const handles = useRef(new Map<string, AparteChatImperativeApi>()).current;
   const [memory, setMemory] = useState<Announcement>(null);
 
   // The mode the switch shows, read at each turn: a conversation the turn creates runs in it.
@@ -201,19 +207,42 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // The resolver owns the decision: aparté's page policy is never consulted.
   const approvals = useMemo(() => createApprovalsStore(), []);
   const open = useRef<string | null>(null);
-  const chat = useRef<AparteChatImperativeApi>(null);
-  useEffect(() => {
-    open.current = conversationId ?? null;
-  }, [conversationId]);
+  open.current = conversationId;
   // A call paused before a reload is asked again as its conversation loads: aparté names its turn.
   const approvalResolver = useMemo(() => createApprovalResolver(approvals), [approvals]);
-  useAparteClient({ streamRunner, approvalResolver });
   const [asked, setAsked] = useState(0);
   useEffect(() => approvals.subscribe(() => setAsked((count) => count + 1)), [approvals]);
   const request = approvals.list(conversationId ?? null)[0];
-  // aparté's gesture for « a new conversation »: the chat closes the one open.
-  const newConversation = (): void => {
-    window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+  // What the core says of each conversation, as the sidebar shows it — read by the deck too.
+  const statusesNow = useRef<Statuses>({});
+  // A chat lives on while it works or waits for the person: a reply written, a question, an approval.
+  const worksOrWaits = (chat: LiveChat): boolean => {
+    const handle = handles.get(chat.key);
+    if (handle?.isStreaming() || (handle?.getComposer() as Composer | null | undefined)?.panelActive) return true;
+    if (chat.conversationId === null) return false;
+    return approvals.list(chat.conversationId).length > 0 || statusesNow.current[chat.conversationId]?.waiting === true;
+  };
+  // Opens a conversation — a new one for null —: its chat shown, mounted first if it was not living.
+  const goTo = (id: string | null): void => setDeck((was) => prune(openIn(was, id), worksOrWaits));
+  const goToRef = useRef(goTo);
+  goToRef.current = goTo;
+  const newConversation = (): void => goTo(null);
+  // The list drives the deck, not a chat: the page shows the chat of the conversation picked.
+  useEffect(() => {
+    const picked = (event: Event): void => {
+      // `id` is null for a new conversation, whatever the event's type says (apartejs/aparte#235).
+      const detail = (event as CustomEvent<{ id?: string | null; targetId?: string }>).detail;
+      if (detail?.targetId === CHATS_TARGET) goToRef.current(detail.id ?? null);
+    };
+    window.addEventListener('aparte-conversation-select', picked);
+    return () => window.removeEventListener('aparte-conversation-select', picked);
+  }, []);
+  // The composer of the chat that holds a conversation, shown or not.
+  const composerOf = (id: string | null): Composer | null => {
+    for (const handle of handles.values()) {
+      if (id !== null && handle.getConversationId() === id) return handle.getComposer() as Composer | null;
+    }
+    return null;
   };
   // The conversation open, as aparté's manager lists it: its title, its pin.
   const openConversation = activeConversations.find((conversation) => conversation.id === conversationId) ?? null;
@@ -223,6 +252,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => setupCommands({ onNew: () => startOver.current() }), []);
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
+  statusesNow.current = statuses;
   useWaitingMarks(statuses);
   const projectOf = (id: string): string | null => statuses[id]?.projectId ?? bornIn.current.get(id) ?? null;
   // A new conversation starts in the project of the conversation open — as the projects now are.
@@ -289,11 +319,23 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       .then((reopen) => {
         // Not over a conversation the person opened, or started, meanwhile.
         if (reopen === true && open.current === null) {
-          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: last.id } }));
+          goToRef.current(last.id);
         }
       })
       .catch(() => undefined);
   }, [listed, activeConversations, conversationId]);
+  // After a restart, the conversations that wait for the person are mounted, not shown: their chat
+  // asks again what was paused (resumeDeferred), and the card is there when they are opened.
+  const pausedMounted = useRef(false);
+  useEffect(() => {
+    if (!listed || pausedMounted.current) return;
+    if (listedIds.length > 0 && Object.keys(statuses).length === 0) return;
+    pausedMounted.current = true;
+    const waiting = Object.entries(statuses)
+      .filter(([, status]) => status.waiting)
+      .map(([id]) => id);
+    if (waiting.length > 0) setDeck((was) => mountHidden(was, waiting));
+  }, [listed, listedIds, statuses]);
 
   useEffect(() => registerStepLabels(messages), [messages]);
   useEffect(() => registerToolLines(messages), [messages]);
@@ -313,8 +355,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         // and only into the conversation of the plan.
         void (id ? bridge.invoke(modesSet, { id, mode: next }) : Promise.resolve())
           .catch(() => undefined)
-          // The chat's own conversation, as it holds it now: React may not have drawn the one just loaded.
-          .then(() => sendWhenFree(messages.plan.goAhead, () => (chat.current?.getConversationId() ?? null) === id));
+          // Into the chat of the plan's conversation, shown or not, once it is free.
+          .then(() => sendWhenFree(messages.plan.goAhead, () => composerOf(id)));
       },
       adjust: () => focusComposer(),
     });
@@ -364,7 +406,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           onExpand={toggleSidebar}
           onNewConversation={newConversation}
           onSearch={() => setSearching(true)}
-          onOpen={(id) => window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id } }))}
+          onOpen={(id) => goTo(id)}
           onSettings={() => setSettingsPage('general')}
         />
       ) : (
@@ -391,11 +433,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         onClose={() => setSearching(false)}
         onOpenConversation={(id) => {
           setSearching(false);
-          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id } }));
+          goTo(id);
         }}
         onNewConversation={(text) => {
           setSearching(false);
-          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+          goTo(null);
           // After the chat has cleared for the new conversation.
           setTimeout(() => prefill(text), 0);
         }}
@@ -417,7 +459,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           chosen.current = startingMode(made.defaultMode);
           setMode(startingMode(made.defaultMode));
           picked.current = false;
-          window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+          goTo(null);
         }}
       />
       <ConversationHeader
@@ -433,27 +475,26 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         onArchive={() => {
           if (!openConversation) return;
           void archive(openConversation.id);
-          newConversation();
+          setDeck((was) => forget(was, openConversation.id));
         }}
         onDelete={() => {
           if (!openConversation) return;
           void remove(openConversation.id);
-          newConversation();
+          setDeck((was) => forget(was, openConversation.id));
         }}
       />
       <div className="aparte-app-shell__main bonaparte-main">
-      <AparteChat
-        ref={chat}
-        onConversationCreated={(id) => {
+      <ChatDeck
+        deck={deck}
+        messages={messages}
+        streamRunner={streamRunner}
+        approvalResolver={approvalResolver}
+        handles={handles}
+        onCreated={(key, id) => {
+          setDeck((was) => created(was, key, id));
           bornHere.current.add(id);
           bornIn.current.set(id, project.current?.id ?? null);
         }}
-        className="bonaparte-chat"
-        centerWhenEmpty
-        placeholder={messages.composer.placeholder}
-        emptyState={<p className="bonaparte-empty">{messages.chat.empty}</p>}
-        // The window is one page: a link in a reply never takes it away (the main process refuses too).
-        onLinkClick={(_detail, event) => event.preventDefault()}
         aboveComposer={
           request ? (
             <ApprovalCard

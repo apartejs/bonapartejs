@@ -60,8 +60,7 @@ restart. The window shows what a call would change — its diff — before
 « Autoriser », draws each call's line (« Lu notes.txt · 2 lignes »,
 « Modifié » with its change behind it), switches the mode, presents a plan
 in Lecture and asks the agent's questions in the composer's place.
-Phase 5 is done but its deck of live chats (5.5, waiting on aparté:
-apartejs/aparte#226): the shell. Projects are made from a folder (what it
+Phase 5 is done: the shell. Projects are made from a folder (what it
 holds said first) and reach their conversations — their folders, their
 mode, their instructions. The sidebar lists them by project, then
 « Discussions », each row saying where its memory is and whether it waits
@@ -320,15 +319,27 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   is fixed. **aparté 1.9** (2026-11-15) gives the runner the conversation of
   each turn (`endpoint: ({ conversationId }) => …`), labels for step keys
   (`registerStepLabel`), `<AparteConversationList manage>` and
-  `<AparteChat onLinkClick>`. bonaparte runs on 1.9.0. One trap is open
-  (apartejs/aparte#212): giving `onConversationCreated`'s id back to
-  `<AparteChat conversationId>` reloads the conversation in the middle of its
-  first reply — the open conversation is `useConversationManager().activeId`,
-  the chat stays uncontrolled, and « Nouvelle conversation » is aparté's
-  `aparte-conversation-select` event with `{ id: null }`. Another
-  (apartejs/aparte#213): after a failed turn, aparté drops the failed message
-  from the next request, then joins it to the following one — the handler's
-  comparison with the journal takes such an earlier message as the journal's.
+  `<AparteChat onLinkClick>`. **aparté 1.10** (2026-11-15) gives each chat
+  its own conversation on one manager (`getConversationId()`, the guide
+  « Several live chats »), the turn to `approvalResolver`
+  (`{ conversationId, messageId, targetId }`), a stable history after a
+  failed turn, `renderMeta` on the list's rows, React components for the
+  plugins' elements (`createAparteElement`), `.aparte-segmented` and the
+  kit's hover tooltip. bonaparte runs on 1.10.0. One trap is open
+  (apartejs/aparte#236): a chat mounted with `conversationId` draws nothing
+  of it until `setConversationId(id)` is called on its handle — the deck
+  does it as each chat mounts.
+- **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
+  one `<AparteChat>` and one client per live conversation — the one shown,
+  those that work or wait for the person, the four seen last — each bound to
+  its conversation for its whole life; the conversation open is the shown
+  chat's, never the manager's `activeId`. The list's `target` is the deck
+  (`bonaparte-chats`), so it opens nothing itself: every opening goes through
+  `goTo(id)`. What only the person acts on (the approval card, the toolbar)
+  is given to the chat shown; the composer helpers aim at the shown chat
+  unless one is named, and the end-to-end fixture reads the shown chat.
+  After a restart, the conversations that wait are mounted hidden, so their
+  pause is asked again.
 - **The agent** (`packages/core/src/agent/`, `tools/`, `permissions/`,
   `project/`): `runAgentTurn` runs the tool rounds inside the conversation
   engine's turn, in the slot it holds; the registry passes writes and

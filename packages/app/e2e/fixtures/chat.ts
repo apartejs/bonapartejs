@@ -37,7 +37,8 @@ export interface ChatDriver {
 }
 
 export function chat(page: Page): ChatDriver {
-  const root = page.locator('[data-aparte-chat]');
+  // Several chats live in the page (task 5.5): the one shown.
+  const root = page.locator('.bonaparte-live-chat:not([hidden]) [data-aparte-chat]');
   const editor = root.getByRole('textbox');
   const sendButton = root.locator('aparte-composer-send[data-act="send"] button');
   const replies = root.locator('aparte-chat-bubble[data-role="assistant"]');

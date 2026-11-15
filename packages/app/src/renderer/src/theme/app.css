@@ -27,6 +27,12 @@ body {
   min-height: 0;
 }
 
+/* The deck of live chats (task 5.5): its wrappers take no box, and a chat not shown takes none either. */
+.bonaparte-chats,
+.bonaparte-live-chat:not([hidden]) {
+  display: contents;
+}
+
 /* The line of an empty conversation sits above the composer, on its axis. */
 .bonaparte-empty {
   margin: 0 auto;
