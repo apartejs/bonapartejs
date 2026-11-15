@@ -52,6 +52,11 @@ type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt'>>;
 
 /** The window's document of a conversation, beside its journal. */
 const DOCUMENT = 'aparte.json';
+/** The document of a branch not shown: `aparte.<branch>.json` — a branch id is ours, never a path. */
+const branchDocument = (branchId: string): string => {
+  if (!/^[\w-]{1,64}$/.test(branchId)) throw new Error(`Not a branch: ${branchId}`);
+  return `aparte.${branchId}.json`;
+};
 /** The draft of the composer, beside it. */
 const DRAFT = 'draft.txt';
 const MAX_DRAFT_CHARS = 1024 * 1024;
@@ -188,6 +193,30 @@ export class ConversationStore {
     } catch {
       return null;
     }
+  }
+
+  /** A branch left (another shown instead): the window's document of it kept apart, for when it comes back (task 7.2). */
+  async keepDocument(id: string, branchId: string): Promise<void> {
+    await this.writes.run(idOf(id), async () => {
+      const text = await readFile(join(this.dir, idOf(id), DOCUMENT), 'utf8').catch(() => null);
+      if (text !== null) await writeFile(join(this.dir, idOf(id), branchDocument(branchId)), text, 'utf8');
+    });
+  }
+
+  /**
+   * The branch shown now: its document as it was left, if it was kept — otherwise none, and the journal
+   * is read again (task 5.4). True when it had one.
+   */
+  async takeDocument(id: string, branchId: string): Promise<boolean> {
+    return this.writes.run(idOf(id), async () => {
+      const text = await readFile(join(this.dir, idOf(id), branchDocument(branchId)), 'utf8').catch(() => null);
+      if (text === null) {
+        await rm(join(this.dir, idOf(id), DOCUMENT), { force: true });
+        return false;
+      }
+      await writeFile(join(this.dir, idOf(id), DOCUMENT), text, 'utf8');
+      return true;
+    });
   }
 
   /** The conversation whole: its card and its journal. */

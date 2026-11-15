@@ -178,6 +178,16 @@ describe('going back before a message', () => {
     expect(await rewind.undo(id)).toBeNull();
   });
 
+  it('keeps the window’s document of the branch left, and gives it back when the going back is undone', async () => {
+    const { id, rewind, store, target } = await rig();
+    await store.saveDocument(id, { id, messages: ['three turns, as shown'] });
+    await rewind.rewind(id, target, 'both');
+    // The page shows the new branch: the message gone back before, and what followed, taken out.
+    await store.saveDocument(id, { id, messages: ['two turns, as shown'] });
+    await rewind.undo(id);
+    expect(await store.loadDocument(id)).toEqual({ id, messages: ['three turns, as shown'] });
+  });
+
   it('says beforehand what going back would move — the files, the commands — and moves nothing', async () => {
     const { id, rewind, a, target, branchOf } = await rig();
     const before = await branchOf();

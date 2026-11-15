@@ -135,6 +135,8 @@ export function createRewind(deps: RewindDeps) {
         if (what !== 'conversation') await deps.checkpoints.redo(id, asTurn);
         throw error;
       }
+      // The window's document of the branch left, kept for when it is shown again (« Annuler le retour », « Brancher »).
+      if (what !== 'code') await deps.store.keepDocument(id, moved.fromBranchId);
       await deps.store.update(id, { rewound: { what, fromBranchId: moved.fromBranchId, branchId: moved.branchId, asTurn } });
       return { ...moved, text: look.message.text, filesRestored: files.restored, conflicts: files.conflicts, commandsNotUndone: commands };
     },
@@ -146,6 +148,10 @@ export function createRewind(deps: RewindDeps) {
       if (!meta || !rewound) return null;
       const files = rewound.what === 'conversation' ? { restored: [], conflicts: [] } : await deps.checkpoints.redo(id, rewound.asTurn);
       await deps.engine.undoRewind(id, rewound);
+      if (rewound.what !== 'code') {
+        await deps.store.keepDocument(id, rewound.branchId);
+        await deps.store.takeDocument(id, rewound.fromBranchId);
+      }
       await deps.store.update(id, { rewound: undefined });
       return { branchId: rewound.what === 'code' ? meta.branchId : rewound.fromBranchId, filesRestored: files.restored, conflicts: files.conflicts };
     },

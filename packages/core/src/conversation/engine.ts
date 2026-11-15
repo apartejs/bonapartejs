@@ -546,6 +546,8 @@ export class ConversationEngine {
     const { family, client } = engine;
     let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
     if (input.forkAfter) ({ meta, journal } = await this.fork(meta, journal, input.forkAfter));
+    // Each answer names the window's message it fills: the sibling the person picks is found by it.
+    const answerOf = input.messageId ? { messageId: input.messageId } : {};
 
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     if (!journal.entries().some((entry) => entry.kind === 'system')) {
@@ -717,7 +719,7 @@ export class ConversationEngine {
             } catch (error) {
               finishReread();
               if (signal?.aborted) {
-                await journal.append({ kind: 'assistant', raw, stopped: 'user', rendered: roundOpening + raw + family.endAssistant(raw) });
+                await journal.append({ kind: 'assistant', raw, stopped: 'user', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
                 return { usage, stopped: 'user' as const };
               }
               if (refusedAsTooLong(error)) {
@@ -727,7 +729,7 @@ export class ConversationEngine {
                 if (user && round === 0) await journal.append({ kind: 'withdrawn', entryId: user.id });
                 throw new ContextFullError(this.contextFull(engine, round === 0 ? used : estimateTokens(prompt), window));
               }
-              await journal.append({ kind: 'assistant', raw, stopped: 'engine', rendered: roundOpening + raw + family.endAssistant(raw) });
+              await journal.append({ kind: 'assistant', raw, stopped: 'engine', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
               // What the slot held is gone with the engine: nothing of it is saved.
               this.scheduler.evict(owner);
               throw new EngineFailedError(error);
@@ -736,6 +738,7 @@ export class ConversationEngine {
               kind: 'assistant',
               raw,
               usage,
+              ...answerOf,
               ...(truncated ? { truncated: true as const } : {}),
               rendered: roundOpening + raw + family.endAssistant(raw),
             });
@@ -763,7 +766,7 @@ export class ConversationEngine {
     } catch (error) {
       // Stopped while it waited for the slot: the message stays, with an empty answer stopped by the person.
       if (signal?.aborted && error instanceof DOMException && error.name === 'AbortError') {
-        await journal.append({ kind: 'assistant', raw: '', stopped: 'user', rendered: opening + family.endAssistant('') });
+        await journal.append({ kind: 'assistant', raw: '', stopped: 'user', ...answerOf, rendered: opening + family.endAssistant('') });
         return { usage: { inputTokens: 0, outputTokens: 0 }, stopped: 'user' };
       }
       throw error;
