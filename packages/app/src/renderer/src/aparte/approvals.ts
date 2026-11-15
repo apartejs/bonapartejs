@@ -83,3 +83,22 @@ export function createApprovalResolver(store: ApprovalsStore, conversation: () =
   return (call: { id: string; name: string; input: Record<string, unknown> }, signal: AbortSignal): Promise<ApprovalDecision> =>
     store.ask({ id: call.id, conversationId: conversation(), name: call.name, input: call.input }, signal);
 }
+
+/**
+ * The conversation a page has just loaded, told before aparté's client hears
+ * of it: the client asks again about a call paused before a reload as soon
+ * as its conversation is loaded (`resumeDeferred`, on
+ * `aparte-conversation-loaded`), before React has rendered the manager's new
+ * `activeId` — and the resolver gets the call alone, not its conversation
+ * (apartejs/aparte#221).
+ * A capturing listener on the window runs before the client's own, which
+ * listens as the event bubbles. The function returned stops listening.
+ */
+export function followLoadedConversation(page: EventTarget, onLoaded: (conversationId: string) => void): () => void {
+  const listener = (event: Event): void => {
+    const id = (event as CustomEvent<{ conversationId?: unknown }>).detail?.conversationId;
+    if (typeof id === 'string') onLoaded(id);
+  };
+  page.addEventListener('aparte-conversation-loaded', listener, { capture: true });
+  return () => page.removeEventListener('aparte-conversation-loaded', listener, { capture: true });
+}

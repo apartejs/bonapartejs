@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createApprovalResolver, createApprovalsStore } from './approvals';
+import { createApprovalResolver, createApprovalsStore, followLoadedConversation } from './approvals';
 
 const CALL = { id: 'call-1', name: 'edit_file', input: { path: 'a.ts' } };
 
@@ -40,5 +40,22 @@ describe('the approvals store and its resolver', () => {
     expect(store.list('c-2')).toEqual([]);
     store.answer('call-1', { approved: true });
     expect(seen).toEqual([1, 0]);
+  });
+
+  it("a call paused before a reload is asked about in the conversation that was just loaded, not the one the page showed before", async () => {
+    // aparté asks again on loading a conversation (resumeDeferred), before the page has heard which one is open.
+    const page = new EventTarget();
+    let open: string | null = null;
+    const stop = followLoadedConversation(page, (id) => {
+      open = id;
+    });
+    const store = createApprovalsStore();
+    const resolve = createApprovalResolver(store, () => open);
+    page.addEventListener('aparte-conversation-loaded', () => void resolve(CALL, new AbortController().signal));
+    page.dispatchEvent(new CustomEvent('aparte-conversation-loaded', { detail: { targetId: 'chat', conversationId: 'c-9' } }));
+    expect(store.list('c-9')).toHaveLength(1);
+    stop();
+    page.dispatchEvent(new CustomEvent('aparte-conversation-loaded', { detail: { targetId: 'chat', conversationId: 'c-10' } }));
+    expect(open).toBe('c-9');
   });
 });

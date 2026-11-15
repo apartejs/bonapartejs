@@ -10,7 +10,7 @@ import {
   type PlayMode,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createApprovalResolver, createApprovalsStore } from './aparte/approvals';
+import { createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
@@ -46,6 +46,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => {
     open.current = conversationId ?? null;
   }, [conversationId]);
+  // A call paused before a reload is asked again as its conversation loads, before React hears of it.
+  useEffect(
+    () =>
+      followLoadedConversation(window, (id) => {
+        open.current = id;
+      }),
+    [],
+  );
   const approvalResolver = useMemo(() => createApprovalResolver(approvals, () => open.current), [approvals]);
   useAparteClient({ streamRunner, approvalResolver });
   const [asked, setAsked] = useState(0);
