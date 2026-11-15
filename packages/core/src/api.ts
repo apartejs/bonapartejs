@@ -71,7 +71,7 @@ import {
   type TurnInput,
   type TurnResult,
 } from './conversation/engine.js';
-import type { PlayMode } from '@aparte/bonaparte-shared';
+import type { PlayMode, PtySpawner } from '@aparte/bonaparte-shared';
 import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
@@ -93,7 +93,7 @@ import {
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
 import { PluginHost } from './plugins/host.js';
 import { ToolRegistry } from './tools/registry.js';
-import type { ToolDef } from './tools/types.js';
+import type { CommandOutputEvent, ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
 import { KvStore } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
@@ -122,6 +122,12 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
+  /** Terminals for the plugins: the app runs them in a process of its own. None without it. */
+  pty?: PtySpawner;
+  /** An event of a plugin for one of its views (a terminal's tab), pushed to the window. */
+  pluginEvent?: (pluginId: string, instanceId: string, event: string, payload: unknown) => void;
+  /** What a command of the agent prints, as it prints it: the terminal's agent tab. */
+  commandOutput?: (conversationId: string, event: CommandOutputEvent) => void;
   /** Tests only: the home folder the tools work in when a conversation has no project. */
   home?: string;
   /** The language the answers are written in, in plain words (« French »): the interface's. */
@@ -826,6 +832,8 @@ export function createCore(deps: CoreDeps): Core {
       checkpoints.before(conversationId, turnId, absolute, shown),
     afterWrite: (absolute: string) =>
       checkpoints.after(conversationId, turnId, absolute),
+    // And what a command prints, for the terminal's agent tab.
+    onOutput: (event: CommandOutputEvent) => deps.commandOutput?.(conversationId, event),
   });
   // Impro confirmed by the person during this run of the app: a mode read from disk is not a confirmation.
   const improConfirmed = new Set<string>();
@@ -849,6 +857,8 @@ export function createCore(deps: CoreDeps): Core {
   const plugins = new PluginHost({
     registry: tools,
     log,
+    ...(deps.pty ? { pty: deps.pty } : {}),
+    ...(deps.pluginEvent ? { emit: deps.pluginEvent } : {}),
     judge: async ({ conversationId, tool, input }) => {
       const { projectId } = await rootsOf(conversationId);
       const { mode } = await modeOf(conversationId);

@@ -67,10 +67,13 @@ export const runCommand: BuiltinTool = {
         resolve(refused(`Cannot run ${program}: ${describeError(error)}`));
         return;
       }
+      ctx.onOutput?.({ kind: 'start', command: shown, cwd });
       let output = '';
       let ended: 'time' | 'stop' | null = null;
       const keep = (chunk: Buffer | string): void => {
-        if (output.length < MAX_KEPT_CHARS) output += chunk.toString();
+        const text = chunk.toString();
+        ctx.onOutput?.({ kind: 'data', text });
+        if (output.length < MAX_KEPT_CHARS) output += text;
       };
       child.stdout?.on('data', keep);
       child.stderr?.on('data', keep);
@@ -93,6 +96,7 @@ export const runCommand: BuiltinTool = {
       };
       child.on('error', (error) => finish(refused(`Cannot run ${program}: ${describeError(error)}`)));
       child.on('close', (code) => {
+        ctx.onOutput?.({ kind: 'exit', code });
         const printed = output.trimEnd();
         const end =
           ended === 'time'

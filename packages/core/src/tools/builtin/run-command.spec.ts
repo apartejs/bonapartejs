@@ -35,6 +35,18 @@ describe('run_command', () => {
     expect(result.failed).toBeUndefined();
   });
 
+  it('tells what it runs as it runs: the command, what it prints, how it ended (the terminal\'s agent tab)', async () => {
+    const told: unknown[] = [];
+    const ctx = { ...(await context()), onOutput: (event: unknown) => told.push(event) };
+    await run(node('process.stdout.write("one"); process.stderr.write("two"); process.exit(2)'), ctx);
+    expect(told[0]).toMatchObject({ kind: 'start' });
+    expect((told[0] as { command: string }).command.startsWith(`${process.execPath} -e`)).toBe(true);
+    const printed = told.filter((event) => (event as { kind: string }).kind === 'data').map((event) => (event as { text: string }).text);
+    expect(printed.join('')).toContain('one');
+    expect(printed.join('')).toContain('two');
+    expect(told.at(-1)).toEqual({ kind: 'exit', code: 2 });
+  });
+
   it('says how the program ended, and what it wrote on both outputs', async () => {
     const result = await run(node('console.error("oops"); process.exit(3)'));
     expect(result.content).toContain('oops');

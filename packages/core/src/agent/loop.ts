@@ -49,6 +49,7 @@ export interface AgentTurnContext {
   /** Before and after a tool writes a file: its original kept for the turn (checkpoints). */
   beforeWrite?: ToolContext['beforeWrite'];
   afterWrite?: ToolContext['afterWrite'];
+  onOutput?: ToolContext['onOutput'];
 }
 
 /**
@@ -120,6 +121,7 @@ export async function runAgentTurn(
           signal: ctx.signal,
           ...(ctx.beforeWrite ? { beforeWrite: ctx.beforeWrite } : {}),
           ...(ctx.afterWrite ? { afterWrite: ctx.afterWrite } : {}),
+          ...(ctx.onOutput ? { onOutput: ctx.onOutput } : {}),
         },
       );
       emit(

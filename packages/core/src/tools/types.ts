@@ -50,7 +50,15 @@ export interface ToolContext {
   beforeWrite?(absolute: string, shown: string): Promise<void>;
   /** After it wrote it. */
   afterWrite?(absolute: string): Promise<void>;
+  /** What a command prints, as it prints it: the terminal's agent tab shows it. */
+  onOutput?(event: CommandOutputEvent): void;
 }
+
+/** A command the agent runs, told as it runs. */
+export type CommandOutputEvent =
+  | { kind: 'start'; command: string; cwd: string }
+  | { kind: 'data'; text: string }
+  | { kind: 'exit'; code: number | null };
 
 /** What a tool gives back; the registry adds the call it answers. */
 export interface ToolOutput {

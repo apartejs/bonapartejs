@@ -184,6 +184,27 @@ export interface PluginProcess {
   kill(): Promise<void>;
 }
 
+/** A pseudo-terminal a plugin opened through its context: killed when the plugin goes. */
+export interface PluginPty {
+  readonly pid: number;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  onData(listener: (data: string) => void): void;
+  onExit(listener: (code: number | null) => void): void;
+  kill(): void;
+}
+
+export interface PluginPtyOptions {
+  cwd?: string;
+  cols: number;
+  rows: number;
+  /** The whole environment of the terminal: nothing else is inherited. */
+  env: Record<string, string>;
+}
+
+/** What opens a pseudo-terminal, outside the core (the app runs it in its own process). */
+export type PtySpawner = (shell: string, args: readonly string[], options: PluginPtyOptions) => PluginPty;
+
 /** The events of one view of the plugin (a terminal's tab), pushed with back-pressure. */
 export interface PluginInstanceChannel {
   /** False: the view is behind — stop until `onDrain`. */
@@ -214,6 +235,12 @@ export interface PluginNodeContext {
    * are killed when the plugin goes.
    */
   spawn?(program: string, args: readonly string[], options?: { cwd?: string; env?: Record<string, string> }): PluginProcess;
+  /**
+   * Open a pseudo-terminal running `shell` with its arguments. Only for a
+   * plugin that declares `execute`, and only where the app gives terminals;
+   * it is killed when the plugin goes.
+   */
+  pty?(shell: string, args: readonly string[], options: PluginPtyOptions): PluginPty;
 }
 
 export interface PluginNodeModule {

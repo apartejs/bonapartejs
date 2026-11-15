@@ -31,9 +31,11 @@ import {
   type PluginNodeContext,
   type PluginNodeModule,
   type PluginProcess,
+  type PluginPty,
   type PluginStatus,
   type PluginToolContribution,
   type PluginToolHandler,
+  type PtySpawner,
   type Verdict,
 } from '@aparte/bonaparte-shared';
 import { readdir, readFile } from 'node:fs/promises';
@@ -62,6 +64,8 @@ export interface PluginHostOptions {
   judge?: (use: { conversationId: string; tool: ToolDef; input: unknown }) => Verdict | Promise<Verdict>;
   /** Tests only: what launches a plugin's processes. */
   spawn?: SpawnFn;
+  /** What opens a pseudo-terminal (the app runs them in a process of their own); none without it. */
+  pty?: PtySpawner;
 }
 
 export interface DiscoveredPlugin {
@@ -87,6 +91,8 @@ interface Activation {
   commands: Map<string, (payload: unknown) => unknown>;
   flows: Map<string, Flow>;
   processes: Set<SpawnedProcess>;
+  /** Its terminals, killed at teardown. */
+  ptys: Set<PluginPty>;
   disposers: (() => void | Promise<void>)[];
 }
 
@@ -186,6 +192,7 @@ export class PluginHost {
       commands: new Map(),
       flows: new Map(),
       processes: new Set(),
+      ptys: new Set(),
       disposers: [],
     };
     this.activations.set(id, activation);
@@ -345,6 +352,16 @@ export class PluginHost {
         child.on('error', (error) => this.log(`[plugin ${id}] ${program}: ${describe(error)}`));
         return wrapProcess(child, this.options.spawn);
       };
+      const spawner = this.options.pty;
+      if (spawner) {
+        context.pty = (shell, args, options) => {
+          if (activation.closed) throw new Error(`The plugin ${id} is not active.`);
+          const pty = spawner(shell, args, options);
+          activation.ptys.add(pty);
+          pty.onExit(() => activation.ptys.delete(pty));
+          return pty;
+        };
+      }
     }
     return context;
   }
@@ -459,6 +476,14 @@ export class PluginHost {
       }
     }
     await Promise.all([...activation.processes].map((child) => stopProcessTree(child, this.options.spawn ? { spawn: this.options.spawn } : {})));
+    for (const pty of activation.ptys) {
+      try {
+        pty.kill();
+      } catch (error) {
+        this.log(`[plugin ${id}] a terminal did not stop: ${describe(error)}`);
+      }
+    }
+    activation.ptys.clear();
     activation.flows.clear();
     this.activations.delete(id);
   }

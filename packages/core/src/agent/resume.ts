@@ -89,6 +89,7 @@ export interface AnswerContext {
   /** Before and after a tool writes a file: its original kept for the turn (checkpoints). */
   beforeWrite?: ToolContext['beforeWrite'];
   afterWrite?: ToolContext['afterWrite'];
+  onOutput?: ToolContext['onOutput'];
 }
 
 /** Answers the calls of a pause, in order: their results, and those that must wait again. */
@@ -113,6 +114,7 @@ export async function answerPause(
         ...(granted ? { granted } : {}),
         ...(ctx.beforeWrite ? { beforeWrite: ctx.beforeWrite } : {}),
         ...(ctx.afterWrite ? { afterWrite: ctx.afterWrite } : {}),
+        ...(ctx.onOutput ? { onOutput: ctx.onOutput } : {}),
       },
     );
     emit(
