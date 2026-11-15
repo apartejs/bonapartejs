@@ -365,7 +365,7 @@ body {
 }
 
 /* The line of a tool's call: its target is a path, a pattern or a command — code, as the
-   board draws it, where aparté's quiet line sets it in the chat's font. */
+   board draws it, where aparté's quiet line sets it in the chat's font (apartejs/aparte#220). */
 .aparte-segment-tool-call[data-quiet] .aparte-tool-target:not(.aparte-tool-target--words) {
   font-family: var(--aparte-code-font-family);
 }

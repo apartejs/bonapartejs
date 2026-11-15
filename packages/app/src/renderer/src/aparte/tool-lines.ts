@@ -7,8 +7,9 @@
  * code). An edit or a write keeps its change behind its line, opened
  * (aparté's `setupDiff`); a command keeps what it printed.
  *
- * aparté holds one tool-line provider per config: the one this sets answers
- * for the core's tools only, and hands every other call to the one it found.
+ * aparté holds one tool-line provider per config (apartejs/aparte#219): the
+ * one this sets answers for the core's tools only, and hands every other call
+ * to the one it found.
  */
 
 import { aparteGlobalConfig, type AparteConfig, type AparteToolCallSegment } from '@aparte/core';
