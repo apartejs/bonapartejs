@@ -28,7 +28,7 @@ import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
-import { renderInstructionsDelta, renderModeDelta } from '../prompt/deltas.js';
+import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -358,6 +358,12 @@ export class ConversationEngine {
       if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       meta = await this.deps.store.update(id, { instructions });
     }
+    if (!input.resume && input.tools) {
+      // The tools the window runs (ask_user) are not in the frozen prompt: told by a note when they change.
+      const windowTools = input.tools.defs.filter((tool) => tool.where === 'window');
+      const delta = renderInventoryDelta(lastToldWindowTools(journal.entries()), windowTools);
+      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, windowTools }, rendered: family.renderSystemNote(delta.text) });
+    }
     if (!input.resume) {
       // The mode the calls are decided in, told when it is not the one the model last read (Répétition until told).
       const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
@@ -605,5 +611,14 @@ function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
     if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
   }
   return 'repetition';
+}
+
+/** The window's tools the model last read of in this branch: the last note of them, else none. */
+function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'delta' && entry.delta.windowTools) return entry.delta.windowTools;
+  }
+  return [];
 }
 

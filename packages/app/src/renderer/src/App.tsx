@@ -17,6 +17,7 @@ import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
 import { registerToolLines } from './aparte/tool-lines';
+import { speakAsBonaparte } from './aparte/words';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
@@ -97,6 +98,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   useEffect(() => registerStepLabels(messages), [messages]);
   useEffect(() => registerToolLines(messages), [messages]);
+  useEffect(() => speakAsBonaparte(messages), [messages]);
 
   // The plan card of Lecture: launching it moves the conversation to Plume or Répétition — the core
   // first, so the go-ahead is decided in the new mode — then gives the model the go-ahead.

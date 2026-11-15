@@ -29,6 +29,8 @@ export interface ChatDriver {
   errors: Locator;
   /** The line of a tool's call in a reply: aparté keeps the tool's name on it, for a test. */
   toolLine(name: string): Locator;
+  /** A question in the composer's place: the panel aparté's composer stamps `data-aparte-panel`. */
+  question: Locator;
   send(text: string): Promise<void>;
 }
 
@@ -50,6 +52,7 @@ export function chat(page: Page): ChatDriver {
     streamingReplies: replies.locator('[aria-busy="true"]'),
     errors: root.locator('[data-error-code]'),
     toolLine: (name) => replies.locator(`[data-tool-name="${name}"]`),
+    question: root.locator('aparte-composer [data-aparte-panel]'),
 
     async send(text) {
       await editor.fill(text);

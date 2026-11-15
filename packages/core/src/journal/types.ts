@@ -9,6 +9,7 @@
  */
 
 import type { PlayMode } from '@aparte/bonaparte-shared';
+import type { ToolDef } from '../tools/types.js';
 
 import type { ToolResult } from '../tools/types.js';
 
@@ -45,6 +46,8 @@ export interface Delta {
   text: string;
   /** A note of the mode: the mode it told (the next turn compares with it). */
   mode?: PlayMode;
+  /** A note of the window's tools: all of them, as the model knows them after it. */
+  windowTools?: ToolDef[];
 }
 
 interface Common {

@@ -147,7 +147,19 @@ export interface Messages {
     /** The person's go-ahead, sent as their message when they launch the plan. */
     goAhead: string;
   };
+  /** aparté's own words that bonaparte says its way (« tu », the board's wording): the question, the list. */
+  aparteWords: Record<AparteWord, string>;
 }
+
+/** The words of aparté's locale that bonaparte says its own way. */
+export type AparteWord =
+  | 'elicitationSkip'
+  | 'elicitationWaiting'
+  | 'elicitationOtherPlaceholder'
+  | 'elicitationOtherLabel'
+  | 'elicitationAnswerLabel'
+  | 'questionDeclined'
+  | 'conversationWaiting';
 
 /** The tools of the core whose calls have a line of their own. */
 export type ToolLineName = 'read_file' | 'list_files' | 'search' | 'edit_file' | 'write_file' | 'run_command' | 'web_fetch';

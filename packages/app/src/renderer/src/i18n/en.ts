@@ -157,4 +157,13 @@ export const en: Messages = {
     },
     goAhead: 'Go ahead with the plan.',
   },
+  aparteWords: {
+    elicitationSkip: 'Let it choose',
+    elicitationWaiting: 'Waiting for your answer',
+    elicitationOtherPlaceholder: 'Another answer…',
+    elicitationOtherLabel: 'Another answer',
+    elicitationAnswerLabel: 'Your answer',
+    questionDeclined: 'You left it the choice.',
+    conversationWaiting: 'Waiting for your answer',
+  },
 };

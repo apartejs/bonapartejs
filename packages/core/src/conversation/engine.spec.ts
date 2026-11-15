@@ -601,3 +601,35 @@ describe('ConversationEngine — the mode, as the model knows it', () => {
     expect(prompt).not.toContain('[mode] Impro');
   });
 });
+
+describe("ConversationEngine — the window's tools, as the model knows them", () => {
+  const ASK_USER = {
+    name: 'ask_user',
+    description: 'Ask the person a question with a few choices.',
+    inputSchema: { type: 'object', properties: { question: { type: 'string' } } },
+    effect: 'ui' as const,
+    source: 'builtin' as const,
+    where: 'window' as const,
+  };
+  const quiet = { defs: [ASK_USER], onCalls: async () => ({ results: [] }) };
+
+  it('the tools the window runs are announced at the first turn that brings them, as a note — never in the frozen prompt', async () => {
+    const { prompts, conversation, engine } = await rig();
+    const meta = await conversation();
+    await engine.turn(meta.id, { text: 'Bonjour', tools: quiet }, () => undefined);
+    const prompt = prompts.filter((one) => one.includes('Bonjour')).at(-1)!;
+    expect(prompt).toContain('[tool inventory update]');
+    expect(prompt).toContain('ask_user');
+    expect(prompt.indexOf('ask_user')).toBeLessThan(prompt.indexOf('Bonjour'));
+  });
+
+  it('told once: the next turn with the same tools adds nothing; a turn without them removes nothing', async () => {
+    const { store, conversation, engine, say } = await rig();
+    const meta = await conversation();
+    await engine.turn(meta.id, { text: 'Bonjour', tools: quiet }, () => undefined);
+    await engine.turn(meta.id, { text: 'Encore', tools: quiet }, () => undefined);
+    await say(meta.id, 'Et puis ?');
+    const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
+    expect(notes).toHaveLength(1);
+  });
+});
