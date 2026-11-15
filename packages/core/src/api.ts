@@ -89,6 +89,7 @@ import {
   type Project,
   type ProjectChanges,
 } from './project/store.js';
+import { PluginHost } from './plugins/host.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
@@ -194,6 +195,8 @@ export interface Core {
   /** The one registry of tools, and the one approval policy. */
   readonly tools: ToolRegistry;
   readonly permissions: PermissionEngine;
+  /** The plugins: their tools join the registry, what they reach is judged by the same policy. */
+  readonly plugins: PluginHost;
   /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
   readonly checkpoints: CheckpointStore;
   /** The page's document of a conversation; rebuilt from its journal when the page's is missing; null for none. */
@@ -815,6 +818,17 @@ export function createCore(deps: CoreDeps): Core {
       return { mode: modeAfterRestart(mode), reconfirm: true };
     return { mode, reconfirm: false };
   }
+  // The plugins (task 6.1): their tools join the one registry; each core tool one of them uses is
+  // judged by the one policy, in its conversation's mode and perimeter. A project may turn one off.
+  const plugins = new PluginHost({
+    registry: tools,
+    log,
+    judge: async ({ conversationId, tool, input }) => {
+      const { projectId } = await rootsOf(conversationId);
+      const { mode } = await modeOf(conversationId);
+      return permissions.evaluate({ tool, input, mode, ...(projectId ? { projectId } : {}) });
+    },
+  });
   // The tickets of paused turns, signed with this installation's secret (made at the first turn).
   let ticketsReady: Promise<Tickets> | undefined;
   const tickets = (): Promise<Tickets> =>
@@ -842,7 +856,7 @@ export function createCore(deps: CoreDeps): Core {
     },
     prompt: (meta) => ({
       kind: meta.kind,
-      tools: toolsFor(meta.kind, tools.list()),
+      tools: toolsFor(meta.kind, tools.view(plugins.visibleTo(meta.projectId)).list()),
       perimeter: meta.projectId ? (projectRoots.get(meta.projectId) ?? []) : [],
       replyLanguage: deps.replyLanguage?.() ?? 'English',
     }),
@@ -911,7 +925,7 @@ export function createCore(deps: CoreDeps): Core {
           input,
           mode: (await modeOf(conversationId)).mode,
           ...(projectId ? { projectId } : {}),
-          registry: tools,
+          registry: tools.view(plugins.visibleTo(projectId)),
           permissions,
           conversations,
           roots,
@@ -968,12 +982,14 @@ export function createCore(deps: CoreDeps): Core {
         .catch((error: unknown) =>
           log(`[bonaparte] a memory was not saved: ${String(error)}`),
         );
+      await plugins.deactivateAll();
       await supervisor.stop();
     },
     conversations,
     conversationStore,
     tools,
     permissions,
+    plugins,
     checkpoints,
 
     projects: {
@@ -1127,7 +1143,7 @@ export function createCore(deps: CoreDeps): Core {
           conversationId,
           mode: (await modeOf(conversationId)).mode,
           ...(place.projectId ? { projectId: place.projectId } : {}),
-          registry: tools,
+          registry: tools.view(plugins.visibleTo(place.projectId)),
           permissions,
           roots: place.roots,
           nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),

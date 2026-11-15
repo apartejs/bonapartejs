@@ -379,7 +379,10 @@ export class PluginHost {
         const judge = this.options.judge ?? onlyReads;
         const verdict = await judge({ conversationId: ctx.conversationId, tool: core.def, input });
         if (verdict.verdict === 'deny') return { content: `Not done: ${verdict.reason}`, failed: true };
-        if (verdict.verdict === 'ask') {
+        // The person allowed this very call of the plugin: what only the mode asks about is what they
+        // allowed. Anything asked for another reason (a file that runs later, outside the perimeter, the
+        // network) they never saw — refused.
+        if (verdict.verdict === 'ask' && !(ctx.granted === true && verdict.why === 'mode')) {
           return {
             content: `Not done: ${inner} here needs the person's approval, which a plugin's tool cannot ask for. Do it with your own tools, so that the person is asked.`,
             failed: true,

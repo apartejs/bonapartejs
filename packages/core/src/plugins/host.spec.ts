@@ -332,6 +332,33 @@ describe('PluginHost — a tool gets only what its effect allows', () => {
     expect(result.failed).toBe(true);
     expect(result.content).toMatch(/approval/);
     await expect(readFile(join(project, 'package.json'), 'utf8')).rejects.toThrow();
+    // Even when the person allowed the plugin's call itself: they never saw that path.
+    const allowed = await registry.run({ id: 't2', name: 'scribble', input: {} }, { ...context([project]), granted: true });
+    expect(allowed.failed).toBe(true);
+    await expect(readFile(join(project, 'package.json'), 'utf8')).rejects.toThrow();
+  });
+
+  it('a call the person allowed may do what only the mode would ask about — in Répétition, the write they allowed', async () => {
+    const byMode = (use: { tool: { name: string }; input: unknown }): Verdict =>
+      use.tool.name === 'write_file' ? { verdict: 'ask', why: 'mode' } : { verdict: 'allow' };
+    const { host, registry } = rig({ judge: byMode });
+    host.add(
+      manifest('notes', {
+        effects: [{ effect: 'read', what: 'x' }, { effect: 'write', what: 'the notes' }],
+        contributes: { tools: [{ name: 'scribble', description: 'Scribble.', effect: 'write' }] },
+      }),
+      { builtin: true },
+    );
+    await host.activate('notes', capture((ctx) => {
+      ctx.registerToolHandler('scribble', async (call) => call.use('write_file', { path: 'notes.md', content: 'noted\n' }));
+    }));
+    // Not allowed by the person (a policy that let the call pass, a sub-call): refused.
+    expect((await registry.run({ id: 't1', name: 'scribble', input: {} }, context([project]))).failed).toBe(true);
+    await expect(readFile(join(project, 'notes.md'), 'utf8')).rejects.toThrow();
+    // Allowed by the person: done.
+    const done = await registry.run({ id: 't2', name: 'scribble', input: {} }, { ...context([project]), granted: true });
+    expect(done.failed).toBeUndefined();
+    expect(await readFile(join(project, 'notes.md'), 'utf8')).toBe('noted\n');
   });
 
   it('a tool that sends never reads the project, and a tool that is not the core’s cannot be used', async () => {

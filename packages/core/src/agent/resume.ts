@@ -16,7 +16,7 @@ import type { PlayMode } from '@aparte/bonaparte-shared';
 import { toolRefusal, type StreamRunEvent } from '@aparte/engine';
 import type { JournalEntry, Outcome, PendingCall } from '../journal/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
-import type { ToolRegistry } from '../tools/registry.js';
+import type { ToolSet } from '../tools/registry.js';
 import type { ToolContext, ToolResult } from '../tools/types.js';
 import type { Tickets } from './tickets.js';
 
@@ -79,7 +79,7 @@ export interface AnswerContext {
   conversationId: string;
   mode: PlayMode;
   projectId?: string;
-  registry: ToolRegistry;
+  registry: ToolSet;
   permissions: PermissionEngine;
   roots: readonly string[];
   nCtx: number;

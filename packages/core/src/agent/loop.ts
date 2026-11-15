@@ -21,7 +21,7 @@ import { toolRefusal, type StreamRunEvent } from '@aparte/engine';
 import type { CallsAnswer, ModelCall, TurnEvent, TurnInput, TurnResult } from '../conversation/engine.js';
 import type { PendingCall } from '../journal/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
-import type { ToolRegistry } from '../tools/registry.js';
+import type { ToolSet } from '../tools/registry.js';
 import type { ToolContext, ToolDef, ToolResult } from '../tools/types.js';
 import { NOT_RUN_STOPPED } from './resume.js';
 
@@ -33,7 +33,7 @@ export interface AgentTurnContext {
   input: Omit<TurnInput, 'tools'>;
   mode: PlayMode;
   projectId?: string;
-  registry: ToolRegistry;
+  registry: ToolSet;
   permissions: PermissionEngine;
   conversations: { turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> };
   /** The perimeter the tools run in. */
