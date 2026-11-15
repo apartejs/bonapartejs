@@ -251,9 +251,12 @@ body {
   color: var(--aparte-text-muted);
 }
 
-/* What opening a conversation costs, above the composer. */
+/* What opening a conversation costs, above the composer, on its axis (the shell's own rules). */
 .memory-banner {
-  margin-block-end: var(--aparte-space-4);
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--aparte-message-max-width, 800px);
+  margin: 0 auto var(--aparte-space-4);
 }
 
 .memory-banner__detail {

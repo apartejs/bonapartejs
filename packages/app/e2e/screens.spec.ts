@@ -5,7 +5,7 @@
  * otherwise.
  */
 
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
@@ -102,6 +102,81 @@ for (const locale of ['fr', 'en'] as const) {
       await expect(empty.page.locator('.engine-setup__empty')).toBeVisible();
       await expect(empty.page.locator('.llama-status .aparte-btn')).toBeVisible();
       await empty.page.screenshot({ path: join(into, `setup-empty-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}
+
+// The memory of a conversation (phase 3): saved, let go, read again.
+const WORDS = {
+  fr: {
+    start: 'Démarrer',
+    new: 'Nouvelle conversation',
+    goOn: 'Relire et continuer',
+    first: `Peux-tu relire le parseur des heures et me dire ce qui cloche ? ${'Voici ce que j’ai observé jusqu’ici. '.repeat(40)}`,
+    second: 'Et pour les fuseaux horaires ?',
+    next: 'Continuons.',
+  },
+  en: {
+    start: 'Start',
+    new: 'New conversation',
+    goOn: 'Re-read and continue',
+    first: `Can you read the hours parser again and tell me what is wrong? ${'Here is what I saw so far. '.repeat(40)}`,
+    second: 'And the time zones?',
+    next: 'Let us go on.',
+  },
+};
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the memory of a conversation, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = WORDS[locale];
+      const launched = await launch({
+        locale,
+        managed: { models: { 'gemma-4-E4B-it-Q4_K_M': { paddingBytes: 2 * 1024 * 1024 } } },
+        env: { FAKE_LLAMA_PREFILL_BATCH: '16', FAKE_LLAMA_PREFILL_PACE_MS: '150' },
+      });
+      const { page } = launched;
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      const shot = (name: string) =>
+        page.screenshot({ path: join(into, `${name}-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      await page.getByRole('button', { name: words.start }).click();
+      await expect(ui.editor).toBeVisible({ timeout: 20_000 });
+      for (const [text, fresh] of [
+        [words.first, false],
+        [words.second, true],
+      ] as const) {
+        if (fresh) await page.getByRole('button', { name: words.new }).click();
+        await ui.send(text);
+        await expect(ui.replyText).toHaveText('ok', { timeout: 30_000 });
+        await expect(ui.streamingReplies).toHaveCount(0);
+      }
+      await shot('workspace');
+
+      const list = page.locator('aparte-conversation-list');
+      const first = list.getByRole('button', { name: new RegExp(`^${words.first.slice(0, 12)}`) });
+      await first.click();
+      await expect(page.locator('.memory-banner')).toBeVisible();
+      await shot('memory-restore');
+
+      // Its memory let go, as the disk budget does.
+      await page.getByRole('button', { name: words.new }).click();
+      const dir = join(launched.dataDir, 'kv-slots');
+      for (const name of (await readdir(dir)).filter((one) => one !== 'seeds')) await rm(join(dir, name), { force: true });
+      await first.click();
+      await expect(page.getByRole('button', { name: words.goOn })).toBeVisible();
+      await shot('memory-reread');
+
+      await page.getByRole('button', { name: words.goOn }).click();
+      await ui.send(words.next);
+      await expect(page.locator('.reread-progress')).toBeVisible({ timeout: 10_000 });
+      await page.waitForTimeout(600);
+      await shot('memory-rereading');
+      await expect(ui.streamingReplies).toHaveCount(0, { timeout: 30_000 });
     });
   }
 }

@@ -71,6 +71,10 @@ test('reopening a conversation whose memory was saved says so, with nothing to c
   await expect(banner).toContainText(/Reprise en ~.+ au lieu de ~.+ de relecture\./);
   await expect(banner).toContainText(/Sauvée le \d\d\/\d\d à \d\d:\d\d · .+ sur disque/);
   await expect(banner.getByRole('button')).toHaveCount(0);
+  // It sits above the composer, on its axis.
+  const [box, composer] = await Promise.all([banner.boundingBox(), chat(page).composerBox.boundingBox()]);
+  expect(Math.round(box!.x)).toBe(Math.round(composer!.x));
+  expect(Math.round(box!.width)).toBe(Math.round(composer!.width));
 
   // The conversation goes on from its memory: nothing is read again.
   await ask(page, 'Et ensuite ?');
