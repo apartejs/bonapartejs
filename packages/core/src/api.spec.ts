@@ -6,7 +6,7 @@
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
@@ -360,6 +360,13 @@ describe('createCore — the modes and the previews of the window', () => {
     await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
     const preview = await core.previewCall('c1', { name: 'edit_file', input: { path: 'notes.txt', old_string: 'old line', new_string: 'new line' } });
     expect(preview).toMatchObject({ kind: 'diff', path: 'notes.txt', before: 'old line\n', after: 'new line\n' });
+  });
+
+  it("without a project, and outside a test run, the tools work in the person's home folder", async () => {
+    const { core } = await setup();
+    const write = core.tools.get('write_file')!.def;
+    const inHome = core.permissions.evaluate({ tool: write, input: { path: join(homedir(), 'bp-never-written.txt') }, mode: 'plume' });
+    expect(inHome).toEqual({ verdict: 'allow' });
   });
 
   it('previews a write: the text before and after, and their diff — nothing is written', async () => {
