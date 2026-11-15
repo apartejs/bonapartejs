@@ -12,6 +12,7 @@ function core() {
   const kept = new Map<string, unknown>();
   const calls: string[] = [];
   const bridge: Bridge = {
+    on: () => () => undefined,
     invoke: (async (channel: { name: string }, input: unknown) => {
       calls.push(channel.name);
       const args = input as { id?: string; document?: { id: string } };

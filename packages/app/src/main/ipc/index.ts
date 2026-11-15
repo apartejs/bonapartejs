@@ -10,6 +10,7 @@ import { registerConversationChannels } from './conversations.js';
 import { registerChangeChannels } from './changes.js';
 import { registerEngineChannels } from './engine.js';
 import { registerFileChannels } from './files.js';
+import { registerPluginChannels } from './plugins.js';
 import { registerModeChannels } from './modes.js';
 import { registerProjectChannels, type ChooseFolder } from './projects.js';
 import { searchQuery } from '@aparte/bonaparte-shared';
@@ -33,6 +34,7 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerModeChannels(ipc, core);
   registerFileChannels(ipc, core);
   registerChangeChannels(ipc, core);
+  registerPluginChannels(ipc, core);
   registerProjectChannels(ipc, core, facts.chooseFolder);
   ipc.handle(searchQuery, ({ query, conversationId, projectId }) =>
     core.search(query, { ...(conversationId ? { conversationId } : {}), ...(projectId ? { projectId } : {}) }),

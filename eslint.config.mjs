@@ -137,6 +137,8 @@ export default tseslint.config(
                 'scope:core',
                 'scope:shared',
                 'scope:plugin-sdk',
+                // The built-in plugins are built with the app.
+                'scope:plugin',
               ],
             },
           ],

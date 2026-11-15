@@ -16,6 +16,8 @@
   },
   "dependencies": {
     "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-plugin-sdk": "workspace:*",
+    "@aparte/bonaparte-plugin-terminal": "workspace:*",
     "@aparte/bonaparte-shared": "workspace:*",
     "@aparte/core": "1.10.0",
     "@aparte/locales": "1.10.0",
@@ -27,6 +29,9 @@
     "@aparte/plugin-streaming-markdown": "1.10.0",
     "@aparte/plugin-triggers": "1.10.0",
     "@aparte/react": "1.10.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "node-pty": "1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "shiki": "^4.0.0",

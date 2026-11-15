@@ -369,6 +369,17 @@ export const fr: Messages = {
     cancel: 'Annuler',
     confirmDelete: 'Supprimer',
   },
+  terminal: {
+    tabs: 'Terminaux',
+    newTab: 'Nouveau terminal',
+    agent: 'agent',
+    byAgent: 'Lancé par l’agent',
+    output: (name) => `Sortie du terminal ${name}`,
+    exited: 'Le shell s’est arrêté.',
+    restart: 'Relancer',
+    noShell: 'Aucun shell trouvé sur cette machine.',
+    exitCode: (code) => `[code de sortie ${code ?? 'inconnu'}]`,
+  },
   review: {
     hint: 'Clique sur un numéro de ligne pour la commenter. Tes commentaires partent ensemble, en un seul message.',
     message: (count) => (count === 1 ? '1 commentaire sur le diff :' : `${count} commentaires sur le diff :`),

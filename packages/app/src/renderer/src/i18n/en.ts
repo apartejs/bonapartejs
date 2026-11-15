@@ -368,6 +368,17 @@ export const en: Messages = {
     cancel: 'Cancel',
     confirmDelete: 'Delete',
   },
+  terminal: {
+    tabs: 'Terminals',
+    newTab: 'New terminal',
+    agent: 'agent',
+    byAgent: 'Run by the agent',
+    output: (name) => `Output of the terminal ${name}`,
+    exited: 'The shell stopped.',
+    restart: 'Restart',
+    noShell: 'No shell found on this machine.',
+    exitCode: (code) => `[exit code ${code ?? 'unknown'}]`,
+  },
   review: {
     hint: 'Click a line number to comment on it. Your comments leave together, in one message.',
     message: (count) => (count === 1 ? '1 comment on the diff:' : `${count} comments on the diff:`),

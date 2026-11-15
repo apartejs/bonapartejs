@@ -4,11 +4,13 @@
  * anything about a conversation.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, Tray } from 'electron';
-import { mkdirSync } from 'node:fs';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, Tray, utilityProcess } from 'electron';
+import { existsSync, mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { bonaparteDataDir, createAgentHandler, createCore, type Core } from '@aparte/bonaparte-core';
-import type { Locale } from '@aparte/bonaparte-shared';
+import { bonaparteDataDir, createAgentHandler, createCore, withoutSecrets, type Core } from '@aparte/bonaparte-core';
+import { terminal, terminalManifest } from '@aparte/bonaparte-plugin-terminal';
+import { APP_EVENT, type AppEvent, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
 import { e2eEngineDeps, e2ePickedFolder } from './e2e-engine.js';
 import { mainWords, type MainWords } from './i18n/index.js';
@@ -18,6 +20,10 @@ import { stopEngineBeforeQuit } from './quit.js';
 import { devServerUrlFrom, isTrustedOrigin } from './security.js';
 import { applyLaunchAtLogin, claimSingleInstance, hideOnClose, revealWindow, windowProfile } from './startup.js';
 import { trayMenu, type TrayActions } from './tray.js';
+// The terminals' own process: built apart by electron-vite, its path given here.
+import ptyProcessPath from './terminals/pty-process?modulePath';
+import { createTerminalService } from './terminals/pty-host.js';
+import { findShells } from './terminals/shells.js';
 import { createMainWindow } from './windows.js';
 
 /** The language the person chose (the setting « language »), until it is read: the system's. */
@@ -76,12 +82,34 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
 
   await app.whenReady();
 
+  // What the main process pushes to the window: a terminal's output, an agent's command.
+  const push = (event: AppEvent): void => {
+    if (window && !window.isDestroyed()) window.webContents.send(APP_EVENT, event);
+  };
+  // The terminals (task 6.6): the machine's shells, found once; node-pty in a process of its own.
+  const shells = findShells(process.platform, process.env, existsSync);
+  const engineDeps = e2eEngineDeps(process.env, options.e2e);
+  const terminals = createTerminalService({
+    shells: () => shells,
+    start: () => utilityProcess.fork(ptyProcessPath, [], { serviceName: 'bonaparte-terminals', stdio: 'ignore' }),
+    env: () => withoutSecrets(process.env),
+    home: engineDeps.home ?? homedir(),
+    log: (message) => console.log(message),
+  });
+  if (options.e2e) (globalThis as { __bonaparteTerminals?: unknown }).__bonaparteTerminals = terminals;
   const core = createCore({
     dataDir,
     // The answers are written in the language of the interface.
     replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
-    ...e2eEngineDeps(process.env, options.e2e),
+    terminals,
+    pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
+    commandOutput: (conversationId, output) => push({ kind: 'command', conversationId, output }),
+    ...engineDeps,
   });
+  // The built-in plugins, built with the app.
+  core.plugins.add(terminalManifest, { builtin: true });
+  const activated = await core.plugins.activate('terminal', terminal);
+  if (!activated.active) console.error(`[bonaparte] the terminal did not start: ${activated.error ?? 'unknown'}`);
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),

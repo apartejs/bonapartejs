@@ -9,6 +9,7 @@
  */
 
 import type { ZodType } from 'zod';
+import type { AppEvent } from './plugins.js';
 
 export interface Channel<I, O> {
   readonly name: string;
@@ -23,4 +24,6 @@ export function defineChannel<I, O>(name: string, input: ZodType<I>, output: Zod
 /** What the window sees of the bridge. The preload exposes it as `window.bonaparte`. */
 export interface Bridge {
   invoke<I, O>(channel: Channel<I, O>, input: I): Promise<O>;
+  /** What the main process pushes (a terminal's output); the function returned stops listening. */
+  on(listener: (event: AppEvent) => void): () => void;
 }

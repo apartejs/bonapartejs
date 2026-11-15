@@ -14,6 +14,7 @@ import {
   type ProjectView,
   changesList,
   type AppliedChangeView,
+  pluginsInvoke,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -32,6 +33,9 @@ import { addComment, clearPending, editComment, markSent, pendingOf, reviewMessa
 import { appliedCards, ChangesPanel, useProposedCards } from './panels/ChangesPanel';
 import { countLines, total } from './panels/changes';
 import { FilesPanel } from './panels/FilesPanel';
+import { createAgentOutput } from './panels/agent-output';
+import { TerminalPanel } from './panels/TerminalPanel';
+import { NO_TABS, openTab, withAgentTab, type TerminalTabs } from './panels/terminal-tabs';
 import { PanelDock } from './panels/PanelDock';
 import { PanelToggles } from './panels/PanelToggles';
 import { close as closePane, opened, opensByItself, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
@@ -206,6 +210,30 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     window.addEventListener(SETTING_CHANGED, follow);
     return () => window.removeEventListener(SETTING_CHANGED, follow);
   }, []);
+  // The terminal (task 6.6): its tabs live as long as the window; the agent's commands are gathered
+  // from the start, even while the pane is closed.
+  const [terminalTabs, setTerminalTabs] = useState<TerminalTabs>(NO_TABS);
+  const words = useRef(messages);
+  words.current = messages;
+  const agentOutput = useMemo(() => createAgentOutput(() => words.current.terminal.exitCode), []);
+  useEffect(
+    () =>
+      bridge.on((event) => {
+        if (event.kind !== 'command') return;
+        agentOutput.push(event.output);
+        if (event.output.kind === 'start') setTerminalTabs((was) => withAgentTab(was, words.current.terminal.agent));
+      }),
+    [agentOutput],
+  );
+  const newShellTab = (): void => {
+    void bridge
+      .invoke(pluginsInvoke, { pluginId: 'terminal', action: 'shells', payload: {} })
+      .then((answer) => {
+        const first = (answer as { shells?: { id: string }[] }).shells?.[0];
+        if (first) setTerminalTabs((was) => openTab(was, first.id));
+      })
+      .catch(() => undefined);
+  };
   // The settings, over the shell: null for the conversations.
   const [settingsPage, setSettingsPage] = useState<SettingsPageName | null>(null);
   // The settings closed, by any way (back, Ctrl K, Ctrl B): what they may have changed is read again —
@@ -256,6 +284,12 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     window.addEventListener('aparte-message-done', ended);
     return () => window.removeEventListener('aparte-message-done', ended);
   }, []);
+  // The terminal pane opens on a shell: its first tab, on the machine's default shell.
+  const terminalOpen = panes.includes('terminal');
+  useEffect(() => {
+    if (terminalOpen && !terminalTabs.tabs.some((tab) => tab.shellId !== null)) newShellTab();
+    // Only when the pane opens.
+  }, [terminalOpen]);
   // « Changements »: what waits for the person, then what the conversation changed (task 6.4).
   const [reverted, setReverted] = useState(0);
   const [applied, setApplied] = useState<AppliedChangeView[]>([]);
@@ -627,6 +661,18 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         shown={shownPanes(panes, narrow)}
         narrow={narrow}
         content={{
+          terminal: {
+            body: (
+              <TerminalPanel
+                messages={messages}
+                tabs={terminalTabs}
+                onTabs={setTerminalTabs}
+                onNewTab={newShellTab}
+                cwd={activeProject?.roots[0] ?? null}
+                agent={agentOutput}
+              />
+            ),
+          },
           changes: {
             meta: (
               <>

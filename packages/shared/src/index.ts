@@ -34,6 +34,8 @@ export type {
 export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';
+export { APP_EVENT, pluginsAck, pluginsInvoke } from './ipc/plugins.js';
+export type { AppEvent, CommandOutputView } from './ipc/plugins.js';
 export { appliedChangeSchema, changesList, changesRevert, revertResultSchema } from './ipc/changes.js';
 export type { AppliedChangeView, RevertResultView } from './ipc/changes.js';
 export { changedFileSchema, fileEntrySchema, fileScopeSchema, filesChanged, filesList, filesRead, fileTextSchema } from './ipc/files.js';

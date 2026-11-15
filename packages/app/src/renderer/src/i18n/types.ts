@@ -367,6 +367,18 @@ export interface Messages {
     close: { files: string; changes: string; terminal: string };
     closeTip: string;
   };
+  /** The terminal (task 6.6): its tabs, the agent's, a shell that ended. */
+  terminal: {
+    tabs: string;
+    newTab: string;
+    agent: string;
+    byAgent: string;
+    output(name: string): string;
+    exited: string;
+    restart: string;
+    noShell: string;
+    exitCode(code: number | null): string;
+  };
   /** The « Changements » pane (task 6.4), and the header's counts that open it. */
   changes: {
     files(count: number): string;

@@ -44,6 +44,12 @@
   --bonaparte-accent-soft: color-mix(in srgb, var(--bonaparte-accent) 10%, var(--aparte-bg));
   --bonaparte-merged: #7A4BC2;
   --bonaparte-merged-bg: #F3EEFB;
+
+  /* The terminal (board « Conversation au travail »): dark in either theme. */
+  --bonaparte-terminal-bg: #1E1E1C;
+  --bonaparte-terminal-bar: #33332F;
+  --bonaparte-terminal-ink: #E6E6E1;
+  --bonaparte-terminal-muted: #B4B4AD;
 }
 
 [data-aparte-theme='dark'] {

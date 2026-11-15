@@ -8,7 +8,12 @@ import type { Plugin } from 'vite';
  * at run time: the app directory that ships must run with nothing but Electron
  * next to it. Third-party dependencies stay external, as usual.
  */
-const bundledWorkspace = ['@aparte/bonaparte-core', '@aparte/bonaparte-shared'];
+const bundledWorkspace = [
+  '@aparte/bonaparte-core',
+  '@aparte/bonaparte-shared',
+  '@aparte/bonaparte-plugin-sdk',
+  '@aparte/bonaparte-plugin-terminal',
+];
 
 /**
  * The Content-Security-Policy of the packaged window. Scripts come from the
