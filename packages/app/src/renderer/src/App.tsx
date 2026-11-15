@@ -11,6 +11,8 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
+import { focusComposer, sendAsPerson } from './aparte/composer';
+import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
@@ -64,6 +66,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   // The mode the conversation runs in: read again when a request comes, which it explains.
   const [mode, setMode] = useState<PlayMode>('repetition');
+  // The conversations born in this window: the page saves one before its first turn reaches the
+  // core, so a read then would answer the default mode; the switch's choice goes with that turn.
+  const bornHere = useRef(new Set<string>());
   useEffect(() => {
     chosen.current = mode;
   }, [mode]);
@@ -77,7 +82,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     void bridge
       .invoke(modesGet, { id: conversationId })
       .then((view) => {
-        if (current) setMode(view.mode);
+        if (current && !bornHere.current.has(conversationId)) setMode(view.mode);
       })
       .catch(() => undefined);
     return () => {
@@ -92,6 +97,30 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   useEffect(() => registerStepLabels(messages), [messages]);
   useEffect(() => registerToolLines(messages), [messages]);
+
+  // The plan card of Lecture: launching it moves the conversation to Plume or Répétition — the core
+  // first, so the go-ahead is decided in the new mode — then gives the model the go-ahead.
+  const plans = useRef<{ refresh(): void } | null>(null);
+  useEffect(() => {
+    const cards = setupPlanCards(messages, {
+      mode: () => chosen.current,
+      launch: (next) => {
+        setMode(next);
+        chosen.current = next;
+        const id = open.current;
+        void (id ? bridge.invoke(modesSet, { id, mode: next }) : Promise.resolve())
+          .catch(() => undefined)
+          .then(() => sendAsPerson(messages.plan.goAhead));
+      },
+      adjust: () => focusComposer(),
+    });
+    plans.current = cards;
+    return () => {
+      cards.stop();
+      plans.current = null;
+    };
+  }, [messages]);
+  useEffect(() => plans.current?.refresh(), [mode]);
   useEffect(() => registerRereadProgress(messages, locale), [messages, locale]);
 
   // What opening the conversation will cost, said before anything is paid.
@@ -135,6 +164,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         <EngineCard engine={engine} messages={messages} />
       </aside>
       <AparteChat
+        onConversationCreated={(id) => bornHere.current.add(id)}
         className="bonaparte-chat"
         centerWhenEmpty
         placeholder={messages.composer.placeholder}

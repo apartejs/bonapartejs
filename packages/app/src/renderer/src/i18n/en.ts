@@ -141,4 +141,20 @@ export const en: Messages = {
     created: 'new file',
     waiting: 'Waiting for your approval',
   },
+  plan: {
+    region: 'Plan',
+    files: 'Files touched',
+    changes: { new: 'new', modified: 'modified', deleted: 'deleted' },
+    toSettle: 'To settle on the way: ',
+    launchPlume: 'Launch in Plume',
+    launchRepetition: 'Launch in Répétition',
+    adjust: 'Change the plan…',
+    adjustHint: 'or reply to adjust it',
+    launched: (mode) => `Launched in ${mode}.`,
+    modeNote: {
+      plume: 'Writes go through without asking; commands still ask.',
+      repetition: 'Every write and every command will be asked.',
+    },
+    goAhead: 'Go ahead with the plan.',
+  },
 };

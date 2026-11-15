@@ -383,3 +383,95 @@ body {
   white-space: pre-wrap;
 }
 
+/* The plan card of Lecture: aparté's steps, then what the plan touches, what is left to settle,
+   and its actions (board « Le mode plan au travail »). */
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plan-card__extras {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.plan-card__extras:empty {
+  display: none;
+}
+
+.plan-card__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-card__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--aparte-surface-1);
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.plan-card__sign {
+  font-weight: 600;
+}
+
+.plan-card__file[data-change='new'] .plan-card__sign {
+  color: var(--aparte-success);
+}
+
+.plan-card__file[data-change='modified'] .plan-card__sign {
+  color: var(--aparte-warning);
+}
+
+.plan-card__file[data-change='deleted'] .plan-card__sign {
+  color: var(--aparte-error);
+}
+
+.plan-card__path {
+  color: var(--aparte-text);
+}
+
+.plan-card__questions {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--aparte-warning-surface);
+  color: var(--aparte-warning-ink);
+  font-size: 13px;
+}
+
+.plan-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-card__hint {
+  margin-inline-start: auto;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.plan-card__launched {
+  margin: 0;
+  font-size: 13px;
+  color: var(--aparte-text-muted);
+}
+
+.plan-card__launched-label {
+  font-weight: 600;
+  color: var(--aparte-success);
+}
+

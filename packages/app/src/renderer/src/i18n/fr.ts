@@ -141,4 +141,20 @@ export const fr: Messages = {
     created: 'nouveau fichier',
     waiting: 'Attend ton accord',
   },
+  plan: {
+    region: 'Plan',
+    files: 'Fichiers touchés',
+    changes: { new: 'nouveau', modified: 'modifié', deleted: 'supprimé' },
+    toSettle: 'À trancher en route : ',
+    launchPlume: 'Lancer en Plume',
+    launchRepetition: 'Lancer en Répétition',
+    adjust: 'Modifier le plan…',
+    adjustHint: 'ou réponds pour l’ajuster',
+    launched: (mode) => `Lancé en ${mode}.`,
+    modeNote: {
+      plume: 'Les écritures passent sans demander ; les commandes demandent encore.',
+      repetition: 'Chaque écriture et chaque commande te sera demandée.',
+    },
+    goAhead: 'Lance le plan.',
+  },
 };

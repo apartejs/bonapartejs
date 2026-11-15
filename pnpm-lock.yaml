@@ -65,6 +65,12 @@ importers:
       '@aparte/plugin-approval':
         specifier: 1.9.0
         version: 1.9.0(@aparte/core@1.9.0)
+      '@aparte/plugin-ask-user':
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
+      '@aparte/plugin-cards':
+        specifier: 1.9.0
+        version: 1.9.0(@aparte/core@1.9.0)
       '@aparte/plugin-diff':
         specifier: 1.9.0
         version: 1.9.0(@aparte/core@1.9.0)
@@ -200,6 +206,18 @@ packages:
 
   '@aparte/plugin-approval@1.9.0':
     resolution: {integrity: sha512-3hEX01lv1QxU5tJmGliuv10hzsELQqtb7G+rrpFAMJ4ZXxPFoGHBNcGdv+BVSqR5xSA42G4hv3bmIR8bBOFGRg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@aparte/core': '>=1.9.0 <2.0.0'
+
+  '@aparte/plugin-ask-user@1.9.0':
+    resolution: {integrity: sha512-iQuE32jnvD1Azj+6ew4246lhnoJtz6GEUX1YvPngiLAt1wwd/0Saf/P8p2BWyaBhudNZpl/xzA+sSB2WTmWCTA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@aparte/core': '>=1.9.0 <2.0.0'
+
+  '@aparte/plugin-cards@1.9.0':
+    resolution: {integrity: sha512-2psEMmWtthVOuQ0c5poisTBrDW5xzNiDUtPElc99s74uDdaQVgeqb4x946r5QTAl8mYcpWtPw3f4qciaDegLzA==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': '>=1.9.0 <2.0.0'
@@ -3387,6 +3405,14 @@ snapshots:
       '@aparte/core': 1.9.0
 
   '@aparte/plugin-approval@1.9.0(@aparte/core@1.9.0)':
+    dependencies:
+      '@aparte/core': 1.9.0
+
+  '@aparte/plugin-ask-user@1.9.0(@aparte/core@1.9.0)':
+    dependencies:
+      '@aparte/core': 1.9.0
+
+  '@aparte/plugin-cards@1.9.0(@aparte/core@1.9.0)':
     dependencies:
       '@aparte/core': 1.9.0
 

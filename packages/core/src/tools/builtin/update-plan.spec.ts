@@ -42,4 +42,29 @@ describe('update_plan', () => {
   it('is a tool of the interface: it writes nothing, runs nothing', () => {
     expect(updatePlan.def.effect).toBe('ui');
   });
+
+  it('carries the files the plan touches and the questions to settle on the way, for the card under the plan', async () => {
+    const result = await run({
+      title: 'Export the recap',
+      steps: [{ title: 'Write toCsv', status: 'pending' }],
+      files: [
+        { path: 'src/recap/csv.ts', change: 'new' },
+        { path: 'src/ui/RecapHeader.tsx', change: 'modified' },
+        { path: 'nowhere', change: 'renamed' },
+        { change: 'new' },
+      ],
+      questions: ['The separator: semicolon or comma.', '', 3],
+    });
+    expect(result.structuredContent).toEqual({
+      title: 'Export the recap',
+      steps: [{ title: 'Write toCsv', status: 'pending' }],
+      files: [
+        { path: 'src/recap/csv.ts', change: 'new' },
+        { path: 'src/ui/RecapHeader.tsx', change: 'modified' },
+      ],
+      questions: ['The separator: semicolon or comma.'],
+    });
+    expect(result.content).toBe('Plan updated: 1 steps, 0 done.');
+  });
 });
+

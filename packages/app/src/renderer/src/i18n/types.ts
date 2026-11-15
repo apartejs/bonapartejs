@@ -131,6 +131,22 @@ export interface Messages {
     /** The state word of a call that waits for the person. */
     waiting: string;
   };
+  /** The plan card of Lecture (board « Le mode plan au travail »). */
+  plan: {
+    region: string;
+    files: string;
+    changes: Record<'new' | 'modified' | 'deleted', string>;
+    /** Before the questions left to settle, with its space. */
+    toSettle: string;
+    launchPlume: string;
+    launchRepetition: string;
+    adjust: string;
+    adjustHint: string;
+    launched(mode: string): string;
+    modeNote: Record<'plume' | 'repetition', string>;
+    /** The person's go-ahead, sent as their message when they launch the plan. */
+    goAhead: string;
+  };
 }
 
 /** The tools of the core whose calls have a line of their own. */

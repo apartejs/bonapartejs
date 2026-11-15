@@ -16,6 +16,17 @@ interface PlanStep {
   detail?: string;
 }
 
+const CHANGES = ['new', 'modified', 'deleted'] as const;
+type FileChange = (typeof CHANGES)[number];
+
+/** A file the plan touches: its path and what happens to it. Anything else is left out. */
+function readFile(raw: unknown): { path: string; change: FileChange } | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { path, change } = raw as Record<string, unknown>;
+  if (typeof path !== 'string' || path.trim() === '' || !CHANGES.includes(change as FileChange)) return null;
+  return { path, change: change as FileChange };
+}
+
 function readStep(raw: unknown): PlanStep | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const { title, status, detail } = raw as Record<string, unknown>;
@@ -46,6 +57,20 @@ export const updatePlan: BuiltinTool = {
             required: ['title', 'status'],
           },
         },
+        files: {
+          type: 'array',
+          description: 'The files the plan touches.',
+          items: {
+            type: 'object',
+            properties: { path: { type: 'string' }, change: { type: 'string', enum: [...CHANGES] } },
+            required: ['path', 'change'],
+          },
+        },
+        questions: {
+          type: 'array',
+          description: 'What is left to settle on the way, each in a sentence: you will ask the person when it comes.',
+          items: { type: 'string' },
+        },
       },
       required: ['steps'],
     },
@@ -64,9 +89,19 @@ export const updatePlan: BuiltinTool = {
     const kept = steps as PlanStep[];
     const title = typeof input['title'] === 'string' && input['title'] !== '' ? input['title'] : undefined;
     const done = kept.filter((step) => step.status === 'done').length;
+    // What the card shows under the steps: a file or a question it cannot read is left out, never refused.
+    const files = Array.isArray(input['files']) ? input['files'].map(readFile).filter((file) => file !== null) : [];
+    const questions = Array.isArray(input['questions'])
+      ? input['questions'].filter((question): question is string => typeof question === 'string' && question.trim() !== '')
+      : [];
     return {
       content: `Plan updated: ${kept.length} steps, ${done} done.`,
-      structuredContent: { ...(title ? { title } : {}), steps: kept },
+      structuredContent: {
+        ...(title ? { title } : {}),
+        steps: kept,
+        ...(files.length > 0 ? { files } : {}),
+        ...(questions.length > 0 ? { questions } : {}),
+      },
     };
   },
 };
