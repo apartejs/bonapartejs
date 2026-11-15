@@ -4,7 +4,7 @@
  * the core, nothing written, nothing run —, proposes the folder's name, lets
  * them add other folders and choose the conversations' default mode. aparté's
  * kit draws it: `.aparte-dialog` on the native <dialog>, `.aparte-field`,
- * `.aparte-field-choice` (the kit has no segmented radio group).
+ * `.aparte-field-choice` (the kit has no segmented radio group: apartejs/aparte#225).
  */
 
 import {
