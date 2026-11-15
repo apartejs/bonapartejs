@@ -17,23 +17,55 @@ import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
 import { announceLoad, type EngineLoadAnnouncement } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
-import { readGpuMemoryBytes, readLlamaDeviceMemory } from './engine/gpu-memory.js';
+import {
+  readGpuMemoryBytes,
+  readLlamaDeviceMemory,
+} from './engine/gpu-memory.js';
 import { MeasureStore } from './engine/measures.js';
 import { installedLlama, installLlama } from './engine/llama-install.js';
-import { buildNumber, latestLlamaAsset, type LlamaAsset } from './engine/llama-release.js';
+import {
+  buildNumber,
+  latestLlamaAsset,
+  type LlamaAsset,
+} from './engine/llama-release.js';
 import { readBuildTag } from './engine/process-probe.js';
-import { EngineSupervisor, type EngineConfig, type KvCacheType } from './engine/supervisor.js';
-import { familyLayer, layerForModel, UnsupportedFamilyError, type FamilyId, type FamilyLayer } from './families/index.js';
+import {
+  EngineSupervisor,
+  type EngineConfig,
+  type KvCacheType,
+} from './engine/supervisor.js';
+import {
+  familyLayer,
+  layerForModel,
+  UnsupportedFamilyError,
+  type FamilyId,
+  type FamilyLayer,
+} from './families/index.js';
 import { readJsonFile } from './fs/json-file.js';
 import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
-import { defaultScanRoots, scanModels, type ModelSource, type ScanRoot } from './models/inventory.js';
+import {
+  defaultScanRoots,
+  scanModels,
+  type ModelSource,
+  type ScanRoot,
+} from './models/inventory.js';
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
-import { createTickets, installationSecret, type Tickets } from './agent/tickets.js';
-import { ConversationEngine, type EngineView, type TurnEvent, type TurnInput, type TurnResult } from './conversation/engine.js';
+import {
+  createTickets,
+  installationSecret,
+  type Tickets,
+} from './agent/tickets.js';
+import {
+  ConversationEngine,
+  type EngineView,
+  type TurnEvent,
+  type TurnInput,
+  type TurnResult,
+} from './conversation/engine.js';
 import type { PlayMode } from '@aparte/bonaparte-shared';
 import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
@@ -45,7 +77,13 @@ import { detectProject, type ProjectFacts } from './project/detect.js';
 import { readProjectInstructions } from './project/instructions.js';
 import { openJournal } from './journal/journal.js';
 import { projectToAparte } from './journal/projection.js';
-import { ProjectStore, type NewProject, type Project, type ProjectChanges } from './project/store.js';
+import { ConversationIndex, type SearchResult } from './conversation/index.js';
+import {
+  ProjectStore,
+  type NewProject,
+  type Project,
+  type ProjectChanges,
+} from './project/store.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
@@ -128,6 +166,11 @@ export interface Core {
   readonly checkpoints: CheckpointStore;
   /** The page's document of a conversation; rebuilt from its journal when the page's is missing; null for none. */
   conversationDocument(id: string): Promise<unknown>;
+  /** « Rechercher »: the conversations where the words were said, and the files of the open conversation's project. */
+  search(
+    query: string,
+    options?: { conversationId?: string },
+  ): Promise<SearchResult>;
   /** Deletes a conversation: its card, its journal, its memory — and the originals its turns kept. */
   removeConversation(id: string): Promise<void>;
   /** The projects: made from a folder (what it says read first), each with its folders and its default mode. */
@@ -155,17 +198,33 @@ export interface Core {
    * not kept without a new confirmation (security rule 9): Plume until the
    * person confirms it, and `reconfirm` says so.
    */
-  modeOf(conversationId: string): Promise<{ mode: PlayMode; reconfirm: boolean }>;
+  modeOf(
+    conversationId: string,
+  ): Promise<{ mode: PlayMode; reconfirm: boolean }>;
   setMode(conversationId: string, mode: PlayMode): Promise<void>;
   /** What a call would change — the text before and after, and their diff — for the approval card. */
-  previewCall(conversationId: string, call: { name: string; input: unknown }): Promise<ToolPreview | null>;
+  previewCall(
+    conversationId: string,
+    call: { name: string; input: unknown },
+  ): Promise<ToolPreview | null>;
   /** Is this the resume of the pause the conversation waits on: its ticket, its answers? */
-  checkResume(conversationId: string, resume: { messageId: string; ticket: string; outcomes: Record<string, unknown> }): Promise<ResumeCheck>;
+  checkResume(
+    conversationId: string,
+    resume: {
+      messageId: string;
+      ticket: string;
+      outcomes: Record<string, unknown>;
+    },
+  ): Promise<ResumeCheck>;
   /** A pause answered: its calls run or refused as answered, then the turn goes on — or pauses again. */
   resumeTurn(
     conversationId: string,
     check: Extract<ResumeCheck, { ok: true }>,
-    options: { messageId: string; clientTools: readonly ClientTool[]; signal: AbortSignal },
+    options: {
+      messageId: string;
+      clientTools: readonly ClientTool[];
+      signal: AbortSignal;
+    },
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult>;
@@ -208,7 +267,10 @@ const globalConfigSchema = z.looseObject({
   backend: z
     .union([
       z.object({ mode: z.literal('remote'), url: z.url() }),
-      z.object({ mode: z.literal('managed'), binPath: z.string().min(1).optional() }),
+      z.object({
+        mode: z.literal('managed'),
+        binPath: z.string().min(1).optional(),
+      }),
     ])
     .optional(),
   engine: engineSettingsSchema,
@@ -220,7 +282,8 @@ type GlobalConfig = z.infer<typeof globalConfigSchema>;
 const LLAMA_CANDIDATES = ['llama-server', 'llama'];
 
 const samePath = (a: string, b: string): boolean =>
-  resolve(a).replace(/\\/g, '/').toLowerCase() === resolve(b).replace(/\\/g, '/').toLowerCase();
+  resolve(a).replace(/\\/g, '/').toLowerCase() ===
+  resolve(b).replace(/\\/g, '/').toLowerCase();
 
 export function createCore(deps: CoreDeps): Core {
   const env = deps.env ?? process.env;
@@ -261,11 +324,16 @@ export function createCore(deps: CoreDeps): Core {
       raw = await readJsonFile(configFile);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw new Error(`The configuration file ${configFile} cannot be read: ${(error as Error).message}`);
+        throw new Error(
+          `The configuration file ${configFile} cannot be read: ${(error as Error).message}`,
+        );
       }
     }
     const parsed = globalConfigSchema.safeParse(raw);
-    if (!parsed.success) throw new Error(`The configuration file ${configFile} is not valid: ${parsed.error.message}`);
+    if (!parsed.success)
+      throw new Error(
+        `The configuration file ${configFile} is not valid: ${parsed.error.message}`,
+      );
     config = parsed.data;
     return config;
   }
@@ -273,15 +341,19 @@ export function createCore(deps: CoreDeps): Core {
   function remoteUrl(read: GlobalConfig): string | undefined {
     const fromEnv = env['BONAPARTE_LLAMA_URL'];
     if (fromEnv) return fromEnv.replace(/\/+$/, '');
-    return read.backend?.mode === 'remote' ? read.backend.url.replace(/\/+$/, '') : undefined;
+    return read.backend?.mode === 'remote'
+      ? read.backend.url.replace(/\/+$/, '')
+      : undefined;
   }
 
   async function launchSettings() {
     const read = await readConfig();
     return {
       nCtx: read.engine?.nCtx ?? (settingDefault('nCtx') as number),
-      cacheType: (read.engine?.cacheType ?? settingDefault('cacheType')) as KvCacheType,
-      gpuLayers: (read.engine?.gpuLayers ?? settingDefault('gpuLayers')) as number | 'all',
+      cacheType: (read.engine?.cacheType ??
+        settingDefault('cacheType')) as KvCacheType,
+      gpuLayers: (read.engine?.gpuLayers ?? settingDefault('gpuLayers')) as
+        number | 'all',
     };
   }
 
@@ -293,7 +365,10 @@ export function createCore(deps: CoreDeps): Core {
   /** The remote engine, configured once. Reaches nothing: joining is a turn's. */
   async function configuredRemote(): Promise<void> {
     if (supervisor.engine) return;
-    await supervisor.configure({ mode: 'remote', url: remoteUrl(await readConfig())! });
+    await supervisor.configure({
+      mode: 'remote',
+      url: remoteUrl(await readConfig())!,
+    });
   }
 
   /**
@@ -305,8 +380,16 @@ export function createCore(deps: CoreDeps): Core {
     const binPath = await llamaBinary();
     const current = supervisor.engine;
     // A build installed since: taken at the next load, never under a model that runs.
-    if (current?.mode === 'managed' && (current.binPath === binPath || supervisor.loaded)) return current;
-    await supervisor.configure({ mode: 'managed', binPath, ...(await launchSettings()) });
+    if (
+      current?.mode === 'managed' &&
+      (current.binPath === binPath || supervisor.loaded)
+    )
+      return current;
+    await supervisor.configure({
+      mode: 'managed',
+      binPath,
+      ...(await launchSettings()),
+    });
     return supervisor.engine!;
   }
 
@@ -319,10 +402,23 @@ export function createCore(deps: CoreDeps): Core {
   function llamaFound(): Promise<LlamaFound | null> {
     found ??= (async (): Promise<LlamaFound | null> => {
       const read = await readConfig();
-      const configured = read.backend?.mode === 'managed' ? read.backend.binPath : env['BONAPARTE_LLAMA_BIN'];
-      if (configured) return { source: 'configured', path: configured, build: await buildOf([configured]) };
+      const configured =
+        read.backend?.mode === 'managed'
+          ? read.backend.binPath
+          : env['BONAPARTE_LLAMA_BIN'];
+      if (configured)
+        return {
+          source: 'configured',
+          path: configured,
+          build: await buildOf([configured]),
+        };
       const managed = await installedLlama(llamaDir);
-      if (managed) return { source: 'managed', path: managed.binary, build: managed.build };
+      if (managed)
+        return {
+          source: 'managed',
+          path: managed.binary,
+          build: managed.build,
+        };
       // The tests' fake binary stands for the one on the PATH.
       if (deps.llamaCommand) {
         const build = await buildOf(deps.llamaCommand);
@@ -334,15 +430,22 @@ export function createCore(deps: CoreDeps): Core {
       }
       return null;
     })();
-    void found.then((result) => {
-      if (!result) found = undefined;
-    }, () => (found = undefined));
+    void found.then(
+      (result) => {
+        if (!result) found = undefined;
+      },
+      () => (found = undefined),
+    );
     return found;
   }
 
   /** `b12383`, read from `--version` (the unified CLI takes it without `serve`); null when it does not answer. */
   async function buildOf(command: readonly string[]): Promise<string | null> {
-    const tag = await readBuildTag(command[0]!, [...command.slice(1), '--version'], deps.spawn);
+    const tag = await readBuildTag(
+      command[0]!,
+      [...command.slice(1), '--version'],
+      deps.spawn,
+    );
     if (tag === 'unknown') return null;
     const number = buildNumber(tag);
     return number === null ? tag : `b${number}`;
@@ -352,7 +455,9 @@ export function createCore(deps: CoreDeps): Core {
     const llama = await llamaFound();
     if (llama) return llama.path;
     if (deps.llamaCommand) return 'llama-server';
-    throw new Error('llama.cpp was not found: neither llama-server nor llama answers on this machine.');
+    throw new Error(
+      'llama.cpp was not found: neither llama-server nor llama answers on this machine.',
+    );
   }
 
   // ── Keeping llama.cpp: what is published, and downloading it on demand ──
@@ -365,18 +470,27 @@ export function createCore(deps: CoreDeps): Core {
 
   async function checkLatest(): Promise<void> {
     if (deps.llamaReleases === null) return;
-    if (latest && latest !== 'failed' && Date.now() - latest.at < CHECK_EVERY_MS) return;
+    if (
+      latest &&
+      latest !== 'failed' &&
+      Date.now() - latest.at < CHECK_EVERY_MS
+    )
+      return;
     try {
       latest = {
         at: Date.now(),
-        asset: await latestLlamaAsset(deps.llamaReleases ? { releases: deps.llamaReleases } : {}),
+        asset: await latestLlamaAsset(
+          deps.llamaReleases ? { releases: deps.llamaReleases } : {},
+        ),
       };
     } catch {
       latest = 'failed';
     }
   }
 
-  async function llamaCpp(options: { checkLatest?: boolean } = {}): Promise<LlamaCppState> {
+  async function llamaCpp(
+    options: { checkLatest?: boolean } = {},
+  ): Promise<LlamaCppState> {
     if (options.checkLatest) await checkLatest();
     const current = await llamaFound();
     const asset = latest && latest !== 'failed' ? latest.asset : null;
@@ -386,11 +500,21 @@ export function createCore(deps: CoreDeps): Core {
       return offered !== null && (have === null || have < offered);
     };
     return {
-      current: current ? { source: current.source, build: current.build } : null,
+      current: current
+        ? { source: current.source, build: current.build }
+        : null,
       latest: asset ? { build: asset.build, bytes: asset.bytes } : null,
-      check: latest === undefined ? 'not-asked' : latest === 'failed' ? 'failed' : 'done',
+      check:
+        latest === undefined
+          ? 'not-asked'
+          : latest === 'failed'
+            ? 'failed'
+            : 'done',
       // A llama.cpp the person configured is theirs: nothing is offered over it.
-      updateAvailable: asset !== null && current?.source !== 'configured' && behind(current?.build ?? null),
+      updateAvailable:
+        asset !== null &&
+        current?.source !== 'configured' &&
+        behind(current?.build ?? null),
       installing,
     };
   }
@@ -399,11 +523,16 @@ export function createCore(deps: CoreDeps): Core {
     install ??= (async () => {
       // The build a server runs is not replaced under it: a relaunch would find it gone.
       if (supervisor.loaded || supervisor.status() !== 'stopped') {
-        throw new Error('A model is loaded, or loading: llama.cpp is updated once it is stopped.');
+        throw new Error(
+          'A model is loaded, or loading: llama.cpp is updated once it is stopped.',
+        );
       }
       if (!latest || latest === 'failed' || !latest.asset) await checkLatest();
       const asset = latest && latest !== 'failed' ? latest.asset : null;
-      if (!asset) throw new Error('No llama.cpp build is published for this machine, or GitHub could not be reached.');
+      if (!asset)
+        throw new Error(
+          'No llama.cpp build is published for this machine, or GitHub could not be reached.',
+        );
       installing = { done: 0, total: asset.bytes };
       try {
         await installLlama({
@@ -438,7 +567,11 @@ export function createCore(deps: CoreDeps): Core {
     if (!deps.llamaCommand) {
       const command = (await llamaFound().catch(() => null))?.path;
       const fromEngine = command
-        ? await readLlamaDeviceMemory(command, detectServeCommandPrefix(command), spawn)
+        ? await readLlamaDeviceMemory(
+            command,
+            detectServeCommandPrefix(command),
+            spawn,
+          )
         : null;
       if (fromEngine !== null) return fromEngine;
     }
@@ -456,7 +589,10 @@ export function createCore(deps: CoreDeps): Core {
             model: {
               path: model.modelPath,
               name: nameOf(model.modelPath),
-              family: engine.mode === 'managed' ? (loaded?.info.family ?? null) : (remoteFamily?.id ?? null),
+              family:
+                engine.mode === 'managed'
+                  ? (loaded?.info.family ?? null)
+                  : (remoteFamily?.id ?? null),
               nCtx: model.nCtx,
             },
           }
@@ -471,18 +607,33 @@ export function createCore(deps: CoreDeps): Core {
     const totalBytes = await gpuBytes();
     return Promise.all(
       found.map(async (model): Promise<ModelChoice> => {
-        const base = { path: model.path, name: model.name, sizeBytes: model.sizeBytes, source: model.source };
+        const base = {
+          path: model.path,
+          name: model.name,
+          sizeBytes: model.sizeBytes,
+          source: model.source,
+        };
         let info: GgufInfo;
         try {
           info = await readGgufInfo(model.path);
         } catch {
-          return { ...base, family: null, supported: false, problem: 'unreadable', kvBytesPerToken: null, announcement: null };
+          return {
+            ...base,
+            family: null,
+            supported: false,
+            problem: 'unreadable',
+            kvBytesPerToken: null,
+            announcement: null,
+          };
         }
         let problem: ModelChoice['problem'];
         try {
           layerForModel(info);
         } catch (error) {
-          problem = error instanceof UnsupportedFamilyError ? error.code : 'unsupported-family';
+          problem =
+            error instanceof UnsupportedFamilyError
+              ? error.code
+              : 'unsupported-family';
         }
         const loadSeconds = supervisor.loadSeconds(model.path);
         return {
@@ -492,7 +643,11 @@ export function createCore(deps: CoreDeps): Core {
           ...(problem ? { problem } : {}),
           kvBytesPerToken: kvBytesPerToken(info, settings.cacheType),
           announcement: announceLoad(
-            { info, fileBytes: model.sizeBytes, ...(loadSeconds !== undefined ? { loadSeconds } : {}) },
+            {
+              info,
+              fileBytes: model.sizeBytes,
+              ...(loadSeconds !== undefined ? { loadSeconds } : {}),
+            },
             settings,
             { totalBytes },
           ),
@@ -508,7 +663,9 @@ export function createCore(deps: CoreDeps): Core {
     .then((disk) => (kvBudget = defaultBudgetBytes(disk.bavail * disk.bsize)))
     .catch(() => undefined);
   const kv = new KvStore(resolve(kvDir), { budgetBytes: () => kvBudget });
-  const conversationStore = new ConversationStore(join(deps.dataDir, 'conversations'));
+  const conversationStore = new ConversationStore(
+    join(deps.dataDir, 'conversations'),
+  );
   // The one registry, and the one policy. No project yet: the perimeter is the home folder.
   const tools = new ToolRegistry();
   for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
@@ -518,7 +675,9 @@ export function createCore(deps: CoreDeps): Core {
   // before a turn, a preview or a resume (rootsOf), so the policy — which decides at once — finds them.
   const projectStore = new ProjectStore(deps.dataDir);
   const projectRoots = new Map<string, string[]>();
-  async function rootsOf(conversationId: string): Promise<{ roots: string[]; projectId?: string }> {
+  async function rootsOf(
+    conversationId: string,
+  ): Promise<{ roots: string[]; projectId?: string }> {
     const projectId = (await conversationStore.get(conversationId))?.projectId;
     const project = projectId ? await projectStore.get(projectId) : undefined;
     if (!project) return { roots: perimeter() };
@@ -526,25 +685,40 @@ export function createCore(deps: CoreDeps): Core {
     return { roots: project.roots, projectId: project.id };
   }
   const permissions = new PermissionEngine({
-    roots: (projectId) => (projectId ? (projectRoots.get(projectId) ?? perimeter()) : perimeter()),
+    roots: (projectId) =>
+      projectId ? (projectRoots.get(projectId) ?? perimeter()) : perimeter(),
     dataDir: deps.dataDir,
   });
   // Before a tool writes, the file as it was, kept per turn (the turn is its message).
   const checkpoints = new CheckpointStore(join(deps.dataDir, 'checkpoints'));
+  // « Rechercher »: the conversations' text, read once, refreshed when a turn ends (task 5.8).
+  const index = new ConversationIndex(
+    conversationStore,
+    () => loaded?.layer ?? remoteFamily ?? familyLayer('gemma'),
+  );
   const keepOriginals = (conversationId: string, turnId: string) => ({
-    beforeWrite: (absolute: string, shown: string) => checkpoints.before(conversationId, turnId, absolute, shown),
-    afterWrite: (absolute: string) => checkpoints.after(conversationId, turnId, absolute),
+    beforeWrite: (absolute: string, shown: string) =>
+      checkpoints.before(conversationId, turnId, absolute, shown),
+    afterWrite: (absolute: string) =>
+      checkpoints.after(conversationId, turnId, absolute),
   });
   // Impro confirmed by the person during this run of the app: a mode read from disk is not a confirmation.
   const improConfirmed = new Set<string>();
-  async function modeOf(conversationId: string): Promise<{ mode: PlayMode; reconfirm: boolean }> {
-    const mode = (await conversationStore.get(conversationId))?.mode ?? 'repetition';
-    if (mode === 'impro' && !improConfirmed.has(conversationId)) return { mode: modeAfterRestart(mode), reconfirm: true };
+  async function modeOf(
+    conversationId: string,
+  ): Promise<{ mode: PlayMode; reconfirm: boolean }> {
+    const mode =
+      (await conversationStore.get(conversationId))?.mode ?? 'repetition';
+    if (mode === 'impro' && !improConfirmed.has(conversationId))
+      return { mode: modeAfterRestart(mode), reconfirm: true };
     return { mode, reconfirm: false };
   }
   // The tickets of paused turns, signed with this installation's secret (made at the first turn).
   let ticketsReady: Promise<Tickets> | undefined;
-  const tickets = (): Promise<Tickets> => (ticketsReady ??= installationSecret(deps.dataDir).then((secret) => createTickets(secret)));
+  const tickets = (): Promise<Tickets> =>
+    (ticketsReady ??= installationSecret(deps.dataDir).then((secret) =>
+      createTickets(secret),
+    ));
   const conversations = new ConversationEngine({
     store: conversationStore,
     kv,
@@ -559,7 +733,8 @@ export function createCore(deps: CoreDeps): Core {
         ...engine,
         live,
         modelPath: supervisor.loaded?.modelPath ?? '',
-        kvBytesPerToken: loaded && live ? kvBytesPerToken(loaded.info, live.cacheTypeK) : null,
+        kvBytesPerToken:
+          loaded && live ? kvBytesPerToken(loaded.info, live.cacheTypeK) : null,
         generation: supervisor.generation,
       };
     },
@@ -572,29 +747,38 @@ export function createCore(deps: CoreDeps): Core {
     // The project's instructions (.bonaparte/instructions.md, AGENTS.md or CLAUDE.md), read at each turn:
     // frozen at the first, a change told by a note (task 4.7).
     instructions: async (meta) => {
-      const project = meta.projectId ? await projectStore.get(meta.projectId) : undefined;
-      return project ? ((await readProjectInstructions(project.roots))?.text ?? '') : undefined;
+      const project = meta.projectId
+        ? await projectStore.get(meta.projectId)
+        : undefined;
+      return project
+        ? ((await readProjectInstructions(project.roots))?.text ?? '')
+        : undefined;
     },
     // The person learns it when the conversation opens again (« not saved »); the log keeps why.
     onSaveError: (error, conversationId) =>
-      log(`[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`),
+      log(
+        `[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`,
+      ),
   });
 
   async function currentEngine(): Promise<Engine | undefined> {
-      if ((await mode()) === 'remote') {
-        await configuredRemote();
-        if (supervisor.status() !== 'ready') {
-          remoteFamily = undefined;
-          await supervisor.connect();
-        }
-        const client = supervisor.client();
-        if (!client) return undefined;
-        remoteFamily ??= layerForModel({ chatTemplate: (await client.props()).chatTemplate });
-        return { client, family: remoteFamily };
+    if ((await mode()) === 'remote') {
+      await configuredRemote();
+      if (supervisor.status() !== 'ready') {
+        remoteFamily = undefined;
+        await supervisor.connect();
       }
       const client = supervisor.client();
-      if (!client || !loaded || supervisor.loaded?.modelPath !== loaded.path) return undefined;
-      return { client, family: loaded.layer };
+      if (!client) return undefined;
+      remoteFamily ??= layerForModel({
+        chatTemplate: (await client.props()).chatTemplate,
+      });
+      return { client, family: remoteFamily };
+    }
+    const client = supervisor.client();
+    if (!client || !loaded || supervisor.loaded?.modelPath !== loaded.path)
+      return undefined;
+    return { client, family: loaded.layer };
   }
 
   async function agentTurn(
@@ -607,32 +791,44 @@ export function createCore(deps: CoreDeps): Core {
     const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
       name: tool.name,
       description: typeof tool.description === 'string' ? tool.description : '',
-      inputSchema: typeof tool.inputSchema === 'object' && tool.inputSchema !== null ? (tool.inputSchema as Record<string, unknown>) : {},
+      inputSchema:
+        typeof tool.inputSchema === 'object' && tool.inputSchema !== null
+          ? (tool.inputSchema as Record<string, unknown>)
+          : {},
       effect: 'ui',
       source: 'builtin',
       where: 'window',
     }));
     const signer = await tickets();
     const { roots, projectId } = await rootsOf(conversationId);
-    return runAgentTurn(
-      {
-        conversationId,
-        input,
-        mode: (await modeOf(conversationId)).mode,
-        ...(projectId ? { projectId } : {}),
-        registry: tools,
-        permissions,
-        conversations,
-        roots,
-        nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
-        windowTools,
-        ...keepOriginals(conversationId, input.messageId ?? 'turn'),
-        ticket: (pending) => signer.signTicket({ messageId: input.messageId ?? '', calls: pending.map((call) => call.toolCallId) }),
-        signal: options.signal,
-      },
-      emit,
-      onTurnEvent,
-    );
+    // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
+    try {
+      return await runAgentTurn(
+        {
+          conversationId,
+          input,
+          mode: (await modeOf(conversationId)).mode,
+          ...(projectId ? { projectId } : {}),
+          registry: tools,
+          permissions,
+          conversations,
+          roots,
+          nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
+          windowTools,
+          ...keepOriginals(conversationId, input.messageId ?? 'turn'),
+          ticket: (pending) =>
+            signer.signTicket({
+              messageId: input.messageId ?? '',
+              calls: pending.map((call) => call.toolCallId),
+            }),
+          signal: options.signal,
+        },
+        emit,
+        onTurnEvent,
+      );
+    } finally {
+      await index.refresh(conversationId).catch(() => undefined);
+    }
   }
 
   return {
@@ -641,8 +837,13 @@ export function createCore(deps: CoreDeps): Core {
     models,
 
     async loadModel(path) {
-      if ((await mode()) !== 'managed') throw new Error('The engine is a server that already runs: it loads no model.');
-      const listed = (await scanModels(deps.modelRoots ?? defaultScanRoots(env))).find((model) => samePath(model.path, path));
+      if ((await mode()) !== 'managed')
+        throw new Error(
+          'The engine is a server that already runs: it loads no model.',
+        );
+      const listed = (
+        await scanModels(deps.modelRoots ?? defaultScanRoots(env))
+      ).find((model) => samePath(model.path, path));
       if (!listed) throw new ModelNotListedError(path);
       const info = await readGgufInfo(listed.path);
       // Refused before anything is launched.
@@ -660,7 +861,11 @@ export function createCore(deps: CoreDeps): Core {
     hold: () => supervisor.hold(),
     // The conversation in the slot is saved before the engine stops: its memory survives the restart.
     async stop() {
-      await conversations.flush().catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
+      await conversations
+        .flush()
+        .catch((error: unknown) =>
+          log(`[bonaparte] a memory was not saved: ${String(error)}`),
+        );
       await supervisor.stop();
     },
     conversations,
@@ -678,14 +883,31 @@ export function createCore(deps: CoreDeps): Core {
       remove: (id) => projectStore.remove(id),
     },
 
+    async search(query, options = {}) {
+      // The files of the open conversation's project; none without a project (never the whole home folder).
+      const place = options.conversationId
+        ? await rootsOf(options.conversationId)
+        : undefined;
+      return index.search(
+        query,
+        place?.projectId ? { roots: place.roots } : {},
+      );
+    },
+
     async conversationDocument(id) {
       const saved = await conversationStore.loadDocument(id);
       if (saved !== null) return saved;
       const meta = await conversationStore.get(id);
       if (!meta) return null;
       // The journal is the truth: read with the family of the engine loaded, Gemma's (the product's) without one.
-      const family = (await currentEngine().catch(() => undefined))?.family ?? familyLayer('gemma');
-      const journal = await openJournal(conversationStore.dir, id, meta.branchId);
+      const family =
+        (await currentEngine().catch(() => undefined))?.family ??
+        familyLayer('gemma');
+      const journal = await openJournal(
+        conversationStore.dir,
+        id,
+        meta.branchId,
+      );
       return projectToAparte(meta, journal.entries(), family);
     },
 
@@ -720,7 +942,11 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async checkResume(conversationId, resume) {
-      return checkResume(await conversations.paused(conversationId), resume, await tickets());
+      return checkResume(
+        await conversations.paused(conversationId),
+        resume,
+        await tickets(),
+      );
     },
 
     async resumeTurn(conversationId, check, options, emit, onTurnEvent) {
@@ -744,12 +970,31 @@ export function createCore(deps: CoreDeps): Core {
       );
       if (waiting.length > 0) {
         // A call queued behind must be asked about in its turn: the turn pauses again.
-        const ticket = (await tickets()).signTicket({ messageId: options.messageId, calls: waiting.map((call) => call.toolCallId) });
-        await conversations.recordAnswers(conversationId, { outcomes: check.outcomes, results, pending: { calls: waiting, ticket } });
-        return { usage: { inputTokens: 0, outputTokens: 0 }, suspended: { pending: waiting, ticket } };
+        const ticket = (await tickets()).signTicket({
+          messageId: options.messageId,
+          calls: waiting.map((call) => call.toolCallId),
+        });
+        await conversations.recordAnswers(conversationId, {
+          outcomes: check.outcomes,
+          results,
+          pending: { calls: waiting, ticket },
+        });
+        return {
+          usage: { inputTokens: 0, outputTokens: 0 },
+          suspended: { pending: waiting, ticket },
+        };
       }
-      await conversations.recordAnswers(conversationId, { outcomes: check.outcomes, results });
-      return agentTurn(conversationId, { resume: true, messageId: options.messageId }, options, emit, onTurnEvent);
+      await conversations.recordAnswers(conversationId, {
+        outcomes: check.outcomes,
+        results,
+      });
+      return agentTurn(
+        conversationId,
+        { resume: true, messageId: options.messageId },
+        options,
+        emit,
+        onTurnEvent,
+      );
     },
     llamaCpp,
     installLlamaCpp,
@@ -767,4 +1012,3 @@ export class ModelNotListedError extends Error {
 function nameOf(path: string): string {
   return (path.split(/[\\/]/).pop() ?? path).replace(/\.gguf$/i, '');
 }
-

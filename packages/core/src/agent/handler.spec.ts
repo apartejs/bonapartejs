@@ -478,5 +478,18 @@ describe('the agent handler — the mode of a new conversation', () => {
     await (await handler(at('/c/nowhere?project=ghost', turn(user('Bonjour'))))).text();
     expect((await core.conversationStore.get('nowhere'))?.projectId).toBeUndefined();
   });
+
+  it('« Rechercher » finds a conversation as soon as its turn ends, and the files of its project', async () => {
+    const { core, handler } = await setup({ responder: () => 'Le fuseau horaire est Europe/Paris.' });
+    const folder = await mkdtemp(join(tmpdir(), 'bp-handler-search-'));
+    await mkdir(join(folder, 'src'), { recursive: true });
+    await writeFile(join(folder, 'src', 'timezone.ts'), '');
+    const project = await core.projects.create({ name: 'p', roots: [folder] });
+    expect((await core.search('fuseau')).conversations).toEqual([]);
+    await (await handler(at(`/c/zones?project=${project.id}`, turn(user('Quel fuseau ?'))))).text();
+    const found = await core.search('fuseau', { conversationId: 'zones' });
+    expect(found.conversations.map((one) => one.id)).toEqual(['zones']);
+    expect((await core.search('timezone', { conversationId: 'zones' })).files).toEqual([{ path: 'src/timezone.ts' }]);
+  });
 });
 
