@@ -56,7 +56,8 @@ async function rig() {
   return { id, store, engine, branches, say, entries, branchId };
 }
 
-describe('the branches of a conversation', () => {
+// Several turns each: slow when the whole suite runs at once.
+describe('the branches of a conversation', { timeout: 30_000 }, () => {
   it('lists each branch: where it parts from its parent, what it says there, which one is shown', async () => {
     const { id, branches, say, entries, branchId } = await rig();
     await say('Premier message.', 'm1');

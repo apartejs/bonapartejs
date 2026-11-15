@@ -969,6 +969,7 @@ export function createCore(deps: CoreDeps): Core {
         kvBytesPerToken:
           loaded && live ? kvBytesPerToken(loaded.info, live.cacheTypeK) : null,
         generation: supervisor.generation,
+        ...(loaded && live ? { slidingWindow: loaded.info.slidingWindow } : {}),
       };
     },
     prompt: (meta) => ({

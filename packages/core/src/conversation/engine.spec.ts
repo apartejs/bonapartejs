@@ -72,7 +72,7 @@ async function rig(
     ...(options.mode ? { mode: options.mode } : {}),
     engine: async () => {
       engineCalls += 1;
-      return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
+      return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation, slidingWindow: 1024 };
     },
     prompt: () => ({ kind: 'code', tools: options.tools?.() ?? [], perimeter: options.perimeter?.() ?? [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
   });
@@ -127,6 +127,27 @@ describe('ConversationEngine — a turn', () => {
 });
 
 describe('ConversationEngine — the memory', () => {
+  it('a conversation leaving the slot is read to the end of its last answer first, nothing generated: its state ends there', async () => {
+    // A model with a sliding window resumes from a context checkpoint, and llama.cpp makes one only while it
+    // reads a prompt — never in what it generates. Read once more to the answer's end, the saved state gets
+    // one there: coming back costs a few tokens, not the whole last answer (task 7.0).
+    const completions: { prompt: string; nPredict: unknown }[] = [];
+    const { store, conversation, say } = await rig({
+      server: { onCompletion: (body) => completions.push({ prompt: String(body['prompt']), nPredict: body['n_predict'] }) },
+    });
+    const a = await conversation();
+    const b = await conversation();
+    await say(a.id, 'Bonjour');
+    const answered = completions.length;
+    await say(b.id, 'Salut');
+    const settle = completions.findIndex((completion, index) => index >= answered && completion.nPredict === 0 && completion.prompt.includes('Bonjour'));
+    expect(settle).toBeGreaterThanOrEqual(0);
+    expect(completions[settle]!.prompt).toBe(frozenPrompt((await openJournal(store.dir, a.id)).entries()));
+    // Before the conversation arriving is answered.
+    const answerOfB = completions.findIndex((completion) => completion.nPredict !== 0 && completion.prompt.includes('Salut'));
+    expect(settle).toBeLessThan(answerOfB);
+  });
+
   it('a new conversation starts from the seed: prepared by the first, restored by the next', async () => {
     const { kv, conversation, say } = await rig();
     const first = await conversation();

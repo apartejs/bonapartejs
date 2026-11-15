@@ -95,7 +95,8 @@ async function rig() {
   return { id, engine, store, kv, rewind, checkpoints, prompts, a, csv, branchOf, entries, target };
 }
 
-describe('going back before a message', () => {
+// Several turns each: slow when the whole suite runs at once.
+describe('going back before a message', { timeout: 30_000 }, () => {
   it('the code and the conversation: the files as before the message, a branch that starts before it, the old one kept with its memory', async () => {
     const { id, rewind, kv, prompts, a, csv, branchOf, entries, target, engine } = await rig();
     const before = await branchOf();

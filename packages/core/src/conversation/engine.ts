@@ -56,6 +56,11 @@ export interface EngineView {
   kvBytesPerToken: number | null;
   /** Which server: a relaunched one (after a crash, another model) is a new one, its slots empty. */
   generation: number;
+  /**
+   * The model's sliding window (GGUF), 0 or absent without one. llama.cpp then keeps only the window's last
+   * tokens in those layers, and resumes a shorter prefix from a context checkpoint (task 7.0).
+   */
+  slidingWindow?: number;
 }
 
 export interface ConversationEngineDeps {
@@ -834,12 +839,31 @@ export class ConversationEngine {
    * The slot hook: the conversation leaving is saved, room made first for
    * what it will weigh — never at the cost of the state of the one arriving.
    */
+  /**
+   * Before a conversation's state is saved, on a model with a sliding window: its prompt read once more to the
+   * end of its last answer, nothing generated. llama.cpp puts a context checkpoint where such a reading starts,
+   * and never in what it generated: the state saved then ends on one, and coming back reads a few tokens
+   * again — not the whole last answer. A reading that fails costs only that.
+   */
+  private async settle(owner: Extract<SlotOwner, { kind: 'conversation' }>, slotId: number, client: LlamaCppHttpClient): Promise<void> {
+    try {
+      const prompt = frozenPrompt((await openJournal(this.deps.store.dir, owner.conversationId, owner.branchId)).entries());
+      if (!prompt) return;
+      for await (const _ of client.complete({ prompt, idSlot: slotId, cachePrompt: true, nPredict: 0 })) {
+        // Only the reading matters.
+      }
+    } catch {
+      // The state is saved as it is.
+    }
+  }
+
   private async save(owner: SlotOwner, slotId: number, incoming?: SlotOwner): Promise<void> {
     const last = this.lastRun.get(ownerKey(owner));
     const live = last?.engine.live;
     if (!last || !live) return;
     // The slot of a server that went away holds nothing of this conversation.
     if ((await this.deps.engine())?.generation !== last.engine.generation) return;
+    if (owner.kind === 'conversation' && (last.engine.slidingWindow ?? 0) > 0) await this.settle(owner, slotId, last.engine.client);
     await this.deps.kv.saveState(last.engine.client, slotId, ownerKey(owner), live, {
       expectedBytes: last.tokens * (last.engine.kvBytesPerToken ?? 0),
       keep: incoming?.kind === 'conversation' ? [ownerKey(incoming)] : [],
