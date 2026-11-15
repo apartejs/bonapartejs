@@ -27,7 +27,9 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerConversationChannels(ipc, core);
   registerModeChannels(ipc, core);
   registerProjectChannels(ipc, core, facts.chooseFolder);
-  ipc.handle(searchQuery, ({ query, conversationId }) => core.search(query, conversationId ? { conversationId } : {}));
+  ipc.handle(searchQuery, ({ query, conversationId, projectId }) =>
+    core.search(query, { ...(conversationId ? { conversationId } : {}), ...(projectId ? { projectId } : {}) }),
+  );
   registerSettingsChannels(ipc, core);
   registerExportChannel(ipc, core, facts.chooseFolder);
 }

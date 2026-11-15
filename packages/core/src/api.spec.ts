@@ -417,6 +417,17 @@ describe('createCore — the modes and the previews of the window', () => {
     expect(preview).toMatchObject({ kind: 'diff', before: 'old line\n', after: 'new line\n' });
   });
 
+  it('« Rechercher » finds the files of a project before its first conversation exists — and none without a project', async () => {
+    const { core } = await setup();
+    const folder = await mkdtemp(join(tmpdir(), 'bp-core-project-'));
+    dirs.push(folder);
+    await writeFile(join(folder, 'format.ts'), 'export {};\n');
+    const project = await core.projects.create({ name: 'p', roots: [folder] });
+    expect((await core.search('form', { projectId: project.id })).files).toEqual([{ path: 'format.ts' }]);
+    expect((await core.search('form', { projectId: 'gone' })).files).toEqual([]);
+    expect((await core.search('form')).files).toEqual([]);
+  });
+
   it("without a project, and outside a test run, the tools work in the person's home folder", async () => {
     const { core } = await setup();
     const write = core.tools.get('write_file')!.def;

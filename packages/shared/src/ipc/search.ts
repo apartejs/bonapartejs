@@ -21,6 +21,11 @@ export type SearchResultView = z.infer<typeof searchResultSchema>;
 
 export const searchQuery = defineChannel(
   'search.query',
-  z.object({ query: z.string().max(500), conversationId: z.string().min(1).max(128).optional() }),
+  z.object({
+    query: z.string().max(500),
+    conversationId: z.string().min(1).max(128).optional(),
+    // A new conversation, before its first turn: the files of the project it starts in.
+    projectId: z.string().min(1).max(128).optional(),
+  }),
   searchResultSchema,
 );

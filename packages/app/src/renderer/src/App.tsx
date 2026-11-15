@@ -1,4 +1,5 @@
-import { AparteChat, AparteContext, useAparteClient, useConversationManager } from '@aparte/react';
+import { setupCommands } from '@aparte/plugin-triggers/commands';
+import { AparteChat, useAparteClient, useConversationManager } from '@aparte/react';
 import {
   conversationsMemory,
   engineState,
@@ -25,7 +26,7 @@ import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { MemoryBanner } from './chat/MemoryBanner';
-import { ModeSwitch } from './chat/ModeSwitch';
+import { ComposerToolbar } from './chat/ComposerToolbar';
 import { NewProject } from './dialogs/NewProject';
 import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
@@ -152,6 +153,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   };
   // The conversation open, as aparté's manager lists it: its title, its pin.
   const openConversation = activeConversations.find((conversation) => conversation.id === conversationId) ?? null;
+  // « / new », « / stop », « / retry », « / copy »: aparté's commands, a new conversation as « Nouvelle conversation » starts one.
+  const startOver = useRef(newConversation);
+  startOver.current = newConversation;
+  useEffect(() => setupCommands({ onNew: () => startOver.current() }), []);
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
   useMemoryMarks(statuses, messages.shell.memory);
@@ -393,18 +398,19 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           ) : undefined
         }
         toolbar={
-          <>
-            <ModeSwitch
-              mode={mode}
-              messages={messages}
-              onChange={(next) => {
-                setMode(next);
-                // The core keeps it: the next call of the conversation is decided in it.
-                if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
-              }}
-            />
-            {engine.model ? <AparteContext window={String(engine.model.nCtx)} variant="ring" /> : null}
-          </>
+          <ComposerToolbar
+            messages={messages}
+            mode={mode}
+            onMode={(next) => {
+              setMode(next);
+              // The core keeps it: the next call of the conversation is decided in it.
+              if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
+            }}
+            engine={engine}
+            scope={() =>
+              conversationId ? { conversationId } : project.current ? { projectId: project.current.id } : {}
+            }
+          />
         }
       />
       </div>

@@ -171,7 +171,7 @@ export interface Core {
   /** « Rechercher »: the conversations where the words were said, and the files of the open conversation's project. */
   search(
     query: string,
-    options?: { conversationId?: string },
+    options?: { conversationId?: string; projectId?: string },
   ): Promise<SearchResult>;
   /** Deletes a conversation: its card, its journal, its memory — and the originals its turns kept. */
   removeConversation(id: string): Promise<void>;
@@ -898,7 +898,12 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async search(query, options = {}) {
-      // The files of the open conversation's project; none without a project (never the whole home folder).
+      // The files of the open conversation's project, or of the project a new one starts in;
+      // none without a project (never the whole home folder).
+      if (options.projectId && !options.conversationId) {
+        const project = await projectStore.get(options.projectId);
+        return index.search(query, project ? { roots: project.roots } : {});
+      }
       const place = options.conversationId
         ? await rootsOf(options.conversationId)
         : undefined;
