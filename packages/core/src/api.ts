@@ -29,7 +29,15 @@ import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
 import { defaultScanRoots, scanModels, type ModelSource, type ScanRoot } from './models/inventory.js';
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
-import { ConversationEngine, type EngineView } from './conversation/engine.js';
+import { randomUUID } from 'node:crypto';
+import type { StreamRunEvent } from '@aparte/engine';
+import { runAgentTurn } from './agent/loop.js';
+import { ConversationEngine, type EngineView, type TurnEvent, type TurnInput, type TurnResult } from './conversation/engine.js';
+import { PermissionEngine } from './permissions/engine.js';
+import { toolsFor } from './prompt/system-prompt.js';
+import { builtinTools } from './tools/builtin/index.js';
+import { ToolRegistry } from './tools/registry.js';
+import type { ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
 import { KvStore } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
@@ -101,6 +109,28 @@ export interface Core {
   /** The conversations: their cards, their journals, their turns on the engine. */
   readonly conversations: ConversationEngine;
   readonly conversationStore: ConversationStore;
+  /** The one registry of tools, and the one approval policy. */
+  readonly tools: ToolRegistry;
+  readonly permissions: PermissionEngine;
+  /**
+   * A turn of the agent: the model's calls decided by the policy, run by the
+   * registry, the window's own tools (its `clientTools`) paused for it.
+   */
+  agentTurn(
+    conversationId: string,
+    input: Omit<TurnInput, 'tools'>,
+    options: { clientTools: readonly ClientTool[]; signal: AbortSignal },
+    emit: (event: StreamRunEvent) => void,
+    onTurnEvent: (event: TurnEvent) => void,
+  ): Promise<TurnResult>;
+}
+
+/** A tool the window runs, as aparté's client declares it. */
+export interface ClientTool {
+  name: string;
+  description?: unknown;
+  inputSchema?: unknown;
+  [key: string]: unknown;
 }
 
 interface LlamaFound {
@@ -433,6 +463,10 @@ export function createCore(deps: CoreDeps): Core {
     .catch(() => undefined);
   const kv = new KvStore(resolve(kvDir), { budgetBytes: () => kvBudget });
   const conversationStore = new ConversationStore(join(deps.dataDir, 'conversations'));
+  // The one registry, and the one policy. No project yet: the perimeter is the home folder.
+  const tools = new ToolRegistry();
+  for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
+  const permissions = new PermissionEngine({ roots: () => [], dataDir: deps.dataDir });
   const conversations = new ConversationEngine({
     store: conversationStore,
     kv,
@@ -449,7 +483,12 @@ export function createCore(deps: CoreDeps): Core {
         generation: supervisor.generation,
       };
     },
-    prompt: (meta) => ({ kind: meta.kind, tools: [], perimeter: [], replyLanguage: deps.replyLanguage?.() ?? 'English' }),
+    prompt: (meta) => ({
+      kind: meta.kind,
+      tools: toolsFor(meta.kind, tools.list()),
+      perimeter: [],
+      replyLanguage: deps.replyLanguage?.() ?? 'English',
+    }),
     // The person learns it when the conversation opens again (« not saved »); the log keeps why.
     onSaveError: (error, conversationId) =>
       log(`[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`),
@@ -502,6 +541,38 @@ export function createCore(deps: CoreDeps): Core {
     },
     conversations,
     conversationStore,
+    tools,
+    permissions,
+
+    async agentTurn(conversationId, input, options, emit, onTurnEvent) {
+      const meta = await conversationStore.get(conversationId);
+      const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
+        name: tool.name,
+        description: typeof tool.description === 'string' ? tool.description : '',
+        inputSchema: typeof tool.inputSchema === 'object' && tool.inputSchema !== null ? (tool.inputSchema as Record<string, unknown>) : {},
+        effect: 'ui',
+        source: 'builtin',
+        where: 'window',
+      }));
+      return runAgentTurn(
+        {
+          conversationId,
+          input,
+          mode: meta?.mode ?? 'repetition',
+          registry: tools,
+          permissions,
+          conversations,
+          roots: [],
+          nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
+          windowTools,
+          // Signed with the resume (task 4.5).
+          ticket: () => `ticket-${randomUUID()}`,
+          signal: options.signal,
+        },
+        emit,
+        onTurnEvent,
+      );
+    },
     llamaCpp,
     installLlamaCpp,
   };

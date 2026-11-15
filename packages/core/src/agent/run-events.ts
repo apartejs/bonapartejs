@@ -14,7 +14,11 @@ import type { StreamRunEvent } from '@aparte/engine';
 
 export type RunEvent = StreamRunEvent;
 
-export type WireLine = RunEvent | { type: 'run-error'; message: string; code?: string };
+export type WireLine =
+  | RunEvent
+  | { type: 'run-error'; message: string; code?: string }
+  /** A pause, as aparté's server loop writes it on the wire: with the ticket that resumes it. */
+  | (Extract<RunEvent, { type: 'run-suspended' }> & { ticket: string });
 
 export function encodeEvent(event: WireLine): string {
   return `${JSON.stringify(event)}\n`;

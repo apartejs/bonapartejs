@@ -397,3 +397,30 @@ describe('the agent handler, on the journal', () => {
     expect(last.done).toBe(last.total);
   });
 });
+
+describe('the agent handler — the tools', () => {
+  const Q = '<|"|>';
+  const call = (text: string) => (prompt: string) =>
+    prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? 'Done.' : text;
+
+  it('a call of the model runs, and the answer goes on: tool-start, its outcome, the text, then run-done', async () => {
+    const { handler } = await setup({ responder: call(`<|tool_call>call:read_file{path:${Q}surely-not-here.txt${Q}}<tool_call|>`) });
+    const lines = await linesOf(await handler(post(turn(user('Lis ce fichier')))));
+    const kinds = lines.map((line) => line.type);
+    expect(kinds).toContain('tool-start');
+    expect(kinds.indexOf('tool-failed')).toBeGreaterThan(kinds.indexOf('tool-start'));
+    expect(joined(lines, 'text-delta')).toContain('Done.');
+    expect(lines.at(-1)?.type).toBe('run-done');
+  });
+
+  it('a call to ask about ends the stream with run-suspended: its pending call, and a ticket', async () => {
+    const { handler } = await setup({
+      responder: call(`<|tool_call>call:edit_file{path:${Q}a.ts${Q},old_string:${Q}a${Q},new_string:${Q}b${Q}}<tool_call|>`),
+    });
+    const lines = await linesOf(await handler(post(turn(user('Change a.ts')))));
+    expect(lines.map((line) => line.type)).toContain('tool-awaiting-approval');
+    const last = lines.at(-1)!;
+    expect(last).toMatchObject({ type: 'run-suspended', pending: [{ name: 'edit_file', reason: 'approval' }] });
+    expect(typeof last['ticket']).toBe('string');
+  });
+});

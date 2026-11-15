@@ -13,7 +13,7 @@
  * loads a model: with none loaded, it is refused.
  */
 
-import type { Core, Engine } from '../api.js';
+import type { ClientTool, Core, Engine } from '../api.js';
 import { ContextFullError, EngineFailedError, type TurnEvent, type TurnInput, type TurnResult } from '../conversation/engine.js';
 import { openJournal } from '../journal/journal.js';
 import { agentBodySchema, type AgentBody } from './body.js';
@@ -100,7 +100,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
         : divergence.kind === 'retry'
           ? { forkAfter: divergence.afterEntryId }
           : { text: divergence.text, forkAfter: divergence.afterEntryId, messageId: body.data.messageId };
-    return streamTurn(core, conversationId, input, request.signal);
+    return streamTurn(core, conversationId, input, request.signal, body.data.clientTools);
   };
 }
 
@@ -125,7 +125,13 @@ function toWire(event: TurnEvent, rereading: { on: boolean }): WireLine | null {
   }
 }
 
-function streamTurn(core: Core, conversationId: string, input: TurnInput, signal: AbortSignal): Response {
+function streamTurn(
+  core: Core,
+  conversationId: string,
+  input: TurnInput,
+  signal: AbortSignal,
+  clientTools: readonly ClientTool[],
+): Response {
   const encoder = new TextEncoder();
   // Stops the generation: when the window cuts its request, or stops reading.
   const stop = new AbortController();
@@ -152,14 +158,15 @@ function streamTurn(core: Core, conversationId: string, input: TurnInput, signal
         write({ type: 'run-start' });
         write({ type: 'turn-start' });
         const rereading = { on: false };
-        const result: TurnResult = await core.conversations.turn(
+        const result: TurnResult = await core.agentTurn(
           conversationId,
           input,
+          { clientTools, signal: stop.signal },
+          (event) => write(event),
           (event) => {
             const line = toWire(event, rereading);
             if (line) write(line);
           },
-          stop.signal,
         );
         if (result.stopped === 'user') {
           // A stop ends the run cleanly: the reply is over, not failed.
@@ -168,6 +175,16 @@ function streamTurn(core: Core, conversationId: string, input: TurnInput, signal
           return;
         }
         const { usage } = result;
+        if (result.suspended) {
+          // The turn waits for a person, or for the window: the page answers, and resumes with the ticket.
+          write({
+            type: 'run-suspended',
+            pending: result.suspended.pending,
+            usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, totalTokens: usage.inputTokens + usage.outputTokens },
+            ticket: result.suspended.ticket,
+          });
+          return;
+        }
         write({
           type: 'run-done',
           usage: {
