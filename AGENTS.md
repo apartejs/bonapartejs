@@ -40,8 +40,17 @@ launches llama.cpp itself, hidden and with its per-launch key, and a turn
 runs in the model's family: Gemma 4 by default, Qwen too. bonaparte keeps
 its own llama.cpp build: it reads what is published, says the size first,
 downloads on a click and verifies the digest. The window opens on « Préparons
-le moteur » until a model is loaded. A section below that names something not
-built yet says so.
+le moteur » until a model is loaded. Phase 3 is done: each conversation keeps
+its memory. A journal per conversation is the truth (one JSONL file per
+branch, each entry with the text it froze into the prompt); the KV state of
+the slot is saved when a conversation leaves it and restored when it comes
+back, under a disk budget; a fresh conversation starts from a shared seed;
+asking an answer again, or changing a message, makes a branch that starts
+from the state its conversation saved. Opening a conversation says what it
+costs before anything is paid: its memory saved (tokens, time, size), or let
+go and to be read again — never in silence. The window lists the
+conversations and keeps aparté's document of each beside its journal. A
+section below that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -270,9 +279,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   into aparté's chat, which documents none: a release that moves one breaks
   that file, not twenty specs.
 - **The window is one page**, and it never loads another document. A link in
-  a reply is refused twice: by the page, which answers no to aparté's
-  `aparte-link-click` (`renderer/src/aparte/links.ts`), and by the main
-  process, which refuses every address but the window's own (`isOwnPage`).
+  a reply is refused twice: by the page, whose `<AparteChat onLinkClick>`
+  prevents it (aparté 1.9), and by the main process, which refuses every
+  address but the window's own (`isOwnPage`).
   Opening a file in its pane and a site in the system browser arrive with the
   panes and with the list of allowed addresses.
 - **The four approval modes** keep aparté's French names in the product:
@@ -285,7 +294,35 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   day) keeps the tool calls of one step in order unless a tool says
   `parallel: true`, holds the calls after one awaiting approval, and gives
   `createAparteAgentHandler` its `parallelTools` option: apartejs/aparte#202
-  is fixed. bonaparte runs on 1.8.0.
+  is fixed. **aparté 1.9** (2026-11-15) gives the runner the conversation of
+  each turn (`endpoint: ({ conversationId }) => …`), labels for step keys
+  (`registerStepLabel`), `<AparteConversationList manage>` and
+  `<AparteChat onLinkClick>`. bonaparte runs on 1.9.0. One trap is open
+  (apartejs/aparte#212): giving `onConversationCreated`'s id back to
+  `<AparteChat conversationId>` reloads the conversation in the middle of its
+  first reply — the open conversation is `useConversationManager().activeId`,
+  the chat stays uncontrolled, and « Nouvelle conversation » is aparté's
+  `aparte-conversation-select` event with `{ id: null }`. Another
+  (apartejs/aparte#213): after a failed turn, aparté drops the failed message
+  from the next request, then joins it to the following one — the handler's
+  comparison with the journal takes such an earlier message as the journal's.
+- **A relaunched server is a new one**: the supervisor counts the servers
+  that became ready (`generation`), and the conversation engine forgets every
+  resident of a server that went away — never saved over the memory on disk.
+  A state the budget lets go leaves a note (`<id>.evicted.json`: when, which
+  budget) that its re-read announcement reads; a state older than the
+  journal is restored and the rest read, announced as `behind`.
+- **The memory** (`packages/core/src/journal/`, `kv/`, `engine/slot-scheduler.ts`,
+  `conversation/`): `ConversationEngine` owns the slot scheduler; a turn
+  takes the slot, whose restore hook brings the conversation's KV state, else
+  the seed (its first system turn, prepared once by a prefill and shared),
+  and says what it waits for as steps (`slot-wait`, `restore`, `seed`,
+  `reread`) that the window labels. The handler compares the window's
+  messages with the journal (`agent/divergence.ts`): a new message, an
+  answer asked again or a changed message (both branch), or a 409. The KV
+  states live under `<data>/kv-slots/`, the conversations under
+  `<data>/conversations/<id>/` (`meta.json`, one `<branch>.jsonl` per branch,
+  `branches.json`, aparté's `aparte.json`).
 - **Model families** (`packages/core/src/families/`): one layer per family —
   turns, control tokens, stop strings, the tool convention, the lazy tool
   grammar, the stream demux. **Gemma 4** is the default of the product,
@@ -392,13 +429,41 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   llama.cpp's own lines on the screen; the inventory cannot tell beforehand.
 - **A test of « nothing happens before the click » reads the state**, not
   only a port: a load that has just begun answers on no port yet, but says
-  `starting` at once.
+  `starting` at once. For the managed engine, the fake binary writes every
+  completion it is asked into `FAKE_LLAMA_REQUESTS` (the fixture's
+  `engineRequests()`), with the tokens it counted: that is how a test proves
+  nothing was read, and what the gauge must show.
+- **llama.cpp reads again the last few tokens of a cached prefix** on a model
+  with sliding-window attention (Gemma 4): it resumes from its last context
+  checkpoint, which it places a few tokens before the end of each prompt —
+  5 on b12383, a fixed cost. A restore or a seed serves all its tokens but
+  those; the smoke allows for it (`CHECKPOINT_TAIL`).
+- **A flex item takes the width of its widest unbreakable content** unless it
+  says `min-width: 0`: the first long message, as a conversation's title, made
+  the sidebar 16,000 px wide and the send button unreachable.
+- **aparté hides the waiting step once an activity shows**: during a re-read
+  the screen shows our bar, and the step stays in aparté's live region — what
+  an end-to-end test reads.
 
 ## Real-model smoke results
 
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
+- **2026-11-15, phase 3 — 8/8 green.** Same model and build as phase 2
+  (Gemma 4 26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S,
+  `-c 8192`), loaded in 11 s, after checking the free memory (75,992 MiB on
+  the card, 54.6 GiB of RAM). The five cases of phase 2 again, with the
+  system prompt the app builds, and three of the memory, through the
+  conversation engine and the handler as the app's turns go: a conversation
+  that leaves the slot is saved and comes back restored in 91 ms, 151 of its
+  157 tokens served by the cache, and the model still gives the code word it
+  was told; an answer asked again starts from the state its conversation
+  saved (181 of 189 tokens), not from what the slot held; the seed one fresh
+  conversation prepared serves the next one (71 of its 76 tokens; served
+  2 → 3). The tokens read again are llama.cpp's checkpoint tail (5),
+  measured against `/tokenize`: the token sequences are identical. Replayed
+  after the gate's fixes: 8/8 (restore 112 ms).
 - **2026-11-14, phase 2 — 5/5 green.** Gemma 4 26B-A4B-it UD-Q4_K_XL
   (unsloth), llama.cpp b12383 (`llama-server`, the Vulkan package bonaparte
   downloads and verifies), Windows, Radeon 8060S (unified memory: llama.cpp
