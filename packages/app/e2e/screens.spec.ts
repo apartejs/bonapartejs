@@ -186,3 +186,116 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// The agent at work (phase 4): a read and an edit waiting for the person, the edit done with its
+// change behind its line, a plan in Lecture, a question in the composer's place.
+const AGENT = {
+  fr: {
+    fix: 'Corrige les heures décimales dans la note',
+    plan: 'Ajoute un export CSV du récap',
+    ask: 'Choisis le séparateur avec moi',
+    region: 'Demande d’accord',
+    allow: 'Autoriser',
+    new: 'Nouvelle conversation',
+    done: 'C’est corrigé : 1 h 30 donne maintenant 1,5.',
+    planned: 'Voici le plan : je n’écris rien tant que tu ne l’as pas lancé.',
+    question: 'Quel séparateur pour le CSV ?',
+    options: ['Point-virgule', 'Virgule'],
+    steps: ['Écrire toCsv(recap) dans src/recap/csv.ts', 'Ajouter le bouton « Exporter »', 'Lancer la suite de tests'],
+    settle: 'Le séparateur : point-virgule ou virgule.',
+  },
+  en: {
+    fix: 'Fix the decimal hours in the note',
+    plan: 'Add a CSV export of the recap',
+    ask: 'Pick the separator with me',
+    region: 'Approval request',
+    allow: 'Allow',
+    new: 'New conversation',
+    done: 'Fixed: 1 h 30 now gives 1.5.',
+    planned: 'Here is the plan: nothing is written until you launch it.',
+    question: 'Which separator for the CSV?',
+    options: ['Semicolon', 'Comma'],
+    steps: ['Write toCsv(recap) in src/recap/csv.ts', 'Add the « Export » button', 'Run the test suite'],
+    settle: 'The separator: semicolon or comma.',
+  },
+};
+
+const Q4 = '<|"|>';
+const NOTE = 'Récap de la semaine\n- lundi : 7,5 h\n- mardi : 1,3 h (1 h 30)\n- mercredi : 8 h\n';
+
+function agentModel(words: (typeof AGENT)['fr']) {
+  const call = (name: string, args: string) => `<|tool_call>call:${name}{${args}}<tool_call|>`;
+  const text = (value: string) => `${Q4}${value}${Q4}`;
+  return (prompt: string): string => {
+    const user = prompt.lastIndexOf('<|turn>user');
+    const response = prompt.lastIndexOf('<|tool_response>');
+    const asked = prompt.slice(user);
+    if (response > user) {
+      const said = prompt.slice(response);
+      if (said.includes('Plan updated')) return words.planned;
+      if (said.includes('Edited')) return words.done;
+      if (said.includes('Récap')) return call('edit_file', `path:${text('notes.txt')},old_string:${text('1,3 h')},new_string:${text('1,5 h')}`);
+      return 'ok';
+    }
+    if (prompt.lastIndexOf('[mode] Lecture') > prompt.lastIndexOf('[mode] Plume')) {
+      const steps = words.steps.map((step) => `{title:${text(step)},status:${text('pending')}}`).join(',');
+      return call(
+        'update_plan',
+        `title:${text(words.plan)},steps:[${steps}],files:[{path:${text('src/recap/csv.ts')},change:${text('new')}},` +
+          `{path:${text('src/ui/RecapHeader.tsx')},change:${text('modified')}}],questions:[${text(words.settle)}]`,
+      );
+    }
+    if (asked.includes('parat')) {
+      const options = words.options.map((option) => `{title:${text(option)}}`).join(',');
+      return call('ask_user', `questions:[{question:${text(words.question)},header:${text('CSV')},options:[${options}]}]`);
+    }
+    if (asked.includes(words.fix.slice(0, 8))) return call('read_file', `path:${text('notes.txt')}`);
+    return 'ok';
+  };
+}
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the agent at work, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = AGENT[locale];
+      const { page, home } = await launch({ locale, engine: { responder: agentModel(words) } });
+      await writeFile(join(home, 'notes.txt'), NOTE);
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      const shot = (name: string) => page.screenshot({ path: join(into, `${name}-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      // A read, then an edit that waits for the person: the card with its diff.
+      await ui.send(words.fix);
+      const card = page.getByRole('region', { name: words.region });
+      await expect(card).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(400);
+      await shot('agent-approval');
+
+      // Allowed: the edit is done, its change behind its line.
+      await card.getByRole('button', { name: words.allow, exact: true }).click();
+      await expect(ui.replyText).toHaveText(words.done, { timeout: 15_000 });
+      await page.waitForTimeout(400);
+      await shot('agent-done');
+
+      // A plan in Lecture.
+      await page.getByRole('button', { name: words.new }).click();
+      await page.locator('aparte-approval-mode').getByRole('combobox').click();
+      await page.getByRole('option', { name: 'Lecture' }).click();
+      await ui.send(words.plan);
+      await expect(page.getByRole('region', { name: 'Plan' })).toBeVisible({ timeout: 15_000 });
+      await expect(ui.replyText).toHaveText(words.planned, { timeout: 15_000 });
+      await page.waitForTimeout(400);
+      await shot('agent-plan');
+
+      // A question in the composer's place.
+      await page.getByRole('button', { name: words.new }).click();
+      await ui.send(words.ask);
+      await expect(ui.question).toContainText(words.question, { timeout: 15_000 });
+      await page.waitForTimeout(400);
+      await shot('agent-question');
+    });
+  }
+}

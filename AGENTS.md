@@ -49,8 +49,20 @@ asking an answer again, or changing a message, makes a branch that starts
 from the state its conversation saved. Opening a conversation says what it
 costs before anything is paid: its memory saved (tokens, time, size), or let
 go and to be read again — never in silence. The window lists the
-conversations and keeps aparté's document of each beside its journal. A
-section below that names something not built yet says so.
+conversations and keeps aparté's document of each beside its journal.
+Phase 4 is done: the agent. One tool registry and one approval policy, in
+the core: it reads, lists, searches, edits and writes files, runs a program
+with its arguments, fetches a page and keeps a plan; the four modes decide
+what passes, what is refused and what is asked, and a path that runs later
+(`package.json`, a git hook, `.env`…) is asked in every mode but Lecture.
+A call to ask pauses the turn with a signed ticket; the pause survives a
+restart. The window shows what a call would change — its diff — before
+« Autoriser », draws each call's line (« Lu notes.txt · 2 lignes »,
+« Modifié » with its change behind it), switches the mode, presents a plan
+in Lecture and asks the agent's questions in the composer's place. A
+section below that names something not built yet says so: projects reach
+the conversations with phase 5 — until then the tools work in the home
+folder.
 
 ## apartéJS frictions — MANDATORY
 
@@ -306,6 +318,40 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (apartejs/aparte#213): after a failed turn, aparté drops the failed message
   from the next request, then joins it to the following one — the handler's
   comparison with the journal takes such an earlier message as the journal's.
+- **The agent** (`packages/core/src/agent/`, `tools/`, `permissions/`,
+  `project/`): `runAgentTurn` runs the tool rounds inside the conversation
+  engine's turn, in the slot it holds; the registry passes writes and
+  commands one at a time per conversation, in their order, and caps a tool's
+  output to the context. A call to ask ends the stream with `run-suspended`
+  and its ticket (HMAC-SHA256, the installation's secret in
+  `<data>/engine/ticket.key`, seven days); the journal keeps the pause, and a
+  resume runs or refuses the calls as answered. What the model reads of the
+  mode, and of the window's tools (`ask_user`), is a note appended at the
+  start of a turn when it changed — never the frozen prompt, so one seed
+  serves every mode. A tool's `structuredContent` is for the window only
+  (lines read, matches, exit code, the unified diff of a write): the families
+  never render it.
+- **Approvals in the window** (`renderer/src/aparte/approvals.ts`,
+  `chat/ApprovalCard.tsx`, `chat/ModeSwitch.tsx`): the client's
+  `approvalResolver` owns every decision — aparté's page policy is never
+  consulted — and the card is bonaparte's, with `<aparte-diff>` fed by the
+  core's preview (aparté's panel has no slot for it, apartejs/aparte#214).
+  The switch is aparté's `<aparte-approval-mode>`, enabled by `setupApproval`
+  (no React wrapper, apartejs/aparte#216). The mode chosen before a
+  conversation's first message travels with that turn (`?mode=`): the page
+  saves a new conversation before its first turn reaches the core, so a read
+  of the core then answers the default. A call paused before a reload is
+  asked again as its conversation loads, before React knows which one is
+  open: a capturing listener files it under the conversation aparté loaded
+  (apartejs/aparte#221).
+- **The thread of a working agent**: the tools' lines (`aparte/tool-lines.ts`,
+  one line provider, apartejs/aparte#219; the target in the code font,
+  apartejs/aparte#220), the plan card (`aparte/plan-card.ts`: aparté's card
+  for the steps, wrapped to draw the files, the questions and « Lancer en
+  Plume » under it, apartejs/aparte#222), and the question (`ask_user`,
+  aparté's own, without keys yet, apartejs/aparte#223). aparté's French says
+  « vous »: the words bonaparte shows are said with « tu »
+  (`aparte/words.ts`).
 - **A relaunched server is a new one**: the supervisor counts the servers
   that became ready (`generation`), and the conversation engine forgets every
   resident of a server that went away — never saved over the memory on disk.
@@ -444,12 +490,38 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **aparté hides the waiting step once an activity shows**: during a re-read
   the screen shows our bar, and the step stays in aparté's live region — what
   an end-to-end test reads.
+- **The page saves a conversation before its first turn reaches the core.**
+  Whatever the page chose before the first message (the mode) has to travel
+  with that turn; a read of the core in between answers the default, and a
+  window that trusts it shows a mode the conversation does not run in.
+- **A small model plans only when the tool is named**: Lecture's note and
+  its refusals say `update_plan`, not « a plan ».
+- **A test that reads aparté's question** finds it in the composer
+  (`aparte-composer [data-aparte-panel]`), not in `<aparte-elicitation>`;
+  its choices are buttons, not radios.
 
 ## Real-model smoke results
 
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
+- **2026-11-15, phase 4 — 10/10 green.** Same model and build (Gemma 4
+  26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`),
+  loaded in 20 s, after checking the free memory of Windows (32.7 GiB, for
+  16.7 GiB announced). The eight cases of phase 3 again, with the system
+  prompt of phase 4 (its tools: 1,171 tokens of seed, against 76), and two
+  of the agent, through aparté's stock runner and bonaparte's handler as
+  the window's turns go: the model calls `read_file` on a file of the
+  smoke's home folder and answers the code word it holds, the last round
+  served by the cache but for the tool's result (1,275 of 1,298 tokens);
+  an `edit_file` in Répétition ends the stream with `run-suspended`,
+  nothing written, and the person's answer resumes the turn — approved,
+  resolved, the file written, « DONE ». Stop cut a real generation in
+  117 ms. Two findings: a restore of 1,252 tokens took 2.7 to 3.3 s (91 ms
+  for 157 tokens in phase 3: the cost of a restore grows faster than its
+  tokens — to measure with the restore-speed item of the ledger); and asked
+  to count to 500, a real model with its tools may run a counter instead
+  of writing: the Stop case now asks for text.
 - **2026-11-15, phase 3 — 8/8 green.** Same model and build as phase 2
   (Gemma 4 26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S,
   `-c 8192`), loaded in 11 s, after checking the free memory (75,992 MiB on
