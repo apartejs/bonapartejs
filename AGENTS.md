@@ -499,6 +499,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **A test that reads aparté's question** finds it in the composer
   (`aparte-composer [data-aparte-panel]`), not in `<aparte-elicitation>`;
   its choices are buttons, not radios.
+- **aparté's select holds every option in its own text** (a hidden sizer
+  that keeps its width): `toContainText` on the mode switch is true
+  whatever the mode. Read its label (`chat(page).modeShown`).
+- **The app bundles the core.** An end-to-end test runs what
+  `packages/app/out` holds: a change of the core needs the core built,
+  then the app (`pnpm build`, or `test:e2e`, which builds). A test « seen
+  red » by breaking the core without rebuilding the app proves nothing.
 
 ## Real-model smoke results
 
