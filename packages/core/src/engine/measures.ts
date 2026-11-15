@@ -17,6 +17,8 @@ export interface ModelMeasures {
   loadSeconds?: number;
   /** Prompt tokens per second, a running average over measured turns. */
   prefillTokensPerSecond?: number;
+  /** When the model was last loaded (ISO date): « Dernière fois » in Settings, Models. */
+  lastLoadedAt?: string;
 }
 
 interface MeasureFile {
@@ -39,6 +41,7 @@ export class MeasureStore {
     const kept: ModelMeasures = {};
     if (isMeasure(figures.loadSeconds, true)) kept.loadSeconds = figures.loadSeconds;
     if (isMeasure(figures.prefillTokensPerSecond, false)) kept.prefillTokensPerSecond = figures.prefillTokensPerSecond;
+    if (typeof figures.lastLoadedAt === 'string' && !Number.isNaN(Date.parse(figures.lastLoadedAt))) kept.lastLoadedAt = figures.lastLoadedAt;
     if (Object.keys(kept).length === 0) return;
     const models = this.load();
     models.set(modelPath, { ...models.get(modelPath), ...kept });

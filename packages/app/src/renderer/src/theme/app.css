@@ -1300,3 +1300,81 @@ body {
   align-self: stretch;
 }
 
+/* Settings, Models: the folders searched, and the table of the models found. */
+.settings__intro,
+.settings__footnote {
+  margin: 0;
+  font-size: 13px;
+  color: var(--aparte-text-muted);
+}
+
+.settings__intro {
+  font-size: 15px;
+}
+
+.model-folder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--aparte-surface-1);
+}
+
+.model-folder__path {
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.model-folder__count {
+  flex: none;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.settings-table-wrap {
+  overflow-x: auto;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 12px;
+}
+
+.settings-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.settings-table th {
+  padding: 10px 12px;
+  background: var(--aparte-surface-1);
+  color: var(--aparte-text-muted);
+  font-weight: var(--aparte-font-weight-medium);
+  text-align: start;
+}
+
+.settings-table td {
+  padding: 10px 12px;
+  border-top: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.settings-table__number {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-table th.settings-table__number {
+  text-align: end;
+}
+
+.model-row__name {
+  font-weight: var(--aparte-font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.model-row--running {
+  background: var(--bonaparte-accent-soft);
+}
+

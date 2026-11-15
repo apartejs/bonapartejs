@@ -54,6 +54,12 @@ export function defaultScanRoots(
 export interface ScanOptions {
   /** Max recursion depth (default 4). */
   maxDepth?: number;
+  /** Stops the walk: what was found so far is returned. */
+  signal?: AbortSignal;
+  /** A folder not to enter, by its name. */
+  skip?: (name: string) => boolean;
+  /** Told of each folder entered: how far a long search went. */
+  onDirectory?: (dir: string) => void;
 }
 
 export async function scanModels(
@@ -64,6 +70,8 @@ export async function scanModels(
   const byPath = new Map<string, DiscoveredModel>();
 
   async function walk(dir: string, source: ModelSource, depth: number): Promise<void> {
+    if (options.signal?.aborted) return;
+    options.onDirectory?.(dir);
     let entries;
     try {
       entries = await readdir(dir, { withFileTypes: true });
@@ -73,7 +81,7 @@ export async function scanModels(
     for (const entry of entries) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (depth < maxDepth) await walk(path, source, depth + 1);
+        if (depth < maxDepth && !options.skip?.(entry.name)) await walk(path, source, depth + 1);
         continue;
       }
       if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.gguf')) continue;

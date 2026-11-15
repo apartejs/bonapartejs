@@ -225,6 +225,26 @@ export interface Messages {
       exportFailed: string;
       exportLabels: { person: string; assistant: string; untitled: string };
     };
+    models: {
+      intro: string;
+      where: string;
+      noFolder: string;
+      folderCount(count: number): string;
+      addFolder: string;
+      scanDisk: string;
+      scanning(visited: number): string;
+      cancel: string;
+      scanFound(count: number): string;
+      scanNothing: string;
+      scanCancelled: string;
+      columns: { model: string; size: string; perToken: string; vram: string; last: string; preferred: string };
+      running: string;
+      never: string;
+      yesterday: string;
+      preferredOf(name: string): string;
+      footnote: string;
+      empty: string;
+    };
     appearance: {
       theme: string;
       light: string;

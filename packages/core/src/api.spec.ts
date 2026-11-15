@@ -92,6 +92,35 @@ describe('createCore — the managed engine', () => {
     await core.models();
   });
 
+  it('looks in the folders the person added, and says which model is the default', async () => {
+    const { core, dir, gemma } = await setup();
+    const added = join(dir, 'added');
+    await mkdir(added, { recursive: true });
+    const extra = join(added, 'gemma-4-extra.gguf');
+    await writeFakeGguf(extra, {});
+    expect((await core.models()).map((model) => model.path)).not.toContain(extra);
+    await core.settings.set('modelFolders', [added]);
+    await core.settings.set('defaultModel', gemma);
+    const models = await core.models();
+    expect(models.map((model) => model.path)).toContain(extra);
+    expect(models.find((model) => model.path === gemma)).toMatchObject({ isDefault: true, lastLoadedAt: null });
+    expect(models.find((model) => model.path === extra)).toMatchObject({ isDefault: false });
+  });
+
+  it('a folder added, or found on the disk, joins the folders searched — once', async () => {
+    const { core, dir } = await setup();
+    const found = join(dir, 'disk', 'deep', 'models');
+    await mkdir(found, { recursive: true });
+    await writeFakeGguf(join(found, 'gemma-4-disk.gguf'), {});
+    expect(await core.addModelFolder(join(dir, 'added'))).toEqual([join(dir, 'added')]);
+    expect(await core.addModelFolder(join(dir, 'added'))).toEqual([join(dir, 'added')]);
+    const scanning = await setup({ diskRoots: async () => [join(dir, 'disk')] });
+    scanning.core.diskScan.start();
+    await scanning.core.diskScan.whenDone();
+    expect(await scanning.core.settings.get('modelFolders')).toEqual([found]);
+    expect((await scanning.core.models()).map((model) => model.name)).toContain('gemma-4-disk');
+  });
+
   it('lists the models it finds, each with its family and what loading it costs', async () => {
     const { core, gemma, qwen, old, bare } = await setup();
     const models = await core.models();

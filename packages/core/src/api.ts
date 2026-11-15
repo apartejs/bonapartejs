@@ -53,6 +53,7 @@ import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
 import { SettingsStore } from './settings/store.js';
 import { exportConversations } from './conversation/export.js';
+import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
@@ -103,6 +104,8 @@ export interface CoreDeps {
   port?: number;
   /** Where models are looked for (default: the known folders, or `BONAPARTE_MODEL_DIRS`). */
   modelRoots?: ScanRoot[];
+  /** Where « Chercher sur tout le disque » walks (default: the machine's drives). */
+  diskRoots?: () => Promise<string[]>;
   /** The card's video memory (default: read on the machine; null when unknown). */
   gpuMemory?: () => Promise<number | null>;
   /** Injected in tests: what spawnHidden launches with. */
@@ -136,6 +139,10 @@ export interface ModelChoice {
   kvBytesPerToken: number | null;
   /** What loading it costs, said before it is paid; null when its header cannot be read. */
   announcement: EngineLoadAnnouncement | null;
+  /** The model new conversations start on (the setting « defaultModel »). */
+  isDefault: boolean;
+  /** When it was last loaded (ISO date); null for never. */
+  lastLoadedAt: string | null;
 }
 
 /** The engine a turn runs on, and how its model is spoken to. */
@@ -185,6 +192,10 @@ export interface Core {
   ): Promise<{ folder: string; count: number }>;
   /** The app's settings as the person left them (global scope): read, written, listened to. */
   readonly settings: SettingsStore;
+  /** « Chercher sur tout le disque »: the folders where it finds models join « modelFolders ». */
+  readonly diskScan: DiskScan;
+  /** « Ajouter un dossier »: a folder joins the ones searched for models. */
+  addModelFolder(folder: string): Promise<string[]>;
   /** The projects: made from a folder (what it says read first), each with its folders and its default mode. */
   readonly projects: {
     detect(folder: string): Promise<ProjectFacts>;
@@ -305,7 +316,15 @@ export function createCore(deps: CoreDeps): Core {
   const kvDir = join(deps.dataDir, 'kv-slots');
   const measures = new MeasureStore(join(engineDir, 'measures.json'));
   // The app's settings live in the same file, under `settings`, beside the engine's.
-  const settings = new SettingsStore(configFile);
+  const appSettings = new SettingsStore(configFile);
+  async function addModelFolders(folders: readonly string[]): Promise<string[]> {
+    const kept = await appSettings.get('modelFolders').catch(() => []);
+    const list = Array.isArray(kept) ? kept.filter((dir): dir is string => typeof dir === 'string') : [];
+    const next = [...list, ...folders.filter((dir) => !list.some((known) => samePath(known, dir)))];
+    if (next.length !== list.length) await appSettings.set('modelFolders', next);
+    return next;
+  }
+  const diskScan = new DiskScan(deps.diskRoots ?? (() => diskRoots()), async (folders) => void (await addModelFolders(folders)));
   // Where the core says what went wrong without failing: the supervisor's own default.
   const log = deps.logger ?? ((line: string) => console.log(line));
   const supervisor = new EngineSupervisor({
@@ -614,9 +633,16 @@ export function createCore(deps: CoreDeps): Core {
     };
   }
 
+  /** Where models are looked for: the known folders, and the ones the person added (Settings, Models). */
+  async function modelRoots(): Promise<ScanRoot[]> {
+    const added = await appSettings.get('modelFolders').catch(() => []);
+    const folders = Array.isArray(added) ? added.filter((dir): dir is string => typeof dir === 'string') : [];
+    return [...(deps.modelRoots ?? defaultScanRoots(env)), ...folders.map((dir) => ({ dir, source: 'custom' as const }))];
+  }
+
   async function models(): Promise<ModelChoice[]> {
-    const roots = deps.modelRoots ?? defaultScanRoots(env);
-    const found = await scanModels(roots);
+    const found = await scanModels(await modelRoots());
+    const preferred = await appSettings.get('defaultModel').catch(() => '');
     const settings = await launchSettings();
     const totalBytes = await gpuBytes();
     return Promise.all(
@@ -626,6 +652,8 @@ export function createCore(deps: CoreDeps): Core {
           name: model.name,
           sizeBytes: model.sizeBytes,
           source: model.source,
+          isDefault: preferred === model.path,
+          lastLoadedAt: measures.get(model.path)?.lastLoadedAt ?? null,
         };
         let info: GgufInfo;
         try {
@@ -856,7 +884,7 @@ export function createCore(deps: CoreDeps): Core {
           'The engine is a server that already runs: it loads no model.',
         );
       const listed = (
-        await scanModels(deps.modelRoots ?? defaultScanRoots(env))
+        await scanModels(await modelRoots())
       ).find((model) => samePath(model.path, path));
       if (!listed) throw new ModelNotListedError(path);
       const info = await readGgufInfo(listed.path);
@@ -947,7 +975,9 @@ export function createCore(deps: CoreDeps): Core {
         date: `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`,
       });
     },
-    settings,
+    settings: appSettings,
+    diskScan,
+    addModelFolder: (folder) => addModelFolders([folder]),
 
     agentTurn,
     modeOf,

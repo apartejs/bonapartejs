@@ -248,7 +248,7 @@ export class EngineSupervisor {
     await mkdir(this.options.slotsDir, { recursive: true });
     const started = Date.now();
     await server.start();
-    this.measures.record(modelPath, { loadSeconds: (Date.now() - started) / 1000 });
+    this.measures.record(modelPath, { loadSeconds: (Date.now() - started) / 1000, lastLoadedAt: new Date().toISOString() });
 
     const real = server.slotContext;
     if (real !== undefined && real !== engine.nCtx) {

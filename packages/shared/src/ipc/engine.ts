@@ -45,6 +45,10 @@ export const modelChoiceSchema = z.object({
   problem: z.enum(['unsupported-family', 'no-chat-template', 'unreadable']).optional(),
   kvBytesPerToken: z.number().nullable(),
   announcement: loadAnnouncementSchema.nullable(),
+  /** The model new conversations start on (Settings, Models). */
+  isDefault: z.boolean(),
+  /** When it was last loaded (ISO date); null for never. */
+  lastLoadedAt: z.string().nullable(),
 });
 
 export type ModelChoiceView = z.infer<typeof modelChoiceSchema>;
