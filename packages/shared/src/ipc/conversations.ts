@@ -29,7 +29,7 @@ export const rereadAnnouncementSchema = z.object({
   kind: z.literal('reread'),
   tokens: z.number(),
   seconds: z.number(),
-  reason: z.enum(['evicted', 'not-saved', 'behind', 'other-model', 'cache-types', 'context-too-small', 'engine-died']),
+  reason: z.enum(['evicted', 'not-saved', 'behind', 'other-model', 'cache-types', 'context-too-small', 'engine-died', 'rewind']),
   /** A memory let go under the disk budget: when, and which budget. */
   evicted: z.object({ at: z.string(), budgetBytes: z.number(), byPerson: z.literal(true).optional() }).optional(),
   compactSeconds: z.number().optional(),
@@ -143,7 +143,7 @@ export type RewindWhatView = z.infer<typeof rewindWhat>;
 export const conversationsRewindPreview = defineChannel(
   'conversations.rewindPreview',
   z.object(rewindTarget),
-  z.object({ files: z.array(z.string()), commands: z.array(z.string()) }),
+  z.object({ files: z.array(z.string()), commands: z.array(z.string()), memory: z.union([z.literal('kept'), rereadAnnouncementSchema]).nullable() }),
 );
 
 /** « Revenir »: the files, the conversation, or both, back to before the message. */
@@ -157,6 +157,7 @@ export const conversationsRewind = defineChannel(
     filesRestored: z.array(z.string()),
     conflicts: z.array(z.string()),
     commandsNotUndone: z.array(z.string()),
+    memory: z.union([z.literal('kept'), rereadAnnouncementSchema]).nullable(),
   }),
 );
 

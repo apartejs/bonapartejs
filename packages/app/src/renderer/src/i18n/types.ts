@@ -81,7 +81,7 @@ export interface Messages {
     restoreSaved(date: string, time: string, size: string): string;
     rereadTitle(tokens: string, duration: string): string;
     rereadReason: Record<
-      'evicted' | 'not-saved' | 'behind' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died',
+      'evicted' | 'not-saved' | 'behind' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died' | 'rewind',
       string
     >;
     /** A memory let go under the disk budget: on which day, under which budget. */

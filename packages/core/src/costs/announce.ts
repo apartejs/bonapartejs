@@ -54,7 +54,9 @@ export type RereadReason =
   | 'other-model'
   | 'cache-types'
   | 'context-too-small'
-  | 'engine-died';
+  | 'engine-died'
+  /** Going back before a message: the prefix kept, from llama.cpp's nearest checkpoint (task 7.1). */
+  | 'rewind';
 
 export interface RereadAnnouncement {
   kind: 'reread';

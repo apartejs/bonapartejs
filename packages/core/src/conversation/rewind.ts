@@ -15,6 +15,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { CheckpointStore } from '../checkpoints/store.js';
+import type { RereadAnnouncement } from '../costs/announce.js';
 import type { FamilyLayer } from '../families/types.js';
 import type { JournalEntry } from '../journal/types.js';
 import { RewindTargetError, type ConversationEngine, type RewindLook, type RewindTarget } from './engine.js';
@@ -35,6 +36,8 @@ export interface RewindResult {
   conflicts: string[];
   /** Commands run after the message: a command does not undo. */
   commandsNotUndone: string[];
+  /** What the conversation's memory will cost at its next turn: kept, read again (said), or none to keep. */
+  memory: 'kept' | RereadAnnouncement | null;
 }
 
 /** What going back before a message would move, said before the person decides. */
@@ -43,6 +46,8 @@ export interface RewindPreview {
   files: string[];
   /** Commands run since: none of them is undone. */
   commands: string[];
+  /** What the memory will cost, for the conversation (not for the code only): kept, or read again. */
+  memory: 'kept' | RereadAnnouncement | null;
 }
 
 export interface RewindDeps {
@@ -112,12 +117,14 @@ export function createRewind(deps: RewindDeps) {
       return {
         files: await deps.checkpoints.changedSince(id, look.message.at, { except: look.earlier }),
         commands: commandsRun(look.after, deps.family()),
+        memory: await deps.engine.rewindMemory(id, target),
       };
     },
 
     /** Going back before the person's message the window names; its text checked, nothing moved otherwise. */
     async rewind(id: string, target: RewindTarget, what: RewindWhat): Promise<RewindResult> {
       const look: RewindLook = await deps.engine.lookBefore(id, target);
+      const memory = what === 'code' ? null : await deps.engine.rewindMemory(id, target);
       const commands = commandsRun(look.after, deps.family());
       const asTurn = `rewind-${randomUUID().slice(0, 8)}`;
       const since = look.message.at;
@@ -138,7 +145,7 @@ export function createRewind(deps: RewindDeps) {
       // The window's document of the branch left, kept for when it is shown again (« Annuler le retour », « Brancher »).
       if (what !== 'code') await deps.store.keepDocument(id, moved.fromBranchId);
       await deps.store.update(id, { rewound: { what, fromBranchId: moved.fromBranchId, branchId: moved.branchId, asTurn } });
-      return { ...moved, text: look.message.text, filesRestored: files.restored, conflicts: files.conflicts, commandsNotUndone: commands };
+      return { ...moved, text: look.message.text, filesRestored: files.restored, conflicts: files.conflicts, commandsNotUndone: commands, memory };
     },
 
     /** « Annuler le retour »: until the next turn begins; null when there is nothing to undo. */

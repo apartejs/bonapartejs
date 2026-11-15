@@ -20,7 +20,7 @@
 import { randomUUID } from 'node:crypto';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
-import { announceOpen, DEFAULT_PREFILL_TOKENS_PER_SECOND, type Announcement } from '../costs/announce.js';
+import { announceOpen, DEFAULT_PREFILL_TOKENS_PER_SECOND, type Announcement, type RereadAnnouncement } from '../costs/announce.js';
 import { createSlotScheduler, type SlotOwner, type SlotScheduler } from '../engine/slot-scheduler.js';
 import type { MeasureStore } from '../engine/measures.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
@@ -28,6 +28,7 @@ import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
+import { rereadBeforeMessage } from '../kv/reread.js';
 import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
@@ -189,6 +190,9 @@ export interface RewindLook {
   /** The entry the new branch starts after. */
   previousId: string;
 }
+
+/** Tokens read again so few that the memory is said kept: « aucune relecture ». */
+const KEPT_REREAD_TOKENS = 32;
 
 /** The message the window names is not the one of this branch: nothing moves. */
 export class RewindTargetError extends Error {
@@ -420,6 +424,53 @@ export class ConversationEngine {
       await journal.append({ kind: 'rewind', toEntryId: look.message.id, what, fromBranchId, ...(note ? { note } : {}), rendered: '' });
       return { fromBranchId, branchId: meta.branchId };
     });
+  }
+
+  /**
+   * What going back before a message will cost its memory (task 7.1), said before: kept when llama.cpp
+   * resumes where the message began — a few tokens; otherwise what it will read again. Null without an
+   * engine that keeps a memory.
+   */
+  async rewindMemory(id: string, target: RewindTarget): Promise<'kept' | RereadAnnouncement | null> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) throw new Error(`There is no conversation ${id}.`);
+    const engine = await this.deps.engine();
+    if (engine) this.follow(engine);
+    if (!engine?.live) return null;
+    const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
+    const look = lookUp(entries, target);
+    const index = entries.indexOf(look.message);
+    const kept = entries.slice(0, index);
+    const prefixTokens = estimateTokens(frozenPrompt(kept));
+    const measured = this.deps.measures?.get(engine.modelPath)?.prefillTokensPerSecond;
+    const prefill = measured ?? DEFAULT_PREFILL_TOKENS_PER_SECOND;
+    const reread = (tokens: number, reason: RereadAnnouncement['reason']): RereadAnnouncement => ({
+      kind: 'reread',
+      tokens,
+      seconds: tokens / prefill,
+      reason,
+      estimated: measured === undefined,
+    });
+    const owner = this.ownerOf(meta);
+    if (!this.scheduler.isResident(owner)) {
+      const manifest = await this.deps.kv.manifest(ownerKey(owner));
+      if (!manifest) return reread(prefixTokens, 'evicted');
+      const verdict = canRestore(manifest, engine.live);
+      if (!verdict.ok) return reread(prefixTokens, verdict.reason);
+    }
+    const previous = kept.findLast((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
+    const opened = previous ? kept.indexOf(previous) + 1 : 0;
+    const tokens = rereadBeforeMessage({
+      slidingWindow: engine.slidingWindow ?? 0,
+      prefixTokens,
+      // What the message's request appended to what the slot held: its notes and the message (and the opening).
+      segmentTokens: estimateTokens(entries.slice(opened, index + 1).map((entry) => entry.rendered ?? '').join('')) + 4,
+      previousAnswerTokens: previous?.usage?.outputTokens ?? estimateTokens(previous?.raw ?? ''),
+      // Up to two a request (one answer each), one a saved state (counted once a message: more is safer).
+      checkpointsSince:
+        look.after.filter((entry) => entry.kind === 'assistant').length * 2 + look.after.filter((entry) => entry.kind === 'user').length,
+    });
+    return tokens <= KEPT_REREAD_TOKENS ? 'kept' : reread(tokens, 'rewind');
   }
 
   /** « Annuler le retour »: the branch it left active again — or, for the code only, nothing told to the model. */

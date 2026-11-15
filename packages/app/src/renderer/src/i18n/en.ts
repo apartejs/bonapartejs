@@ -86,6 +86,7 @@ export const en: Messages = {
       'cache-types': 'Its memory was made with other cache settings.',
       'context-too-small': 'Its memory no longer fits the current context.',
       'engine-died': 'The engine stopped during the last answer.',
+      rewind: 'Going back before this message takes the memory up from further back.',
     },
     rereadReleased: (date) => `You let its memory go on ${date}.`,
     rereadEvicted: (date, budget) => `Its memory was let go on ${date} to stay under ${budget}.`,

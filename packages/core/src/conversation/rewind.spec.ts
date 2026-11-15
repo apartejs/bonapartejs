@@ -58,7 +58,7 @@ async function rig() {
   const engine = new ConversationEngine({
     store,
     kv,
-    engine: async () => ({ client, family: gemma, live: LIVE, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation: 1 }),
+    engine: async () => ({ client, family: gemma, live: LIVE, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation: 1, slidingWindow: 1024 }),
     prompt: () => ({ kind: 'code', tools: [], perimeter: [repo], replyLanguage: 'French' }),
   });
   const checkpoints = new CheckpointStore(join(dir, 'checkpoints'));
@@ -197,6 +197,19 @@ describe('going back before a message', { timeout: 30_000 }, () => {
     expect(preview.commands).toEqual(['pnpm test']);
     expect(await branchOf()).toBe(before);
     expect(await readFile(a, 'utf8')).toBe('v3');
+  });
+
+  it('says what its memory will cost: kept when llama.cpp resumes where the message began, read again when let go', async () => {
+    const { id, rewind, store, target, engine } = await rig();
+    expect((await rewind.preview(id, target)).memory).toBe('kept');
+    // The memory let go (another conversation took the slot, then the person freed it): read again, said.
+    const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'plume' });
+    await engine.turn(other.id, { text: 'Ailleurs.', messageId: 'o1' }, () => undefined);
+    await engine.release(id);
+    const memory = (await rewind.preview(id, target)).memory;
+    expect(memory).toMatchObject({ kind: 'reread', reason: 'evicted' });
+    expect(memory !== 'kept' && memory !== null && memory.tokens).toBeGreaterThan(100);
+    expect((await rewind.rewind(id, target, 'both')).memory).toMatchObject({ kind: 'reread' });
   });
 
   it('refuses a message that is not the one the window names: nothing moves', async () => {

@@ -86,6 +86,7 @@ export const fr: Messages = {
       'cache-types': 'Sa mémoire a été faite avec d’autres réglages du cache.',
       'context-too-small': 'Sa mémoire ne tient plus dans le contexte actuel.',
       'engine-died': 'Le moteur s’est arrêté pendant la dernière réponse.',
+      rewind: 'Revenir avant ce message reprend la mémoire de plus loin.',
     },
     rereadReleased: (date) => `Tu as libéré sa mémoire le ${date}.`,
     rereadEvicted: (date, budget) => `Sa mémoire a été libérée le ${date} pour rester sous les ${budget}.`,
