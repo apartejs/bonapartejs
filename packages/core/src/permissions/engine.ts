@@ -19,7 +19,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import type { PlayMode, ToolEffect, Verdict } from '@aparte/bonaparte-shared';
 import type { ToolDef } from '../tools/types.js';
-import { InvalidPathError, NetworkPathError, PathOutsideHomeError, permissionPath, resolveInPerimeter } from '../project/paths.js';
+import { InvalidPathError, NetworkPathError, PathOutsideHomeError, permissionPath, realLocation, resolveInPerimeter } from '../project/paths.js';
 import { isValidRule, matchesRule, type AllowRule, type CommandLine } from './rules.js';
 
 export interface PermissionQuery {
@@ -149,7 +149,8 @@ export class PermissionEngine {
           }
           inside = false;
         }
-        const real = inside ? permissionPath(roots, requested, home) : resolve(roots[0] ?? home, requested);
+        // Outside too, where it really lands decides: a link into .ssh is armed.
+        const real = inside ? permissionPath(roots, requested, home) : realLocation(resolve(roots[0] ?? home, requested));
         if (isArmedPath(real, this.deps.dataDir, this.deps.alwaysAsk?.(query.projectId) ?? [])) {
           return { verdict: 'ask', why: 'armed-path' };
         }

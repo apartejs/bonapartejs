@@ -7,7 +7,7 @@
  * the most permissive mode does not survive a restart unconfirmed.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PlayMode, ToolEffect } from '@aparte/bonaparte-shared';
@@ -100,6 +100,17 @@ describe('outside the project', () => {
     expect(outside.verdict).toBe('deny');
     expect(outside.verdict === 'deny' ? outside.reason : '').toMatch(/outside the home folder/);
     expect(homeOnly.evaluate({ tool: EDIT, input: { path: 'notes.txt' }, mode: 'plume' })).toEqual({ verdict: 'allow' });
+  });
+
+  it('a write outside the project is judged where it really lands: through a link into .ssh, it is armed', async () => {
+    const ssh = join(project, '..', `bp-home-${Date.now()}`, '.ssh');
+    await mkdir(ssh, { recursive: true });
+    try {
+      await symlink(ssh, join(project, '..', `bp-keys-${process.pid}`), 'junction');
+    } catch {
+      return;
+    }
+    expect(edit(`../bp-keys-${process.pid}/authorized_keys`, 'impro')).toEqual({ verdict: 'ask', why: 'armed-path' });
   });
 
   it('a network path is refused outright', () => {

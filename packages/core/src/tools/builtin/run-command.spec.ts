@@ -41,6 +41,12 @@ describe('run_command', () => {
     expect(result.content).toMatch(/exit code 3/);
   });
 
+  it("an allowed call never widens the folder it runs in: the card shows the command, not its folder", async () => {
+    const ctx = await context();
+    const result = await run({ ...node('0'), cwd: '..' }, { ...ctx, granted: true });
+    expect(result).toMatchObject({ failed: true });
+  });
+
   it('runs in the project, and refuses a folder outside it', async () => {
     const ctx = await context();
     expect((await run(node('console.log(process.cwd())'), ctx)).content).toContain(ctx.roots[0]!);

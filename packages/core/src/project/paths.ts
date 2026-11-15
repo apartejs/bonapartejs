@@ -83,7 +83,8 @@ export function realLocation(absolute: string, links = 0): string {
       const stat = lstatSync(current, { throwIfNoEntry: false });
       if (stat?.isSymbolicLink()) {
         if (links >= MAX_LINKS) throw new Error(`Too many links to follow: ${absolute}`);
-        const target = resolve(dirname(current), readlinkSync(current));
+        // A relative target is read from where the link really stands, never from how it was reached.
+        const target = resolve(realLocation(dirname(current), links + 1), readlinkSync(current));
         return join(realLocation(target, links + 1), ...missing.reverse());
       }
       const parent = dirname(current);

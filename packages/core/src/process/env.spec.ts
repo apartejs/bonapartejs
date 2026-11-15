@@ -50,4 +50,20 @@ describe('withoutSecrets', () => {
     };
     expect(withoutSecrets(needed)).toEqual(needed);
   });
+
+  it('drops the short names and the values that carry a credential', () => {
+    const secrets = {
+      DB_PASS: 'hunter2',
+      SMTP_PASS: 'x',
+      DB_PW: 'x',
+      SENTRY_DSN: 'https://abc@o1.ingest.sentry.io/1',
+      AZURE_STORAGE_CONNECTION_STRING: 'DefaultEndpointsProtocol=https;AccountName=a;AccountKey=b',
+      DATABASE_URL: 'postgres://user:pw@db.example.com/app',
+      MIRROR: 'https://someone:token@mirror.example.com/',
+    };
+    expect(withoutSecrets(secrets)).toEqual({});
+    const kept = { REGISTRY_URL: 'https://registry.npmjs.org/', PASSAGE: 'x', COMPASS: 'x' };
+    expect(withoutSecrets(kept)).toEqual(kept);
+  });
 });
+

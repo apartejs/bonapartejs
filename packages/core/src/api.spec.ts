@@ -362,6 +362,19 @@ describe('createCore — the modes and the previews of the window', () => {
     expect(preview).toMatchObject({ kind: 'diff', path: 'notes.txt', before: 'old line\n', after: 'new line\n' });
   });
 
+  it("deleting a conversation takes the originals its turns kept with it: copies of the person's files never outlive it", async () => {
+    const { core } = await setup();
+    const dir = await mkdtemp(join(tmpdir(), 'bp-core-forget-'));
+    dirs.push(dir);
+    await writeFile(join(dir, 'notes.txt'), 'secret\n');
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    await core.checkpoints.before('c1', 'm1', join(dir, 'notes.txt'), 'notes.txt');
+    expect(await core.checkpoints.changes('c1', 'm1')).toBeDefined();
+    await core.removeConversation('c1');
+    expect(await core.checkpoints.changes('c1', 'm1')).toBeUndefined();
+    expect(await core.conversationStore.get('c1')).toBeNull();
+  });
+
   it("without a project, and outside a test run, the tools work in the person's home folder", async () => {
     const { core } = await setup();
     const write = core.tools.get('write_file')!.def;

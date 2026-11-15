@@ -51,7 +51,8 @@ export const runCommand: BuiltinTool = {
     const requestedCwd = text(call.input, 'cwd');
     let cwd = workRoot(ctx);
     if (requestedCwd) {
-      const resolved = inPerimeter(ctx, requestedCwd);
+      // The card shows the command, not its folder: an allowed call never widens where it runs.
+      const resolved = inPerimeter({ ...ctx, granted: false }, requestedCwd);
       if ('error' in resolved) return refused(resolved.error);
       cwd = resolved.path;
     }

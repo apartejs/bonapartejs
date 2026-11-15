@@ -121,6 +121,8 @@ export interface Core {
   readonly permissions: PermissionEngine;
   /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
   readonly checkpoints: CheckpointStore;
+  /** Deletes a conversation: its card, its journal, its memory — and the originals its turns kept. */
+  removeConversation(id: string): Promise<void>;
   /**
    * A turn of the agent: the model's calls decided by the policy, run by the
    * registry, the window's own tools (its `clientTools`) paused for it.
@@ -628,6 +630,12 @@ export function createCore(deps: CoreDeps): Core {
     tools,
     permissions,
     checkpoints,
+
+    async removeConversation(id) {
+      await conversations.remove(id);
+      // Copies of the person's files never outlive the conversation that kept them.
+      await checkpoints.forget(id);
+    },
 
     agentTurn,
     modeOf,

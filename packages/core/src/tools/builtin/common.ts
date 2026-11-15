@@ -6,7 +6,7 @@
 
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
-import { PathOutsideHomeError, PathOutsidePerimeterError, resolveInPerimeter } from '../../project/paths.js';
+import { PathOutsideHomeError, PathOutsidePerimeterError, realLocation, resolveInPerimeter } from '../../project/paths.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../types.js';
 
 export interface BuiltinTool {
@@ -34,6 +34,11 @@ export function wholeNumber(input: unknown, key: string): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : undefined;
 }
 
+/** The same place, as Windows compares paths (its names ignore case) or as the system does elsewhere. */
+function samePlace(a: string, b: string): boolean {
+  return process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b);
+}
+
 /** Where a requested path lands in the perimeter — or the refusal for the model, which names the folders allowed. */
 export function inPerimeter(ctx: ToolContext, requested: string): { path: string } | { error: string } {
   try {
@@ -42,7 +47,9 @@ export function inPerimeter(ctx: ToolContext, requested: string): { path: string
     // Outside the project, allowed by the person for this call: written where it was shown. Never
     // outside the home folder without a project, never the network, never a stream.
     if (ctx.granted && error instanceof PathOutsidePerimeterError && !(error instanceof PathOutsideHomeError) && ctx.roots[0]) {
-      return { path: resolve(ctx.roots[0], requested.replace(/\\/g, '/')) };
+      const absolute = resolve(ctx.roots[0], requested.replace(/\\/g, '/'));
+      // Only where the card showed: a link anywhere on the way leads elsewhere, and is refused.
+      if (samePlace(realLocation(absolute), absolute)) return { path: absolute };
     }
     return { error: describeError(error) };
   }

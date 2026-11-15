@@ -22,7 +22,8 @@ const NEW_CONVERSATION = { kind: 'code', engineId: 'builtin', modelId: '', mode:
 
 interface ConversationCore {
   conversationStore: Pick<Core['conversationStore'], 'ensure' | 'list' | 'loadDocument' | 'saveDocument'>;
-  conversations: Pick<Core['conversations'], 'open' | 'remove'>;
+  conversations: Pick<Core['conversations'], 'open'>;
+  removeConversation: Core['removeConversation'];
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
@@ -40,7 +41,7 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     await store.saveDocument(document.id, document);
   });
 
-  ipc.handle(conversationsDelete, ({ id }) => core.conversations.remove(id));
+  ipc.handle(conversationsDelete, ({ id }) => core.removeConversation(id));
 
   ipc.handle(conversationsMemory, async ({ id }): Promise<ConversationMemoryView> => {
     const announcement = await core.conversations.open(id);

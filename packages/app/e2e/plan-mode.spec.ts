@@ -93,3 +93,31 @@ test('« Lancer en Plume » while the reply is still written: the go-ahead leave
   await expect(ui.userMessages.last()).toContainText('Lance le plan.', { timeout: 20_000 });
   await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 20_000 }).toBe('second\n');
 });
+
+test('« Lancer en Plume », then away to another conversation before the reply ends: the go-ahead leaves on the way back', async ({ launch }) => {
+  const slow = (prompt: string): string => {
+    const answer = model(prompt);
+    return answer === 'Voici le plan.' ? `Voici le plan. ${'Je détaille chaque étape avant de commencer. '.repeat(12)}` : answer;
+  };
+  const { page, home } = await launch({ engine: { responder: slow, paceMs: 40 } });
+  await writeFile(join(home, 'notes.txt'), 'first\n');
+  const ui = chat(page);
+  const list = page.locator('aparte-conversation-list');
+  await ui.send('Autre sujet');
+  await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Nouvelle conversation' }).click();
+  await page.locator('aparte-approval-mode').getByRole('combobox').click();
+  await page.getByRole('option', { name: 'Lecture' }).click();
+  await ui.send('Ajoute un export CSV du récap');
+
+  const launchIt = page.getByRole('region', { name: 'Plan' }).first().getByRole('button', { name: 'Lancer en Plume' });
+  await expect(launchIt).toBeVisible({ timeout: 15_000 });
+  await launchIt.click();
+  // Away before the reply ends, then back.
+  await list.getByRole('button', { name: /Autre sujet/ }).click();
+  await expect(ui.userMessages.first()).toContainText('Autre sujet');
+  await list.getByRole('button', { name: /Ajoute un export/ }).click();
+
+  await expect(ui.userMessages.last()).toContainText('Lance le plan.', { timeout: 20_000 });
+  await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 20_000 }).toBe('second\n');
+});

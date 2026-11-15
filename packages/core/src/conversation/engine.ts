@@ -371,7 +371,9 @@ export class ConversationEngine {
       const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
       const told = lastToldMode(journal.entries());
       if (running !== told) {
-        const delta = renderModeDelta(running, told);
+        // Leaving Lecture launches a plan only when one was presented since the model was told Lecture.
+        const launched = told === 'lecture' && running !== 'lecture' && planSinceLecture(journal.entries());
+        const delta = renderModeDelta(running, launched);
         await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       }
     }
@@ -637,6 +639,9 @@ async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<voi
   let open: { toolCallId: string; name: string }[];
   if (last?.kind === 'pending') {
     open = last.calls.map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
+  } else if (last?.kind === 'tool-results') {
+    // The results are there, the continuation never came (it did not fit, the engine failed): only the close.
+    open = [];
   } else if (last?.kind === 'assistant' && family.endAssistant(last.raw) === '') {
     const demux = family.createDemux();
     open = [...demux.push(last.raw), ...demux.flush()]
@@ -653,5 +658,22 @@ async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<voi
     stopped: 'user',
     rendered: family.beginAssistant({ thinking: false, continuing: true }) + family.endAssistant(''),
   });
+}
+
+/** Did the model present a plan (an update_plan that ran) since its last note of Lecture, in this branch? */
+function planSinceLecture(entries: readonly JournalEntry[]): boolean {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'delta' && entry.delta.kind === 'mode') return false;
+    if (entry.kind === 'tool-results' && entry.results.some((result) => result.name === 'update_plan' && !result.failed)) {
+      // A plan — when the mode told before it is Lecture.
+      for (let back = index - 1; back >= 0; back -= 1) {
+        const earlier = entries[back]!;
+        if (earlier.kind === 'delta' && earlier.delta.kind === 'mode') return earlier.delta.mode === 'lecture';
+      }
+      return false;
+    }
+  }
+  return false;
 }
 

@@ -96,8 +96,7 @@ const LAUNCHED =
   'The person launched your plan: send update_plan again with its first step in-progress, then carry the plan out, ' +
   'sending update_plan each time a step moves.';
 
-/** The mode the conversation runs in, when it is not the one the model was last told (`from`). */
-export function renderModeDelta(mode: PlayMode, from?: PlayMode): Delta {
-  const launched = from === 'lecture' && mode !== 'lecture' ? `\n${LAUNCHED}` : '';
-  return { kind: 'mode', mode, text: `[mode] ${MODE_NOTES[mode]}${launched}` };
+/** The mode the conversation runs in, when it is not the one the model was last told; `launched`: it leaves Lecture with a plan. */
+export function renderModeDelta(mode: PlayMode, launched = false): Delta {
+  return { kind: 'mode', mode, text: `[mode] ${MODE_NOTES[mode]}${launched ? `\n${LAUNCHED}` : ''}` };
 }

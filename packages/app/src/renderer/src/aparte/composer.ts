@@ -27,28 +27,30 @@ export function focusComposer(): void {
   composer()?.focus();
 }
 
-/** What ends a reply, or a question, that holds the composer: aparté dispatches them on the chat, bubbling. */
-const FREED = ['aparte-message-done', 'aparte-message-aborted', 'aparte-message-error'] as const;
+/**
+ * What frees the composer for a message: the end of a reply, or of the question that held it — and
+ * a conversation loaded, the one the message waits for perhaps. aparté dispatches them on the chat,
+ * bubbling.
+ */
+const FREED = ['aparte-message-done', 'aparte-message-aborted', 'aparte-message-error', 'aparte-conversation-loaded'] as const;
 
 /**
- * Sends as the person as soon as the composer is free: now, or when the reply — or the question —
- * that holds it ends. `still()` says whether it is still wanted (the same conversation is open);
- * the function returned gives it up.
+ * Sends as the person as soon as the composer is free and `here()` (the conversation it belongs to
+ * is the one open): now, or when the reply — or the question — that holds the composer ends, or
+ * when the person comes back to that conversation. Never into another one, never lost; the
+ * function returned gives it up.
  */
-export function sendWhenFree(text: string, still: () => boolean, page: EventTarget = window): () => void {
-  if (!still()) return () => undefined;
-  if (sendAsPerson(text)) return () => undefined;
+export function sendWhenFree(text: string, here: () => boolean, page: EventTarget = window): () => void {
+  if (here() && sendAsPerson(text)) return () => undefined;
   let done = false;
   const stop = (): void => {
     done = true;
     for (const name of FREED) page.removeEventListener(name, retry);
   };
   function retry(): void {
-    // After aparté's own listeners: the composer is free only once they have run.
+    // After aparté's own listeners: the composer is free, and the conversation open, only once they have run.
     setTimeout(() => {
-      if (done) return;
-      if (!still()) stop();
-      else if (sendAsPerson(text)) stop();
+      if (!done && here() && sendAsPerson(text)) stop();
     }, 0);
   }
   for (const name of FREED) page.addEventListener(name, retry);

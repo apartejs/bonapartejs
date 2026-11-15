@@ -5,7 +5,7 @@
  * the original first (the turn's checkpoint).
  */
 
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -113,6 +113,22 @@ describe('write_file', () => {
     expect(allowed.failed).toBeUndefined();
     expect(await readFile(beside, 'utf8')).toBe('allowed');
     await rm(beside, { force: true });
+  });
+
+  it('an allowed write outside the project never goes through a link to somewhere else than the card showed', async () => {
+    const { root, ctx } = await project();
+    const elsewhere = await mkdtemp(join(tmpdir(), 'bp-elsewhere-'));
+    dirs.push(elsewhere);
+    const beside = join(root, '..', `bp-beside-link-${Date.now()}`);
+    try {
+      await symlink(elsewhere, beside, 'junction');
+    } catch {
+      return;
+    }
+    dirs.push(beside);
+    const result = await call(writeFileTool.handler, { path: join(beside, 'x.txt'), content: 'x' }, { ...ctx, granted: true });
+    expect(result).toMatchObject({ failed: true });
+    expect(await readdir(elsewhere)).toEqual([]);
   });
 
   it('refuses a path outside, and writes nothing there', async () => {

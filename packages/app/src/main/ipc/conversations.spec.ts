@@ -31,12 +31,11 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
   registerConversationChannels(ipc, {
     conversationStore: store,
-    conversations: {
-      open: open as never,
-      remove: async (id: string) => {
-        removed.push(id);
-        await store.remove(id);
-      },
+    conversations: { open: open as never },
+    // The core's delete: the conversation and the originals its turns kept.
+    removeConversation: async (id: string) => {
+      removed.push(id);
+      await store.remove(id);
     },
   });
   const call = (name: string, input: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);

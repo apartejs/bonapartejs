@@ -568,6 +568,32 @@ describe('ConversationEngine — the tools', () => {
     expect((await openJournal(store.dir, meta.id)).entries().some((entry) => entry.kind === 'tool-results')).toBe(true);
   });
 
+  it('a turn left open after its results — the continuation did not fit — is closed before the next message', async () => {
+    const { store, engine, prompts, conversation } = await rig({ server: { responder: agent } });
+    const meta = await conversation();
+    const pause = (calls: readonly { id: string; name: string; input: unknown }[]) => ({
+      suspend: { pending: calls.map((one) => ({ toolCallId: one.id, name: one.name, input: one.input as Record<string, unknown>, reason: 'approval' as const })), ticket: 't' },
+    });
+    await engine.turn(meta.id, { text: 'Lis a.ts', tools: { defs: [READ_FILE], onCalls: async (calls) => pause(calls) } }, () => undefined);
+    const paused = (await engine.paused(meta.id))!;
+    const call = paused.calls[0]!;
+    await engine.recordAnswers(meta.id, {
+      outcomes: { [call.toolCallId]: { kind: 'decision', approved: true } },
+      results: [{ toolCallId: call.toolCallId, name: call.name, content: 'x'.repeat(4000) }],
+    });
+    // The continuation does not fit: refused before anything is sent, the journal ending on the results.
+    await store.update(meta.id, { contextCap: 600 });
+    await expect(engine.turn(meta.id, { resume: true, tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined)).rejects.toThrow();
+    expect((await openJournal(store.dir, meta.id)).entries().at(-1)?.kind).toBe('tool-results');
+
+    await store.update(meta.id, { contextCap: 100_000 });
+    await engine.turn(meta.id, { text: 'Autre chose', tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
+    const next = prompts.find((prompt) => prompt.includes('Autre chose'))!;
+    const answered = next.lastIndexOf('<tool_response|>');
+    expect(next.indexOf('<turn|>', answered)).toBeGreaterThan(answered);
+    expect(next.indexOf('<turn|>', answered)).toBeLessThan(next.indexOf('<|turn>user', answered));
+  });
+
   it('a turn the loop stops at its limit ends there', async () => {
     const { engine, prompts, conversation } = await rig({ server: { responder: agent } });
     const meta = await conversation();
@@ -636,24 +662,72 @@ describe('ConversationEngine — the mode, as the model knows it', () => {
     expect(notes).toHaveLength(1);
   });
 
-  it('leaving Lecture launches the plan: the note says so, and asks for update_plan with the first step in progress', async () => {
-    const { store, prompts, say } = await rig();
-    const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
-    await say(meta.id, 'Fais un plan');
-    await store.update(meta.id, { mode: 'plume' });
-    await say(meta.id, 'Lance le plan.');
-    const launched = prompts.at(-1)!;
-    const note = launched.slice(launched.lastIndexOf('[mode]'), launched.lastIndexOf('Lance le plan.'));
-    expect(note).toContain('Plume');
-    expect(note).toContain('launched your plan');
-    expect(note).toContain('update_plan');
-    expect(note).toContain('in-progress');
-    // From Répétition to Plume there is no plan to launch.
-    const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
-    await say(other.id, 'Bonjour');
-    await store.update(other.id, { mode: 'plume' });
-    await say(other.id, 'Encore');
-    expect(prompts.at(-1)!).not.toContain('launched your plan');
+  describe('the launch of a plan', () => {
+    const Q = '<|"|>';
+    const PLAN = `<|tool_call>call:update_plan{steps:[{title:${Q}Écrire toCsv${Q},status:${Q}pending${Q}}]}<tool_call|>`;
+    const UPDATE_PLAN: ToolDef = {
+      name: 'update_plan',
+      description: 'Show the plan.',
+      inputSchema: { type: 'object', properties: {} },
+      effect: 'ui',
+      source: 'builtin',
+      where: 'core',
+    };
+    /** The model presents a plan when asked for one, and says « Voici. » once it has the result. */
+    const planner = (prompt: string): string => {
+      const user = prompt.lastIndexOf('<|turn>user');
+      if (prompt.lastIndexOf('<|tool_response>') > user) return 'Voici.';
+      const asked = prompt.slice(user);
+      return asked.includes('plan') && !asked.includes('Lance') ? PLAN : 'ok';
+    };
+    const tools = {
+      defs: [UPDATE_PLAN],
+      onCalls: async (calls: readonly { id: string; name: string }[]) => ({
+        results: calls.map((call) => ({ toolCallId: call.id, name: call.name, content: 'Plan updated: 1 steps, 0 done.' })),
+      }),
+    };
+    const noteOf = (prompt: string, before: string): string => prompt.slice(prompt.lastIndexOf('[mode]'), prompt.lastIndexOf(before));
+
+    it('leaving Lecture after a plan launches it: the note says so, and asks for update_plan with the first step in progress', async () => {
+      const { store, prompts, engine } = await rig({ server: { responder: planner } });
+      const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
+      await engine.turn(meta.id, { text: 'Fais un plan', tools }, () => undefined);
+      await store.update(meta.id, { mode: 'plume' });
+      await engine.turn(meta.id, { text: 'Lance le plan.', tools }, () => undefined);
+      const note = noteOf(prompts.at(-1)!, 'Lance le plan.');
+      expect(note).toContain('Plume');
+      expect(note).toContain('launched your plan');
+      expect(note).toContain('update_plan');
+      expect(note).toContain('in-progress');
+    });
+
+    it('no plan, no launch: leaving Lecture without one, or from another mode, says only the mode', async () => {
+      const { store, prompts, engine } = await rig({ server: { responder: planner } });
+      const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
+      await engine.turn(meta.id, { text: 'Lis le code', tools }, () => undefined);
+      await store.update(meta.id, { mode: 'plume' });
+      await engine.turn(meta.id, { text: 'Corrige la ligne', tools }, () => undefined);
+      expect(noteOf(prompts.at(-1)!, 'Corrige la ligne')).not.toContain('launched your plan');
+
+      const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
+      await engine.turn(other.id, { text: 'Bonjour', tools }, () => undefined);
+      await store.update(other.id, { mode: 'plume' });
+      await engine.turn(other.id, { text: 'Encore', tools }, () => undefined);
+      expect(prompts.at(-1)!).not.toContain('launched your plan');
+    });
+
+    it('a plan launched once is not launched again by a return to Lecture and back', async () => {
+      const { store, prompts, engine } = await rig({ server: { responder: planner } });
+      const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
+      await engine.turn(meta.id, { text: 'Fais un plan', tools }, () => undefined);
+      await store.update(meta.id, { mode: 'plume' });
+      await engine.turn(meta.id, { text: 'Lance le plan.', tools }, () => undefined);
+      await store.update(meta.id, { mode: 'lecture' });
+      await engine.turn(meta.id, { text: 'Relis', tools }, () => undefined);
+      await store.update(meta.id, { mode: 'plume' });
+      await engine.turn(meta.id, { text: 'Continue', tools }, () => undefined);
+      expect(noteOf(prompts.at(-1)!, 'Continue')).not.toContain('launched your plan');
+    });
   });
 
   it('the mode the core runs in is the one told: Impro not confirmed again after a restart is told as Plume', async () => {

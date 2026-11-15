@@ -8,7 +8,7 @@
 
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runShort } from '../engine/process-probe.js';
 import {
@@ -103,6 +103,20 @@ describe('the real location decides, not the spelling', () => {
     expect(() => resolveInPerimeter([root], 'escape/evil.txt')).toThrow(PathOutsidePerimeterError);
     expect(isInPerimeter([root], 'escape/evil.txt')).toBe(false);
     expect(realLocation(join(root, 'escape', 'evil.txt'))).toBe(join(outside, 'not-yet', 'evil.txt'));
+  });
+
+  it('a relative link reached through another link is resolved from where it really stands', async () => {
+    const root = await folder();
+    const outside = await folder('bp-outside-');
+    await mkdir(join(root, 'deep', 'er'), { recursive: true });
+    try {
+      // deep/er/back leads back to the project; evil points one folder above where it really stands.
+      await symlink(root, join(root, 'deep', 'er', 'back'), 'junction');
+      await symlink(join('..', basename(outside), 'evil.txt'), join(root, 'evil'), 'file');
+    } catch {
+      return; // a relative link needs a privilege on Windows: Linux and macOS run it
+    }
+    expect(() => resolveInPerimeter([root], 'deep/er/back/evil')).toThrow(PathOutsidePerimeterError);
   });
 
   it('a file link that points nowhere yet is where it points', async () => {
