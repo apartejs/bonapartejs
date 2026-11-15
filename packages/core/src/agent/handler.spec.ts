@@ -424,3 +424,42 @@ describe('the agent handler — the tools', () => {
     expect(typeof last['ticket']).toBe('string');
   });
 });
+
+describe('the agent handler — the mode of a new conversation', () => {
+  const at = (path: string, body: unknown) =>
+    new Request(`${AGENT_ENDPOINT}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+  it('a conversation the first turn creates runs in the mode the window chose before it existed', async () => {
+    const { core, handler } = await setup({ responder: () => 'ok' });
+    await (await handler(at('/c/fresh?mode=lecture', turn(user('Bonjour'))))).text();
+    expect((await core.conversationStore.get('fresh'))?.mode).toBe('lecture');
+  });
+
+  it('a conversation the page saved before its first turn (made in the default mode) takes the mode of that turn', async () => {
+    const { core, handler } = await setup({ responder: () => 'ok' });
+    await core.conversationStore.ensure('saved', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    await (await handler(at('/c/saved?mode=lecture', turn(user('Bonjour'))))).text();
+    expect((await core.conversationStore.get('saved'))?.mode).toBe('lecture');
+  });
+
+  it('after its first turn, the mode of a conversation is the core’s: a turn never changes it', async () => {
+    const { core, handler } = await setup({ responder: () => 'ok' });
+    await (await handler(at('/c/kept?mode=plume', turn(user('Bonjour'))))).text();
+    const second = { ...turn(user('Bonjour'), { role: 'assistant', content: 'ok' }, user('Encore')), messageId: 'm2' };
+    await (await handler(at('/c/kept?mode=impro', second))).text();
+    expect((await core.conversationStore.get('kept'))?.mode).toBe('plume');
+  });
+
+  it('a mode that is not one is not taken: the new conversation asks before every change', async () => {
+    const { core, handler } = await setup({ responder: () => 'ok' });
+    await (await handler(at('/c/odd?mode=root', turn(user('Bonjour'))))).text();
+    expect((await core.conversationStore.get('odd'))?.mode).toBe('repetition');
+  });
+
+  it('Impro chosen for a new conversation is the person’s choice of now: nothing to confirm again', async () => {
+    const { core, handler } = await setup({ responder: () => 'ok' });
+    await (await handler(at('/c/bold?mode=impro', turn(user('Bonjour'))))).text();
+    expect(await core.modeOf('bold')).toEqual({ mode: 'impro', reconfirm: false });
+  });
+});
+

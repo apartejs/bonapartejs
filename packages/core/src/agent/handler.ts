@@ -13,6 +13,7 @@
  * loads a model: with none loaded, it is refused.
  */
 
+import { playModeSchema } from '@aparte/bonaparte-shared';
 import type { StreamRunEvent } from '@aparte/engine';
 import type { Core, Engine } from '../api.js';
 import { ContextFullError, EngineFailedError, type TurnEvent, type TurnInput, type TurnResult } from '../conversation/engine.js';
@@ -41,7 +42,8 @@ function hasImage(body: AgentBody): boolean {
 
 export function createAgentHandler(core: Core): (request: Request) => Promise<Response> {
   return async (request) => {
-    const conversationId = /^\/agent\/c\/([^/]+)$/.exec(new URL(request.url).pathname)?.[1];
+    const url = new URL(request.url);
+    const conversationId = /^\/agent\/c\/([^/]+)$/.exec(url.pathname)?.[1];
     if (!conversationId) return jsonError(404, 'Not found.');
     if (request.method !== 'POST') return jsonError(405, 'A turn is sent with POST.');
     // A cross-site form cannot send application/json: refusing anything else
@@ -102,6 +104,10 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       );
     }
     const entries = (await openJournal(core.conversationStore.dir, conversationId, meta.branchId)).entries();
+    // A conversation's first turn runs in the mode the person chose before it had any — the page may
+    // have saved the conversation already, made in the default mode. After that, the core's mode stands.
+    const chosen = playModeSchema.safeParse(url.searchParams.get('mode'));
+    if (entries.length === 0 && chosen.success) await core.setMode(conversationId, chosen.data);
     const divergence = compareWithJournal(body.data.request.messages, entries);
     if (divergence.kind === 'mismatch') {
       return jsonError(409, 'This history is not the one of this conversation: open it again.');

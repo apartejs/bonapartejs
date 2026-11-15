@@ -38,7 +38,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const { init, activeConversations, activeId: conversationId } = useConversationManager();
   const [memory, setMemory] = useState<Announcement>(null);
 
-  const streamRunner = useMemo(() => createConversationRunner(), []);
+  // The mode the switch shows, read at each turn: a conversation the turn creates runs in it.
+  const chosen = useRef<PlayMode>('repetition');
+  const streamRunner = useMemo(() => createConversationRunner({ mode: () => chosen.current }), []);
   // The core decides every call; what it asks about waits here for the person's answer on the card.
   // The resolver owns the decision: aparté's page policy is never consulted.
   const approvals = useMemo(() => createApprovalsStore(), []);
@@ -63,7 +65,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // The mode the conversation runs in: read again when a request comes, which it explains.
   const [mode, setMode] = useState<PlayMode>('repetition');
   useEffect(() => {
-    if (!conversationId) return;
+    chosen.current = mode;
+  }, [mode]);
+  useEffect(() => {
+    // A new conversation starts where the product does: asking before every change.
+    if (!conversationId) {
+      setMode('repetition');
+      return;
+    }
     let current = true;
     void bridge
       .invoke(modesGet, { id: conversationId })

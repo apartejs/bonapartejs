@@ -58,4 +58,15 @@ describe('createConversationRunner', () => {
     await expect(createConversationRunner({ fetch })(turn(undefined))).rejects.toThrow(/conversation/);
     expect(posted).toEqual([]);
   });
+
+  it('tells the core the mode the person chose: a conversation the turn creates runs in it', async () => {
+    const { fetch, posted } = answering([{ type: 'run-start' }, { type: 'run-done' }]);
+    let mode: 'lecture' | 'plume' = 'lecture';
+    const runner = createConversationRunner({ fetch, mode: () => mode });
+    await runner(turn('c-1'));
+    mode = 'plume';
+    await runner(turn('c-1'));
+    expect(posted).toEqual(['bonaparte://app/agent/c/c-1?mode=lecture', 'bonaparte://app/agent/c/c-1?mode=plume']);
+  });
 });
+

@@ -89,3 +89,14 @@ test('Impro: a file that runs later is asked about all the same, and nothing is 
   await card(page).getByRole('button', { name: 'Autoriser', exact: true }).click();
   await expect.poll(() => readFile(join(home, 'package.json'), 'utf8'), { timeout: 15_000 }).toBe('{ "name": "b" }\n');
 });
+
+test('a mode chosen before the first message holds: the new conversation runs in it, and the switch keeps showing it', async ({ launch }) => {
+  const { page, home } = await launch({ engine: { responder: model } });
+  await writeFile(join(home, 'notes.txt'), 'first\n');
+  await choose(page, 'Lecture');
+  await answered(page, 'Change la note');
+  await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
+  await expect(card(page)).toHaveCount(0);
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('first\n');
+  await expect(page.locator('aparte-approval-mode').getByRole('combobox')).toContainText('Lecture');
+});
