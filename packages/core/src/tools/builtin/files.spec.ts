@@ -115,6 +115,23 @@ describe('write_file', () => {
     await rm(beside, { force: true });
   });
 
+  it('an allowed write outside the project still goes where shown when a folder above the project is a link (a short name, /var on macOS)', async () => {
+    const real = await mkdtemp(join(tmpdir(), 'bp-real-'));
+    dirs.push(real);
+    const reached = join(tmpdir(), `bp-reached-${Date.now()}`);
+    try {
+      await symlink(real, reached, 'junction');
+    } catch {
+      return;
+    }
+    dirs.push(reached);
+    await mkdir(join(real, 'project'));
+    const ctx: ToolContext = { conversationId: 'c1', roots: [join(reached, 'project')], nCtx: 8_192, signal: new AbortController().signal, granted: true };
+    const result = await call(writeFileTool.handler, { path: '../beside.txt', content: 'shown' }, ctx);
+    expect(result.failed).toBeUndefined();
+    expect(await readFile(join(real, 'beside.txt'), 'utf8')).toBe('shown');
+  });
+
   it('an allowed write outside the project never goes through a link to somewhere else than the card showed', async () => {
     const { root, ctx } = await project();
     const elsewhere = await mkdtemp(join(tmpdir(), 'bp-elsewhere-'));

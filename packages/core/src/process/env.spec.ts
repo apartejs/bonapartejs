@@ -62,7 +62,7 @@ describe('withoutSecrets', () => {
       MIRROR: 'https://someone:token@mirror.example.com/',
     };
     expect(withoutSecrets(secrets)).toEqual({});
-    const kept = { REGISTRY_URL: 'https://registry.npmjs.org/', PASSAGE: 'x', COMPASS: 'x' };
+    const kept = { REGISTRY_URL: 'https://registry.npmjs.org/', PASSAGE: 'x', COMPASS: 'x', PW_TEST_HTML_REPORT_OPEN: 'never', PW_TEST_REPORTER: 'line' };
     expect(withoutSecrets(kept)).toEqual(kept);
   });
 });

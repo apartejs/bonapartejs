@@ -11,7 +11,7 @@
 
 import { lstatSync, readlinkSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 
 export class PathOutsidePerimeterError extends Error {
   constructor(
@@ -67,6 +67,22 @@ function refuseStreams(requested: string, absolute: string): void {
 const MAX_LINKS = 40;
 
 /**
+ * Where a link points, as the system follows it: a relative target read from where the link really
+ * stands, and each `..` taken from where the path so far really leads — never folded as text, which
+ * would undo a link met on the way (`back/..` where `back` leads elsewhere).
+ */
+function linkTarget(link: string, links: number): string {
+  const raw = readlinkSync(link);
+  const absolute = isAbsolute(raw);
+  let at = absolute ? parse(raw).root : realLocation(dirname(link), links);
+  for (const part of (absolute ? raw.slice(parse(raw).root.length) : raw).split(/[\\/]+/)) {
+    if (part === '' || part === '.') continue;
+    at = part === '..' ? dirname(realLocation(at, links)) : join(at, part);
+  }
+  return at;
+}
+
+/**
  * The real location of a path: links, junctions and 8.3 names resolved. A
  * path that does not exist yet is the real location of its nearest existing
  * ancestor, with the rest appended — and a link whose target does not exist
@@ -83,8 +99,7 @@ export function realLocation(absolute: string, links = 0): string {
       const stat = lstatSync(current, { throwIfNoEntry: false });
       if (stat?.isSymbolicLink()) {
         if (links >= MAX_LINKS) throw new Error(`Too many links to follow: ${absolute}`);
-        // A relative target is read from where the link really stands, never from how it was reached.
-        const target = resolve(realLocation(dirname(current), links + 1), readlinkSync(current));
+        const target = linkTarget(current, links + 1);
         return join(realLocation(target, links + 1), ...missing.reverse());
       }
       const parent = dirname(current);

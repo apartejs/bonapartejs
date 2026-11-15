@@ -119,6 +119,19 @@ describe('the real location decides, not the spelling', () => {
     expect(() => resolveInPerimeter([root], 'deep/er/back/evil')).toThrow(PathOutsidePerimeterError);
   });
 
+  it("a '..' after a link inside a link's target goes up from where that link really leads", async () => {
+    const root = await folder();
+    await mkdir(join(root, 'deep', 'er'), { recursive: true });
+    try {
+      // deep/er/back leads back to the project: back/.. is the project's parent, not deep/er.
+      await symlink(root, join(root, 'deep', 'er', 'back'), 'junction');
+      await symlink(join('deep', 'er', 'back', '..', 'bp-escaped.txt'), join(root, 'notes'), 'file');
+    } catch {
+      return; // a relative file link needs a privilege on Windows: Linux and macOS run it
+    }
+    expect(() => resolveInPerimeter([root], 'notes')).toThrow(PathOutsidePerimeterError);
+  });
+
   it('a file link that points nowhere yet is where it points', async () => {
     const root = await folder();
     const outside = await folder('bp-outside-');

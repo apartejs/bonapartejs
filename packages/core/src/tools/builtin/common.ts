@@ -5,8 +5,9 @@
  */
 
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
-import { PathOutsideHomeError, PathOutsidePerimeterError, realLocation, resolveInPerimeter } from '../../project/paths.js';
+import { lstatSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
+import { PathOutsideHomeError, PathOutsidePerimeterError, resolveInPerimeter } from '../../project/paths.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../types.js';
 
 export interface BuiltinTool {
@@ -34,9 +35,25 @@ export function wholeNumber(input: unknown, key: string): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : undefined;
 }
 
-/** The same place, as Windows compares paths (its names ignore case) or as the system does elsewhere. */
-function samePlace(a: string, b: string): boolean {
-  return process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b);
+/**
+ * Is there a link between the folder a path shares with the project and the path itself? A link
+ * above that folder (a short name, a home moved elsewhere, /var on macOS) leads the project too,
+ * and changes nothing; one below it leads the write somewhere the card never showed.
+ */
+function linkOnTheWay(root: string, absolute: string): boolean {
+  const same = (a: string, b: string): boolean => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+  const from = resolve(root).split(sep);
+  const to = resolve(absolute).split(sep);
+  let shared = 0;
+  while (shared < from.length && shared < to.length && same(from[shared]!, to[shared]!)) shared += 1;
+  let current = to.slice(0, shared).join(sep) || sep;
+  for (const part of to.slice(shared)) {
+    current = join(current, part);
+    const stat = lstatSync(current, { throwIfNoEntry: false });
+    if (!stat) return false;
+    if (stat.isSymbolicLink()) return true;
+  }
+  return false;
 }
 
 /** Where a requested path lands in the perimeter — or the refusal for the model, which names the folders allowed. */
@@ -48,8 +65,8 @@ export function inPerimeter(ctx: ToolContext, requested: string): { path: string
     // outside the home folder without a project, never the network, never a stream.
     if (ctx.granted && error instanceof PathOutsidePerimeterError && !(error instanceof PathOutsideHomeError) && ctx.roots[0]) {
       const absolute = resolve(ctx.roots[0], requested.replace(/\\/g, '/'));
-      // Only where the card showed: a link anywhere on the way leads elsewhere, and is refused.
-      if (samePlace(realLocation(absolute), absolute)) return { path: absolute };
+      // Only where the card showed: a link on the way out of the project leads elsewhere, and is refused.
+      if (!linkOnTheWay(ctx.roots[0], absolute)) return { path: absolute };
     }
     return { error: describeError(error) };
   }
