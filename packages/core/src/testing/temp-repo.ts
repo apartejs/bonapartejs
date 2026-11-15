@@ -30,7 +30,11 @@ export async function tempRepo(files: Record<string, string>, ignored: string[] 
   await run('config', 'user.name', 'Test');
   await run('config', 'commit.gpgsign', 'false');
   await run('config', 'core.autocrlf', 'false');
+  // No background git (auto maintenance) left holding the folder when a test removes it.
+  await run('config', 'maintenance.auto', 'false');
+  await run('config', 'gc.auto', '0');
   await run('add', '-A');
   await run('commit', '-q', '-m', 'first');
-  return { dir, remove: () => rm(dir, { recursive: true, force: true }) };
+  // On Windows a folder stays busy while a process that just ran in it exits: retried.
+  return { dir, remove: () => rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) };
 }

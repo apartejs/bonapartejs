@@ -440,3 +440,43 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the panes, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = locale === 'fr'
+        ? { group: 'Volets', files: 'Fichiers', changes: 'Changements', terminal: 'Terminal', ask: 'Corrige le format des heures', tree: 'Fichiers du projet' }
+        : { group: 'Panes', files: 'Files', changes: 'Changes', terminal: 'Terminal', ask: 'Fix the hours format', tree: 'Project files' };
+      const Q = '<|"|>';
+      const edit = `<|tool_call>call:edit_file{path:${Q}src/format.ts${Q},old_string:${Q}minutes / 100${Q},new_string:${Q}minutes / 60${Q}}<tool_call|>`;
+      const done = locale === 'fr' ? 'Corrigé : une vraie division par 60. Relis le diff et dis-moi.' : 'Fixed: a real division by 60. Read the diff and tell me.';
+      const { page, home } = await launch({
+        locale,
+        engine: { responder: (prompt: string) => (prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? done : edit) },
+        settings: { defaultMode: 'plume' },
+      });
+      await mkdir(join(home, 'src'), { recursive: true });
+      await writeFile(join(home, 'src', 'format.ts'), 'export function toDecimal(hours: number, minutes: number): number {\n  return hours + minutes / 100;\n}\n');
+      await writeFile(join(home, 'AGENTS.md'), '# spanwise\n');
+      await page.emulateMedia({ colorScheme: scheme });
+      await chat(page).send(words.ask);
+      await expect(chat(page).replyText).toHaveText(done, { timeout: 15_000 });
+      const toggles = page.getByRole('group', { name: words.group });
+      await toggles.getByRole('button', { name: words.changes, exact: true }).click();
+      await toggles.getByRole('button', { name: words.terminal, exact: true }).click();
+      await expect(page.getByRole('tablist').getByRole('tab').first()).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: join(into, `panes-changes-terminal-${locale}-${scheme}.png`), animations: 'disabled' });
+      await toggles.getByRole('button', { name: words.terminal, exact: true }).click();
+      await toggles.getByRole('button', { name: words.files, exact: true }).click();
+      const tree = page.getByRole('tree', { name: words.tree });
+      await tree.getByRole('treeitem', { name: /^src/ }).click();
+      await tree.getByRole('treeitem', { name: /^format\.ts/ }).click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `panes-files-changes-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}

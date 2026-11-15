@@ -54,12 +54,6 @@ function LiveChatView({
     },
     [chat.key, handles],
   );
-  // A chat mounted with its conversation's id draws nothing of it until it is opened again
-  // (apartejs/aparte#236): opened once, as it mounts — the same id read again.
-  const mountedOn = useRef(chat.conversationId);
-  useEffect(() => {
-    if (mountedOn.current) void handle.current?.setConversationId(mountedOn.current);
-  }, []);
   // A chat hidden cannot measure itself: shown again, it goes to its end.
   useEffect(() => {
     if (shown) handle.current?.scrollToBottom();

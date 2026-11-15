@@ -21,8 +21,6 @@ const ApprovalModeSwitch = createAparteElement(approvalModeElement);
 
 const TO_APARTE: Record<PlayMode, ApprovalMode> = { lecture: 'plan', repetition: 'ask', plume: 'auto-edit', impro: 'auto' };
 const FROM_APARTE: Record<ApprovalMode, PlayMode> = { plan: 'lecture', ask: 'repetition', 'auto-edit': 'plume', auto: 'impro' };
-// The event's detail says `mode: string` (apartejs/aparte#234): only aparté's four are read.
-const isApprovalMode = (mode: string): mode is ApprovalMode => Object.hasOwn(FROM_APARTE, mode);
 
 /** What the element needs to enable itself; the classification is never read (the resolver decides). */
 const CLASSIFY = {
@@ -55,7 +53,5 @@ export function ModeSwitch({ mode, messages, onChange }: ModeSwitchProps) {
   }, [controller, mode]);
 
   // The person's choice.
-  return <ApprovalModeSwitch className="mode-switch" labels={labels} onApprovalModeChange={(detail) => {
-        if (isApprovalMode(detail.mode)) onChange(FROM_APARTE[detail.mode]);
-      }} />;
+  return <ApprovalModeSwitch className="mode-switch" labels={labels} onApprovalModeChange={(detail) => onChange(FROM_APARTE[detail.mode])} />;
 }

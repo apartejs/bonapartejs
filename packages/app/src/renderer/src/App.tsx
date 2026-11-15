@@ -1,3 +1,4 @@
+import type { AparteConversationSelectDetail } from '@aparte/core';
 import { setupCommands } from '@aparte/plugin-triggers/commands';
 import { useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
 import {
@@ -394,9 +395,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // The list drives the deck, not a chat: the page shows the chat of the conversation picked.
   useEffect(() => {
     const picked = (event: Event): void => {
-      // `id` is null for a new conversation, whatever the event's type says (apartejs/aparte#235).
-      const detail = (event as CustomEvent<{ id?: string | null; targetId?: string }>).detail;
-      if (detail?.targetId === CHATS_TARGET) goToRef.current(detail.id ?? null);
+      const detail = (event as CustomEvent<AparteConversationSelectDetail>).detail;
+      if (detail?.targetId === CHATS_TARGET) goToRef.current(detail.id);
     };
     window.addEventListener('aparte-conversation-select', picked);
     return () => window.removeEventListener('aparte-conversation-select', picked);
@@ -424,11 +424,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     void archive(id);
     setDeck((was) => forget(was, id));
   };
+  // The core says what is not committed (none without a branch): the rows' states may not know the branch yet.
   const askArchive = (id: string, title: string): void => {
-    if (!statuses[id]?.branch) {
-      archiveNow(id);
-      return;
-    }
     void bridge
       .invoke(conversationsArchiveCheck, { id })
       .then(({ uncommitted }) => (uncommitted > 0 ? setArchiving({ id, title, uncommitted }) : archiveNow(id)))
@@ -445,7 +442,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       mergedArchived.current.add(id);
       archiveNow(id);
     }
-  }, [statuses]);
+    // Read again when a reply ends: a conversation that was working may rest now.
+  }, [statuses, turnsEnded]);
   // « Ouvrir une PR »: said first — it goes online —, done on the person's word.
   const [openingPr, setOpeningPr] = useState<{ id: string; branch: string; base: string; failed: boolean } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
