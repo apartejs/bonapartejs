@@ -336,3 +336,28 @@ describe('createCore — what the review of phase 2 found', () => {
     expect(github.downloads).toBe(0);
   });
 });
+
+describe('createCore — the modes and the previews of the window', () => {
+  it('a conversation runs in the mode set for it; Impro does not survive a restart without a new confirmation', async () => {
+    const { core, dir } = await setup();
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    expect(await core.modeOf('c1')).toEqual({ mode: 'repetition', reconfirm: false });
+    await core.setMode('c1', 'impro');
+    expect(await core.modeOf('c1')).toEqual({ mode: 'impro', reconfirm: false });
+
+    const again = createCore({ dataDir: join(dir, 'data'), env: {}, logger: () => undefined });
+    cores.push(again);
+    expect(await again.modeOf('c1')).toEqual({ mode: 'plume', reconfirm: true });
+    await again.setMode('c1', 'impro');
+    expect(await again.modeOf('c1')).toEqual({ mode: 'impro', reconfirm: false });
+  });
+
+  it('previews a write: the text before and after, and their diff — nothing is written', async () => {
+    const { core } = await setup();
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    const preview = await core.previewCall('c1', { name: 'write_file', input: { path: 'bonaparte-preview-never-written.txt', content: 'one\n' } });
+    expect(preview).toMatchObject({ kind: 'diff', before: null, after: 'one\n' });
+    expect(preview?.kind === 'diff' ? preview.diff : '').toContain('+one');
+    expect(await core.previewCall('c1', { name: 'read_file', input: { path: 'x' } })).toBeNull();
+  });
+});

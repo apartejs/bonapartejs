@@ -34,7 +34,10 @@ import { runAgentTurn } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
 import { createTickets, installationSecret, type Tickets } from './agent/tickets.js';
 import { ConversationEngine, type EngineView, type TurnEvent, type TurnInput, type TurnResult } from './conversation/engine.js';
-import { PermissionEngine } from './permissions/engine.js';
+import type { PlayMode } from '@aparte/bonaparte-shared';
+import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
+import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
+import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { toolsFor } from './prompt/system-prompt.js';
 import { builtinTools } from './tools/builtin/index.js';
 import { ToolRegistry } from './tools/registry.js';
@@ -124,6 +127,15 @@ export interface Core {
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult>;
+  /**
+   * The mode a conversation runs in. Impro set before this run of the app is
+   * not kept without a new confirmation (security rule 9): Plume until the
+   * person confirms it, and `reconfirm` says so.
+   */
+  modeOf(conversationId: string): Promise<{ mode: PlayMode; reconfirm: boolean }>;
+  setMode(conversationId: string, mode: PlayMode): Promise<void>;
+  /** What a call would change — the text before and after, and their diff — for the approval card. */
+  previewCall(conversationId: string, call: { name: string; input: unknown }): Promise<ToolPreview | null>;
   /** Is this the resume of the pause the conversation waits on: its ticket, its answers? */
   checkResume(conversationId: string, resume: { messageId: string; ticket: string; outcomes: Record<string, unknown> }): Promise<ResumeCheck>;
   /** A pause answered: its calls run or refused as answered, then the turn goes on — or pauses again. */
@@ -478,6 +490,13 @@ export function createCore(deps: CoreDeps): Core {
   const tools = new ToolRegistry();
   for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
   const permissions = new PermissionEngine({ roots: () => [], dataDir: deps.dataDir });
+  // Impro confirmed by the person during this run of the app: a mode read from disk is not a confirmation.
+  const improConfirmed = new Set<string>();
+  async function modeOf(conversationId: string): Promise<{ mode: PlayMode; reconfirm: boolean }> {
+    const mode = (await conversationStore.get(conversationId))?.mode ?? 'repetition';
+    if (mode === 'impro' && !improConfirmed.has(conversationId)) return { mode: modeAfterRestart(mode), reconfirm: true };
+    return { mode, reconfirm: false };
+  }
   // The tickets of paused turns, signed with this installation's secret (made at the first turn).
   let ticketsReady: Promise<Tickets> | undefined;
   const tickets = (): Promise<Tickets> => (ticketsReady ??= installationSecret(deps.dataDir).then((secret) => createTickets(secret)));
@@ -532,7 +551,6 @@ export function createCore(deps: CoreDeps): Core {
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult> {
-    const meta = await conversationStore.get(conversationId);
     const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
       name: tool.name,
       description: typeof tool.description === 'string' ? tool.description : '',
@@ -546,7 +564,7 @@ export function createCore(deps: CoreDeps): Core {
       {
         conversationId,
         input,
-        mode: meta?.mode ?? 'repetition',
+        mode: (await modeOf(conversationId)).mode,
         registry: tools,
         permissions,
         conversations,
@@ -595,17 +613,39 @@ export function createCore(deps: CoreDeps): Core {
     permissions,
 
     agentTurn,
+    modeOf,
+
+    async setMode(conversationId, mode) {
+      await conversationStore.update(conversationId, { mode });
+      if (mode === 'impro') improConfirmed.add(conversationId);
+      else improConfirmed.delete(conversationId);
+    },
+
+    async previewCall(_conversationId, call) {
+      // No project yet: the perimeter is the home folder (the projects reach the conversations in 5.3).
+      const roots: string[] = [];
+      const preview = await previewToolCall(call, {
+        resolve: (requested) => {
+          try {
+            return resolveInPerimeter(roots, requested);
+          } catch {
+            return null;
+          }
+        },
+        display: (absolute) => displayInPerimeter(roots, absolute),
+      });
+      return preview ?? null;
+    },
 
     async checkResume(conversationId, resume) {
       return checkResume(await conversations.paused(conversationId), resume, await tickets());
     },
 
     async resumeTurn(conversationId, check, options, emit, onTurnEvent) {
-      const meta = await conversationStore.get(conversationId);
       const { results, waiting } = await answerPause(
         {
           conversationId,
-          mode: meta?.mode ?? 'repetition',
+          mode: (await modeOf(conversationId)).mode,
           registry: tools,
           permissions,
           roots: [],
