@@ -109,3 +109,47 @@ export const engineLlama = defineChannel(
 
 /** Downloads the newest build for this machine: only on a click, its size said before. */
 export const engineLlamaInstall = defineChannel('engine.llama.install', z.void(), llamaInstallResultSchema);
+
+/** Changing model, said before it is paid (task 7.4; board « Coûts annoncés », 3). */
+export const modelSwitchViewSchema = z.object({
+  to: z.object({ path: z.string(), name: z.string() }),
+  from: z.object({ path: z.string(), name: z.string() }).nullable(),
+  announcement: z.object({
+    kind: z.literal('model-switch'),
+    reloadSeconds: z.number(),
+    rereadTokens: z.number(),
+    rereadSeconds: z.number(),
+    vramBytes: z.number(),
+    vramBytesNow: z.number(),
+    estimated: z.boolean(),
+  }),
+});
+
+export type ModelSwitchView = z.infer<typeof modelSwitchViewSchema>;
+
+const conversationIdSchema = z.string().min(1).max(128);
+
+/** What changing to a model the core listed costs, for the conversation shown (none: a new one). Loads nothing. */
+export const engineSwitchCost = defineChannel(
+  'engine.switchCost',
+  z.object({ path: z.string().min(1).max(4096), conversationId: conversationIdSchema.optional() }),
+  modelSwitchViewSchema,
+);
+
+/** `busy`: a reply runs — the model is not changed under it. */
+export const engineSwitchResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), state: engineStateSchema, conversationId: conversationIdSchema.optional() }),
+  z.object({ ok: z.literal(false), error: z.object({ code: z.union([loadErrorCodeSchema, z.literal('busy')]), detail: z.string() }) }),
+]);
+
+export type EngineSwitchResult = z.infer<typeof engineSwitchResultSchema>;
+
+/**
+ * « Changer » (`as` here: the conversation goes on in the new model at its next message) or « Brancher sur ce
+ * modèle » (`copy`: a new conversation does, whose id comes back).
+ */
+export const engineSwitch = defineChannel(
+  'engine.switch',
+  z.object({ path: z.string().min(1).max(4096), conversationId: conversationIdSchema.optional(), as: z.enum(['here', 'copy']).optional() }),
+  engineSwitchResultSchema,
+);

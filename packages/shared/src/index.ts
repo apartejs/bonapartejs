@@ -68,6 +68,10 @@ export {
   engineLoadResultSchema,
   engineModels,
   engineState,
+  engineSwitch,
+  engineSwitchCost,
+  engineSwitchResultSchema,
+  modelSwitchViewSchema,
   engineStateSchema,
   familyIdSchema,
   llamaCppStateSchema,
@@ -77,6 +81,8 @@ export {
 } from './ipc/engine.js';
 export type {
   EngineLoadResult,
+  EngineSwitchResult,
+  ModelSwitchView,
   EngineStateView,
   LlamaCppStateView,
   LlamaInstallResult,

@@ -33,7 +33,7 @@ import type { MeasureStore } from '../engine/measures.js';
 import { familyLayer } from '../families/index.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
-import { frozenPrompt, isRefrozen, openJournal } from '../journal/journal.js';
+import { copyJournal, frozenPrompt, isRefrozen, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
@@ -788,7 +788,12 @@ export class ConversationEngine {
    * What a change of model would freeze (task 7.4): the system prompt frozen again for the engine's family,
    * with the truth of the moment, then the conversation rendered again by that family.
    */
-  private async refreezeFor(meta: ConversationMeta, entries: readonly JournalEntry[], engine: EngineView, instructions: string | undefined) {
+  private async refreezeFor(
+    meta: ConversationMeta,
+    entries: readonly JournalEntry[],
+    engine: Pick<EngineView, 'family'>,
+    instructions: string | undefined,
+  ) {
     const { family } = engine;
     const asked = this.deps.prompt(meta);
     const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
@@ -800,6 +805,62 @@ export class ConversationEngine {
       from: written ? familyLayer(written) : family,
     });
     return { asked, stable, rendered };
+  }
+
+  /**
+   * What the conversation's next turn would read on `target` (task 7.4: the cost of changing model, said
+   * before): rendered again for it when its branch is frozen for another model; nothing when its memory is
+   * saved; else its frozen prompt. Nothing for a conversation with no message yet.
+   */
+  async rereadOn(id: string, target: Pick<EngineView, 'family' | 'modelPath'>): Promise<number> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) return 0;
+    const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
+    if (!entries.some((entry) => entry.kind === 'user')) return 0;
+    if (onAnotherModel(branchModel(entries), target)) {
+      const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
+      return estimateTokens((await this.refreezeFor(meta, entries, target, instructions)).rendered);
+    }
+    return (await this.deps.kv.manifest(ownerKey(this.ownerOf(meta)))) ? 0 : estimateTokens(frozenPrompt(entries));
+  }
+
+  /**
+   * « Brancher sur ce modèle » (task 7.4): a new conversation from the branch shown — its entries, the window's
+   * document — opened by a change of model to `target`; the original keeps its model and its memory. A
+   * worktree belongs to one conversation: the copy works in the project's folder, its prompt says so.
+   */
+  copy(id: string, target: Pick<EngineView, 'family' | 'modelPath'>): Promise<ConversationMeta> {
+    return this.exclusive.run(id, async () => {
+      const meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      const created = await this.deps.store.create({
+        kind: meta.kind,
+        engineId: meta.engineId,
+        modelId: target.modelPath,
+        mode: meta.mode,
+        ...(meta.projectId ? { projectId: meta.projectId } : {}),
+        ...(meta.title ? { title: meta.title } : {}),
+      });
+      const document = await this.deps.store.loadDocument(id);
+      if (document && typeof document === 'object') await this.deps.store.saveDocument(created.id, { ...document, id: created.id });
+      const journal = await copyJournal(this.deps.store.dir, { conversationId: id, branchId: meta.branchId }, created.id);
+      const entries = journal.entries();
+      if (!entries.some((entry) => entry.kind === 'system')) return created;
+      const instructions = this.deps.instructions ? ((await this.deps.instructions(created)) ?? '') : undefined;
+      const { asked, stable, rendered } = await this.refreezeFor(created, entries, target, instructions);
+      await journal.append({
+        kind: 'engine',
+        engineId: created.engineId,
+        modelId: target.modelPath,
+        family: target.family.id,
+        stable,
+        replyLanguage: asked.replyLanguage,
+        perimeter: [...asked.perimeter],
+        tools: [...asked.tools],
+        rendered,
+      });
+      return instructions === undefined ? created : this.deps.store.update(created.id, { instructions });
+    });
   }
 
   /**
@@ -1174,8 +1235,9 @@ export class ConversationEngine {
  * A branch frozen for another model than the engine's (task 7.4): another model file, or — for a journal older
  * than the record, which knows only its family — another family.
  */
-function onAnotherModel(model: ReturnType<typeof branchModel>, engine: EngineView): boolean {
-  if (model.modelId !== undefined && engine.modelPath !== undefined) return model.modelId !== engine.modelPath;
+function onAnotherModel(model: ReturnType<typeof branchModel>, engine: Pick<EngineView, 'family' | 'modelPath'>): boolean {
+  // A server that already runs names no model file: only its family is known.
+  if (model.modelId && engine.modelPath) return model.modelId !== engine.modelPath;
   return model.family !== undefined && model.family !== engine.family.id;
 }
 

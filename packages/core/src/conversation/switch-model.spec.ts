@@ -176,6 +176,50 @@ describe('opening a conversation of another model', () => {
   });
 });
 
+describe('what changing model would read', () => {
+  it('the conversation rendered again for the new model; nothing for a conversation with no message', async () => {
+    const { id, engine, store, say } = await rig();
+    const target = { family: qwen, modelPath: 'qwen.gguf' };
+    expect(await engine.rereadOn(id, target)).toBe(0);
+    await say('Bonjour');
+    const tokens = await engine.rereadOn(id, target);
+    expect(tokens).toBeGreaterThan(estimateTokens(qwen.renderUser('Bonjour')));
+    const empty = await store.create({ kind: 'code', engineId: 'builtin', modelId: '', mode: 'plume' });
+    expect(await engine.rereadOn(empty.id, target)).toBe(0);
+  });
+
+  it('back on the model it was frozen for, with its memory saved: nothing to read', async () => {
+    const { id, engine, say, load } = await rig();
+    await say('Bonjour');
+    load('qwen');
+    await engine.flush();
+    expect(await engine.rereadOn(id, { family: gemma, modelPath: 'gemma.gguf' })).toBe(0);
+  });
+});
+
+describe('a copy on another model (« Brancher sur ce modèle »)', () => {
+  it('a new conversation: the branch shown, its document, and a change of model at its head; the original untouched', async () => {
+    const { id, engine, store, say, branch } = await rig();
+    await say('Bonjour');
+    await store.saveDocument(id, { id, messages: ['the window’s thread'] });
+    await store.update(id, { worktree: 'C:/somewhere/.bonaparte/worktrees/x', worksIn: 'branch', branch: 'x' });
+    const before = await branch();
+
+    const copy = await engine.copy(id, { family: qwen, modelPath: 'qwen.gguf' });
+    expect(copy.id).not.toBe(id);
+    expect(copy).toMatchObject({ kind: 'code', mode: 'plume', modelId: 'qwen.gguf', branchId: 'main' });
+    // A worktree belongs to one conversation: the copy works in the project's folder.
+    expect(copy.worktree).toBeUndefined();
+    expect(copy.branch).toBeUndefined();
+    expect(await store.loadDocument(copy.id)).toEqual({ id: copy.id, messages: ['the window’s thread'] });
+    const copied = (await openJournal(store.dir, copy.id)).entries();
+    expect(copied.slice(0, before.length).map((entry) => entry.id)).toEqual(before.map((entry) => entry.id));
+    expect(copied.at(-1)).toMatchObject({ kind: 'engine', modelId: 'qwen.gguf', family: 'qwen' });
+    expect(await branch()).toEqual(before);
+    expect((await store.get(id))!.modelId).toBe('gemma.gguf');
+  });
+});
+
 describe('going back across a change of model', () => {
   it('before a message frozen for the old model: said as a re-reading for this one, never as memory kept', async () => {
     const { id, engine, say, load } = await rig();

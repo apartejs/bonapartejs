@@ -11,7 +11,7 @@ export { isSecretName } from './providers/secrets.js';
 export type { SecretStore } from './providers/secrets.js';
 export { LlamaCppHttpClient, LlamaCppHttpError } from './backend/llamacpp/http-client.js';
 export type * from './backend/types.js';
-export { createCore, ModelNotListedError } from './api.js';
+export { createCore, EngineBusyError, ModelNotListedError } from './api.js';
 export type { Core, CoreDeps, Engine, EngineState, LlamaCppState, ModelChoice } from './api.js';
 export type { EngineLoadAnnouncement, Announcement } from './costs/announce.js';
 export type { FamilyId } from './families/index.js';

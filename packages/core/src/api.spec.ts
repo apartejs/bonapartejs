@@ -209,6 +209,58 @@ describe('createCore — the managed engine', () => {
     await expect(readFile(join(dir, 'data', 'kv-slots', 'c1_main.manifest.json'), 'utf8')).resolves.toContain('c1_main');
   });
 
+  it('says what changing model costs before anything is paid: the reload, the re-reading, the video memory now and after', async () => {
+    const { core, gemma, qwen } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    const listed = await core.models();
+    const target = listed.find((model) => model.path === qwen)!.announcement!;
+    const current = listed.find((model) => model.path === gemma)!.announcement!;
+
+    const cost = await core.modelSwitch(qwen, 'c1');
+    expect(cost).toMatchObject({
+      to: { path: qwen, name: 'qwen-test' },
+      from: { path: gemma, name: 'gemma-4-test' },
+      announcement: { kind: 'model-switch', reloadSeconds: target.seconds, vramBytes: target.vramBytes, vramBytesNow: current.vramBytes },
+    });
+    expect(cost.announcement.rereadTokens).toBeGreaterThan(0);
+    // Nothing was loaded to say it.
+    expect((await core.engineState()).model?.path).toBe(gemma);
+    // Without a conversation, or with the engine unloaded: the reload alone, and no memory taken now.
+    await core.unloadModel();
+    expect(await core.modelSwitch(qwen)).toMatchObject({ from: null, announcement: { rereadTokens: 0, vramBytesNow: 0 } });
+  }, 20_000);
+
+  it('changing model is refused under a reply; done, the conversation goes on in the new model at its next message', async () => {
+    const { core, gemma, qwen } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    const release = core.hold();
+    await expect(core.switchModel(qwen, { conversationId: 'c1' })).rejects.toThrow(/reply is running/);
+    release();
+    expect(await core.switchModel(qwen, { conversationId: 'c1' })).toMatchObject({ conversationId: 'c1', state: { model: { path: qwen, family: 'qwen' } } });
+    await core.conversations.turn('c1', { text: 'Et en Qwen ?' }, () => undefined);
+    const meta = (await core.conversationStore.get('c1'))!;
+    const entries = (await openJournal(core.conversationStore.dir, 'c1', meta.branchId)).entries();
+    expect(entries.find((entry) => entry.kind === 'engine')).toMatchObject({ modelId: qwen, family: 'qwen' });
+  }, 20_000);
+
+  it('« Brancher sur ce modèle »: a new conversation on the new model, the original kept on its own', async () => {
+    const { core, gemma, qwen } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    const { conversationId } = await core.switchModel(qwen, { conversationId: 'c1', as: 'copy' });
+    expect(conversationId).not.toBe('c1');
+    const copied = (await openJournal(core.conversationStore.dir, conversationId!)).entries();
+    expect(copied.at(-1)).toMatchObject({ kind: 'engine', modelId: qwen, family: 'qwen' });
+    const original = (await openJournal(core.conversationStore.dir, 'c1')).entries();
+    expect(original.some((entry) => entry.kind === 'engine')).toBe(false);
+    expect((await core.engineState()).model?.path).toBe(qwen);
+  }, 20_000);
+
   it('refuses to load a file that is not among the models it found', async () => {
     const { core, dir } = await setup();
     const elsewhere = join(dir, 'elsewhere.gguf');

@@ -164,3 +164,17 @@ export async function openJournal(dir: string, conversationId: string, branchId 
   const entries = await writes.run(file, () => readBranch(file));
   return new FileJournal(dir, conversationId, branchId, entries);
 }
+
+/**
+ * A conversation that starts from another's branch (« Brancher sur ce modèle », task 7.4): that branch's
+ * entries, as they were written, become the main branch of `toConversationId` — a journal that has none yet.
+ */
+export async function copyJournal(dir: string, from: { conversationId: string; branchId: string }, toConversationId: string): Promise<Journal> {
+  const source = await openJournal(dir, from.conversationId, from.branchId);
+  const target = await openJournal(dir, toConversationId);
+  if (target.entries().length > 0) throw new Error(`The conversation ${toConversationId} already has a journal.`);
+  const file = join(dir, toConversationId, `${MAIN}.jsonl`);
+  const lines = source.entries().map((entry) => `${JSON.stringify(entry)}\n`).join('');
+  await writes.run(file, () => writeFile(file, lines));
+  return openJournal(dir, toConversationId);
+}

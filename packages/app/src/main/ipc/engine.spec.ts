@@ -7,6 +7,7 @@
 
 import {
   DigestMismatchError,
+  EngineBusyError,
   EngineStoppedError,
   ModelNotListedError,
   UnsupportedFamilyError,
@@ -34,7 +35,7 @@ const LLAMA = {
   installing: null,
 };
 
-function setup(loadModel: Core['loadModel'], llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp'>> = {}) {
+function setup(loadModel: Core['loadModel'], llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel'>> = {}) {
   const listeners = new Map<string, Listener>();
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
@@ -135,3 +136,38 @@ describe('the engine channels', () => {
     });
   });
 });
+
+describe('changing model through the bridge (task 7.4)', () => {
+  const view = {
+    to: { path: 'C:/models/qwen.gguf', name: 'qwen' },
+    from: { path: 'C:/models/gemma.gguf', name: 'gemma' },
+    announcement: { kind: 'model-switch' as const, reloadSeconds: 5, rereadTokens: 18_400, rereadSeconds: 20, vramBytes: 4, vramBytesNow: 23, estimated: false },
+  };
+
+  it('says the cost first, for the conversation named', async () => {
+    const asked: unknown[] = [];
+    const { call } = setup(async () => READY, {
+      modelSwitch: async (path, conversationId) => {
+        asked.push([path, conversationId]);
+        return view;
+      },
+    });
+    await expect(call('engine.switchCost', { path: 'C:/models/qwen.gguf', conversationId: 'c1' })).resolves.toEqual(view);
+    expect(asked).toEqual([['C:/models/qwen.gguf', 'c1']]);
+  });
+
+  it('changes model, or says why not: a reply that runs, a family it cannot speak', async () => {
+    let answer: () => Promise<{ state: EngineState; conversationId?: string }> = async () => ({ state: READY, conversationId: 'c2' });
+    const { call } = setup(async () => READY, { switchModel: () => answer() });
+    await expect(call('engine.switch', { path: 'C:/models/qwen.gguf', conversationId: 'c1', as: 'copy' })).resolves.toEqual({ ok: true, state: READY, conversationId: 'c2' });
+    answer = async () => {
+      throw new EngineBusyError();
+    };
+    await expect(call('engine.switch', { path: 'C:/models/qwen.gguf' })).resolves.toMatchObject({ ok: false, error: { code: 'busy' } });
+    answer = async () => {
+      throw new UnsupportedFamilyError('unsupported-family');
+    };
+    await expect(call('engine.switch', { path: 'C:/models/qwen.gguf' })).resolves.toMatchObject({ ok: false, error: { code: 'unsupported-family' } });
+  });
+});
+

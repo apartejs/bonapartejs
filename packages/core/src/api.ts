@@ -15,7 +15,13 @@ import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
-import { announceLoad, type Announcement, type EngineLoadAnnouncement } from './costs/announce.js';
+import {
+  announceLoad,
+  announceModelSwitch,
+  type Announcement,
+  type EngineLoadAnnouncement,
+  type ModelSwitchAnnouncement,
+} from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
 import {
   readGpuMemoryBytes,
@@ -192,6 +198,13 @@ export interface ModelChoice {
   lastLoadedAt: string | null;
 }
 
+/** Changing model, said before (task 7.4): to what, from what (null when none runs), and what it costs. */
+export interface ModelSwitchView {
+  to: { path: string; name: string };
+  from: { path: string; name: string } | null;
+  announcement: ModelSwitchAnnouncement;
+}
+
 /** The engine a turn runs on, and how its model is spoken to. */
 export interface Engine {
   client: LlamaCppHttpClient;
@@ -205,6 +218,17 @@ export interface Core {
   models(): Promise<ModelChoice[]>;
   /** Loads a model the core listed. The window says the cost before it asks. */
   loadModel(path: string): Promise<EngineState>;
+  /**
+   * What changing to the model at `path` costs (task 7.4), said before anything is paid: its load, the
+   * conversation `conversationId` read again for it, the video memory now and after. Loads nothing.
+   */
+  modelSwitch(path: string, conversationId?: string): Promise<ModelSwitchView>;
+  /**
+   * Changes model (« Changer »): the memory saved, the model loaded — the conversation goes on in it at its
+   * next message. `as: 'copy'` (« Brancher sur ce modèle »): a new conversation from `conversationId` goes on
+   * in it, the original keeps its model. Refused while a reply runs.
+   */
+  switchModel(path: string, options?: { conversationId?: string; as?: 'here' | 'copy' }): Promise<{ state: EngineState; conversationId?: string }>;
   /** A turn in progress: the model is not unloaded while one is held. */
   hold(): () => void;
   stop(): Promise<void>;
@@ -1126,6 +1150,39 @@ export function createCore(deps: CoreDeps): Core {
       return engineState();
     },
 
+    async modelSwitch(path, conversationId) {
+      const listed = await models();
+      const target = listed.find((model) => samePath(model.path, path));
+      if (!target) throw new ModelNotListedError(path);
+      if (!target.announcement) throw new Error(`The model ${target.name} cannot be read: it cannot be loaded.`);
+      const layer = layerForModel(await readGgufInfo(target.path));
+      const running = (await currentEngine()) && loaded ? listed.find((model) => samePath(model.path, loaded!.path)) : undefined;
+      const rereadTokens = conversationId ? await conversations.rereadOn(conversationId, { family: layer, modelPath: target.path }) : 0;
+      const prefill = measures.get(target.path)?.prefillTokensPerSecond;
+      return {
+        to: { path: target.path, name: target.name },
+        from: running ? { path: running.path, name: running.name } : null,
+        announcement: announceModelSwitch({
+          load: target.announcement,
+          rereadTokens,
+          ...(prefill !== undefined ? { prefillTokensPerSecond: prefill } : {}),
+          vramBytesNow: running?.announcement?.vramBytes ?? 0,
+        }),
+      };
+    },
+
+    async switchModel(path, options = {}) {
+      // A reply in progress keeps its model: changing it would cut the answer.
+      if (supervisor.held) throw new EngineBusyError();
+      // Loaded first — the failure-prone step: a copy is made only for a model that runs.
+      const state = await this.loadModel(path);
+      if (options.as === 'copy' && options.conversationId && loaded) {
+        const copy = await conversations.copy(options.conversationId, { family: loaded.layer, modelPath: loaded.path });
+        return { state, conversationId: copy.id };
+      }
+      return { state, ...(options.conversationId ? { conversationId: options.conversationId } : {}) };
+    },
+
     hold: () => supervisor.hold(),
     // The conversation in the slot is saved before the engine stops: its memory survives the restart.
     async stop() {
@@ -1412,6 +1469,14 @@ export function createCore(deps: CoreDeps): Core {
 }
 
 /** A load names a file the core did not list: the window may only load what it was shown. */
+/** A reply runs: the engine is not changed under it (task 7.4). */
+export class EngineBusyError extends Error {
+  constructor() {
+    super('A reply is running: the model is not changed under it.');
+    this.name = 'EngineBusyError';
+  }
+}
+
 export class ModelNotListedError extends Error {
   constructor(readonly path: string) {
     super(`This file is not among the models bonaparte found: ${path}`);

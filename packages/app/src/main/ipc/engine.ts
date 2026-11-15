@@ -6,6 +6,7 @@
 
 import {
   DigestMismatchError,
+  EngineBusyError,
   EngineStoppedError,
   ModelNotListedError,
   UnsupportedFamilyError,
@@ -17,6 +18,8 @@ import {
   engineLoad,
   engineModels,
   engineState,
+  engineSwitch,
+  engineSwitchCost,
   type EngineLoadResult,
   type LlamaInstallResult,
 } from '@aparte/bonaparte-shared';
@@ -33,7 +36,7 @@ function loadError(error: unknown): EngineLoadResult {
 
 export function registerEngineChannels(
   ipc: IpcRegistry,
-  core: Pick<Core, 'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp'>,
+  core: Pick<Core, 'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel'>,
 ): void {
   ipc.handle(engineState, () => core.engineState());
   ipc.handle(engineModels, () => core.models());
@@ -41,6 +44,16 @@ export function registerEngineChannels(
     try {
       return { ok: true, state: await core.loadModel(path) };
     } catch (error) {
+      return loadError(error);
+    }
+  });
+  ipc.handle(engineSwitchCost, ({ path, conversationId }) => core.modelSwitch(path, conversationId));
+  ipc.handle(engineSwitch, async ({ path, conversationId, as }) => {
+    try {
+      const done = await core.switchModel(path, { ...(conversationId ? { conversationId } : {}), ...(as ? { as } : {}) });
+      return { ok: true, state: done.state, ...(done.conversationId ? { conversationId: done.conversationId } : {}) };
+    } catch (error) {
+      if (error instanceof EngineBusyError) return { ok: false, error: { code: 'busy', detail: error.message } };
       return loadError(error);
     }
   });

@@ -14,14 +14,7 @@ import type { GgufInfo, KvCacheTypeName } from '../models/gguf.js';
 export type Announcement =
   | RestoreAnnouncement
   | RereadAnnouncement
-  | {
-      kind: 'model-switch';
-      reloadSeconds: number;
-      rereadTokens: number;
-      rereadSeconds: number;
-      vramBytes: number;
-      vramBytesNow: number;
-    }
+  | ModelSwitchAnnouncement
   | { kind: 'context-full'; used: number; window: number; compactSeconds: number }
   | EngineLoadAnnouncement
   | { kind: 'restart'; setting: string }
@@ -79,6 +72,42 @@ export interface EngineLoadAnnouncement {
   /** The card's; null when it was not measured — never zero. */
   gpuBytes: number | null;
   verdict: MemoryVerdict;
+}
+
+/**
+ * Changing model (task 7.4; board « Coûts annoncés », 3): the reload, the conversation read again for the new
+ * model, the video memory it takes against what the loaded one takes now (0 when none runs).
+ */
+export interface ModelSwitchAnnouncement {
+  kind: 'model-switch';
+  reloadSeconds: number;
+  rereadTokens: number;
+  rereadSeconds: number;
+  vramBytes: number;
+  vramBytesNow: number;
+  /** The new model was never measured on this machine: the window says the figures are estimates. */
+  estimated: boolean;
+}
+
+export function announceModelSwitch(facts: {
+  /** What loading the new model costs. */
+  load: EngineLoadAnnouncement;
+  /** What the conversation's next turn reads on it. */
+  rereadTokens: number;
+  /** The new model's measured prefill speed. */
+  prefillTokensPerSecond?: number;
+  vramBytesNow: number;
+}): ModelSwitchAnnouncement {
+  const prefill = facts.prefillTokensPerSecond ?? DEFAULT_PREFILL_TOKENS_PER_SECOND;
+  return {
+    kind: 'model-switch',
+    reloadSeconds: facts.load.seconds,
+    rereadTokens: facts.rereadTokens,
+    rereadSeconds: facts.rereadTokens / prefill,
+    vramBytes: facts.load.vramBytes,
+    vramBytesNow: facts.vramBytesNow,
+    estimated: facts.load.secondsEstimated || (facts.rereadTokens > 0 && facts.prefillTokensPerSecond === undefined),
+  };
 }
 
 export interface LoadModel {
