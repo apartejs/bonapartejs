@@ -91,8 +91,22 @@ class FileJournal implements Journal {
     return writes.run(this.file, async () => {
       const handle = await open(this.file, 'a');
       try {
-        await handle.write(line);
-        await handle.datasync();
+        const data = Buffer.from(line, 'utf8');
+        const before = (await handle.stat()).size;
+        try {
+          // A disk may take less than asked: the rest is written until the line is whole.
+          for (let offset = 0; offset < data.length; ) {
+            const { bytesWritten } = await handle.write(data, offset, data.length - offset);
+            if (bytesWritten <= 0) throw new Error(`The journal ${this.file} could not be written: the disk took nothing.`);
+            offset += bytesWritten;
+          }
+          await handle.datasync();
+        } catch (error) {
+          // What went half-way is taken back: the next line is never glued to it. By its path: a file
+          // opened to append cannot be cut through that handle on Windows.
+          await truncate(this.file, before).catch(() => undefined);
+          throw error;
+        }
       } finally {
         await handle.close();
       }

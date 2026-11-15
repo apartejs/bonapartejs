@@ -6,14 +6,15 @@
  * line only.
  */
 
-import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, open, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { frozenPrompt, openJournal } from './journal.js';
 
 let dirs: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
   dirs = [];
 });
@@ -114,6 +115,46 @@ describe('openJournal', () => {
     expect(journal.entries().map((entry) => entry.kind)).toEqual(['system']);
     expect(frozenPrompt(journal.entries())).toBe(SYSTEM);
     expect(await readFile(join(dir, 'c1', 'main.jsonl'), 'utf8')).toContain('withdrawn');
+  });
+
+  /** The prototype of node's FileHandle: where a disk that writes less than asked is played. */
+  async function fileHandlePrototype(dir: string): Promise<{ write: (...args: unknown[]) => Promise<{ bytesWritten: number }> }> {
+    const handle = await open(join(dir, 'probe'), 'w');
+    const prototype = Object.getPrototypeOf(handle);
+    await handle.close();
+    return prototype;
+  }
+
+  /** The next write puts only half of what it was given on disk — then says so, or fails. */
+  async function halfWrite(dir: string, then: 'returns' | 'throws'): Promise<void> {
+    const prototype = await fileHandlePrototype(dir);
+    const original = prototype.write;
+    vi.spyOn(prototype, 'write').mockImplementationOnce(async function (this: unknown, data: unknown, ...rest: unknown[]) {
+      const bytes = typeof data === 'string' ? Buffer.from(data) : (data as Buffer).subarray((rest[0] as number) ?? 0);
+      const half = bytes.subarray(0, Math.floor(bytes.length / 2));
+      await original.call(this, half);
+      if (then === 'throws') throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+      return { bytesWritten: half.length, buffer: half };
+    });
+  }
+
+  it('a write the disk takes only in part is completed: the entry is whole once the append resolves', async () => {
+    const dir = await folder();
+    const journal = await openJournal(dir, 'c1');
+    await halfWrite(dir, 'returns');
+    await journal.append({ kind: 'user', text: 'Bonjour', rendered: USER });
+    const reopened = await openJournal(dir, 'c1');
+    expect(reopened.entries().map((entry) => entry.kind)).toEqual(['user']);
+  });
+
+  it('a write that fails half-way is taken back whole: the journal stays readable, the next entry whole', async () => {
+    const dir = await folder();
+    const journal = await openJournal(dir, 'c1');
+    await halfWrite(dir, 'throws');
+    await expect(journal.append({ kind: 'user', text: 'Bonjour', rendered: USER })).rejects.toThrow(/no space/);
+    await journal.append({ kind: 'user', text: 'Salut', rendered: USER });
+    const reopened = await openJournal(dir, 'c1');
+    expect(reopened.entries().map((entry) => (entry.kind === 'user' ? entry.text : entry.kind))).toEqual(['Salut']);
   });
 
   it('two writes at the same time are two whole lines, in the order they were asked', async () => {
