@@ -93,10 +93,11 @@ export async function answerPause(
   const results: ToolResult[] = [];
   const waiting: PendingCall[] = [];
   let refused = false;
-  const run = async (call: PendingCall): Promise<void> => {
+  // `granted`: the person allowed this very call — a write outside the project goes where the card showed.
+  const run = async (call: PendingCall, granted = false): Promise<void> => {
     const result = await ctx.registry.run(
       { id: call.toolCallId, name: call.name, input: call.input },
-      { conversationId: ctx.conversationId, roots: ctx.roots, nCtx: ctx.nCtx, signal: ctx.signal },
+      { conversationId: ctx.conversationId, roots: ctx.roots, nCtx: ctx.nCtx, signal: ctx.signal, ...(granted ? { granted } : {}) },
     );
     emit(
       result.failed
@@ -149,7 +150,7 @@ export async function answerPause(
     if (call.reason === 'approval') {
       if (outcome?.kind === 'decision' && outcome.approved) {
         emit({ type: 'tool-approved', toolCallId: call.toolCallId });
-        await run(call);
+        await run(call, true);
       } else {
         refused = true;
         const decision = outcome?.kind === 'decision' ? outcome : {};

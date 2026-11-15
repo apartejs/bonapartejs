@@ -105,6 +105,16 @@ describe('write_file', () => {
     expect(written).toEqual(['before src/new/a.ts', 'after']);
   });
 
+  it('writes outside the project once the person allowed that very call, never otherwise', async () => {
+    const { root, ctx } = await project();
+    const beside = join(root, '..', `bp-beside-${Date.now()}.txt`);
+    expect(await call(writeFileTool.handler, { path: beside, content: 'x' }, ctx)).toMatchObject({ failed: true });
+    const allowed = await call(writeFileTool.handler, { path: beside, content: 'allowed' }, { ...ctx, granted: true });
+    expect(allowed.failed).toBeUndefined();
+    expect(await readFile(beside, 'utf8')).toBe('allowed');
+    await rm(beside, { force: true });
+  });
+
   it('refuses a path outside, and writes nothing there', async () => {
     const { ctx, written } = await project();
     expect(await call(writeFileTool.handler, { path: '../evil.ts', content: 'x' }, ctx)).toMatchObject({ failed: true });

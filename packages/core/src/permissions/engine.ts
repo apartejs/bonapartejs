@@ -19,7 +19,7 @@ import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import type { PlayMode, ToolEffect, Verdict } from '@aparte/bonaparte-shared';
 import type { ToolDef } from '../tools/types.js';
-import { InvalidPathError, NetworkPathError, permissionPath, resolveInPerimeter } from '../project/paths.js';
+import { InvalidPathError, NetworkPathError, PathOutsideHomeError, permissionPath, resolveInPerimeter } from '../project/paths.js';
 import { isValidRule, matchesRule, type AllowRule, type CommandLine } from './rules.js';
 
 export interface PermissionQuery {
@@ -64,8 +64,8 @@ const ARMED: RegExp[] = [
   /(^|\/)package\.json$/,
   /(^|\/)\.npmrc$/,
   /(^|\/)\.yarnrc(\.yml)?$/,
-  // Any `<name>.config.<ext>`: what a build tool loads and runs.
-  /(^|\/)[^/]+\.config\.[a-z0-9]+$/,
+  // Any `<name>.config.<anything>`: what a build tool loads and runs (`webpack.config.babel.js` too).
+  /(^|\/)[^/]+\.config\.[^/]+$/,
   /(^|\/)makefile$/,
   /(^|\/)\.env(\.[^/]*)?$/,
   // Beyond a project, within the home folder: what the system runs at login,
@@ -142,7 +142,9 @@ export class PermissionEngine {
         try {
           resolveInPerimeter(roots, requested, home);
         } catch (error) {
-          if (error instanceof NetworkPathError || error instanceof InvalidPathError) {
+          // A network path, a stream, or — without a project — a place outside the home folder:
+          // never written, whatever the person would answer (security rule 6).
+          if (error instanceof NetworkPathError || error instanceof InvalidPathError || error instanceof PathOutsideHomeError) {
             return { verdict: 'deny', reason: error.message };
           }
           inside = false;

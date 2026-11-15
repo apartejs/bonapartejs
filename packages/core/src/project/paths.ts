@@ -9,7 +9,7 @@
  * the folders allowed, so that it corrects itself instead of retrying.
  */
 
-import { realpathSync } from 'node:fs';
+import { lstatSync, readlinkSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
@@ -63,18 +63,29 @@ function refuseStreams(requested: string, absolute: string): void {
   if (process.platform === 'win32' && absolute.slice(2).includes(':')) throw new InvalidPathError(requested);
 }
 
+/** Past this many links followed, a path is a loop, never a location. */
+const MAX_LINKS = 40;
+
 /**
  * The real location of a path: links, junctions and 8.3 names resolved. A
  * path that does not exist yet is the real location of its nearest existing
- * ancestor, with the rest appended.
+ * ancestor, with the rest appended — and a link whose target does not exist
+ * yet is where it points, never where it stands: a write through it lands
+ * at its target.
  */
-export function realLocation(absolute: string): string {
+export function realLocation(absolute: string, links = 0): string {
   const missing: string[] = [];
   let current = absolute;
   for (;;) {
     try {
       return join(realpathSync.native(current), ...missing.reverse());
     } catch {
+      const stat = lstatSync(current, { throwIfNoEntry: false });
+      if (stat?.isSymbolicLink()) {
+        if (links >= MAX_LINKS) throw new Error(`Too many links to follow: ${absolute}`);
+        const target = resolve(dirname(current), readlinkSync(current));
+        return join(realLocation(target, links + 1), ...missing.reverse());
+      }
       const parent = dirname(current);
       if (parent === current) return absolute;
       missing.push(basename(current));

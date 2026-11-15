@@ -40,6 +40,32 @@ describe('isPublicAddress', () => {
       expect(isPublicAddress(ip)).toBe(true);
     }
   });
+
+  it('sees through an IPv4 address written in IPv6, in every spelling a URL gives it', () => {
+    // WHATWG URL writes [::ffff:127.0.0.1] as [::ffff:7f00:1]: the hex form is what reaches the check.
+    expect(new URL('http://[::ffff:127.0.0.1]/').hostname).toBe('[::ffff:7f00:1]');
+    for (const ip of [
+      '::ffff:7f00:1',
+      '[::ffff:7f00:1]',
+      '::ffff:a9fe:a9fe',
+      '::ffff:c0a8:101',
+      '0:0:0:0:0:ffff:7f00:1',
+      '::ffff:0:7f00:1',
+      '::7f00:1',
+      '::127.0.0.1',
+      '64:ff9b::7f00:1',
+      '64:ff9b::a9fe:a9fe',
+      '64:ff9b:1::1',
+      '2002:7f00:1::1',
+      '2002:c0a8:101::1',
+      '2001:db8::1',
+    ]) {
+      expect(isPublicAddress(ip), ip).toBe(false);
+    }
+    for (const ip of ['::ffff:5db8:d822', '64:ff9b::808:808', '2002:808:808::1']) {
+      expect(isPublicAddress(ip), ip).toBe(true);
+    }
+  });
 });
 
 describe('web_fetch', () => {
@@ -68,7 +94,15 @@ describe('web_fetch', () => {
   it('refuses the machine, its network and the metadata service — by name or by address', async () => {
     const { fetch, lookup, asked } = web({}, { 'intranet.local': ['192.168.1.10'], localhost: ['127.0.0.1'] });
     const tool = createWebFetch({ fetch, lookup });
-    for (const url of ['http://localhost:3000/', 'http://intranet.local/', 'http://169.254.169.254/latest/meta-data/', 'http://[::1]/', 'http://10.0.0.1/']) {
+    for (const url of [
+      'http://localhost:3000/',
+      'http://intranet.local/',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://[::1]/',
+      'http://10.0.0.1/',
+      'http://[::ffff:127.0.0.1]:3000/',
+      'http://[::ffff:169.254.169.254]/latest/meta-data/',
+    ]) {
       const result = await run(tool, url);
       expect(result).toMatchObject({ failed: true });
       expect(result.content).toMatch(/local or private address/);

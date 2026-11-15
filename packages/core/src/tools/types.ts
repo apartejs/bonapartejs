@@ -44,6 +44,8 @@ export interface ToolContext {
   /** The engine's context: what the output is cut to. */
   nCtx: number;
   signal: AbortSignal;
+  /** The person allowed this very call although it lands outside the project's folders: a write goes there. */
+  granted?: boolean;
   /** Before a tool writes a file: its original is kept for the turn (checkpoints). */
   beforeWrite?(absolute: string, shown: string): Promise<void>;
   /** After it wrote it. */

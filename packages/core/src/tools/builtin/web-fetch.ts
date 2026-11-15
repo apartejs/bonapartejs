@@ -32,20 +32,56 @@ function publicV4(ip: string): boolean {
   return a < 224;
 }
 
-/** Is it an address of the internet — not the machine, a private network, link-local, multicast or reserved? */
+/** An IPv6 address as its eight groups, whatever its spelling: `::`, a dotted IPv4 tail, a zone. */
+function groupsOf(ip: string): number[] | null {
+  let text = ip.toLowerCase().replace(/%.*$/, '');
+  const dotted = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
+  if (dotted) {
+    const [a, b, c, d] = dotted.slice(1).map(Number) as [number, number, number, number];
+    text = `${text.slice(0, dotted.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head = '', tail, ...rest] = text.split('::');
+  if (rest.length > 0) return null;
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === undefined || tail === '' ? [] : tail.split(':');
+  const missing = 8 - left.length - right.length;
+  if (tail === undefined ? missing !== 0 : missing < 1) return null;
+  const groups = [...left, ...Array<string>(tail === undefined ? 0 : missing).fill('0'), ...right].map((group) => Number.parseInt(group, 16));
+  return groups.length === 8 && groups.every((group) => group >= 0 && group <= 0xffff) ? groups : null;
+}
+
+/** The IPv4 address held in two groups of an IPv6 one. */
+const v4Of = (high: number, low: number): string => `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+
+/**
+ * Is it an address of the internet — not the machine, a private network, link-local, multicast
+ * or reserved? An IPv4 address carried in IPv6 is judged as itself, in every spelling a URL can
+ * give it (`[::ffff:7f00:1]` is how WHATWG writes `[::ffff:127.0.0.1]`): mapped, compatible,
+ * translated, NAT64 and 6to4.
+ */
 export function isPublicAddress(address: string): boolean {
   const ip = address.replace(/^\[|\]$/g, '');
   const kind = isIP(ip);
   if (kind === 4) return publicV4(ip);
   if (kind !== 6) return false;
-  const lower = ip.toLowerCase();
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(lower);
-  if (mapped) return publicV4(mapped[1]!);
-  if (lower === '::' || lower === '::1') return false;
-  const first = Number.parseInt(lower.split(':')[0] || '0', 16);
-  if ((first & 0xfe00) === 0xfc00) return false; // unique local, fc00::/7
-  if ((first & 0xffc0) === 0xfe80) return false; // link-local, fe80::/10
-  if ((first & 0xff00) === 0xff00) return false; // multicast
+  const g = groupsOf(ip);
+  if (!g) return false;
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = g as [number, number, number, number, number, number, number, number];
+  const zeroTo = (end: number): boolean => g.slice(0, end).every((group) => group === 0);
+  if (zeroTo(8)) return false; // ::
+  if (zeroTo(7) && g7 === 1) return false; // ::1
+  // ::ffff:a.b.c.d (mapped), ::a.b.c.d (compatible), ::ffff:0:a.b.c.d (translated).
+  if (zeroTo(5) && g5 === 0xffff) return publicV4(v4Of(g6, g7));
+  if (zeroTo(6)) return publicV4(v4Of(g6, g7));
+  if (zeroTo(4) && g4 === 0xffff && g5 === 0) return publicV4(v4Of(g6, g7));
+  // NAT64: the well-known prefix carries an IPv4 address; the local-use one (64:ff9b:1::/48) is private.
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 0 && g3 === 0 && g4 === 0 && g5 === 0) return publicV4(v4Of(g6, g7));
+  if (g0 === 0x64 && g1 === 0xff9b && g2 === 1) return false;
+  if (g0 === 0x2002) return publicV4(v4Of(g1, g2)); // 6to4
+  if (g0 === 0x2001 && g1 === 0xdb8) return false; // documentation
+  if ((g0 & 0xfe00) === 0xfc00) return false; // unique local, fc00::/7
+  if ((g0 & 0xffc0) === 0xfe80) return false; // link-local, fe80::/10
+  if ((g0 & 0xff00) === 0xff00) return false; // multicast
   return true;
 }
 

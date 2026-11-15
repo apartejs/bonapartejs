@@ -19,6 +19,7 @@ import {
   PathOutsideHomeError,
   PathOutsidePerimeterError,
   permissionPath,
+  realLocation,
   resolveInPerimeter,
 } from './paths.js';
 
@@ -88,6 +89,43 @@ describe('the real location decides, not the spelling', () => {
     }
     expect(() => resolveInPerimeter([root], 'escape/evil.txt')).toThrow(PathOutsidePerimeterError);
     expect(isInPerimeter([root], 'escape/evil.txt')).toBe(false);
+  });
+
+  it('a link that points nowhere yet is where it points, not where it stands: outside stays outside', async () => {
+    const root = await folder();
+    const outside = await folder('bp-outside-');
+    try {
+      await symlink(join(outside, 'not-yet'), join(root, 'escape'), 'junction');
+    } catch {
+      return; // links not allowed here
+    }
+    // A write through it would create the folder's content outside the project.
+    expect(() => resolveInPerimeter([root], 'escape/evil.txt')).toThrow(PathOutsidePerimeterError);
+    expect(isInPerimeter([root], 'escape/evil.txt')).toBe(false);
+    expect(realLocation(join(root, 'escape', 'evil.txt'))).toBe(join(outside, 'not-yet', 'evil.txt'));
+  });
+
+  it('a file link that points nowhere yet is where it points', async () => {
+    const root = await folder();
+    const outside = await folder('bp-outside-');
+    try {
+      await symlink(join(outside, 'autostart.desktop'), join(root, 'notes.md'), 'file');
+    } catch {
+      return; // file links need a privilege on Windows
+    }
+    expect(() => resolveInPerimeter([root], 'notes.md')).toThrow(PathOutsidePerimeterError);
+  });
+
+  it('a link that points nowhere yet, inside the project, stays inside — at its target', async () => {
+    const root = await folder();
+    await mkdir(join(root, 'src'));
+    try {
+      await symlink(join(root, 'src', 'later'), join(root, 'alias'), 'junction');
+    } catch {
+      return;
+    }
+    expect(resolveInPerimeter([root], 'alias/a.ts')).toBe(join(root, 'alias', 'a.ts'));
+    expect(realLocation(join(root, 'alias', 'a.ts'))).toBe(join(root, 'src', 'later', 'a.ts'));
   });
 
   it.runIf(process.platform === 'win32')('a stream name is refused, never written beside the file', async () => {

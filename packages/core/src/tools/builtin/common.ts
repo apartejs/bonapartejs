@@ -5,7 +5,8 @@
  */
 
 import { homedir } from 'node:os';
-import { resolveInPerimeter } from '../../project/paths.js';
+import { resolve } from 'node:path';
+import { PathOutsideHomeError, PathOutsidePerimeterError, resolveInPerimeter } from '../../project/paths.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../types.js';
 
 export interface BuiltinTool {
@@ -38,6 +39,11 @@ export function inPerimeter(ctx: ToolContext, requested: string): { path: string
   try {
     return { path: resolveInPerimeter(ctx.roots, requested) };
   } catch (error) {
+    // Outside the project, allowed by the person for this call: written where it was shown. Never
+    // outside the home folder without a project, never the network, never a stream.
+    if (ctx.granted && error instanceof PathOutsidePerimeterError && !(error instanceof PathOutsideHomeError) && ctx.roots[0]) {
+      return { path: resolve(ctx.roots[0], requested.replace(/\\/g, '/')) };
+    }
     return { error: describeError(error) };
   }
 }

@@ -7,7 +7,7 @@
  * It all holds across a restart: a new core on the same data folder resumes.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -32,7 +32,7 @@ function model(call: string) {
   return (prompt: string) => (prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? 'Done.' : call);
 }
 
-async function setup(call: string, dataDir?: string) {
+async function setup(call: string, dataDir?: string, home?: string) {
   const prompts: string[] = [];
   const server = await startFakeLlamaServer({ responder: model(call), onCompletion: (body) => prompts.push(String(body['prompt'])) });
   servers.push(server);
@@ -40,7 +40,7 @@ async function setup(call: string, dataDir?: string) {
   if (!dataDir) dirs.push(dir);
   await mkdir(join(dir, 'config'), { recursive: true });
   await writeFile(join(dir, 'config', 'global.json'), JSON.stringify({ backend: { mode: 'remote', url: server.url } }));
-  return { ...wire(createCore({ dataDir: dir, env: {}, logger: () => undefined })), prompts, dir };
+  return { ...wire(createCore({ dataDir: dir, env: {}, logger: () => undefined, ...(home ? { home } : {}) })), prompts, dir };
 }
 
 function wire(core: Core) {
@@ -94,6 +94,21 @@ async function paused(handler: (request: Request) => Promise<Response>, body: Re
 const TOUCH = '<|tool_call>call:touch_test{}<tool_call|>';
 
 describe('resuming a paused turn', () => {
+  it('a write outside the project, asked and allowed, is written where the card showed it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-resume-outside-'));
+    dirs.push(dir);
+    const home = join(dir, 'project');
+    await mkdir(home, { recursive: true });
+    const Q = '<|"|>';
+    const write = `<|tool_call>call:write_file{path:${Q}../beside.txt${Q},content:${Q}allowed${Q}}<tool_call|>`;
+    const { handler } = await setup(write, dir, home);
+    const { ticket, pending } = await paused(handler);
+    expect(pending).toMatchObject([{ name: 'write_file', reason: 'approval' }]);
+    const resumed = await lines(await post(handler, { resume: { ticket, outcomes: { [pending[0]!.toolCallId]: { kind: 'decision', approved: true } } } }));
+    expect(resumed.map((line) => line.type)).toContain('tool-resolved');
+    expect(await readFile(join(dir, 'beside.txt'), 'utf8')).toBe('allowed');
+  });
+
   it('a decision approved runs the call, and the answer goes on in the same response', async () => {
     const { handler, touched } = await setup(TOUCH);
     const { ticket, pending } = await paused(handler);

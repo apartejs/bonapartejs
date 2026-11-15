@@ -51,6 +51,8 @@ describe('a file that runs later asks in every mode — and is refused in Lectur
     'eslint.config.mjs',
     'tsconfig.config.json',
     'docker.config.yaml',
+    'webpack.config.babel.js',
+    'vite.config.local.ts',
     '.github/workflows/ci.yml',
     '.npmrc',
     'Makefile',
@@ -89,6 +91,15 @@ describe('outside the project', () => {
   it('a write asks, even in Impro', () => {
     expect(edit('../elsewhere.txt', 'impro')).toEqual({ verdict: 'ask', why: 'outside-project' });
     expect(edit('../elsewhere.txt', 'plume')).toEqual({ verdict: 'ask', why: 'outside-project' });
+  });
+
+  it('without a project, a write outside the home folder is refused outright: never the whole machine', () => {
+    const home = join(project, 'home');
+    const homeOnly = engine({ roots: () => [], home });
+    const outside = homeOnly.evaluate({ tool: EDIT, input: { path: join(project, 'elsewhere.txt') }, mode: 'impro' });
+    expect(outside.verdict).toBe('deny');
+    expect(outside.verdict === 'deny' ? outside.reason : '').toMatch(/outside the home folder/);
+    expect(homeOnly.evaluate({ tool: EDIT, input: { path: 'notes.txt' }, mode: 'plume' })).toEqual({ verdict: 'allow' });
   });
 
   it('a network path is refused outright', () => {
