@@ -66,4 +66,25 @@ describe('the lint rules that hold the invariants', () => {
     expect(await brokenRules('packages/core/src/process/spawn.ts', withShell)).toContain('no-restricted-syntax');
     expect(await brokenRules('packages/core/src/x.ts', withoutShell)).toEqual([]);
   });
+
+  it('refuses a built-in plugin the machine: it reaches files, network and processes through its context', async () => {
+    const reaching = [
+      "import { readFile } from 'node:fs/promises';\nexport const read = readFile;\n",
+      "import { readFileSync } from 'fs';\nexport const read = readFileSync;\n",
+      "import { connect } from 'node:net';\nexport const dial = connect;\n",
+      "import { request } from 'node:http';\nexport const ask = request;\n",
+      "import { request } from 'https';\nexport const ask = request;\n",
+      "import { spawn } from 'node-pty';\nexport const open = spawn;\n",
+    ];
+    for (const code of reaching) {
+      expect(await brokenRules('plugins/terminal/src/node.ts', code), code).toContain('no-restricted-imports');
+    }
+    // Nor by a module loaded later, which no import line names.
+    for (const code of ["export const load = () => import('node:fs');\n", "export const kids = require('child_process');\n"]) {
+      expect(await brokenRules('plugins/terminal/src/node.ts', code), code).toContain('no-restricted-syntax');
+    }
+    // Its own pure helpers are fine, and so is the rest of the repository.
+    expect(await brokenRules('plugins/terminal/src/node.ts', "import { join } from 'node:path';\nexport const at = join;\n")).toEqual([]);
+    expect(await brokenRules('packages/core/src/x.ts', reaching[0]!)).toEqual([]);
+  });
 }, 60_000);

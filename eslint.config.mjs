@@ -16,6 +16,23 @@ const electron = {
   patterns: [{ group: ['electron/*'], message: NO_ELECTRON }],
 };
 
+const NO_PLUGIN_REACH =
+  'A built-in plugin reaches files, the network and processes through its context (ctx.use, ctx.spawn): the host holds it to the effects it declared.';
+const REACHING_MODULES = ['fs', 'fs/promises', 'net', 'http', 'https', 'http2', 'tls', 'dgram'];
+const pluginReach = [
+  ...REACHING_MODULES.flatMap((name) => [
+    { name, message: NO_PLUGIN_REACH },
+    { name: `node:${name}`, message: NO_PLUGIN_REACH },
+  ]),
+  { name: 'node-pty', message: NO_PLUGIN_REACH },
+];
+const PLUGIN_REACH_PATTERN = '/^(node:)?(fs|net|http|https|http2|tls|dgram|child_process)(\\u002F.*)?$|^node-pty$/';
+
+const shellTrue = {
+  selector: "Property[key.name='shell'][value.value=true], Property[key.value='shell'][value.value=true]",
+  message: 'Never `shell: true`: launch the program with an argument array, through spawnHidden.',
+};
+
 export default tseslint.config(
   {
     ignores: ['**/dist/**', '**/out/**', '**/node_modules/**', '.nx/**'],
@@ -29,13 +46,7 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       // Never a shell string: a process gets an argument array.
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: "Property[key.name='shell'][value.value=true], Property[key.value='shell'][value.value=true]",
-          message: 'Never `shell: true`: launch the program with an argument array, through spawnHidden.',
-        },
-      ],
+      'no-restricted-syntax': ['error', shellTrue],
       // One door to the process table.
       'no-restricted-imports': ['error', { paths: childProcess }],
     },
@@ -52,6 +63,26 @@ export default tseslint.config(
     files: ['packages/core/src/process/spawn.ts'],
     rules: {
       'no-restricted-imports': ['error', electron],
+    },
+  },
+  {
+    // A built-in plugin runs in the app's process: it reaches files, the network and processes
+    // only through its context, which the host tears down and holds to what it declared.
+    files: ['plugins/**/*.ts', 'plugins/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: [...childProcess, ...pluginReach] }],
+      'no-restricted-syntax': [
+        'error',
+        shellTrue,
+        {
+          selector: `ImportExpression[source.value=${PLUGIN_REACH_PATTERN}]`,
+          message: NO_PLUGIN_REACH,
+        },
+        {
+          selector: `CallExpression[callee.name='require'][arguments.0.value=${PLUGIN_REACH_PATTERN}]`,
+          message: NO_PLUGIN_REACH,
+        },
+      ],
     },
   },
   {

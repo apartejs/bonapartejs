@@ -105,6 +105,8 @@ export const pluginManifestSchema = z
   });
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
+/** A manifest as its author writes it: what has a default may be left out. */
+export type PluginManifestInput = z.input<typeof pluginManifestSchema>;
 export type PluginToolContribution = PluginManifest['contributes']['tools'][number];
 export type PluginPaneContribution = PluginManifest['contributes']['panes'][number];
 export type PluginSettingField = PluginManifest['contributes']['settings'][number];

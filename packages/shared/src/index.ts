@@ -13,6 +13,7 @@ export type {
   PluginEffect,
   PluginInstanceChannel,
   PluginManifest,
+  PluginManifestInput,
   PluginNodeContext,
   PluginNodeModule,
   PluginPaneContribution,

@@ -1,0 +1,54 @@
+{
+  "name": "@aparte/bonaparte-plugin-sdk",
+  "version": "0.1.0",
+  "description": "bonaparte — what a plugin author imports: the manifest, the context of its Node half, definePlugin",
+  "license": "MIT",
+  "author": "Paul Richez",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apartejs/bonapartejs.git",
+    "directory": "packages/plugin-sdk"
+  },
+  "homepage": "https://github.com/apartejs/bonapartejs#readme",
+  "bugs": {
+    "url": "https://github.com/apartejs/bonapartejs/issues"
+  },
+  "keywords": [
+    "bonaparte",
+    "plugin",
+    "coding-agent",
+    "aparte"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": [
+      "scope:plugin-sdk"
+    ]
+  }
+}
