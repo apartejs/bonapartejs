@@ -42,7 +42,8 @@ export type Outcome =
 
 /** What changed since the system prompt was frozen, appended instead of rewritten (task 3.2). */
 export interface Delta {
-  kind: 'inventory' | 'perimeter' | 'instructions' | 'reply-language' | 'mode';
+  /** `note`: what the person did outside the conversation that the model must know (going back, task 7.1). */
+  kind: 'inventory' | 'perimeter' | 'instructions' | 'reply-language' | 'mode' | 'note';
   text: string;
   /** A note of the mode: the mode it told (the next turn compares with it). */
   mode?: PlayMode;
@@ -82,7 +83,11 @@ export type JournalBody =
   | { kind: 'delta'; delta: Delta }
   | { kind: 'rebase'; summary: string }
   | { kind: 'engine'; engineId: string; modelId: string }
-  | { kind: 'rewind'; toEntryId: string; what: 'both' | 'conversation' | 'code'; fromBranchId: string }
+  /**
+   * Going back before the person's message `toEntryId` (task 7.1). `note`: what the model is told at its
+   * next turn (English); `undo`: the going back was undone before that turn — nothing is told.
+   */
+  | { kind: 'rewind'; toEntryId: string; what: 'both' | 'conversation' | 'code'; fromBranchId: string; note?: string; undo?: true }
   /** The message the server refused: it is taken back, never sent again. */
   | { kind: 'withdrawn'; entryId: string };
 

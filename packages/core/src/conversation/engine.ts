@@ -168,6 +168,55 @@ export class ContextFullError extends Error {
   }
 }
 
+/** The person's message to go back before, as the window shows it: its rank among their messages of the branch, and its text. */
+export interface RewindTarget {
+  userIndex: number;
+  text: string;
+}
+
+/** What going back before a message would leave behind, read — nothing moved. */
+export interface RewindLook {
+  message: Extract<JournalEntry, { kind: 'user' }>;
+  /** The message and everything after it, in this branch. */
+  after: JournalEntry[];
+  /** The turns of the person's messages before it (their aparté message ids). */
+  earlier: string[];
+  /** The entry the new branch starts after. */
+  previousId: string;
+}
+
+/** The message the window names is not the one of this branch: nothing moves. */
+export class RewindTargetError extends Error {
+  constructor(target: RewindTarget) {
+    super(`This branch has no message ${target.userIndex + 1} with that text: open the conversation again.`);
+    this.name = 'RewindTargetError';
+  }
+}
+
+function lookUp(entries: readonly JournalEntry[], target: RewindTarget): RewindLook {
+  const users = entries.filter((entry): entry is Extract<JournalEntry, { kind: 'user' }> => entry.kind === 'user');
+  const message = users[target.userIndex];
+  const index = message ? entries.indexOf(message) : -1;
+  if (!message || message.text !== target.text || index < 1) throw new RewindTargetError(target);
+  return {
+    message,
+    after: entries.slice(index),
+    earlier: users.slice(0, target.userIndex).flatMap((user) => (user.messageId ? [user.messageId] : [])),
+    previousId: entries[index - 1]!.id,
+  };
+}
+
+/** A going back the model has not heard of yet: told at the start of its next turn, as a note. */
+async function tellRewind(journal: Journal, family: FamilyLayer): Promise<void> {
+  const entries = journal.entries();
+  const at = entries.findLastIndex((entry) => entry.kind === 'rewind');
+  if (at < 0) return;
+  const rewind = entries[at] as Extract<JournalEntry, { kind: 'rewind' }>;
+  if (rewind.undo || !rewind.note) return;
+  if (entries.slice(at + 1).some((entry) => entry.kind === 'delta' && entry.delta.kind === 'note')) return;
+  await journal.append({ kind: 'delta', delta: { kind: 'note', text: rewind.note }, rendered: family.renderSystemNote(rewind.note) });
+}
+
 /** The engine failed in the middle of the answer: what arrived is kept, marked as such. */
 export class EngineFailedError extends Error {
   constructor(readonly cause: unknown) {
@@ -338,6 +387,64 @@ export class ConversationEngine {
     return this.exclusive.run(id, () => this.runTurn(id, input, sink, signal));
   }
 
+  /** The person's message the window names, and what came after it — read, nothing moved (task 7.1). */
+  async lookBefore(id: string, target: RewindTarget): Promise<RewindLook> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) throw new Error(`There is no conversation ${id}.`);
+    return lookUp((await openJournal(this.deps.store.dir, id, meta.branchId)).entries(), target);
+  }
+
+  /**
+   * Going back before a message (task 7.1): for the conversation, a new branch that starts before it —
+   * the branch it leaves saved first, its state given to the new one; for the code only, the branch stays.
+   * Either way the going back is written down, with what the model will be told of it.
+   */
+  rewindTo(
+    id: string,
+    target: RewindTarget,
+    what: 'both' | 'conversation' | 'code',
+    note?: string,
+  ): Promise<{ fromBranchId: string; branchId: string }> {
+    return this.exclusive.run(id, async () => {
+      let meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+      const look = lookUp(journal.entries(), target);
+      const fromBranchId = meta.branchId;
+      if (what !== 'code') ({ meta, journal } = await this.fork(meta, journal, look.previousId));
+      await journal.append({ kind: 'rewind', toEntryId: look.message.id, what, fromBranchId, ...(note ? { note } : {}), rendered: '' });
+      return { fromBranchId, branchId: meta.branchId };
+    });
+  }
+
+  /** « Annuler le retour »: the branch it left active again — or, for the code only, nothing told to the model. */
+  undoRewind(id: string, rewound: NonNullable<ConversationMeta['rewound']>): Promise<void> {
+    return this.exclusive.run(id, async () => {
+      const meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      if (rewound.what !== 'code') {
+        await this.deps.store.update(id, { branchId: rewound.fromBranchId });
+        return;
+      }
+      const journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+      const last = journal.entries().findLast((entry): entry is Extract<JournalEntry, { kind: 'rewind' }> => entry.kind === 'rewind');
+      if (last) {
+        await journal.append({ kind: 'rewind', toEntryId: last.toEntryId, what: 'code', fromBranchId: rewound.fromBranchId, undo: true, rendered: '' });
+      }
+    });
+  }
+
+  /** Another branch of the conversation shown and continued (« Brancher », a sibling picked): one it has. */
+  switchBranch(id: string, branchId: string): Promise<ConversationMeta> {
+    return this.exclusive.run(id, async () => {
+      const meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      const branches = await (await openJournal(this.deps.store.dir, id, meta.branchId)).branches();
+      if (!branches.some((branch) => branch.branchId === branchId)) throw new Error(`The conversation ${id} has no branch ${branchId}.`);
+      return meta.branchId === branchId ? meta : this.deps.store.update(id, { branchId });
+    });
+  }
+
   /** What a paused turn waits for: its last entry, when it is a pause. */
   async paused(id: string): Promise<Extract<JournalEntry, { kind: 'pending' }> | null> {
     const meta = await this.deps.store.get(id);
@@ -456,6 +563,11 @@ export class ConversationEngine {
     }
     // A model turn left open by calls nobody answered (a limit, a pause given up): closed before any note.
     if (!input.resume) await closeOpenTurn(journal, family);
+    if (!input.resume) {
+      // A going back the model has not heard of is told now; once a turn begins it cannot be undone.
+      await tellRewind(journal, family);
+      if (meta.rewound) meta = await this.deps.store.update(id, { rewound: undefined });
+    }
     if (!input.resume && instructions !== undefined && instructions !== (meta.instructions ?? '')) {
       // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
       // Never on a resume: the answer it continues is still open.

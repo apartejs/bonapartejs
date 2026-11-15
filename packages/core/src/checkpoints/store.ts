@@ -9,12 +9,17 @@
  * file changed again since the turn: that one is left alone and named — an
  * undo never overwrites work done after it.
  *
+ * Going back before a message undoes, the latest first, every turn that
+ * wrote since that moment — across the conversation's branches: the disk is
+ * one. What it puts back is kept as a turn of its own, so that the going back
+ * can be undone too.
+ *
  * Layout: `<dir>/<conversation>/<turn>/manifest.json`, originals beside it.
  */
 
 import { createHash } from 'node:crypto';
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 interface Entry {
   path: string;
@@ -35,6 +40,10 @@ interface Manifest {
   undone: boolean;
   /** The turn's place among the conversation's turns, the first being 1. */
   seq?: number;
+  /** When the turn first wrote (ISO): what « since a message » compares. */
+  at?: string;
+  /** A going back: what it put back is not a change of the conversation, and the turns it undid are named. */
+  rewind?: { undid: string[] };
 }
 
 /** A file the conversation changed, across its turns. */
@@ -71,7 +80,10 @@ async function readBytes(path: string): Promise<Buffer | undefined> {
 const segment = (value: string): string => value.replace(/[^\w-]/g, '_') || '_';
 
 export class CheckpointStore {
-  constructor(readonly dir: string) {}
+  constructor(
+    readonly dir: string,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
 
   private turnDir(conversationId: string, turnId: string): string {
     return join(this.dir, segment(conversationId), segment(turnId));
@@ -118,7 +130,7 @@ export class CheckpointStore {
   private async standing(conversationId: string): Promise<Map<string, { dir: string; manifest: Manifest; entry: Entry }[]>> {
     const byPath = new Map<string, { dir: string; manifest: Manifest; entry: Entry }[]>();
     for (const turn of await this.turns(conversationId)) {
-      if (turn.manifest.undone) continue;
+      if (turn.manifest.undone || turn.manifest.rewind) continue;
       for (const entry of turn.manifest.entries) {
         if (entry.reverted) continue;
         const list = byPath.get(entry.path) ?? [];
@@ -136,6 +148,7 @@ export class CheckpointStore {
       entries: [],
       undone: false,
       seq: (await this.turns(conversationId)).length + 1,
+      at: this.now().toISOString(),
     };
     if (manifest.entries.some((entry) => entry.path === path)) return;
     const original = await readBytes(path);
@@ -225,6 +238,83 @@ export class CheckpointStore {
       await this.writeAt(change.dir, change.manifest);
     }
     return { restored: [first.entry.display], conflicts: [] };
+  }
+
+  /**
+   * Going back before a message sent at `since`: every change made since,
+   * the latest turn first, put back — a file changed elsewhere since is left
+   * as it is and named. What it puts back is kept as the turn `asTurn`.
+   */
+  async undoSince(conversationId: string, since: string, asTurn: string, options: { except?: readonly string[] } = {}): Promise<UndoResult> {
+    const own = this.turnDir(conversationId, asTurn);
+    const later = (await this.since(conversationId, since, options.except)).filter((turn) => turn.dir !== own).reverse();
+    const restored = new Set<string>();
+    const conflicts = new Set<string>();
+    const touched = new Map<string, string>();
+    const undid: string[] = [];
+    for (const turn of later) {
+      for (const entry of turn.manifest.entries) {
+        if (entry.reverted || conflicts.has(entry.display)) continue;
+        const now = await readBytes(entry.path);
+        if ((now === undefined ? undefined : hash(now)) !== entry.afterHash) {
+          conflicts.add(entry.display);
+          continue;
+        }
+        // What the file holds now, kept once: undoing the going back puts it back.
+        if (!touched.has(entry.path)) {
+          await this.before(conversationId, asTurn, entry.path, entry.display);
+          touched.set(entry.path, entry.display);
+        }
+        if (entry.existed && entry.blob) await writeFile(entry.path, await readFile(join(turn.dir, entry.blob)));
+        else await rm(entry.path, { force: true });
+        restored.add(entry.display);
+      }
+      turn.manifest.undone = true;
+      await this.writeAt(turn.dir, turn.manifest);
+      undid.push(turn.dir);
+    }
+    for (const path of touched.keys()) await this.after(conversationId, asTurn, path);
+    const manifest = (await this.read(conversationId, asTurn)) ?? { version: 1, entries: [], undone: false, at: this.now().toISOString() };
+    manifest.rewind = { undid };
+    await this.write(conversationId, asTurn, manifest);
+    return { restored: [...restored], conflicts: [...conflicts].filter((name) => !restored.has(name)) };
+  }
+
+  /** The files changed since a moment and still standing — what going back in the conversation only leaves on disk. */
+  async changedSince(conversationId: string, since: string, options: { except?: readonly string[] } = {}): Promise<string[]> {
+    const names = new Set<string>();
+    for (const turn of await this.since(conversationId, since, options.except)) {
+      for (const entry of turn.manifest.entries) if (!entry.reverted) names.add(entry.display);
+    }
+    return [...names];
+  }
+
+  /**
+   * The turns that wrote since a moment and still stand, in their order. `except`: turns known to come
+   * before it (the person's earlier messages) — a clock tie never takes one of them.
+   */
+  private async since(conversationId: string, since: string, except: readonly string[] = []): Promise<{ dir: string; manifest: Manifest }[]> {
+    const earlier = new Set(except.map(segment));
+    return (await this.turns(conversationId)).filter(
+      (turn) => !turn.manifest.undone && !turn.manifest.rewind && !earlier.has(basename(turn.dir)) && (turn.manifest.at ?? '') >= since,
+    );
+  }
+
+  /** « Annuler le retour »: the files as they were before the going back, and the turns it undid standing again. */
+  async redo(conversationId: string, asTurn: string): Promise<UndoResult> {
+    const manifest = await this.read(conversationId, asTurn);
+    if (!manifest?.rewind || manifest.undone) return { restored: [], conflicts: [] };
+    const result = await this.undo(conversationId, asTurn);
+    for (const dir of manifest.rewind.undid) {
+      try {
+        const undone = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as Manifest;
+        undone.undone = false;
+        await this.writeAt(dir, undone);
+      } catch {
+        // A turn forgotten since: nothing to stand again.
+      }
+    }
+    return result;
   }
 
   /** A deleted conversation takes its checkpoints with it. */

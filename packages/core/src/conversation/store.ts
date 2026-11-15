@@ -36,6 +36,8 @@ export interface ConversationMeta {
   contextCap?: number;
   /** The project's instructions as the model last read them: a change is appended as a note (task 4.7). */
   instructions?: string;
+  /** Its last going back, while it can still be undone — until its next turn begins (task 7.1). */
+  rewound?: { what: 'both' | 'conversation' | 'code'; fromBranchId: string; branchId: string; asTurn: string };
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;

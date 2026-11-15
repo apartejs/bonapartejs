@@ -157,3 +157,64 @@ describe('CheckpointStore', () => {
     expect(await readFile(b, 'utf8')).toBe('changed by the person');
   });
 });
+
+describe('CheckpointStore — going back before a message', () => {
+  /** A clock a second ahead at each turn's first write: the turns' order is their time. */
+  function clocked(dir: string): CheckpointStore {
+    let now = Date.parse('2026-11-15T10:00:00.000Z');
+    return new CheckpointStore(dir, () => new Date((now += 1000)));
+  }
+
+  async function write(store: CheckpointStore, turn: string, path: string, display: string, content: string): Promise<void> {
+    await store.before('conv', turn, path, display);
+    await writeFile(path, content, 'utf8');
+    await store.after('conv', turn, path);
+  }
+
+  async function threeTurns() {
+    const store = clocked(await temp('bp-ckpt-data-'));
+    const repo = await temp('bp-ckpt-repo-');
+    const a = join(repo, 'a.ts');
+    const b = join(repo, 'b.ts');
+    const created = join(repo, 'new.ts');
+    await writeFile(a, 'a0', 'utf8');
+    await writeFile(b, 'b0', 'utf8');
+    await write(store, 'turn-1', a, 'a.ts', 'a1'); // 10:00:01
+    await write(store, 'turn-2', a, 'a.ts', 'a2'); // 10:00:02
+    await write(store, 'turn-2', created, 'new.ts', 'fresh');
+    await write(store, 'turn-3', b, 'b.ts', 'b3'); // 10:00:03
+    return { store, a, b, created, since: '2026-11-15T10:00:01.500Z' };
+  }
+
+  it('undoes every change made since a moment, the latest first, across turns; what came before stays', async () => {
+    const { store, a, b, created, since } = await threeTurns();
+    const result = await store.undoSince('conv', since, 'rewind-1');
+    expect([...result.restored].sort()).toEqual(['a.ts', 'b.ts', 'new.ts']);
+    expect(result.conflicts).toEqual([]);
+    expect(await readFile(a, 'utf8')).toBe('a1');
+    expect(await readFile(b, 'utf8')).toBe('b0');
+    expect(existsSync(created)).toBe(false);
+    // The first turn's change still stands; the later ones are undone.
+    expect((await store.files('conv')).map((file) => file.display)).toEqual(['a.ts']);
+  });
+
+  it('a file changed elsewhere since is left as it is, and named', async () => {
+    const { store, a, b, since } = await threeTurns();
+    await writeFile(b, 'the person’s own', 'utf8');
+    const result = await store.undoSince('conv', since, 'rewind-1');
+    expect(result.conflicts).toEqual(['b.ts']);
+    expect(await readFile(b, 'utf8')).toBe('the person’s own');
+    expect(await readFile(a, 'utf8')).toBe('a1');
+  });
+
+  it('what the going back put back can be undone: every file as before it, the turns standing again', async () => {
+    const { store, a, b, created, since } = await threeTurns();
+    await store.undoSince('conv', since, 'rewind-1');
+    const redone = await store.redo('conv', 'rewind-1');
+    expect([...redone.restored].sort()).toEqual(['a.ts', 'b.ts', 'new.ts']);
+    expect(await readFile(a, 'utf8')).toBe('a2');
+    expect(await readFile(b, 'utf8')).toBe('b3');
+    expect(await readFile(created, 'utf8')).toBe('fresh');
+    expect((await store.files('conv')).map((file) => file.display)).toEqual(['a.ts', 'new.ts', 'b.ts']);
+  });
+});
