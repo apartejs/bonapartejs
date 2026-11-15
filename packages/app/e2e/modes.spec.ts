@@ -98,5 +98,20 @@ test('a mode chosen before the first message holds: the new conversation runs in
   await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
   await expect(card(page)).toHaveCount(0);
   expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('first\n');
-  await expect(page.locator('aparte-approval-mode').getByRole('combobox')).toContainText('Lecture');
+  await expect(chat(page).modeShown).toHaveText('Lecture');
+});
+
+test('going back to a conversation shows its own mode, even one born in this window', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: model } });
+  await choose(page, 'Lecture');
+  await answered(page, 'Premier sujet');
+  await page.getByRole('button', { name: 'Nouvelle conversation' }).click();
+  await choose(page, 'Plume');
+  await answered(page, 'Second sujet');
+  await expect(chat(page).modeShown).toHaveText('Plume');
+
+  await page.locator('aparte-conversation-list').getByRole('button', { name: /Premier sujet/ }).click();
+  await expect(chat(page).modeShown).toHaveText('Lecture');
+  await page.locator('aparte-conversation-list').getByRole('button', { name: /Second sujet/ }).click();
+  await expect(chat(page).modeShown).toHaveText('Plume');
 });

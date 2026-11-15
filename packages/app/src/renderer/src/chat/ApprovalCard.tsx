@@ -73,7 +73,7 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
     if (diff.current && preview?.kind === 'diff') diff.current.diff = { path: preview.path, before: preview.before, after: preview.after };
   }, [preview]);
 
-  // The card takes the focus: Enter allows, Escape refuses.
+  // The card takes the focus, on « Autoriser »: Enter allows, Escape refuses.
   useEffect(() => allow.current?.focus(), [request]);
 
   const refuse = (): void => onAnswer({ approved: false, ...(instruction.trim() ? { instruction: instruction.trim() } : {}) });
@@ -81,7 +81,13 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
     if (event.key === 'Escape') {
       event.preventDefault();
       refuse();
-    } else if (event.key === 'Enter' && !refusing && !(event.target instanceof HTMLTextAreaElement)) {
+    } else if (
+      event.key === 'Enter' &&
+      !refusing &&
+      // A focused button presses itself (« Refuser… » never allows); the field writes its line.
+      !(event.target instanceof HTMLButtonElement) &&
+      !(event.target instanceof HTMLTextAreaElement)
+    ) {
       event.preventDefault();
       onAnswer({ approved: true });
     }

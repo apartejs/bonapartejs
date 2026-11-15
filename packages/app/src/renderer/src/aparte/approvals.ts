@@ -102,3 +102,13 @@ export function followLoadedConversation(page: EventTarget, onLoaded: (conversat
   page.addEventListener('aparte-conversation-loaded', listener, { capture: true });
   return () => page.removeEventListener('aparte-conversation-loaded', listener, { capture: true });
 }
+
+/**
+ * « Autoriser et passer en Plume »: the core takes the new mode first, then the call is allowed —
+ * the calls queued behind it are decided in the mode the person just chose. A mode the core could
+ * not take still answers the call: the person allowed it.
+ */
+export async function allowAndSwitch(steps: { setMode(): Promise<void>; allow(): void }): Promise<void> {
+  await steps.setMode().catch(() => undefined);
+  steps.allow();
+}

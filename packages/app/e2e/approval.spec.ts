@@ -82,3 +82,28 @@ test('the keyboard: Enter allows, Escape refuses', async ({ launch }) => {
   await expect(card(page)).toHaveCount(0);
   await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 15_000 }).toBe('new line\n');
 });
+
+test('the keyboard: Enter presses the button that has the focus — « Refuser… » never allows', async ({ launch }) => {
+  const { page, home } = await launch({ engine: { responder: model() } });
+  await writeFile(join(home, 'notes.txt'), 'old line\n');
+  const ui = chat(page);
+  await ui.send('Change la note');
+  const request = card(page);
+  await expect(request).toBeVisible({ timeout: 15_000 });
+  await request.getByRole('button', { name: 'Refuser…' }).focus();
+  await page.keyboard.press('Enter');
+  // Enter on « Refuser… » opens the refusal, and allows nothing.
+  await expect(request.getByRole('textbox')).toBeVisible();
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+  await page.keyboard.press('Escape');
+  await expect(ui.replyText).toHaveText('Fait.', { timeout: 15_000 });
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+
+  // Enter on « Autoriser et passer en Plume » does both.
+  await ui.send('Change encore la note');
+  await expect(request).toBeVisible({ timeout: 15_000 });
+  await request.getByRole('button', { name: 'Autoriser et passer en Plume' }).focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 15_000 }).toBe('new line\n');
+  await expect(chat(page).modeShown).toHaveText('Plume');
+});

@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createApprovalResolver, createApprovalsStore, followLoadedConversation } from './approvals';
+import { allowAndSwitch, createApprovalResolver, createApprovalsStore, followLoadedConversation } from './approvals';
 
 const CALL = { id: 'call-1', name: 'edit_file', input: { path: 'a.ts' } };
 
@@ -58,4 +58,31 @@ describe('the approvals store and its resolver', () => {
     page.dispatchEvent(new CustomEvent('aparte-conversation-loaded', { detail: { targetId: 'chat', conversationId: 'c-10' } }));
     expect(open).toBe('c-9');
   });
+
+  it('« Autoriser et passer en Plume »: the core changes mode first, then the call is allowed — the calls queued behind it are decided in Plume', async () => {
+    let switched: () => void = () => undefined;
+    const order: string[] = [];
+    const done = allowAndSwitch({
+      setMode: () =>
+        new Promise<void>((resolve) => {
+          switched = () => {
+            order.push('mode');
+            resolve();
+          };
+        }),
+      allow: () => order.push('allow'),
+    });
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    switched();
+    await done;
+    expect(order).toEqual(['mode', 'allow']);
+  });
+
+  it('a mode the core could not take still answers the call: the person allowed it', async () => {
+    const order: string[] = [];
+    await allowAndSwitch({ setMode: () => Promise.reject(new Error('gone')), allow: () => order.push('allow') });
+    expect(order).toEqual(['allow']);
+  });
 });
+

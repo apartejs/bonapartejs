@@ -10,8 +10,8 @@ import {
   type PlayMode,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
-import { focusComposer, sendAsPerson } from './aparte/composer';
+import { allowAndSwitch, createApprovalResolver, createApprovalsStore, followLoadedConversation } from './aparte/approvals';
+import { focusComposer, sendWhenFree } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
@@ -69,7 +69,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const [mode, setMode] = useState<PlayMode>('repetition');
   // The conversations born in this window: the page saves one before its first turn reaches the
   // core, so a read then would answer the default mode; the switch's choice goes with that turn.
+  // Only until it is left: coming back, its mode is the core's.
   const bornHere = useRef(new Set<string>());
+  useEffect(() => {
+    if (!conversationId) return;
+    return () => {
+      bornHere.current.delete(conversationId);
+    };
+  }, [conversationId]);
   useEffect(() => {
     chosen.current = mode;
   }, [mode]);
@@ -110,9 +117,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         setMode(next);
         chosen.current = next;
         const id = open.current;
+        // The go-ahead leaves when the composer is free (a reply still written, a question open),
+        // and only into the conversation of the plan.
         void (id ? bridge.invoke(modesSet, { id, mode: next }) : Promise.resolve())
           .catch(() => undefined)
-          .then(() => sendAsPerson(messages.plan.goAhead));
+          .then(() => sendWhenFree(messages.plan.goAhead, () => open.current === id));
       },
       adjust: () => focusComposer(),
     });
@@ -182,9 +191,12 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
               onAnswer={(answer) => approvals.answer(request.id, answer)}
               onAllowAndPlume={() => {
                 // The writes after this one pass without asking; the commands still ask.
-                if (request.conversationId) void bridge.invoke(modesSet, { id: request.conversationId, mode: 'plume' }).catch(() => undefined);
                 setMode('plume');
-                approvals.answer(request.id, { approved: true });
+                const id = request.conversationId;
+                void allowAndSwitch({
+                  setMode: () => (id ? bridge.invoke(modesSet, { id, mode: 'plume' }) : Promise.resolve()),
+                  allow: () => approvals.answer(request.id, { approved: true }),
+                });
               }}
             />
           ) : memory ? (

@@ -26,3 +26,31 @@ export function sendAsPerson(text: string): boolean {
 export function focusComposer(): void {
   composer()?.focus();
 }
+
+/** What ends a reply, or a question, that holds the composer: aparté dispatches them on the chat, bubbling. */
+const FREED = ['aparte-message-done', 'aparte-message-aborted', 'aparte-message-error'] as const;
+
+/**
+ * Sends as the person as soon as the composer is free: now, or when the reply — or the question —
+ * that holds it ends. `still()` says whether it is still wanted (the same conversation is open);
+ * the function returned gives it up.
+ */
+export function sendWhenFree(text: string, still: () => boolean, page: EventTarget = window): () => void {
+  if (!still()) return () => undefined;
+  if (sendAsPerson(text)) return () => undefined;
+  let done = false;
+  const stop = (): void => {
+    done = true;
+    for (const name of FREED) page.removeEventListener(name, retry);
+  };
+  function retry(): void {
+    // After aparté's own listeners: the composer is free only once they have run.
+    setTimeout(() => {
+      if (done) return;
+      if (!still()) stop();
+      else if (sendAsPerson(text)) stop();
+    }, 0);
+  }
+  for (const name of FREED) page.addEventListener(name, retry);
+  return stop;
+}

@@ -60,7 +60,7 @@ test('in Lecture a change is a plan, and nothing is written; « Lancer en Plume 
   expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('first\n');
 
   await plan.first().getByRole('button', { name: 'Lancer en Plume' }).click();
-  await expect(page.locator('aparte-approval-mode').getByRole('combobox')).toContainText('Plume');
+  await expect(chat(page).modeShown).toHaveText('Plume');
   await expect(ui.userMessages.last()).toContainText('Lance le plan.');
   await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 15_000 }).toBe('second\n');
   await expect(plan.first()).toContainText('Lancé en Plume');
@@ -69,4 +69,27 @@ test('in Lecture a change is a plan, and nothing is written; « Lancer en Plume 
   // The model read the new mode before it went on: told, appended, after the plan.
   const launched = prompts.find((prompt) => prompt.includes('Lance le plan.'))!;
   expect(launched.lastIndexOf('[mode] Plume')).toBeGreaterThan(launched.lastIndexOf('Voici le plan.'));
+});
+
+test('« Lancer en Plume » while the reply is still written: the go-ahead leaves once it ends, never lost', async ({ launch }) => {
+  const slow = (prompt: string): string => {
+    const answer = model(prompt);
+    // The words after the plan take their time: the card's buttons are there while they come.
+    return answer === 'Voici le plan.' ? `Voici le plan. ${'Je détaille chaque étape avant de commencer. '.repeat(12)}` : answer;
+  };
+  const { page, home } = await launch({ engine: { responder: slow, paceMs: 40 } });
+  await writeFile(join(home, 'notes.txt'), 'first\n');
+  const ui = chat(page);
+  await page.locator('aparte-approval-mode').getByRole('combobox').click();
+  await page.getByRole('option', { name: 'Lecture' }).click();
+  await ui.send('Ajoute un export CSV du récap');
+
+  const plan = page.getByRole('region', { name: 'Plan' }).first();
+  const launchIt = plan.getByRole('button', { name: 'Lancer en Plume' });
+  await expect(launchIt).toBeVisible({ timeout: 15_000 });
+  await expect(ui.streamingReplies).toHaveCount(1);
+  await launchIt.click();
+
+  await expect(ui.userMessages.last()).toContainText('Lance le plan.', { timeout: 20_000 });
+  await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 20_000 }).toBe('second\n');
 });
