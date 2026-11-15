@@ -32,6 +32,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
   registerConversationChannels(ipc, {
     conversationStore: store,
     conversations: { open: open as never },
+    conversationDocument: (id: string) => store.loadDocument(id),
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
       removed.push(id);
@@ -73,4 +74,33 @@ describe('the conversation channels', () => {
     await expect(call('conversations.save', { document: { title: 'x' } })).rejects.toThrow(/input/);
     await expect(call('conversations.save', { document: { ...DOC, id: '../x' } })).rejects.toThrow(/conversation id/);
   });
+
+  it('list the cards for the sidebar — titles from the page, dates, pins, archives — without reading the documents', async () => {
+    const { call } = await setup();
+    await call('conversations.save', { document: { ...DOC, title: 'Bonjour' } });
+    const [card] = (await call('conversations.loadMeta', undefined)) as { id: string; title: string; createdAt: number; pinnedAt?: number }[];
+    expect(card).toMatchObject({ id: 'c-1', title: 'Bonjour' });
+    expect(typeof card!.createdAt).toBe('number');
+    await call('conversations.pin', { id: 'c-1' });
+    await call('conversations.rename', { id: 'c-1', title: 'Le parseur' });
+    await call('conversations.archive', { id: 'c-1' });
+    const [changed] = (await call('conversations.loadMeta', undefined)) as { title: string; pinnedAt?: number; archivedAt?: number }[];
+    expect(changed).toMatchObject({ title: 'Le parseur' });
+    expect(typeof changed!.pinnedAt).toBe('number');
+    expect(typeof changed!.archivedAt).toBe('number');
+    await call('conversations.unpin', { id: 'c-1' });
+    await call('conversations.unarchive', { id: 'c-1' });
+    const [back] = (await call('conversations.loadMeta', undefined)) as { pinnedAt?: number; archivedAt?: number }[];
+    expect(back!.pinnedAt).toBeUndefined();
+    expect(back!.archivedAt).toBeUndefined();
+  });
+
+  it('keep the draft of the composer, conversation by conversation', async () => {
+    const { call } = await setup();
+    await call('conversations.save', { document: DOC });
+    await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBeNull();
+    await call('conversations.saveDraft', { id: 'c-1', text: 'Une idée' });
+    await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBe('Une idée');
+  });
 });
+

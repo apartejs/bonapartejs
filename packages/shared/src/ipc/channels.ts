@@ -6,7 +6,21 @@
  */
 
 import { appInfo } from './app.js';
-import { conversationsDelete, conversationsLoadAll, conversationsLoadFull, conversationsMemory, conversationsSave } from './conversations.js';
+import {
+  conversationsArchive,
+  conversationsDelete,
+  conversationsLoadAll,
+  conversationsLoadDraft,
+  conversationsLoadFull,
+  conversationsLoadMeta,
+  conversationsMemory,
+  conversationsPin,
+  conversationsRename,
+  conversationsSave,
+  conversationsSaveDraft,
+  conversationsUnarchive,
+  conversationsUnpin,
+} from './conversations.js';
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
 import { projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
@@ -20,9 +34,17 @@ export const CHANNELS = [
   engineLlamaInstall,
   conversationsLoadAll,
   conversationsLoadFull,
+  conversationsLoadMeta,
   conversationsSave,
   conversationsDelete,
   conversationsMemory,
+  conversationsRename,
+  conversationsPin,
+  conversationsUnpin,
+  conversationsArchive,
+  conversationsUnarchive,
+  conversationsLoadDraft,
+  conversationsSaveDraft,
   modesGet,
   modesSet,
   toolsPreview,

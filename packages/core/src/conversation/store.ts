@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { PlayMode } from '@aparte/bonaparte-shared';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
@@ -44,6 +44,9 @@ type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt'>>;
 
 /** The window's document of a conversation, beside its journal. */
 const DOCUMENT = 'aparte.json';
+/** The draft of the composer, beside it. */
+const DRAFT = 'draft.txt';
+const MAX_DRAFT_CHARS = 1024 * 1024;
 /** What a conversation's document may weigh: a guard against a page gone wrong, not a limit anyone meets. */
 const MAX_DOCUMENT_CHARS = 64 * 1024 * 1024;
 
@@ -132,6 +135,28 @@ export class ConversationStore {
   /** Pinning or archiving is not activity: the order of the list does not move. */
   mark(id: string, marks: Marks): Promise<ConversationMeta> {
     return this.change(id, (meta) => ({ ...meta, ...marks }));
+  }
+
+  /** A new title is not activity either: the person named it, nothing happened in it. */
+  rename(id: string, title: string): Promise<ConversationMeta> {
+    return this.change(id, (meta) => ({ ...meta, title }));
+  }
+
+  /** What the person was writing and has not sent: kept beside the journal; an empty one is forgotten. */
+  async saveDraft(id: string, text: string): Promise<void> {
+    const path = join(this.dir, idOf(id), DRAFT);
+    await this.writes.run(idOf(id), async () => {
+      if (text === '') {
+        await rm(path, { force: true });
+        return;
+      }
+      if (!(await this.get(id))) throw new Error(`There is no conversation ${id}.`);
+      await writeFile(path, text.slice(0, MAX_DRAFT_CHARS), 'utf8');
+    });
+  }
+
+  async loadDraft(id: string): Promise<string | null> {
+    return readFile(join(this.dir, idOf(id), DRAFT), 'utf8').catch(() => null);
   }
 
   /**

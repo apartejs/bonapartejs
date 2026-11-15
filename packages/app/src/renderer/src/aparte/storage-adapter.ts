@@ -10,6 +10,14 @@ import {
   conversationsLoadAll,
   conversationsLoadFull,
   conversationsSave,
+  conversationsLoadMeta,
+  conversationsRename,
+  conversationsPin,
+  conversationsUnpin,
+  conversationsArchive,
+  conversationsUnarchive,
+  conversationsLoadDraft,
+  conversationsSaveDraft,
   type Bridge,
   type ConversationDocument,
 } from '@aparte/bonaparte-shared';
@@ -21,5 +29,13 @@ export function createStorageAdapter(bridge: Bridge): AparteStorageAdapter {
     loadFull: async (id) => (await bridge.invoke(conversationsLoadFull, { id })) as unknown as AparteConversation | null,
     save: (conversation) => bridge.invoke(conversationsSave, { document: conversation as unknown as ConversationDocument }),
     delete: (id) => bridge.invoke(conversationsDelete, { id }),
+    loadMeta: () => bridge.invoke(conversationsLoadMeta, undefined),
+    pin: (id) => bridge.invoke(conversationsPin, { id }),
+    unpin: (id) => bridge.invoke(conversationsUnpin, { id }),
+    archive: (id) => bridge.invoke(conversationsArchive, { id }),
+    unarchive: (id) => bridge.invoke(conversationsUnarchive, { id }),
+    rename: (id, title) => bridge.invoke(conversationsRename, { id, title }),
+    loadDraft: (id) => bridge.invoke(conversationsLoadDraft, { id }),
+    saveDraft: (id, text) => bridge.invoke(conversationsSaveDraft, { id, text }),
   };
 }

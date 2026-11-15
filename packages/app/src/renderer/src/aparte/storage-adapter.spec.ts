@@ -26,6 +26,17 @@ function core() {
         case 'conversations.delete':
           kept.delete(args.id!);
           return undefined;
+        case 'conversations.loadMeta':
+          return [{ id: 'c-1', title: 'Bonjour', createdAt: 1, updatedAt: 2 }];
+        case 'conversations.loadDraft':
+          return 'brouillon';
+        case 'conversations.rename':
+        case 'conversations.pin':
+        case 'conversations.unpin':
+        case 'conversations.archive':
+        case 'conversations.unarchive':
+        case 'conversations.saveDraft':
+          return undefined;
         default:
           throw new Error(`unexpected ${channel.name}`);
       }
@@ -53,4 +64,28 @@ describe('createStorageAdapter', () => {
     await adapter.delete('c-1');
     expect(await adapter.loadAll()).toEqual([]);
   });
+
+  it("gives aparté's manager the cards, the pins, the archives, the titles and the drafts — each through the bridge", async () => {
+    const { bridge, calls } = core();
+    const adapter = createStorageAdapter(bridge);
+    await expect(adapter.loadMeta!()).resolves.toEqual([{ id: 'c-1', title: 'Bonjour', createdAt: 1, updatedAt: 2 }]);
+    await adapter.pin!('c-1');
+    await adapter.unpin!('c-1');
+    await adapter.archive!('c-1');
+    await adapter.unarchive!('c-1');
+    await adapter.rename!('c-1', 'Le parseur');
+    await adapter.saveDraft!('c-1', 'x');
+    await expect(adapter.loadDraft!('c-1')).resolves.toBe('brouillon');
+    expect(calls).toEqual([
+      'conversations.loadMeta',
+      'conversations.pin',
+      'conversations.unpin',
+      'conversations.archive',
+      'conversations.unarchive',
+      'conversations.rename',
+      'conversations.saveDraft',
+      'conversations.loadDraft',
+    ]);
+  });
 });
+

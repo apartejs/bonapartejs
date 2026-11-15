@@ -23,7 +23,7 @@ import { installedLlama, installLlama } from './engine/llama-install.js';
 import { buildNumber, latestLlamaAsset, type LlamaAsset } from './engine/llama-release.js';
 import { readBuildTag } from './engine/process-probe.js';
 import { EngineSupervisor, type EngineConfig, type KvCacheType } from './engine/supervisor.js';
-import { layerForModel, UnsupportedFamilyError, type FamilyId, type FamilyLayer } from './families/index.js';
+import { familyLayer, layerForModel, UnsupportedFamilyError, type FamilyId, type FamilyLayer } from './families/index.js';
 import { readJsonFile } from './fs/json-file.js';
 import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
 import { defaultScanRoots, scanModels, type ModelSource, type ScanRoot } from './models/inventory.js';
@@ -43,6 +43,8 @@ import { builtinTools } from './tools/builtin/index.js';
 import { CheckpointStore } from './checkpoints/store.js';
 import { detectProject, type ProjectFacts } from './project/detect.js';
 import { readProjectInstructions } from './project/instructions.js';
+import { openJournal } from './journal/journal.js';
+import { projectToAparte } from './journal/projection.js';
 import { ProjectStore, type NewProject, type Project, type ProjectChanges } from './project/store.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { ToolDef } from './tools/types.js';
@@ -124,6 +126,8 @@ export interface Core {
   readonly permissions: PermissionEngine;
   /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
   readonly checkpoints: CheckpointStore;
+  /** The page's document of a conversation; rebuilt from its journal when the page's is missing; null for none. */
+  conversationDocument(id: string): Promise<unknown>;
   /** Deletes a conversation: its card, its journal, its memory — and the originals its turns kept. */
   removeConversation(id: string): Promise<void>;
   /** The projects: made from a folder (what it says read first), each with its folders and its default mode. */
@@ -672,6 +676,17 @@ export function createCore(deps: CoreDeps): Core {
       create: (input) => projectStore.create(input),
       update: (id, changes) => projectStore.update(id, changes),
       remove: (id) => projectStore.remove(id),
+    },
+
+    async conversationDocument(id) {
+      const saved = await conversationStore.loadDocument(id);
+      if (saved !== null) return saved;
+      const meta = await conversationStore.get(id);
+      if (!meta) return null;
+      // The journal is the truth: read with the family of the engine loaded, Gemma's (the product's) without one.
+      const family = (await currentEngine().catch(() => undefined))?.family ?? familyLayer('gemma');
+      const journal = await openJournal(conversationStore.dir, id, meta.branchId);
+      return projectToAparte(meta, journal.entries(), family);
     },
 
     async removeConversation(id) {

@@ -7,6 +7,14 @@
 
 import type { Core } from '@aparte/bonaparte-core';
 import {
+  conversationsLoadMeta,
+  conversationsRename,
+  conversationsPin,
+  conversationsUnpin,
+  conversationsArchive,
+  conversationsUnarchive,
+  conversationsLoadDraft,
+  conversationsSaveDraft,
   conversationsDelete,
   conversationsLoadAll,
   conversationsLoadFull,
@@ -21,7 +29,11 @@ import type { IpcRegistry } from './register.js';
 const NEW_CONVERSATION = { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' } as const;
 
 interface ConversationCore {
-  conversationStore: Pick<Core['conversationStore'], 'ensure' | 'list' | 'loadDocument' | 'saveDocument'>;
+  conversationStore: Pick<
+    Core['conversationStore'],
+    'ensure' | 'get' | 'list' | 'loadDocument' | 'saveDocument' | 'mark' | 'rename' | 'loadDraft' | 'saveDraft'
+  >;
+  conversationDocument: Core['conversationDocument'];
   conversations: Pick<Core['conversations'], 'open'>;
   removeConversation: Core['removeConversation'];
 }
@@ -34,11 +46,35 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     return documents.filter((document): document is ConversationDocument => document !== null);
   });
 
-  ipc.handle(conversationsLoadFull, async ({ id }) => (await store.loadDocument(id)) as ConversationDocument | null);
+  // The page's document — or, when it is missing, the conversation rebuilt from its journal.
+  ipc.handle(conversationsLoadFull, async ({ id }) => (await core.conversationDocument(id)) as ConversationDocument | null);
+
+  // The sidebar's cards: read from the conversations' own cards, never from their documents.
+  ipc.handle(conversationsLoadMeta, async () =>
+    (await store.list()).map((meta) => ({
+      id: meta.id,
+      title: meta.title,
+      createdAt: Date.parse(meta.createdAt),
+      updatedAt: Date.parse(meta.updatedAt),
+      ...(meta.pinnedAt ? { pinnedAt: Date.parse(meta.pinnedAt) } : {}),
+      ...(meta.archivedAt ? { archivedAt: Date.parse(meta.archivedAt) } : {}),
+    })),
+  );
+  const now = (): string => new Date().toISOString();
+  ipc.handle(conversationsPin, async ({ id }) => void (await store.mark(id, { pinnedAt: now() })));
+  ipc.handle(conversationsUnpin, async ({ id }) => void (await store.mark(id, { pinnedAt: undefined })));
+  ipc.handle(conversationsArchive, async ({ id }) => void (await store.mark(id, { archivedAt: now() })));
+  ipc.handle(conversationsUnarchive, async ({ id }) => void (await store.mark(id, { archivedAt: undefined })));
+  ipc.handle(conversationsRename, async ({ id, title }) => void (await store.rename(id, title)));
+  ipc.handle(conversationsLoadDraft, ({ id }) => store.loadDraft(id));
+  ipc.handle(conversationsSaveDraft, ({ id, text }) => store.saveDraft(id, text));
 
   ipc.handle(conversationsSave, async ({ document }) => {
-    await store.ensure(document.id, NEW_CONVERSATION);
+    const meta = await store.ensure(document.id, NEW_CONVERSATION);
     await store.saveDocument(document.id, document);
+    // The title the page gave it (its first message, or the person's), on its card for the list.
+    const title = typeof document['title'] === 'string' ? document['title'] : '';
+    if (title !== meta.title) await store.rename(document.id, title);
   });
 
   ipc.handle(conversationsDelete, ({ id }) => core.removeConversation(id));

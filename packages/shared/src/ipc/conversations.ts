@@ -56,3 +56,28 @@ export const conversationsSave = defineChannel(
 export const conversationsDelete = defineChannel('conversations.delete', idInput, z.void());
 
 export const conversationsMemory = defineChannel('conversations.memory', idInput, conversationMemorySchema);
+
+/** The card of a conversation, as aparté's list reads it: no message, so the sidebar never loads a document. */
+export const conversationCardSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  pinnedAt: z.number().optional(),
+  archivedAt: z.number().optional(),
+});
+export type ConversationCard = z.infer<typeof conversationCardSchema>;
+
+export const conversationsLoadMeta = defineChannel('conversations.loadMeta', z.void(), z.array(conversationCardSchema));
+export const conversationsRename = defineChannel('conversations.rename', z.object({ id: z.string().min(1).max(128), title: z.string().max(500) }), z.void());
+export const conversationsPin = defineChannel('conversations.pin', idInput, z.void());
+export const conversationsUnpin = defineChannel('conversations.unpin', idInput, z.void());
+export const conversationsArchive = defineChannel('conversations.archive', idInput, z.void());
+export const conversationsUnarchive = defineChannel('conversations.unarchive', idInput, z.void());
+export const conversationsLoadDraft = defineChannel('conversations.loadDraft', idInput, z.string().nullable());
+export const conversationsSaveDraft = defineChannel(
+  'conversations.saveDraft',
+  z.object({ id: z.string().min(1).max(128), text: z.string().max(1024 * 1024) }),
+  z.void(),
+);
+

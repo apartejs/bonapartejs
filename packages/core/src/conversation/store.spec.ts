@@ -115,5 +115,23 @@ describe('ConversationStore', () => {
     await conversations.update('c-1', { title: 'Gardé' });
     expect((await conversations.ensure('c-1', NEW)).title).toBe('Gardé');
   });
+
+  it('keeps the draft the person was writing, and forgets it once empty', async () => {
+    const { store: conversations } = await store();
+    const meta = await conversations.create({ kind: 'code', engineId: 'builtin', modelId: 'm', mode: 'repetition' });
+    expect(await conversations.loadDraft(meta.id)).toBeNull();
+    await conversations.saveDraft(meta.id, 'Une idée en cours');
+    expect(await conversations.loadDraft(meta.id)).toBe('Une idée en cours');
+    await conversations.saveDraft(meta.id, '');
+    expect(await conversations.loadDraft(meta.id)).toBeNull();
+  });
+
+  it('a new title is not activity: the order of the list does not move', async () => {
+    const { store: conversations } = await store();
+    const meta = await conversations.create({ kind: 'code', engineId: 'builtin', modelId: 'm', mode: 'repetition' });
+    const renamed = await conversations.rename(meta.id, 'Le parseur des heures');
+    expect(renamed.title).toBe('Le parseur des heures');
+    expect(renamed.updatedAt).toBe(meta.updatedAt);
+  });
 });
 

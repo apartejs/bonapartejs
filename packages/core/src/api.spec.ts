@@ -13,6 +13,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCore, type Core, type CoreDeps } from './api.js';
+import { openJournal } from './journal/journal.js';
 import { UnsupportedFamilyError } from './families/index.js';
 import { spawnHidden, type SpawnedProcess, type SpawnFn } from './process/spawn.js';
 import { FAKE_QWEN_TEMPLATE, startFakeLlamaServer, type FakeLlamaServer } from './testing/fake-llama-server.js';
@@ -373,6 +374,23 @@ describe('createCore — the modes and the previews of the window', () => {
     await core.removeConversation('c1');
     expect(await core.checkpoints.changes('c1', 'm1')).toBeUndefined();
     expect(await core.conversationStore.get('c1')).toBeNull();
+  });
+
+  it("a conversation's document is the page's own — and, when it is missing, rebuilt from the journal", async () => {
+    const { core } = await setup();
+    const meta = await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition', title: 'Bonjour' });
+    const journal = await openJournal(core.conversationStore.dir, 'c1', meta.branchId);
+    await journal.append({ kind: 'user', text: 'Bonjour', messageId: 'u1', rendered: '' });
+    await journal.append({ kind: 'assistant', raw: 'Bonjour Paul.', messageId: 'a1', rendered: '' });
+    const rebuilt = (await core.conversationDocument('c1')) as { messages: { role: string; content: string }[] };
+    expect(rebuilt.messages.map((message) => [message.role, message.content])).toEqual([
+      ['user', 'Bonjour'],
+      ['assistant', 'Bonjour Paul.'],
+    ]);
+    const saved = { id: 'c1', title: 'Bonjour', messages: [{ id: 'u1', role: 'user', content: 'Bonjour (page)' }] };
+    await core.conversationStore.saveDocument('c1', saved);
+    expect(await core.conversationDocument('c1')).toEqual(saved);
+    expect(await core.conversationDocument('nobody')).toBeNull();
   });
 
   it('a project is made from a folder: what the folder says, its name, its folders, its mode — nothing written in the folder', async () => {

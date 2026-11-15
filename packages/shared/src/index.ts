@@ -44,6 +44,15 @@ export type {
   ModelChoiceView,
 } from './ipc/engine.js';
 export {
+  conversationsLoadMeta,
+  conversationsRename,
+  conversationsPin,
+  conversationsUnpin,
+  conversationsArchive,
+  conversationsUnarchive,
+  conversationsLoadDraft,
+  conversationsSaveDraft,
+  conversationCardSchema,
   conversationDocumentSchema,
   conversationMemorySchema,
   conversationsDelete,
@@ -52,6 +61,7 @@ export {
   conversationsMemory,
   conversationsSave,
 } from './ipc/conversations.js';
+export type { ConversationCard } from './ipc/conversations.js';
 export type { ConversationDocument, ConversationMemoryView } from './ipc/conversations.js';
 export { modesGet, modesSet, modeViewSchema, playModeSchema, toolPreviewSchema, toolsPreview } from './ipc/modes.js';
 export type { ModeView, ToolPreviewView } from './ipc/modes.js';
