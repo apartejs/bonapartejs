@@ -47,7 +47,7 @@ const excerpt = (text: string): string => {
 function answerText(raw: string, family: FamilyLayer): string {
   const demux = family.createDemux();
   return [...demux.push(raw), ...demux.flush()]
-    .map((event) => (event.type === 'text' ? event.text : ''))
+    .map((event) => (event.type === 'text' ? event.delta : ''))
     .join('');
 }
 

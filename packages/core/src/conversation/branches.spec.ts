@@ -118,6 +118,8 @@ describe('the branches of a conversation', () => {
     // « Réessayer »: a sibling answer, on a branch after the message.
     await say(null, 'm2', user.id);
     expect(await branchId()).not.toBe(main);
+    // Listed by the answer it gives instead.
+    expect((await branches.list(id)).find((branch) => branch.active)).toMatchObject({ userIndex: 1, startsWith: 'answer', label: 'Réponse 2.' });
     expect(await branches.follow(id, ['m1'])).toBe(main);
     expect(await branchId()).toBe(main);
     expect(await branches.follow(id, ['unknown'])).toBeNull();
