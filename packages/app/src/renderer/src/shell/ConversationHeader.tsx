@@ -102,14 +102,14 @@ export function ConversationHeader(props: ConversationHeaderProps) {
       {props.project ? (
         <span className="conversation-header__chip">
           <Icon name="folder" />
-          {props.project}
+          <span className="conversation-header__chip-text">{props.project}</span>
         </span>
       ) : null}
       {props.branch ? (
         <>
           <span className="conversation-header__chip conversation-header__branch">
             <Icon name="branch" />
-            {props.branch.name}
+            <span className="conversation-header__chip-text">{props.branch.name}</span>
           </span>
           {props.branch.ahead > 0 ? <span className="conversation-header__ahead">{props.messages.branches.ahead(props.branch.ahead, props.branch.base)}</span> : null}
         </>
@@ -125,12 +125,29 @@ export function ConversationHeader(props: ConversationHeaderProps) {
           <span className="changes-pane__removed">{props.messages.changes.removed(props.counts.removed)}</span>
         </button>
       ) : null}
+      {props.pr ? (
+        <span className={`conversation-header__pr conversation-header__pr--${props.pr.ci ?? 'none'}`}>{props.messages.pr.pill(props.pr.number, props.pr.ci)}</span>
+      ) : null}
       <span className="conversation-header__spacer" />
       {props.memory ? (
         <span className={`conversation-header__memory conversation-header__memory--${props.memory}`}>
           <span className="conversation-header__memory-dot" aria-hidden="true" />
           {props.messages.shell.memory[props.memory]}
         </span>
+      ) : null}
+      {props.pr ? (
+        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.pr.onShow}>
+          {props.messages.pr.show}
+        </button>
+      ) : props.branch && props.onOpenPr ? (
+        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.onOpenPr}>
+          {props.messages.pr.open}
+        </button>
+      ) : null}
+      {props.branch ? (
+        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.branch.onOpenFolder}>
+          {props.messages.branches.openFolder}
+        </button>
       ) : null}
       {props.conversationId ? (
         <span className="aparte-app-header__actions conversation-header__more">
@@ -159,23 +176,6 @@ export function ConversationHeader(props: ConversationHeaderProps) {
             </button>
           </div>
         </span>
-      ) : null}
-      {props.pr ? (
-        <span className={`conversation-header__pr conversation-header__pr--${props.pr.ci ?? 'none'}`}>{props.messages.pr.pill(props.pr.number, props.pr.ci)}</span>
-      ) : null}
-      {props.pr ? (
-        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.pr.onShow}>
-          {props.messages.pr.show}
-        </button>
-      ) : props.branch && props.onOpenPr ? (
-        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.onOpenPr}>
-          {props.messages.pr.open}
-        </button>
-      ) : null}
-      {props.branch ? (
-        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.branch.onOpenFolder}>
-          {props.messages.branches.openFolder}
-        </button>
       ) : null}
       {props.panels ? (
         <>

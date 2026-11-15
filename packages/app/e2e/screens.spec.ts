@@ -7,8 +7,10 @@
 
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { tempRepo } from '@aparte/bonaparte-core/testing';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
+import { diffView } from './fixtures/diff.js';
 
 const folder = process.env['BONAPARTE_SCREENS'];
 
@@ -477,6 +479,81 @@ for (const locale of ['fr', 'en'] as const) {
       await tree.getByRole('treeitem', { name: /^format\.ts/ }).click();
       await page.waitForTimeout(400);
       await page.screenshot({ path: join(into, `panes-files-changes-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+
+    // A conversation of a git project on its own branch, its pull request read, its diff commented.
+    test(`a conversation on its own branch, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words =
+        locale === 'fr'
+          ? {
+              newProject: 'Nouveau projet',
+              choose: 'Choisir un dossier…',
+              git: 'Un dépôt git, sur main',
+              create: 'Créer le projet',
+              where: 'Où travaille la conversation',
+              own: /Sur sa propre branche/,
+              branch: 'Branche',
+              ask: 'Corrige le format des heures',
+              done: 'Corrigé sur la branche : une vraie division par 60. Relis le diff.',
+              group: 'Volets',
+              changes: 'Changements',
+              comments: ['Garde la division entière pour les minutes.', 'Ajoute un test pour 90 minutes.'],
+            }
+          : {
+              newProject: 'New project',
+              choose: 'Choose a folder…',
+              git: 'A git repository, on main',
+              create: 'Create the project',
+              where: 'Where the conversation works',
+              own: /On its own branch/,
+              branch: 'Branch',
+              ask: 'Fix the hours format',
+              done: 'Fixed on the branch: a real division by 60. Read the diff.',
+              group: 'Panes',
+              changes: 'Changes',
+              comments: ['Keep the integer division for the minutes.', 'Add a test for 90 minutes.'],
+            };
+      const repo = await tempRepo({
+        'src/format.ts': 'export function toDecimal(hours: number, minutes: number): number {\n  return hours + minutes / 100;\n}\n',
+        'AGENTS.md': '# spanwise\n',
+      });
+      try {
+        const Q = '<|"|>';
+        const edit = `<|tool_call>call:edit_file{path:${Q}src/format.ts${Q},old_string:${Q}minutes / 100${Q},new_string:${Q}minutes / 60${Q}}<tool_call|>`;
+        const { page } = await launch({
+          locale,
+          engine: { responder: (prompt: string) => (prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? words.done : edit) },
+          env: { BONAPARTE_E2E_PICK_FOLDER: repo.dir },
+          gh: { pr: { number: 42, url: 'https://github.com/example/spanwise/pull/42', state: 'OPEN', statusCheckRollup: [{ conclusion: 'SUCCESS', status: 'COMPLETED' }] } },
+        });
+        await page.emulateMedia({ colorScheme: scheme });
+        await page.getByRole('button', { name: words.newProject }).click();
+        const dialog = page.getByRole('dialog', { name: words.newProject });
+        await dialog.getByRole('button', { name: words.choose }).click();
+        await expect(dialog).toContainText(words.git);
+        await dialog.getByRole('radio', { name: /Plume/ }).check();
+        await dialog.getByRole('button', { name: words.create }).click();
+        await page.getByRole('radiogroup', { name: words.where }).getByRole('radio', { name: words.own }).check();
+        await page.getByRole('textbox', { name: words.branch }).fill('bonaparte/heures');
+        await chat(page).send(words.ask);
+        await expect(chat(page).replyText).toHaveText(words.done, { timeout: 15_000 });
+        await expect(page.locator('.conversation-header')).toContainText('PR 42', { timeout: 10_000 });
+        await page.getByRole('group', { name: words.group }).getByRole('button', { name: words.changes, exact: true }).click();
+        const file = diffView(page.getByRole('region', { name: words.changes, exact: true }).getByRole('region', { name: 'src/format.ts', exact: true }));
+        for (const [index, text] of words.comments.entries()) {
+          await file.lineNumber('new', index + 2).click();
+          await file.commentField.fill(text);
+          await file.commentField.press('Control+Enter');
+        }
+        await expect(file.comments).toHaveCount(2);
+        await page.waitForTimeout(400);
+        await page.screenshot({ path: join(into, `branch-review-${locale}-${scheme}.png`), animations: 'disabled' });
+      } finally {
+        await repo.remove();
+      }
     });
   }
 }

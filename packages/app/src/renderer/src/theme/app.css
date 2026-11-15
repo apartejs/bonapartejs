@@ -828,6 +828,13 @@ body {
   overflow: hidden;
 }
 
+/* xterm 6 draws its own scrollbar; the viewport behind its screen keeps a black ground and a native bar,
+   seen under the last row the fit leaves: the terminal's colour, and no native bar. */
+.terminal-pane__host .xterm .xterm-viewport {
+  background-color: var(--bonaparte-terminal-bg);
+  scrollbar-width: none;
+}
+
 /* Every link of the height chain says min-height: 0, or the emulator's fit grows without end. */
 .terminal-pane__host,
 .terminal-pane__host .xterm {
@@ -2199,4 +2206,26 @@ body {
 
 .conversation-header .conversation-header__title {
   flex: 0 1 auto;
+  min-width: 48px;
+}
+
+/* One line, whatever it holds: the title and the chips give way (ellipsis), the buttons and the panes' icons never. */
+.conversation-header:not(:has(.conversation-header__field)) {
+  flex-wrap: nowrap;
+}
+
+.conversation-header > :not(.conversation-header__title, .conversation-header__chip, .conversation-header__spacer) {
+  flex-shrink: 0;
+}
+
+.conversation-header .conversation-header__chip {
+  flex-shrink: 1;
+  min-width: 40px;
+}
+
+.conversation-header__chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
