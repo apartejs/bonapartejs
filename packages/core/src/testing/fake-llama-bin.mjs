@@ -76,6 +76,9 @@ const slots = integer('-np', '--parallel');
 const slotDir = value('--slot-save-path');
 
 try {
+  // A test can make the load take time, as a real model's does (FAKE_LLAMA_LOAD_MS).
+  const loading = Number(process.env['FAKE_LLAMA_LOAD_MS'] ?? 0);
+  if (loading > 0) await new Promise((resolve) => setTimeout(resolve, loading));
   const server = await startFakeLlamaServer({
     port,
     apiKey: key,

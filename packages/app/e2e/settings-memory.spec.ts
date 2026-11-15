@@ -20,7 +20,8 @@ async function ask(page: Page, text: string): Promise<void> {
 }
 
 test('the engine, the memory of each conversation, « Libérer », « Redémarrer » and « Décharger »', async ({ launch }) => {
-  const { page } = await launch({ managed: { models: MODELS } });
+  // A load that takes time, as a real model's: the restart is under way when the person goes back.
+  const { page } = await launch({ managed: { models: MODELS }, env: { FAKE_LLAMA_LOAD_MS: '2500' } });
   await page.getByRole('button', { name: 'Démarrer' }).click();
   await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
   await ask(page, 'Première question');
@@ -52,6 +53,13 @@ test('the engine, the memory of each conversation, « Libérer », « Redémarre
   const question = page.getByRole('dialog', { name: 'Redémarrer le moteur ?' });
   await expect(question).toContainText(/Le modèle se recharge : ~/);
   await question.getByRole('button', { name: 'Redémarrer' }).click();
+  // Back to the conversations while it restarts (the old engine stopped, the new one loading): they
+  // come back as soon as it is ready.
+  await page.waitForTimeout(800);
+  await settings.getByRole('link', { name: 'Conversations' }).click();
+  await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await settings.getByRole('link', { name: 'Moteur et mémoire' }).click();
   await expect(engine).toContainText('En marche depuis', { timeout: 20_000 });
 
   await page.getByRole('button', { name: 'Décharger' }).click();

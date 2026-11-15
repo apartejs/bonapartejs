@@ -120,3 +120,20 @@ test('Ctrl K over the settings closes them and opens « Rechercher »; Ctrl B fo
   await expect(page.getByRole('navigation', { name: 'Projets et conversations, barre réduite' })).toBeVisible();
 });
 
+test('a project made with an Impro default starts its first conversation in Plume, as any default', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'spanwise-'));
+  try {
+    const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    await page.getByRole('button', { name: 'Nouveau projet' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
+    await dialog.getByRole('button', { name: 'Choisir un dossier…' }).click();
+    await expect(dialog.getByRole('textbox', { name: 'Nom' })).toHaveValue(/^spanwise-/);
+    await dialog.getByRole('radio', { name: /Impro/ }).check();
+    await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(chat(page).modeShown).toHaveText('Plume');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+

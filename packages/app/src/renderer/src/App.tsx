@@ -418,9 +418,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           readProjects();
           project.current = made;
           setActiveProject(made);
-          // A fresh conversation, in the project and its mode.
-          chosen.current = made.defaultMode;
-          setMode(made.defaultMode);
+          // A fresh conversation, in the project and its mode — an Impro default as any default (rule 9).
+          chosen.current = startingMode(made.defaultMode);
+          setMode(startingMode(made.defaultMode));
+          picked.current = false;
           window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
         }}
       />
@@ -521,11 +522,20 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
 
   // « Décharger » or « Redémarrer » in the settings: the state read again — no model, « Démarrer » again.
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Read, and read again while the engine starts (a restart under way): the conversations come back once it is ready.
     const follow = (): void => {
-      void bridge.invoke(engineState, undefined).then(setEngine);
+      clearTimeout(timer);
+      void bridge.invoke(engineState, undefined).then((state) => {
+        setEngine(state);
+        if (state.status === 'starting') timer = setTimeout(follow, 500);
+      });
     };
     window.addEventListener(ENGINE_CHANGED, follow);
-    return () => window.removeEventListener(ENGINE_CHANGED, follow);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener(ENGINE_CHANGED, follow);
+    };
   }, []);
 
   const needsModel = engine?.mode === 'managed' && engine.status !== 'ready';
