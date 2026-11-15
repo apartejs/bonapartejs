@@ -76,9 +76,10 @@ test('reopening a conversation whose memory was saved says so, with nothing to c
   expect(Math.round(box!.x)).toBe(Math.round(composer!.x));
   expect(Math.round(box!.width)).toBe(Math.round(composer!.width));
 
-  // The conversation goes on from its memory: nothing is read again.
+  // The conversation goes on from its memory: nothing is read again, and the cost said is paid.
   await ask(page, 'Et ensuite ?');
   await expect(page.getByText('Relit la conversation')).toHaveCount(0);
+  await expect(banner).toHaveCount(0);
 });
 
 test('a memory let go says what reading again costs, and nothing is read before the person goes on', async ({ launch }) => {

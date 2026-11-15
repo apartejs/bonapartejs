@@ -55,6 +55,13 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     };
   }, [conversationId]);
 
+  // Once a turn starts, the cost said is being paid: the banner has said its piece.
+  useEffect(() => {
+    const paid = (): void => setMemory(null);
+    window.addEventListener('aparte-message-start', paid);
+    return () => window.removeEventListener('aparte-message-start', paid);
+  }, []);
+
   const style = { locale, units: messages.units };
   return (
     <div className="bonaparte-layout">
