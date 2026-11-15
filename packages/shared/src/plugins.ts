@@ -198,12 +198,25 @@ export interface PluginPtyOptions {
   cwd?: string;
   cols: number;
   rows: number;
-  /** The whole environment of the terminal: nothing else is inherited. */
-  env: Record<string, string>;
+  /** Added to the app's own environment — from which the app takes its secrets out. */
+  env?: Record<string, string>;
 }
 
-/** What opens a pseudo-terminal, outside the core (the app runs it in its own process). */
-export type PtySpawner = (shell: string, args: readonly string[], options: PluginPtyOptions) => PluginPty;
+/** A shell of the machine, as the app found it: chosen by its id, never by a path. */
+export interface PluginShell {
+  id: string;
+  label: string;
+}
+
+/**
+ * The terminals the app gives: the shells it found on the machine (the
+ * default first), and a pseudo-terminal opened on one of them — run in a
+ * process of the app's own, never with its secrets.
+ */
+export interface TerminalService {
+  shells(): readonly PluginShell[];
+  open(shellId: string, options: PluginPtyOptions): PluginPty;
+}
 
 /** The events of one view of the plugin (a terminal's tab), pushed with back-pressure. */
 export interface PluginInstanceChannel {
@@ -236,11 +249,11 @@ export interface PluginNodeContext {
    */
   spawn?(program: string, args: readonly string[], options?: { cwd?: string; env?: Record<string, string> }): PluginProcess;
   /**
-   * Open a pseudo-terminal running `shell` with its arguments. Only for a
+   * The machine's shells, and a pseudo-terminal on one of them. Only for a
    * plugin that declares `execute`, and only where the app gives terminals;
-   * it is killed when the plugin goes.
+   * a terminal is killed when the plugin goes.
    */
-  pty?(shell: string, args: readonly string[], options: PluginPtyOptions): PluginPty;
+  terminals?: TerminalService;
 }
 
 export interface PluginNodeModule {

@@ -415,42 +415,46 @@ describe('PluginHost — a project turns off what the app runs', () => {
 });
 
 describe('PluginHost — terminals', () => {
-  /** A pseudo-terminal that records what is done to it. */
-  function fakePtys() {
-    const opened: { shell: string; args: readonly string[]; env: Record<string, string>; killed: boolean }[] = [];
-    const spawner = (shell: string, args: readonly string[], options: { env: Record<string, string> }) => {
-      const pty = { shell, args, env: options.env, killed: false };
-      opened.push(pty);
-      return {
-        pid: opened.length,
-        write: () => undefined,
-        resize: () => undefined,
-        onData: () => undefined,
-        onExit: () => undefined,
-        kill: () => {
-          pty.killed = true;
-        },
-      };
+  /** The app's terminals, recording what is done to them. */
+  function fakeTerminals() {
+    const opened: { shellId: string; env: Record<string, string> | undefined; killed: boolean }[] = [];
+    const service = {
+      shells: () => [{ id: 'bash', label: 'bash' }],
+      open: (shellId: string, options: { env?: Record<string, string> }) => {
+        const pty = { shellId, env: options.env, killed: false };
+        opened.push(pty);
+        return {
+          pid: opened.length,
+          write: () => undefined,
+          resize: () => undefined,
+          onData: () => undefined,
+          onExit: () => undefined,
+          kill: () => {
+            pty.killed = true;
+          },
+        };
+      },
     };
-    return { opened, spawner };
+    return { opened, service };
   }
 
-  it('a plugin that declares execute gets terminals, killed when it goes; one that does not, gets none', async () => {
-    const { opened, spawner } = fakePtys();
-    const host = new PluginHost({ registry: new ToolRegistry(), pty: spawner });
+  it('a plugin that declares execute gets the terminals, killed when it goes; one that does not, gets none', async () => {
+    const { opened, service } = fakeTerminals();
+    const host = new PluginHost({ registry: new ToolRegistry(), terminals: service });
     host.add(manifest('shell', { effects: [{ effect: 'execute', what: 'a terminal' }] }), { builtin: true });
     host.add(manifest('reader', { effects: [{ effect: 'read', what: 'files' }] }), { builtin: true });
     const shell = capture();
     const reader = capture();
     await host.activate('shell', shell);
     await host.activate('reader', reader);
-    expect(reader.ctx!.pty).toBeUndefined();
+    expect(reader.ctx!.terminals).toBeUndefined();
 
-    shell.ctx!.pty!('bash', ['-i'], { cols: 80, rows: 24, env: { TERM: 'xterm-256color' } });
-    expect(opened).toMatchObject([{ shell: 'bash', args: ['-i'], env: { TERM: 'xterm-256color' }, killed: false }]);
+    expect(shell.ctx!.terminals!.shells()).toEqual([{ id: 'bash', label: 'bash' }]);
+    shell.ctx!.terminals!.open('bash', { cols: 80, rows: 24, env: { TERM: 'xterm-256color' } });
+    expect(opened).toMatchObject([{ shellId: 'bash', env: { TERM: 'xterm-256color' }, killed: false }]);
     await host.deactivate('shell');
     expect(opened[0]!.killed).toBe(true);
-    expect(() => shell.ctx!.pty!('bash', [], { cols: 80, rows: 24, env: {} })).toThrow(/not active/);
+    expect(() => shell.ctx!.terminals!.open('bash', { cols: 80, rows: 24 })).toThrow(/not active/);
   });
 
   it('without terminals from the app, a plugin gets none', async () => {
@@ -458,6 +462,6 @@ describe('PluginHost — terminals', () => {
     host.add(manifest('shell', { effects: [{ effect: 'execute', what: 'a terminal' }] }), { builtin: true });
     const shell = capture();
     await host.activate('shell', shell);
-    expect(shell.ctx!.pty).toBeUndefined();
+    expect(shell.ctx!.terminals).toBeUndefined();
   });
 });

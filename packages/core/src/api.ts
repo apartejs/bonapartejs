@@ -71,7 +71,7 @@ import {
   type TurnInput,
   type TurnResult,
 } from './conversation/engine.js';
-import type { PlayMode, PtySpawner } from '@aparte/bonaparte-shared';
+import type { PlayMode, TerminalService } from '@aparte/bonaparte-shared';
 import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
@@ -122,8 +122,8 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
-  /** Terminals for the plugins: the app runs them in a process of its own. None without it. */
-  pty?: PtySpawner;
+  /** Terminals for the plugins: the app finds the shells and runs them in a process of its own. None without it. */
+  terminals?: TerminalService;
   /** An event of a plugin for one of its views (a terminal's tab), pushed to the window. */
   pluginEvent?: (pluginId: string, instanceId: string, event: string, payload: unknown) => void;
   /** What a command of the agent prints, as it prints it: the terminal's agent tab. */
@@ -857,7 +857,7 @@ export function createCore(deps: CoreDeps): Core {
   const plugins = new PluginHost({
     registry: tools,
     log,
-    ...(deps.pty ? { pty: deps.pty } : {}),
+    ...(deps.terminals ? { terminals: deps.terminals } : {}),
     ...(deps.pluginEvent ? { emit: deps.pluginEvent } : {}),
     judge: async ({ conversationId, tool, input }) => {
       const { projectId } = await rootsOf(conversationId);

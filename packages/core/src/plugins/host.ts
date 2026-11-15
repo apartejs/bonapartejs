@@ -35,7 +35,7 @@ import {
   type PluginStatus,
   type PluginToolContribution,
   type PluginToolHandler,
-  type PtySpawner,
+  type TerminalService,
   type Verdict,
 } from '@aparte/bonaparte-shared';
 import { readdir, readFile } from 'node:fs/promises';
@@ -64,8 +64,8 @@ export interface PluginHostOptions {
   judge?: (use: { conversationId: string; tool: ToolDef; input: unknown }) => Verdict | Promise<Verdict>;
   /** Tests only: what launches a plugin's processes. */
   spawn?: SpawnFn;
-  /** What opens a pseudo-terminal (the app runs them in a process of their own); none without it. */
-  pty?: PtySpawner;
+  /** The terminals the app gives (run in a process of its own); none without it. */
+  terminals?: TerminalService;
 }
 
 export interface DiscoveredPlugin {
@@ -352,14 +352,17 @@ export class PluginHost {
         child.on('error', (error) => this.log(`[plugin ${id}] ${program}: ${describe(error)}`));
         return wrapProcess(child, this.options.spawn);
       };
-      const spawner = this.options.pty;
-      if (spawner) {
-        context.pty = (shell, args, options) => {
-          if (activation.closed) throw new Error(`The plugin ${id} is not active.`);
-          const pty = spawner(shell, args, options);
-          activation.ptys.add(pty);
-          pty.onExit(() => activation.ptys.delete(pty));
-          return pty;
+      const service = this.options.terminals;
+      if (service) {
+        context.terminals = {
+          shells: () => service.shells(),
+          open: (shellId, options) => {
+            if (activation.closed) throw new Error(`The plugin ${id} is not active.`);
+            const pty = service.open(shellId, options);
+            activation.ptys.add(pty);
+            pty.onExit(() => activation.ptys.delete(pty));
+            return pty;
+          },
         };
       }
     }
