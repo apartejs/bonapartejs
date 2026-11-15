@@ -44,6 +44,10 @@ export interface ToolContext {
   /** The engine's context: what the output is cut to. */
   nCtx: number;
   signal: AbortSignal;
+  /** Before a tool writes a file: its original is kept for the turn (checkpoints). */
+  beforeWrite?(absolute: string, shown: string): Promise<void>;
+  /** After it wrote it. */
+  afterWrite?(absolute: string): Promise<void>;
 }
 
 /** What a tool gives back; the registry adds the call it answers. */
