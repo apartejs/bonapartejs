@@ -71,8 +71,19 @@ icons. The header says the title, the project and the memory, with
 mémoire, Modèles, Permissions, and a project's page. One app per data
 folder; closing the window keeps it in the notification area; the last
 conversation reopens; a conversation is deleted saying what goes, and the
-conversations export as Markdown. A section below that names something not
-built yet says so.
+conversations export as Markdown. Several chats live at once: a reply goes
+on while the person looks at another conversation (the deck, 5.5).
+Phase 6 is done: the panes and the work on the code. Beside the
+conversation, Fichiers (the perimeter's tree, a read-only preview, « P » and
+« M »), Changements (what waits and what was applied, aparté's diff,
+« Revenir » on one file, comments on the lines sent as one message) and the
+terminal (a real shell per tab in a process of its own, the agent's
+commands in their tab). A conversation of a git project may work on its own
+branch: a worktree made at its first change, its row and its header saying
+it; its pull request and CI through GitHub's CLI; archived with what is not
+committed asked first. The core hosts plugins: one context torn down as
+one, a tool holding only what its effect allows, the terminal the first
+built-in one. A section below that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -325,10 +336,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`{ conversationId, messageId, targetId }`), a stable history after a
   failed turn, `renderMeta` on the list's rows, React components for the
   plugins' elements (`createAparteElement`), `.aparte-segmented` and the
-  kit's hover tooltip. bonaparte runs on 1.10.0. One trap is open
-  (apartejs/aparte#236): a chat mounted with `conversationId` draws nothing
-  of it until `setConversationId(id)` is called on its handle — the deck
-  does it as each chat mounts.
+  kit's hover tooltip. **aparté 1.10.1** (2026-11-15) types the mode
+  switch's event (`ApprovalModeChangeDetail`) and the list's selection
+  (`AparteConversationSelectDetail`, `id` null for a new conversation), and
+  a chat mounted with `conversationId` draws it at once. bonaparte runs on
+  1.10.1.
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -404,6 +416,52 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   it the same array while nothing it draws changed. Menus and tabs get
   aparté's keyboard through `aparte/kit.ts` (`useMenu`, which must be told
   when its elements arrive).
+- **The panes** (`renderer/src/panels/`): a column of ours beside the
+  conversation (`PanelDock`, as the board draws it), its icons in the header
+  (`PanelToggles`, three — the browser's comes with its pane); under
+  1 100 px the pane opened goes over the conversation, alone. Fichiers reads
+  the core's `files.list`/`files.read` (`core/src/files/browse.ts`, always
+  through `resolveInPerimeter`). Changements: the core's preview of a call
+  that waits (« Proposé ») and the checkpoint store's changes of the whole
+  conversation (« Appliqué »: `files`, `original`, `revertFile`), each drawn
+  by aparté's `<aparte-diff>` through `createAparteElement(diffElement)`
+  (`diff/DiffView.tsx`, the one place the app draws a change); comments are
+  kept by the app (`diff/comments-store.ts`) and leave in one message.
+- **The terminal** (`plugins/terminal`, `main/terminals/`): the app finds
+  the shells (`shells.ts`) and runs node-pty in one Electron utility process
+  (`pty-process.ts`, built apart by electron-vite's `?modulePath` — a second
+  rollup input split the main bundle), the app's environment minus its
+  secrets (`withoutSecrets`). The plugin chooses a shell by id, never an
+  executable; a view acknowledges in `term.write`'s callback
+  (`plugins.ack`), and while it is behind the shell itself is held
+  (`PluginPty.pause`, node-pty's); a view that comes back starts its flow
+  afresh (`PluginInstanceChannel.reset`). The main process pushes on one channel
+  (`bonaparte:event`, the bridge's `on`): a plugin's events, and the
+  agent's commands as `run_command` tells them (`ToolContext.onOutput`).
+- **A conversation's own branch** (`core/src/git/`): chosen before its first
+  message (`worksIn=branch&branch=…&base=…` on the first turn, a name git
+  takes, in any language), made by the loop's `beforeChange` hook before
+  its first write or command is judged — so what the card shows, what is
+  judged and what is done are all on the branch: `.bonaparte/worktrees/<name>`
+  (the next free name, `heures-2`…), only that folder out of the project's
+  status through `.git/info/exclude`, a `.env` copied in only when git
+  ignores it, locked while it lives. From then on its perimeter is the
+  project's folders at the same place in the worktree (`branchRoots`), told
+  at the next turn as a note; the project's own checkout is refused
+  (`PermissionQuery.barred`). A branch that cannot be made is said to the
+  model as the call's failure; the turn goes on. Its
+  pull request: `CoreDeps.gh` (`gh`; a fake CLI in tests,
+  `testing/fake-gh.mjs`; null in a test run that gives none — a test never
+  asks GitHub). Archived, the worktree is let go, removed with its branch
+  30 days after — never with work not committed in it.
+- **The plugin host** (`core/src/plugins/host.ts`, `packages/plugin-sdk`):
+  a manifest read before anything runs; one context per activation, torn
+  down as one (its tools, its commands, its signal, its processes and
+  terminals); a tool reaches the machine only through `use(<core tool>)`,
+  within its declared effect, judged by the permission engine in its
+  conversation's mode (`granted` lets pass what only the mode asks). A
+  built-in plugin imports no `fs`, `net`, `http(s)`, `child_process` nor
+  `node-pty` (lint). A project may turn a plugin off (`visibleTo`).
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
   mounted and hidden (a reply goes on). The app's settings live in the
   core's `SettingsStore` (`config/global.json`, under `settings`), checked
@@ -563,6 +621,20 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   closes its list whenever `triggers` is set again** (apartejs/aparte#232):
   an inline props object closes « @ » under the person's fingers. Memoize
   it.
+- **Two inputs in electron-vite's main build split it**: the dynamic
+  import of the app becomes a chunk, and `import.meta.dirname` moves (the
+  preload was not found). A utility process is built apart with
+  `?modulePath`.
+- **Bash's heredocs eat backslashes** in this environment: a file with
+  `\n`, `\u0000` or a Windows path is written with the Write tool, never
+  through a shell heredoc — one edit left raw control characters in a
+  source file.
+- **Windows' `core.autocrlf`** turns a test repository's checkout into
+  CRLF: the temporary repository sets it off. On Windows a folder also
+  stays busy while a git that just ran in it exits: its removal is retried.
+- **xterm 6 keeps its old viewport** behind the scrollbar it draws itself:
+  black, with a native bar, seen under the last row the fit leaves unless
+  it is styled (`.xterm-viewport`).
 - **A radio hidden by a screen-reader-only class is not clickable** for a
   test (nor by any tool that targets it): draw it transparent over its
   label instead.
