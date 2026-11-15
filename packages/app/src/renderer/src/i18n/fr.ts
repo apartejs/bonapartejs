@@ -186,6 +186,20 @@ export const fr: Messages = {
     railConversation: (title, waiting) => (waiting ? `${title}, attend ta réponse` : title),
     engine: (model) => `Moteur : ${model}, prêt`,
   },
+  header: {
+    more: 'Plus d’actions',
+    rename: 'Renommer',
+    pin: 'Épingler',
+    unpin: 'Retirer l’épingle',
+    archive: 'Archiver',
+    delete: 'Supprimer…',
+    titleField: 'Titre de la conversation',
+    deleteQuestion: (title) => `Supprimer « ${title} » ?`,
+    deleteWhat:
+      'Ses messages, sa mémoire et les copies des fichiers gardées pour revenir en arrière partent avec elle. Les fichiers du projet restent tels qu’ils sont.',
+    cancel: 'Annuler',
+    confirmDelete: 'Supprimer',
+  },
   search: {
     open: 'Rechercher',
     shortcut: 'Ctrl K',

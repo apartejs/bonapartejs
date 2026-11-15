@@ -30,6 +30,7 @@ import { NewProject } from './dialogs/NewProject';
 import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
+import { ConversationHeader } from './shell/ConversationHeader';
 import { Rail } from './shell/Rail';
 import { Sidebar } from './shell/Sidebar';
 import { useConversationStatuses, useMemoryMarks, useWaitingMarks } from './shell/statuses';
@@ -48,7 +49,7 @@ const NARROW = '(max-width: 1099px)';
 function Workspace({ messages, locale, engine }: { messages: Messages; locale: Locale; engine: EngineStateView }) {
   // The conversation open is the manager's: the chat is not driven by an id the page gives it back
   // (apartejs/aparte#212 — that reloads the conversation in the middle of its first reply).
-  const { init, activeConversations, activeId: conversationId } = useConversationManager();
+  const { init, activeConversations, activeId: conversationId, updateTitle, pin, unpin, archive, delete: remove } = useConversationManager();
   const [memory, setMemory] = useState<Announcement>(null);
 
   // The mode the switch shows, read at each turn: a conversation the turn creates runs in it.
@@ -149,6 +150,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const newConversation = (): void => {
     window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
   };
+  // The conversation open, as aparté's manager lists it: its title, its pin.
+  const openConversation = activeConversations.find((conversation) => conversation.id === conversationId) ?? null;
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
   useMemoryMarks(statuses, messages.shell.memory);
@@ -333,6 +336,27 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           chosen.current = made.defaultMode;
           setMode(made.defaultMode);
           window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id: null } }));
+        }}
+      />
+      <ConversationHeader
+        messages={messages}
+        conversationId={openConversation ? openConversation.id : null}
+        title={openConversation?.title ?? ''}
+        project={projects.find((candidate) => openConversation && candidate.id === projectOf(openConversation.id))?.name ?? null}
+        memory={openConversation ? (statuses[openConversation.id]?.memory ?? null) : null}
+        pinned={Boolean((openConversation as { pinnedAt?: number } | null)?.pinnedAt)}
+        onRename={(title) => openConversation && void updateTitle(openConversation.id, title)}
+        onPin={() => openConversation && void pin(openConversation.id)}
+        onUnpin={() => openConversation && void unpin(openConversation.id)}
+        onArchive={() => {
+          if (!openConversation) return;
+          void archive(openConversation.id);
+          newConversation();
+        }}
+        onDelete={() => {
+          if (!openConversation) return;
+          void remove(openConversation.id);
+          newConversation();
         }}
       />
       <div className="aparte-app-shell__main bonaparte-main">

@@ -629,7 +629,7 @@ body {
 
 .bonaparte-main {
   grid-column: 2;
-  grid-row: 1 / -1;
+  grid-row: 2;
   min-width: 0;
 }
 
@@ -870,3 +870,94 @@ body {
 .bonaparte-sidebar.aparte-sidebar > * {
   min-width: 0;
 }
+
+/* The conversation's header (board « Conversation au travail »): its title, its project, its memory, its actions. */
+.conversation-header {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 20px;
+  box-sizing: border-box;
+  border-block-end: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.conversation-header__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: var(--aparte-font-weight-semibold);
+  line-height: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-header__field {
+  min-width: 240px;
+  font-size: 15px;
+}
+
+.conversation-header__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+.conversation-header__chip .bonaparte-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.conversation-header__spacer {
+  flex: 1;
+}
+
+.conversation-header__memory {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  font-size: 12px;
+  font-weight: var(--aparte-font-weight-medium);
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text-muted);
+}
+
+.conversation-header__memory--engine {
+  background: var(--aparte-success-surface);
+  color: var(--aparte-success-ink);
+}
+
+.conversation-header__memory-dot {
+  width: 6px;
+  height: 6px;
+  box-sizing: border-box;
+  border: 1.5px solid currentColor;
+  border-radius: var(--aparte-radius-full);
+  background: currentColor;
+}
+
+.conversation-header__memory--reread .conversation-header__memory-dot {
+  background: transparent;
+}
+
+.conversation-header__more {
+  position: relative;
+}
+
+.conversation-header__danger {
+  color: var(--aparte-error-ink);
+}
+

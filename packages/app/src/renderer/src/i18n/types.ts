@@ -172,6 +172,20 @@ export interface Messages {
     railConversation(title: string, waiting: boolean): string;
     engine(model: string): string;
   };
+  /** The conversation's header, and its « Plus d’actions ». */
+  header: {
+    more: string;
+    rename: string;
+    pin: string;
+    unpin: string;
+    archive: string;
+    delete: string;
+    titleField: string;
+    deleteQuestion(title: string): string;
+    deleteWhat: string;
+    cancel: string;
+    confirmDelete: string;
+  };
   /** « Rechercher » (board « Rechercher (Ctrl K) »), and its opener. */
   search: {
     open: string;
