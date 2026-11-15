@@ -73,7 +73,7 @@ export function memoryMarkOf(memory: Memory, words: Messages['shell']['memory'])
 }
 
 /** The marks of a row: its memory (drawn before the title), its branch and its files (after it). */
-export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages): HTMLElement {
+export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages, pr?: RowPr): HTMLElement {
   const marks = document.createElement('span');
   marks.className = 'conv-marks';
   marks.append(memoryMark(memory, words.shell.memory));
@@ -86,8 +86,31 @@ export function rowMarks(memory: Memory, branchFiles: number | undefined, words:
     branch.append(String(branchFiles));
     marks.append(branch);
   }
+  if (pr && pr.state !== 'closed') {
+    const mark = document.createElement('span');
+    const merged = pr.state === 'merged';
+    mark.className = `conv-pr conv-pr--${merged ? 'merged' : (pr.ci ?? 'none')}`;
+    mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', merged ? words.pr.markMerged : words.pr.markOpen(pr.number, pr.ci));
+    mark.innerHTML = merged ? MERGED_GLYPH : PR_GLYPH;
+    if (!merged) mark.append(String(pr.number));
+    marks.append(mark);
+  }
   return marks;
 }
+
+/** A branch's pull request, as a row shows it. */
+export interface RowPr {
+  number: number;
+  state: 'open' | 'merged' | 'closed';
+  ci: 'success' | 'failure' | 'pending' | null;
+}
+
+/** A pull request, and one merged: the shell's own glyphs (constant markup). */
+const PR_GLYPH =
+  '<svg class="aparte-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8"/><path d="M18 16V9a3 3 0 0 0-3-3h-4"/><path d="m13 3-3 3 3 3"/></svg>';
+const MERGED_GLYPH =
+  '<svg class="aparte-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8"/><path d="M6 8a6 6 0 0 0 6 4h4"/></svg>';
 
 /** A git branch, the shell's own glyph (constant markup). */
 const BRANCH_GLYPH =

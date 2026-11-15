@@ -146,6 +146,15 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
       const failed = await shell.openPath(dataDir);
       if (failed) throw new Error(failed);
     },
+    // A pull request's page, which the core read.
+    openLink: async (url) => {
+      if (options.e2e) {
+        const record = globalThis as { __openedLinks?: string[] };
+        (record.__openedLinks ??= []).push(url);
+        return;
+      }
+      await shell.openExternal(url);
+    },
     // A conversation's own folder, which the core named.
     openFolder: async (path) => {
       if (options.e2e) {

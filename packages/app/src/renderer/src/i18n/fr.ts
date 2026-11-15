@@ -382,6 +382,25 @@ export const fr: Messages = {
     ahead: (count, base) => (count === 1 ? `1 commit d’avance sur ${base}` : `${count} commits d’avance sur ${base}`),
     openFolder: 'Ouvrir le dossier',
   },
+  pr: {
+    markOpen: (number, ci) =>
+      `pull request ${number} ouverte${ci === 'success' ? ', CI réussie' : ci === 'failure' ? ', CI en échec' : ci === 'pending' ? ', CI en cours' : ''}`,
+    markMerged: 'pull request fusionnée',
+    pill: (number, ci) => `PR ${number}${ci === 'success' ? ' · CI réussie' : ci === 'failure' ? ' · CI en échec' : ci === 'pending' ? ' · CI en cours' : ''}`,
+    show: 'Voir la PR',
+    open: 'Ouvrir une PR',
+    openQuestion: 'Ouvrir une pull request ?',
+    openWhat: (branch, base) => `La branche ${branch} part sur GitHub, et une pull request vers ${base} s’ouvre avec ses commits.`,
+    openConfirm: 'Pousser et ouvrir',
+    openFailed: 'La PR n’a pas pu s’ouvrir : vérifie ta connexion à GitHub (gh auth status).',
+    cancel: 'Annuler',
+    archiveQuestion: (title) => `Archiver « ${title} » ?`,
+    uncommitted: (files) =>
+      files === 1 ? 'Sa branche a 1 fichier modifié, pas encore commité.' : `Sa branche a ${files} fichiers modifiés, pas encore commités.`,
+    archiveAnyway: 'Archiver quand même',
+    commitFirst: 'Commiter d’abord',
+    archiveNote: 'Archivée, la conversation garde son dossier et sa branche 30 jours ; la désarchiver les rend.',
+  },
   terminal: {
     tabs: 'Terminaux',
     newTab: 'Nouveau terminal',

@@ -18,7 +18,7 @@ import { CHATS_TARGET } from '../chat/ChatDeck';
 import type { Messages } from '../i18n/index';
 import { EngineCard } from './EngineCard';
 import { Icon } from './icons';
-import { rowMarks, type Memory } from './statuses';
+import { rowMarks, type Memory, type RowPr } from './statuses';
 import { TipButton } from './TipButton';
 
 /** A conversation as aparté's manager lists it: what the list draws. */
@@ -39,7 +39,7 @@ export interface SidebarProps {
   /** The project each conversation works in: what the core says, else where it was started here. */
   projectOf(id: string): string | null;
   /** Where each conversation's memory is, and its branch's changed files, as the core says. */
-  marksOf(id: string): { memory: Memory; branchFiles?: number };
+  marksOf(id: string): { memory: Memory; branchFiles?: number; pr?: RowPr };
   grouping: 'project' | 'single';
   onCollapse(): void;
   onNewConversation(): void;
@@ -49,13 +49,13 @@ export interface SidebarProps {
 }
 
 /** A row as the list draws it: the conversation, where its memory is, its branch's files. */
-type Row = ListedConversation & { memory: Memory; branchFiles?: number };
+type Row = ListedConversation & { memory: Memory; branchFiles?: number; pr?: RowPr };
 
 function List({ items, activeId, flat, words }: { items: readonly Row[]; activeId: string | null; flat: boolean; words: Messages }) {
   // aparté's list draws itself again whenever it is given a new array — closing a row's open
   // menu: it gets a new one only when what it draws has changed.
   const drawn = items
-    .map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt, item.memory, item.branchFiles].join('\u0000'))
+    .map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt, item.memory, item.branchFiles, item.pr ? `${item.pr.number}${item.pr.state}${item.pr.ci}` : ''].join('\u0000'))
     .join('\u0001');
   // A flat list has no « Épinglées » group: a pinned conversation comes first, the last pinned at the top.
   const conversations = useMemo(
@@ -65,7 +65,7 @@ function List({ items, activeId, flat, words }: { items: readonly Row[]; activeI
   // A new function draws the rows again: one only when what they show has changed.
   const renderMeta = useMemo(() => {
     const marks = new Map(items.map((item) => [item.id, item]));
-    return (item: { id: string }) => rowMarks(marks.get(item.id)?.memory ?? null, marks.get(item.id)?.branchFiles, words);
+    return (item: { id: string }) => rowMarks(marks.get(item.id)?.memory ?? null, marks.get(item.id)?.branchFiles, words, marks.get(item.id)?.pr);
   }, [drawn, words]);
   return (
     <AparteConversationList
@@ -117,7 +117,12 @@ export function Sidebar(props: SidebarProps) {
   const words = messages.shell;
   const conversations: Row[] = props.conversations.map((conversation) => {
     const marks = marksOf(conversation.id);
-    return { ...conversation, memory: marks.memory, ...(marks.branchFiles !== undefined ? { branchFiles: marks.branchFiles } : {}) };
+    return {
+      ...conversation,
+      memory: marks.memory,
+      ...(marks.branchFiles !== undefined ? { branchFiles: marks.branchFiles } : {}),
+      ...(marks.pr ? { pr: marks.pr } : {}),
+    };
   });
   const known = new Set(projects.map((project) => project.id));
   const inProject = (id: string): string | null => {

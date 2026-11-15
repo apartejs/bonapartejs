@@ -13,6 +13,9 @@ import {
   conversationsUnpin,
   conversationsArchive,
   conversationsUnarchive,
+  conversationsOpenPr,
+  conversationsArchiveCheck,
+  conversationsCommitBranch,
   conversationsLoadDraft,
   conversationsSaveDraft,
   conversationsDelete,
@@ -38,6 +41,11 @@ interface ConversationCore {
   conversations: Pick<Core['conversations'], 'open' | 'status'>;
   removeConversation: Core['removeConversation'];
   branchOf: Core['branchOf'];
+  prOf: Core['prOf'];
+  openPr: Core['openPr'];
+  uncommitted: Core['uncommitted'];
+  commitBranch: Core['commitBranch'];
+  conversationArchived: Core['conversationArchived'];
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
@@ -65,8 +73,21 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   const now = (): string => new Date().toISOString();
   ipc.handle(conversationsPin, async ({ id }) => void (await store.mark(id, { pinnedAt: now() })));
   ipc.handle(conversationsUnpin, async ({ id }) => void (await store.mark(id, { pinnedAt: undefined })));
-  ipc.handle(conversationsArchive, async ({ id }) => void (await store.mark(id, { archivedAt: now() })));
-  ipc.handle(conversationsUnarchive, async ({ id }) => void (await store.mark(id, { archivedAt: undefined })));
+  // Archived, its worktree is let go (kept 30 days); taken out, it is held again.
+  ipc.handle(conversationsArchive, async ({ id }) => {
+    await store.mark(id, { archivedAt: now() });
+    await core.conversationArchived(id, true).catch(() => undefined);
+  });
+  ipc.handle(conversationsUnarchive, async ({ id }) => {
+    await store.mark(id, { archivedAt: undefined });
+    await core.conversationArchived(id, false).catch(() => undefined);
+  });
+  ipc.handle(conversationsOpenPr, ({ id }) => core.openPr(id));
+  ipc.handle(conversationsArchiveCheck, async ({ id }) => ({ uncommitted: await core.uncommitted(id) }));
+  ipc.handle(conversationsCommitBranch, async ({ id }) => {
+    const meta = await store.get(id);
+    return core.commitBranch(id, `bonaparte: ${meta?.title || id}`);
+  });
   ipc.handle(conversationsRename, async ({ id, title }) => void (await store.rename(id, title)));
   ipc.handle(conversationsLoadDraft, ({ id }) => store.loadDraft(id));
   ipc.handle(conversationsSaveDraft, ({ id, text }) => store.saveDraft(id, text));
@@ -94,8 +115,12 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
         const meta = await store.get(id);
         // On its own branch: what it counts against its base (git, read when the window asks).
         const branch = meta?.worktree ? await core.branchOf(id).catch(() => null) : null;
+        const pr = branch ? await core.prOf(id).catch(() => null) : null;
         const counted = branch
-          ? { branch: { name: branch.name, base: branch.base, ahead: branch.ahead, added: branch.added, removed: branch.removed, files: branch.files } }
+          ? {
+              branch: { name: branch.name, base: branch.base, ahead: branch.ahead, added: branch.added, removed: branch.removed, files: branch.files },
+              ...(pr ? { pr } : {}),
+            }
           : {};
         return [id, { projectId: meta?.projectId ?? null, ...status, ...counted }] as const;
       }),

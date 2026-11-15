@@ -22,6 +22,10 @@ import {
   conversationsUnarchive,
   conversationsUnpin,
   conversationsOpenFolder,
+  conversationsOpenPr,
+  conversationsShowPr,
+  conversationsArchiveCheck,
+  conversationsCommitBranch,
 } from './conversations.js';
 import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState } from './engine.js';
 import { changesList, changesRevert } from './changes.js';
@@ -42,6 +46,10 @@ export const CHANNELS = [
   changesList,
   changesRevert,
   conversationsOpenFolder,
+  conversationsOpenPr,
+  conversationsShowPr,
+  conversationsArchiveCheck,
+  conversationsCommitBranch,
   pluginsInvoke,
   pluginsAck,
   engineState,

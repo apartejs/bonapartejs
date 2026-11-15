@@ -4,7 +4,7 @@
  * the contract's (`CHANNELS`); a test checks they agree.
  */
 
-import { appInfo, conversationsOpenFolder, type Locale } from '@aparte/bonaparte-shared';
+import { appInfo, conversationsOpenFolder, conversationsShowPr, type Locale } from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
 import { registerConversationChannels } from './conversations.js';
 import { registerChangeChannels } from './changes.js';
@@ -27,6 +27,8 @@ export interface AppFacts {
   openDataFolder(): Promise<void>;
   /** Opens a folder the core named (a conversation's worktree) in the system's file manager. */
   openFolder(path: string): Promise<void>;
+  /** Opens a page the core read (a pull request's, on GitHub) in the system's browser. */
+  openLink(url: string): Promise<void>;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -36,6 +38,11 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   ipc.handle(conversationsOpenFolder, async ({ id }) => {
     const branch = await core.branchOf(id);
     if (branch) await facts.openFolder(branch.worktree);
+  });
+  // Only a pull request's page on GitHub, as the core read it for this conversation.
+  ipc.handle(conversationsShowPr, async ({ id }) => {
+    const pr = await core.prOf(id);
+    if (pr && /^https:\/\/github\.com\//.test(pr.url)) await facts.openLink(pr.url);
   });
   registerModeChannels(ipc, core);
   registerFileChannels(ipc, core);

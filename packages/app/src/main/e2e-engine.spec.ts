@@ -43,8 +43,8 @@ describe('e2eEngineDeps', () => {
   it('ignores what it cannot read', () => {
     expect(
       e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: 'node fake.mjs', BONAPARTE_E2E_ENGINE_PORT: 'eighty' }, true),
-    ).toEqual({ llamaReleases: null });
-    expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ llamaReleases: null });
+    ).toEqual({ gh: null, llamaReleases: null });
+    expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ gh: null, llamaReleases: null });
   });
 });
 
@@ -61,3 +61,12 @@ describe('e2ePickedFolder', () => {
   });
 });
 
+
+describe('GitHub in a test run', () => {
+  it('is the test’s fake CLI, or none: a test run never asks GitHub', () => {
+    expect(e2eEngineDeps({}, true).gh).toBeNull();
+    expect(e2eEngineDeps({ BONAPARTE_E2E_GH_COMMAND: JSON.stringify(['node', 'fake-gh.mjs']) }, true).gh).toEqual(['node', 'fake-gh.mjs']);
+    expect(e2eEngineDeps({ BONAPARTE_E2E_GH_COMMAND: '{"not": "a command"}' }, true).gh).toBeNull();
+    expect(e2eEngineDeps({ BONAPARTE_E2E_GH_COMMAND: JSON.stringify(['node']) }, false).gh).toBeUndefined();
+  });
+});

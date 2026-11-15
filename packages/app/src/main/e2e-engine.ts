@@ -12,9 +12,16 @@ import type { CoreDeps } from '@aparte/bonaparte-core';
 export function e2eEngineDeps(
   env: Record<string, string | undefined>,
   e2e: boolean,
-): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots'> {
+): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh'> {
   if (!e2e) return {};
-  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots'> = {};
+  // GitHub's CLI: the test's fake one, or none — a test run never asks GitHub.
+  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh'> = { gh: null };
+  try {
+    const gh = JSON.parse(env['BONAPARTE_E2E_GH_COMMAND'] ?? 'null') as unknown;
+    if (Array.isArray(gh) && gh.length > 0 && gh.every((part) => typeof part === 'string')) deps.gh = gh as string[];
+  } catch {
+    /* not a command: none */
+  }
   // The tools' home folder: the test's, never the person's.
   const home = env['BONAPARTE_E2E_HOME'];
   if (home && (win32.isAbsolute(home) || posix.isAbsolute(home))) deps.home = home;

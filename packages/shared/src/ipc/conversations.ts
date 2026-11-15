@@ -62,6 +62,14 @@ export const conversationsMemory = defineChannel('conversations.memory', idInput
  * the engine, saved on disk, to read again, or none — and whether its last turn waits for the person.
  * A conversation that is gone is left out.
  */
+const prSchema = z.object({
+  number: z.number(),
+  state: z.enum(['open', 'merged', 'closed']),
+  url: z.string(),
+  ci: z.enum(['success', 'failure', 'pending']).nullable(),
+});
+export type PrView = z.infer<typeof prSchema>;
+
 export const conversationStatusSchema = z.object({
   /** The project the conversation works in, once its first turn bound it; null for none. */
   projectId: z.string().nullable(),
@@ -71,6 +79,8 @@ export const conversationStatusSchema = z.object({
   branch: z
     .object({ name: z.string(), base: z.string(), ahead: z.number(), added: z.number(), removed: z.number(), files: z.number() })
     .optional(),
+  /** Its branch's pull request and CI (task 6.8); absent without one. */
+  pr: prSchema.optional(),
 });
 export type ConversationStatusView = z.infer<typeof conversationStatusSchema>;
 
@@ -106,3 +116,19 @@ export const conversationsSaveDraft = defineChannel(
 
 /** « Ouvrir le dossier »: the conversation's own folder — its worktree —, never one the window names. */
 export const conversationsOpenFolder = defineChannel('conversations.openFolder', z.object({ id: z.string().min(1).max(128) }), z.void());
+
+/** « Ouvrir une PR », on the person's word: the branch pushed, its pull request opened (none when either failed). */
+export const conversationsOpenPr = defineChannel('conversations.openPr', z.object({ id: z.string().min(1).max(128) }), prSchema.nullable());
+
+/** « Voir la PR »: its page, in the system's browser — the address the core read, never one the window names. */
+export const conversationsShowPr = defineChannel('conversations.showPr', z.object({ id: z.string().min(1).max(128) }), z.void());
+
+/** Before archiving a conversation on its branch: what is not committed there. */
+export const conversationsArchiveCheck = defineChannel(
+  'conversations.archiveCheck',
+  z.object({ id: z.string().min(1).max(128) }),
+  z.object({ uncommitted: z.number() }),
+);
+
+/** « Commiter d'abord »: everything in its worktree committed. */
+export const conversationsCommitBranch = defineChannel('conversations.commitBranch', z.object({ id: z.string().min(1).max(128) }), z.boolean());

@@ -969,6 +969,52 @@ body {
   flex: 1;
 }
 
+/* A branch's pull request (task 6.8): green when its CI passed, red when it failed, violet merged. */
+.conv-pr {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  margin-inline-end: var(--aparte-space-2);
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+  font-weight: var(--aparte-font-weight-medium);
+  --aparte-icon-size: 12px;
+}
+
+.conv-pr--success {
+  color: var(--aparte-success-ink);
+}
+
+.conv-pr--failure {
+  color: var(--aparte-error-ink);
+}
+
+.conv-pr--merged {
+  color: var(--bonaparte-merged);
+}
+
+.conversation-header__pr {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+.conversation-header__pr--success {
+  background: var(--aparte-success-surface);
+  color: var(--aparte-success-ink);
+}
+
+.conversation-header__pr--failure {
+  background: var(--aparte-error-surface);
+  color: var(--aparte-error-ink);
+}
+
 /* Its own branch in the header (task 6.7): the branch, its commits ahead. */
 .conversation-header__branch {
   font-family: var(--aparte-code-font-family);

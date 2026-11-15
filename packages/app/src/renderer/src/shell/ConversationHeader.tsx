@@ -31,6 +31,9 @@ export interface ConversationHeaderProps {
   counts?: { added: number; removed: number; onOpen(): void } | null;
   /** Its own branch (task 6.7): its name, its commits ahead of its base, its folder. */
   branch?: { name: string; base: string; ahead: number; onOpenFolder(): void } | null;
+  /** Its branch's pull request (task 6.8): « Voir la PR »; without one, « Ouvrir une PR ». */
+  pr?: { number: number; ci: 'success' | 'failure' | 'pending' | null; onShow(): void } | null;
+  onOpenPr?(): void;
 }
 
 type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'delete';
@@ -156,6 +159,18 @@ export function ConversationHeader(props: ConversationHeaderProps) {
             </button>
           </div>
         </span>
+      ) : null}
+      {props.pr ? (
+        <span className={`conversation-header__pr conversation-header__pr--${props.pr.ci ?? 'none'}`}>{props.messages.pr.pill(props.pr.number, props.pr.ci)}</span>
+      ) : null}
+      {props.pr ? (
+        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.pr.onShow}>
+          {props.messages.pr.show}
+        </button>
+      ) : props.branch && props.onOpenPr ? (
+        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.onOpenPr}>
+          {props.messages.pr.open}
+        </button>
       ) : null}
       {props.branch ? (
         <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.branch.onOpenFolder}>

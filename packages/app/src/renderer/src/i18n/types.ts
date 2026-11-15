@@ -382,6 +382,26 @@ export interface Messages {
     ahead(count: number, base: string): string;
     openFolder: string;
   };
+  /** A branch's pull request, and archiving a conversation on its branch (task 6.8). */
+  pr: {
+    /** The mark of a row, said whole: « pull request 42 ouverte, CI réussie ». */
+    markOpen(number: number, ci: 'success' | 'failure' | 'pending' | null): string;
+    markMerged: string;
+    /** The header's pill: « PR 42 · CI réussie ». */
+    pill(number: number, ci: 'success' | 'failure' | 'pending' | null): string;
+    show: string;
+    open: string;
+    openQuestion: string;
+    openWhat(branch: string, base: string): string;
+    openConfirm: string;
+    openFailed: string;
+    cancel: string;
+    archiveQuestion(title: string): string;
+    uncommitted(files: number): string;
+    archiveAnyway: string;
+    commitFirst: string;
+    archiveNote: string;
+  };
   /** The terminal (task 6.6): its tabs, the agent's, a shell that ended. */
   terminal: {
     tabs: string;

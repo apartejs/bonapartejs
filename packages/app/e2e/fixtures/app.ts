@@ -33,6 +33,7 @@ import { appEnvironment } from './app-env.js';
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** What the app launches instead of llama.cpp in a managed test: the core's fake binary. */
 const FAKE_LLAMA_BIN = join(appRoot, '..', 'core', 'src', 'testing', 'fake-llama-bin.mjs');
+const FAKE_GH = join(appRoot, '..', 'core', 'src', 'testing', 'fake-gh.mjs');
 
 const GiB = 1024 ** 3;
 
@@ -75,6 +76,8 @@ export interface LaunchOptions {
   keepData?: boolean;
   /** The app's settings as the person would have left them (`settings` in the configuration file). */
   settings?: Record<string, unknown>;
+  /** GitHub's CLI, a fake one: its pull request (as `gh pr view --json` says it), or none. Without it, the app has no CLI. */
+  gh?: { pr?: Record<string, unknown> };
 }
 
 /** One completion the managed engine was asked for. */
@@ -162,6 +165,11 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
     // Beside the data folder, never in it: bonaparte's own data is a path the policy always asks about.
     await mkdir(home, { recursive: true });
     const managedEnv: Record<string, string> = {};
+    if (options.gh) {
+      const state = join(dataDir, 'fake-gh.json');
+      await writeFile(state, JSON.stringify(options.gh.pr ? { pr: options.gh.pr } : {}));
+      Object.assign(managedEnv, { BONAPARTE_E2E_GH_COMMAND: JSON.stringify([process.execPath, FAKE_GH]), FAKE_GH_STATE: state });
+    }
     let enginePort: number | undefined;
     if (options.managed) {
       const models = join(dataDir, 'models');

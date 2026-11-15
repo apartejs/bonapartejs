@@ -17,6 +17,10 @@ import {
   pluginsInvoke,
   projectsDetect,
   conversationsOpenFolder,
+  conversationsArchiveCheck,
+  conversationsCommitBranch,
+  conversationsOpenPr,
+  conversationsShowPr,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -46,6 +50,8 @@ import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation
 import { MemoryBanner } from './chat/MemoryBanner';
 import { ComposerToolbar } from './chat/ComposerToolbar';
 import { NewProject } from './dialogs/NewProject';
+import { ArchiveConversation } from './dialogs/ArchiveConversation';
+import { OpenPr } from './dialogs/OpenPr';
 import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
@@ -412,6 +418,37 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const statuses = useConversationStatuses(listedIds, asked);
   statusesNow.current = statuses;
   useWaitingMarks(statuses);
+  // Archiving (task 6.8): a conversation whose branch has changes not committed asks first.
+  const [archiving, setArchiving] = useState<{ id: string; title: string; uncommitted: number } | null>(null);
+  const archiveNow = (id: string): void => {
+    void archive(id);
+    setDeck((was) => forget(was, id));
+  };
+  const askArchive = (id: string, title: string): void => {
+    if (!statuses[id]?.branch) {
+      archiveNow(id);
+      return;
+    }
+    void bridge
+      .invoke(conversationsArchiveCheck, { id })
+      .then(({ uncommitted }) => (uncommitted > 0 ? setArchiving({ id, title, uncommitted }) : archiveNow(id)))
+      .catch(() => archiveNow(id));
+  };
+  // A pull request merged archives its conversation by itself — once it is at rest: never under a
+  // reply, a question or an approval (it is asked again at the next reading).
+  const mergedArchived = useRef(new Set<string>());
+  useEffect(() => {
+    for (const [id, status] of Object.entries(statuses)) {
+      if (status.pr?.state !== 'merged' || mergedArchived.current.has(id)) continue;
+      const live = deck.chats.find((chat) => chat.conversationId === id);
+      if (live && worksOrWaits(live)) continue;
+      mergedArchived.current.add(id);
+      archiveNow(id);
+    }
+  }, [statuses]);
+  // « Ouvrir une PR »: said first — it goes online —, done on the person's word.
+  const [openingPr, setOpeningPr] = useState<{ id: string; branch: string; base: string; failed: boolean } | null>(null);
+  const [prBusy, setPrBusy] = useState(false);
   const projectOf = (id: string): string | null => statuses[id]?.projectId ?? bornIn.current.get(id) ?? null;
   // A new conversation starts in the project of the conversation open — as the projects now are.
   useEffect(() => {
@@ -578,6 +615,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           marksOf={(id) => ({
             memory: statuses[id]?.memory ?? null,
             ...(statuses[id]?.branch ? { branchFiles: statuses[id]!.branch!.files } : {}),
+            ...(statuses[id]?.pr ? { pr: statuses[id]!.pr! } : {}),
           })}
           grouping={grouping}
           onCollapse={toggleSidebar}
@@ -607,6 +645,45 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           prefill(text);
         }}
       />
+      <ArchiveConversation
+        messages={messages}
+        asking={archiving}
+        onCancel={() => setArchiving(null)}
+        onArchive={() => {
+          if (archiving) archiveNow(archiving.id);
+          setArchiving(null);
+        }}
+        onCommitFirst={() => {
+          const asked = archiving;
+          setArchiving(null);
+          if (!asked) return;
+          void bridge
+            .invoke(conversationsCommitBranch, { id: asked.id })
+            .catch(() => false)
+            .then(() => archiveNow(asked.id));
+        }}
+      />
+      <OpenPr
+        messages={messages}
+        asking={openingPr}
+        busy={prBusy}
+        onCancel={() => setOpeningPr(null)}
+        onOpen={() => {
+          const asked = openingPr;
+          if (!asked) return;
+          setPrBusy(true);
+          void bridge
+            .invoke(conversationsOpenPr, { id: asked.id })
+            .catch(() => null)
+            .then((pr) => {
+              setPrBusy(false);
+              if (pr) {
+                setOpeningPr(null);
+                setAsked((count) => count + 1);
+              } else setOpeningPr({ ...asked, failed: true });
+            });
+        }}
+      />
       <NewProject
         open={creatingProject}
         messages={messages}
@@ -634,9 +711,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         onPin={() => openConversation && void pin(openConversation.id)}
         onUnpin={() => openConversation && void unpin(openConversation.id)}
         onArchive={() => {
-          if (!openConversation) return;
-          void archive(openConversation.id);
-          setDeck((was) => forget(was, openConversation.id));
+          if (openConversation) askArchive(openConversation.id, openConversation.title);
         }}
         onDelete={() => {
           if (!openConversation) return;
@@ -656,6 +731,18 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
               }
             : null
         }
+        pr={
+          openConversation && statuses[openConversation.id]?.pr
+            ? {
+                ...statuses[openConversation.id]!.pr!,
+                onShow: () => void bridge.invoke(conversationsShowPr, { id: openConversation.id }).catch(() => undefined),
+              }
+            : null
+        }
+        onOpenPr={() => {
+          const branch = openConversation ? statuses[openConversation.id]?.branch : undefined;
+          if (openConversation && branch) setOpeningPr({ id: openConversation.id, branch: branch.name, base: branch.base, failed: false });
+        }}
         panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
