@@ -33,7 +33,7 @@ export interface ChatDriver {
   question: Locator;
   /**
    * The mode the switch shows. Its combobox's text holds every option too (a hidden sizer that
-   * keeps its width): read the label, never the combobox's whole text.
+   * keeps its width): read the label, never the combobox's whole text (apartejs/aparte#224).
    */
   modeShown: Locator;
   send(text: string): Promise<void>;
