@@ -12,7 +12,13 @@
  * 3. the lazy tool grammar is accepted by a real server, and does not force a
  *    call when none is needed;
  * 4. a real model writes a call in the family's syntax, and our demux reads it;
- * 5. Stop cuts a real generation: within a second the slot no longer works.
+ * 5. Stop cuts a real generation: within a second the slot no longer works;
+ * 6. a conversation that leaves the slot is saved, and comes back restored —
+ *    no re-read, the saved tokens served by the cache, the model still knows
+ *    what it was told;
+ * 7. a branch (an answer asked again) starts from the state its conversation
+ *    saved, not from what the slot held;
+ * 8. the seed one fresh conversation prepared serves the next one.
  *
  * Everything goes through `createCore`, as the app does: the binary is found
  * on the PATH (or `BONAPARTE_SMOKE_LLAMA`), launched hidden with its key, and
@@ -25,7 +31,7 @@
  * llama.cpp binary, else found on the PATH) · BONAPARTE_SMOKE_CTX (8192).
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -34,6 +40,7 @@ import { createCore, type Core, type Engine } from '../api.js';
 import type { DemuxEvent } from '../families/types.js';
 import { PromptLog } from '../prompt/prompt-log.js';
 import { buildSystemPrompt } from '../prompt/system-prompt.js';
+import type { Usage } from '../journal/types.js';
 import type { ToolDef } from '../tools/types.js';
 
 const MODEL = process.env['BONAPARTE_SMOKE_MODEL'];
@@ -44,6 +51,14 @@ const PORT = 8127;
 const TIMEOUT = 900_000;
 /** A small model at its default temperature is a coin flip on protocol details: the smoke judges the harness. */
 const SAMPLING = { temperature: 0.2, seed: 42 };
+/**
+ * On a model with sliding-window attention (Gemma 4), llama.cpp resumes a
+ * cached prefix from its last context checkpoint, which it places a few
+ * tokens before the end of each prompt (tools/server/server-context.cpp,
+ * « create checkpoints that many tokens before the end of the prompt »):
+ * those few tokens are read again — 5 on b12383, a fixed cost, not a re-read.
+ */
+const CHECKPOINT_TAIL = 8;
 
 const READ_FILE: ToolDef = {
   name: 'read_file',
@@ -216,5 +231,120 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     const stopped = Date.now();
     await expect.poll(async () => (await engine.client.slots()).some((slot) => slot.processing), { timeout: 1_000 }).toBe(false);
     console.log(`[smoke] the slot stopped working ${Date.now() - stopped} ms after Stop`);
+  }, TIMEOUT);
+
+  // ── The memory: through the conversation engine and the handler, as the app's turns go ──
+
+  interface Turned {
+    text: string;
+    steps: string[];
+    usage: Usage;
+    /** How long the restore step lasted, as the turn waited for it. */
+    restoreMs: number | null;
+  }
+
+  /** One turn of a conversation, as the window's turns run: the conversation made sure of, then the turn. */
+  async function turnIn(id: string, text: string): Promise<Turned> {
+    await core.conversationStore.ensure(id, { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    const steps: string[] = [];
+    let reply = '';
+    let restoreStarted = 0;
+    let restoreMs: number | null = null;
+    const result = await core.conversations.turn(id, { text, thinking: false }, (event) => {
+      if (event.type === 'step') {
+        steps.push(`${event.name}:${event.phase}`);
+        if (event.name === 'restore' && event.phase === 'start') restoreStarted = performance.now();
+        if (event.name === 'restore' && event.phase === 'end') restoreMs = performance.now() - restoreStarted;
+      } else if (event.type === 'text') {
+        reply += event.delta;
+      }
+    });
+    return { text: reply, steps, usage: result.usage, restoreMs };
+  }
+
+  /** The manifests the KV store keeps: the conversations' states, or (`seeds`) the shared prefixes. */
+  async function manifests(sub: '' | 'seeds' = ''): Promise<{ name: string; promptTokenCount: number; served?: number }[]> {
+    const dir = join(dataDir, 'kv-slots', sub);
+    const names = (await readdir(dir)).filter((name) => name.endsWith('.manifest.json'));
+    return Promise.all(names.map(async (name) => ({ name, ...JSON.parse(await readFile(join(dir, name), 'utf8')) })));
+  }
+
+  it('a conversation leaves the slot saved, and comes back restored: no re-read, its tokens served by the cache', async () => {
+    const first = await turnIn('smoke-memory-a', 'Remember this code word: MARMALADE. Reply with OK and nothing else.');
+    console.log(`[smoke] A, first turn: « ${first.text.trim().slice(0, 60)} » (${first.usage.inputTokens} tokens read)`);
+
+    // Another conversation takes the slot: A is saved as it leaves.
+    await turnIn('smoke-memory-b', 'Reply with exactly the word OMEGA.');
+    const saved = (await manifests()).find((manifest) => manifest.name.startsWith('smoke-memory-a'));
+    expect(saved).toBeDefined();
+    const announced = await core.conversations.open('smoke-memory-a');
+    expect(announced?.kind).toBe('restore');
+
+    const second = await turnIn('smoke-memory-a', 'What is the code word I gave you? Reply with the word only.');
+    console.log(
+      `[smoke] A restored in ${second.restoreMs?.toFixed(0)} ms: ${second.usage.cacheReadTokens} tokens served by the cache ` +
+        `(A had saved ${saved!.promptTokenCount}); answer « ${second.text.trim().slice(0, 60)} »`,
+    );
+    expect(second.steps).toContain('restore:end');
+    expect(second.steps.filter((step) => step.startsWith('reread'))).toEqual([]);
+    expect(second.text.toUpperCase()).toContain('MARMALADE');
+    // Every token the state held, but the tail after llama.cpp's last checkpoint (and the last token
+    // generated, never decoded into the slot).
+    expect(second.usage.cacheReadTokens ?? 0).toBeGreaterThanOrEqual(saved!.promptTokenCount - 1 - CHECKPOINT_TAIL);
+  }, TIMEOUT);
+
+  it("a branch starts from the state its conversation saved, not from what the slot held", async () => {
+    // The slot is given to another conversation first: what the branch gets from the cache
+    // can only come from A's saved state, copied to the branch.
+    await turnIn('smoke-memory-b', 'Reply with exactly the word SIGMA.');
+    const before = (await manifests()).find((manifest) => manifest.name.startsWith('smoke-memory-a'))!;
+
+    // The window asks A's last answer again: the same history, ending on the person's message.
+    const history = [
+      { role: 'user', content: 'Remember this code word: MARMALADE. Reply with OK and nothing else.' },
+      { role: 'assistant', content: 'OK' },
+      { role: 'user', content: 'What is the code word I gave you? Reply with the word only.' },
+    ];
+    const handler = createAgentHandler(core);
+    const response = await handler(
+      new Request(`${AGENT_ENDPOINT}/c/smoke-memory-a`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ v: 1, messageId: 'm-retry', request: { messages: history, modelId: '' }, clientTools: [] }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const events = (await response.text())
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { type: string; name?: string; delta?: string; usage?: Usage });
+    const done = events.find((event) => event.type === 'run-done');
+    const text = events.map((event) => (event.type === 'text-delta' ? event.delta : '')).join('');
+    console.log(
+      `[smoke] branch: ${done?.usage?.cacheReadTokens} tokens served from A's saved state (it held ${before.promptTokenCount}); ` +
+        `answer « ${text.trim().slice(0, 60)} »`,
+    );
+    expect(events.some((event) => event.type === 'step-start' && event.name === 'reread')).toBe(false);
+    expect(text.toUpperCase()).toContain('MARMALADE');
+    // The branch shares everything up to the person's last message: the saved answer is all it leaves out.
+    expect(done?.usage?.cacheReadTokens ?? 0).toBeGreaterThanOrEqual(Math.floor(before.promptTokenCount * 0.9));
+  }, TIMEOUT);
+
+  it('the seed one fresh conversation prepared serves the next one', async () => {
+    const seeds = await manifests('seeds');
+    expect(seeds).toHaveLength(1);
+    const seed = seeds[0]!;
+    const fresh = await turnIn('smoke-memory-c', 'Reply with exactly the word DELTA.');
+    const after = (await manifests('seeds'))[0]!;
+    console.log(
+      `[smoke] fresh conversation: ${fresh.usage.cacheReadTokens} tokens served from the seed (it holds ${seed.promptTokenCount}); ` +
+        `served ${seed.served} → ${after.served}`,
+    );
+    expect(fresh.steps).toContain('seed:end');
+    expect(fresh.steps.filter((step) => step.startsWith('reread'))).toEqual([]);
+    expect(fresh.text.toUpperCase()).toContain('DELTA');
+    expect(after.served).toBe((seed.served ?? 0) + 1);
+    // The whole seed, but the tail after llama.cpp's last checkpoint.
+    expect(fresh.usage.cacheReadTokens ?? 0).toBeGreaterThanOrEqual(seed.promptTokenCount - CHECKPOINT_TAIL);
   }, TIMEOUT);
 });
