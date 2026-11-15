@@ -368,6 +368,20 @@ export const en: Messages = {
     cancel: 'Cancel',
     confirmDelete: 'Delete',
   },
+  review: {
+    hint: 'Click a line number to comment on it. Your comments leave together, in one message.',
+    message: (count) => (count === 1 ? '1 comment on the diff:' : `${count} comments on the diff:`),
+    ready: (count, files) => ({
+      strong: count === 1 ? '1 comment' : `${count} comments`,
+      rest: ` ready, on ${files === 1 ? '1 file' : `${files} files`}`,
+    }),
+    clear: 'Clear all',
+    send: 'Send to the agent',
+    edit: 'Edit',
+    editLabel: (where) => `Edit the comment on ${where}`,
+    save: 'Save',
+    cancel: 'Cancel',
+  },
   changes: {
     files: (count) => (count === 1 ? '1 file' : `${count} files`),
     proposed: 'Proposed',

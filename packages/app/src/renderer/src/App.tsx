@@ -28,6 +28,7 @@ import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
+import { addComment, clearPending, editComment, markSent, pendingOf, reviewMessage, type ReviewComment } from './diff/comments-store';
 import { appliedCards, ChangesPanel, useProposedCards } from './panels/ChangesPanel';
 import { countLines, total } from './panels/changes';
 import { FilesPanel } from './panels/FilesPanel';
@@ -278,6 +279,21 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const proposedCards = useProposedCards(conversationId, writesWaiting);
   const changeCards = [...proposedCards, ...appliedCards(applied)];
   const changeCounts = total(changeCards.map((card) => countLines(card.before, card.after)));
+  // The comments on the diff, per conversation (task 6.5): kept while the window lives.
+  const [reviews, setReviews] = useState<Record<string, ReviewComment[]>>({});
+  const review = conversationId ? (reviews[conversationId] ?? []) : [];
+  const changeReview = (change: (review: ReviewComment[]) => ReviewComment[]): void => {
+    if (!conversationId) return;
+    setReviews((was) => ({ ...was, [conversationId]: change(was[conversationId] ?? []) }));
+  };
+  // They leave together, in one message, into the conversation's own chat once it is free.
+  const sendReview = (): void => {
+    const pending = pendingOf(review);
+    if (!conversationId || pending.length === 0) return;
+    const id = conversationId;
+    sendWhenFree(reviewMessage(pending, messages), () => composerOf(id));
+    changeReview(markSent);
+  };
   // What the core says of each conversation, as the sidebar shows it — read by the deck too.
   const statusesNow = useRef<Statuses>({});
   // A chat lives on while it works or waits for the person: a reply written, a question, an approval.
@@ -625,6 +641,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
                 conversationId={conversationId}
                 cards={changeCards}
                 onReverted={() => setReverted((count) => count + 1)}
+                review={review}
+                onComment={(detail) => changeReview((was) => addComment(was, detail, crypto.randomUUID()))}
+                onEdit={(id, text) => changeReview((was) => editComment(was, id, text))}
+                onClear={() => changeReview(clearPending)}
+                onSend={sendReview}
               />
             ),
           },

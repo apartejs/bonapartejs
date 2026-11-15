@@ -383,6 +383,20 @@ export interface Messages {
     added(count: number): string;
     removed(count: number): string;
   };
+  /** Commenting the diff (board « Commenter le diff », task 6.5). */
+  review: {
+    hint: string;
+    /** The first line of the one message the comments leave in. */
+    message(count: number): string;
+    /** « **3 commentaires** prêts, sur 2 fichiers ». */
+    ready(count: number, files: number): { strong: string; rest: string };
+    clear: string;
+    send: string;
+    edit: string;
+    editLabel(where: string): string;
+    save: string;
+    cancel: string;
+  };
   /** The « Fichiers » pane (task 6.3): the tree, the preview, the marks. */
   files: {
     tree: string;

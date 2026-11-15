@@ -369,6 +369,20 @@ export const fr: Messages = {
     cancel: 'Annuler',
     confirmDelete: 'Supprimer',
   },
+  review: {
+    hint: 'Clique sur un numéro de ligne pour la commenter. Tes commentaires partent ensemble, en un seul message.',
+    message: (count) => (count === 1 ? '1 commentaire sur le diff :' : `${count} commentaires sur le diff :`),
+    ready: (count, files) => ({
+      strong: count === 1 ? '1 commentaire' : `${count} commentaires`,
+      rest: `${count === 1 ? ' prêt' : ' prêts'}, sur ${files === 1 ? '1 fichier' : `${files} fichiers`}`,
+    }),
+    clear: 'Tout effacer',
+    send: 'Envoyer à l’agent',
+    edit: 'Modifier',
+    editLabel: (where) => `Modifier le commentaire sur ${where}`,
+    save: 'Enregistrer',
+    cancel: 'Annuler',
+  },
   changes: {
     files: (count) => (count === 1 ? '1 fichier' : `${count} fichiers`),
     proposed: 'Proposé',

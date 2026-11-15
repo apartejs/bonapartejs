@@ -783,6 +783,76 @@ body {
   color: var(--aparte-warning-ink);
 }
 
+/* Commenting the diff (board « Commenter le diff », task 6.5): the hint, then the footer of the review. */
+.changes-pane__hint {
+  margin: -12px -12px 0;
+  padding: 10px 16px;
+  border-block-end: var(--aparte-border-width) solid var(--aparte-border);
+  background: var(--bonaparte-accent-soft);
+  font-size: 13px;
+}
+
+.changes-pane__review {
+  position: sticky;
+  inset-block-end: -12px;
+  margin: 0 -12px -12px;
+  padding: 10px 16px;
+  border-block-start: var(--aparte-border-width) solid var(--aparte-border);
+  background: var(--aparte-bg);
+}
+
+.changes-pane__comments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.changes-pane__comment {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.changes-pane__where {
+  flex: none;
+  color: var(--aparte-text-muted);
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+}
+
+.changes-pane__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.changes-pane__edit {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.changes-pane__edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.changes-pane__send {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.changes-pane__ready {
+  flex: 1;
+}
+
 /* The header's counts: « +4 −4 », a click opens « Changements ». */
 .conversation-header__counts {
   gap: 6px;
