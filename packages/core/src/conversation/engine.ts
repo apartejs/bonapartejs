@@ -20,7 +20,14 @@
 import { randomUUID } from 'node:crypto';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
-import { announceOpen, DEFAULT_PREFILL_TOKENS_PER_SECOND, type Announcement, type RereadAnnouncement } from '../costs/announce.js';
+import {
+  announceContext,
+  announceOpen,
+  DEFAULT_GENERATION_TOKENS_PER_SECOND,
+  DEFAULT_PREFILL_TOKENS_PER_SECOND,
+  type Announcement,
+  type RereadAnnouncement,
+} from '../costs/announce.js';
 import { createSlotScheduler, type SlotOwner, type SlotScheduler } from '../engine/slot-scheduler.js';
 import type { MeasureStore } from '../engine/measures.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
@@ -320,7 +327,7 @@ export class ConversationEngine {
       if (!verdict.ok) refusal = verdict.reason;
     }
     const prefill = this.deps.measures?.get(engine.modelPath)?.prefillTokensPerSecond;
-    return announceOpen({
+    const announced = announceOpen({
       resident: this.scheduler.isResident(owner),
       promptTokens: estimateTokens(frozenPrompt(entries)),
       saved: refusal === null ? manifest : null,
@@ -331,6 +338,34 @@ export class ConversationEngine {
       evicted: manifest ? null : await this.deps.kv.evicted(key),
       measures: prefill === undefined ? {} : { prefillTokensPerSecond: prefill },
     });
+    // « Compacter d'abord »: the reading the summary needs, the summary written, and the short prompt read.
+    if (announced?.kind === 'reread') return { ...announced, compactSeconds: announced.seconds + this.compactionTail(engine) };
+    return announced;
+  }
+
+  /**
+   * The context nearly full — from 90 % of the window —, said before a reply is cut (board « Coûts
+   * annoncés », 4): with what compacting would take. Null below, or without a window known.
+   */
+  async contextOf(id: string): Promise<Extract<Announcement, { kind: 'context-full' }> | null> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) return null;
+    const engine = await this.deps.engine();
+    if (!engine) return null;
+    const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
+    if (!entries.some((entry) => entry.kind === 'user')) return null;
+    const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engine.live?.nCtx || Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(window)) return null;
+    const used = estimateTokens(frozenPrompt(entries));
+    // The summary reads a prompt its memory serves; then it is written, and the short prompt read.
+    const announced = announceContext(used, window, this.compactionTail(engine));
+    return announced?.kind === 'context-full' ? announced : null;
+  }
+
+  /** What a compaction takes once its prompt is read: the summary written, then the system turn and the summary read. */
+  private compactionTail(engine: EngineView): number {
+    const prefill = this.deps.measures?.get(engine.modelPath)?.prefillTokensPerSecond ?? DEFAULT_PREFILL_TOKENS_PER_SECOND;
+    return SUMMARY_MAX_TOKENS / DEFAULT_GENERATION_TOKENS_PER_SECOND + (2 * SUMMARY_MAX_TOKENS) / prefill;
   }
 
   /**
@@ -508,7 +543,7 @@ export class ConversationEngine {
       const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
       const used = estimateTokens(frozen + question);
       const nPredict = Math.min(SUMMARY_MAX_TOKENS, Math.floor(window - used - 64));
-      if (nPredict < 256) throw new CompactionError('There is no room left in the context for a summary: nothing was compacted.');
+      if (nPredict < 256) throw new CompactionError('no-room', 'There is no room left in the context for a summary: nothing was compacted.');
 
       const owner = this.ownerOf(meta);
       const key = ownerKey(owner);
@@ -553,9 +588,9 @@ export class ConversationEngine {
         this.scheduler.evict(owner);
         this.lastRun.delete(key);
       }
-      if (cut) throw new CompactionError('The summary was cut before its end: nothing was compacted.');
+      if (cut) throw new CompactionError('cut', 'The summary was cut before its end: nothing was compacted.');
       summary = summary.trim();
-      if (!summary) throw new CompactionError('The summary came back empty: nothing was compacted.');
+      if (!summary) throw new CompactionError('empty', 'The summary came back empty: nothing was compacted.');
 
       // The system prompt frozen again, with the truth of the moment: every note folded in.
       const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
@@ -570,6 +605,7 @@ export class ConversationEngine {
       await journal.append({
         kind: 'rebase',
         summary,
+        ...(plan.kept[0] ? { keptFrom: plan.kept[0].id } : {}),
         stable,
         replyLanguage: asked.replyLanguage,
         perimeter: [...asked.perimeter],
@@ -586,6 +622,24 @@ export class ConversationEngine {
         tokensBefore: estimateTokens(frozen),
         tokensAfter: estimateTokens(rendered),
       };
+    });
+  }
+
+  /**
+   * « Restaurer » a compaction (aparté's checkpoint): the conversation goes on from before its last rebase,
+   * on a new branch — its early turns read again (no memory holds that prompt any more). The branch it
+   * leaves keeps the rebase. Returns the branch shown now.
+   */
+  uncompact(id: string): Promise<string> {
+    return this.exclusive.run(id, async () => {
+      const meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      const journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+      const entries = journal.entries();
+      const rebase = entries.findLastIndex((entry) => entry.kind === 'rebase');
+      if (rebase < 1) return meta.branchId;
+      const { meta: moved } = await this.fork(meta, journal, entries[rebase - 1]!.id);
+      return moved.branchId;
     });
   }
 

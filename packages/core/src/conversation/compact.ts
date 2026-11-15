@@ -29,9 +29,15 @@ export const MIN_COMPACTED_TOKENS = 2 * SUMMARY_MAX_TOKENS;
 /** The turns kept as they were, when they weigh at most a third of the conversation. */
 export const KEPT_TURNS = 2;
 
+/** Why a compaction did not happen — what the window says, in its language. */
+export type CompactionRefusal = 'pending' | 'not-worth' | 'no-room' | 'cut' | 'empty';
+
 /** The compaction did not happen: the conversation is as it was. */
 export class CompactionError extends Error {
-  constructor(message: string) {
+  constructor(
+    readonly code: CompactionRefusal,
+    message: string,
+  ) {
     super(message);
     this.name = 'CompactionError';
   }
@@ -61,7 +67,7 @@ function conversationPart(entries: readonly JournalEntry[]): readonly JournalEnt
 
 /** What a compaction would fold and keep — or why it is not worth it. */
 export function planCompaction(entries: readonly JournalEntry[], estimate: (text: string) => number): CompactionPlan {
-  if (entries.at(-1)?.kind === 'pending') throw new CompactionError('A call waits for an answer: answer it before compacting.');
+  if (entries.at(-1)?.kind === 'pending') throw new CompactionError('pending', 'A call waits for an answer: answer it before compacting.');
   const part = conversationPart(entries);
   const weigh = (list: readonly JournalEntry[]): number => estimate(list.map((entry) => entry.rendered ?? '').join(''));
   const starts = part.flatMap((entry, index) => (entry.kind === 'user' ? [index] : []));
@@ -76,7 +82,7 @@ export function planCompaction(entries: readonly JournalEntry[], estimate: (text
   const keptTurns = kept.filter((entry) => entry.kind === 'user').length;
   const compactedTokens = total - weigh(kept);
   if (compactedTokens < MIN_COMPACTED_TOKENS) {
-    throw new CompactionError('The conversation is too short for a summary to be worth it: nothing was compacted.');
+    throw new CompactionError('not-worth', 'The conversation is too short for a summary to be worth it: nothing was compacted.');
   }
   return { kept, keptTurns, compactedTurns: starts.length - keptTurns, compactedTokens };
 }

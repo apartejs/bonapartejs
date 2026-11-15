@@ -103,6 +103,10 @@ describe('compaction is a rebase', () => {
     expect(prompt).toContain('Huitième message.');
     expect(prompt).toContain('Septième message.');
     expect(prompt).not.toContain('Sixième message.');
+    // The rebase says where the turns kept begin: the page's checkpoint sits there.
+    const now = await entries();
+    const seventh = now.find((entry) => entry.kind === 'user' && entry.text === 'Septième message.')!;
+    expect(now.at(-1)).toMatchObject({ kind: 'rebase', keptFrom: seventh.id });
   });
 
   it('a summary cut is refused: nothing changes', async () => {
@@ -137,5 +141,44 @@ describe('compaction is a rebase', () => {
     expect(await kv.manifest(`${id}_${meta.branchId}`)).toBeNull();
     await say('Et ensuite ?');
     expect(prompts.at(-1)).toMatch(/Plume/);
+  });
+
+  it('says when the context is nearly full — from 90 % — with what compacting would take', async () => {
+    const { id, engine, store, say } = await rig();
+    await say('Premier message.');
+    await say('Deuxième message.');
+    expect(await engine.contextOf(id)).toBeNull();
+    const used = Math.ceil(frozenPrompt(await (async () => (await openJournal(store.dir, id, (await store.get(id))!.branchId)).entries())()).length / 4);
+    await store.update(id, { contextCap: Math.floor(used / 0.95) });
+    const full = await engine.contextOf(id);
+    expect(full).toMatchObject({ kind: 'context-full', window: Math.floor(used / 0.95) });
+    expect(full!.compactSeconds).toBeGreaterThan(0);
+  });
+
+  it('a memory to read again says what compacting first would take', async () => {
+    const { id, engine, store, say } = await rig();
+    await say('Premier message.');
+    await say('Deuxième message.');
+    const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'plume' });
+    await engine.turn(other.id, { text: 'Ailleurs.' }, () => undefined);
+    await engine.release(id);
+    const announcement = await engine.open(id);
+    expect(announcement).toMatchObject({ kind: 'reread' });
+    expect(announcement?.kind === 'reread' && announcement.compactSeconds).toBeGreaterThan(announcement?.kind === 'reread' ? announcement.seconds : 0);
+  });
+
+  it('« Restaurer »: the conversation goes on from before the rebase, on a branch — the early turns read again', async () => {
+    const { id, engine, store, say, prompts } = await rig();
+    await say('Premier message.');
+    await say('Deuxième message.');
+    await say('Troisième message.');
+    const compacted = (await store.get(id))!.branchId;
+    await engine.compact(id, () => undefined);
+    const restored = await engine.uncompact(id);
+    expect(restored).not.toBe(compacted);
+    expect((await store.get(id))!.branchId).toBe(restored);
+    await say('Et ensuite ?');
+    expect(prompts.at(-1)).toContain('Premier message.');
+    expect(prompts.at(-1)).not.toContain('[conversation summary]');
   });
 });

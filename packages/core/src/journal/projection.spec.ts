@@ -52,4 +52,23 @@ describe('projectToAparte', () => {
     const document = projectToAparte({ id: 'c1', title: '', createdAt: at, updatedAt: at }, [user, entry({ kind: 'withdrawn', entryId: user.id })], familyLayer('gemma'));
     expect(document.messages).toEqual([]);
   });
+
+  it('a compaction is drawn where the page draws one: a checkpoint on the first message kept, else on the last answer', () => {
+    const gemma = familyLayer('gemma');
+    const kept = entry({ kind: 'user', text: 'Et ensuite ?', messageId: 'a2' });
+    const entries = [
+      entry({ kind: 'system' }),
+      entry({ kind: 'user', text: 'Bonjour', messageId: 'a1' }),
+      entry({ kind: 'assistant', raw: 'Bonjour Paul.', messageId: 'a1' }),
+      kept,
+      entry({ kind: 'assistant', raw: 'On continue.', messageId: 'a2' }),
+      entry({ kind: 'rebase', summary: 'Ils se sont salués.', keptFrom: kept.id }),
+    ];
+    const document = projectToAparte({ id: 'c1', title: 'Bonjour', createdAt: at, updatedAt: at }, entries, gemma);
+    expect(document.messages[2]).toMatchObject({ content: 'Et ensuite ?', contextSummary: { summary: 'Ils se sont salués.', count: 2 } });
+    expect(document.messages.filter((message) => message.contextSummary)).toHaveLength(1);
+
+    const none = projectToAparte({ id: 'c1', title: 'Bonjour', createdAt: at, updatedAt: at }, [...entries.slice(0, 5), entry({ kind: 'rebase', summary: 'Tout.' })], gemma);
+    expect(none.messages.at(-1)).toMatchObject({ content: 'On continue.', contextSummary: { summary: 'Tout.' } });
+  });
 });

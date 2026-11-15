@@ -21,8 +21,22 @@ export type Divergence =
   | { kind: 'mismatch' };
 
 export function compareWithJournal(messages: readonly AgentMessage[], entries: readonly JournalEntry[]): Divergence {
+  // After a compaction the page sends from its checkpoint (aparté's `contextSummary`): the turns the rebase
+  // kept, then what came after it — compared with those; a page without the checkpoint sends everything.
+  const rebase = entries.findLastIndex((entry) => entry.kind === 'rebase');
+  if (rebase >= 0) {
+    const keptFrom = (entries[rebase] as Extract<JournalEntry, { kind: 'rebase' }>).keptFrom;
+    const kept = keptFrom ? entries.findIndex((entry) => entry.id === keptFrom) : -1;
+    const shortened = compare(messages, entries, kept >= 0 ? kept : rebase + 1);
+    if (shortened.kind !== 'mismatch') return shortened;
+  }
+  return compare(messages, entries, 0);
+}
+
+/** The page's messages of the person against the journal's from `from` on. */
+function compare(messages: readonly AgentMessage[], entries: readonly JournalEntry[], from: number): Divergence {
   const sent = messages.filter((message) => message.role === 'user').map((message) => messageText(message.content));
-  const said = entries.flatMap((entry, index) => (entry.kind === 'user' ? [{ text: entry.text, index }] : []));
+  const said = entries.flatMap((entry, index) => (entry.kind === 'user' && index >= from ? [{ text: entry.text, index }] : []));
   if (sent.length === 0) return { kind: 'mismatch' };
 
   const differs = sent.findIndex(

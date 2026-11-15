@@ -99,4 +99,18 @@ describe('compareWithJournal', () => {
       text: 'Merci',
     });
   });
+
+  it('after a compaction, the page sends from its checkpoint — the turns kept, then a new message: appended', () => {
+    const kept = JOURNAL[4]!;
+    const compacted = [...JOURNAL, entry({ kind: 'rebase', summary: 'Ils se sont salués.', keptFrom: kept.id })];
+    expect(compareWithJournal([user('Et ensuite ?'), assistant('On continue.'), user('Merci')], compacted)).toEqual({ kind: 'append', text: 'Merci' });
+    // A page without the checkpoint (read again from the journal) sends everything: understood too.
+    expect(compareWithJournal([user('Bonjour'), assistant('Bonjour Paul.'), user('Et ensuite ?'), assistant('On continue.'), user('Merci')], compacted)).toEqual({
+      kind: 'append',
+      text: 'Merci',
+    });
+    // Nothing kept: the checkpoint sits on the last answer, and the page sends only what follows it.
+    const none = [...JOURNAL, entry({ kind: 'rebase', summary: 'Tout.' })];
+    expect(compareWithJournal([assistant('On continue.'), user('Merci')], none)).toEqual({ kind: 'append', text: 'Merci' });
+  });
 });

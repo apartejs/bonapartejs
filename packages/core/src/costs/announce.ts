@@ -151,6 +151,8 @@ export function suggestOffload(model: LoadModel, settings: LoadSettings, gpu: Gp
 
 /** Until this machine measured them: a modest card's prefill, an SSD's read. Said to be estimates. */
 export const DEFAULT_PREFILL_TOKENS_PER_SECOND = 200;
+/** A model's writing speed before any measure: what a summary takes to write. */
+export const DEFAULT_GENERATION_TOKENS_PER_SECOND = 25;
 export const DEFAULT_RESTORE_BYTES_PER_SECOND = 1024 ** 3;
 
 export interface OpenFacts {

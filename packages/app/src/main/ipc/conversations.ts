@@ -22,6 +22,9 @@ import {
   conversationsBranches,
   conversationsSwitchBranch,
   conversationsFollowPath,
+  conversationsCompact,
+  conversationsUncompact,
+  conversationsContext,
   conversationsLoadDraft,
   conversationsSaveDraft,
   conversationsDelete,
@@ -56,6 +59,9 @@ interface ConversationCore {
   rewind: Core['rewind'];
   undoRewind: Core['undoRewind'];
   branches: Core['branches'];
+  compact: Core['compact'];
+  uncompact: Core['uncompact'];
+  contextOf: Core['contextOf'];
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
@@ -108,6 +114,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsBranches, ({ id }) => core.branches.list(id));
   ipc.handle(conversationsSwitchBranch, ({ id, branchId }) => core.branches.switchTo(id, branchId));
   ipc.handle(conversationsFollowPath, ({ id, messageIds }) => core.branches.follow(id, messageIds));
+  // Compaction (task 7.3): said first, done on the person's word.
+  ipc.handle(conversationsCompact, ({ id }) => core.compact(id));
+  ipc.handle(conversationsUncompact, ({ id }) => core.uncompact(id));
+  ipc.handle(conversationsContext, ({ id }) => core.contextOf(id));
   ipc.handle(conversationsRename, async ({ id, title }) => void (await store.rename(id, title)));
   ipc.handle(conversationsLoadDraft, ({ id }) => store.loadDraft(id));
   ipc.handle(conversationsSaveDraft, ({ id, text }) => store.saveDraft(id, text));

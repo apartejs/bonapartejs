@@ -196,3 +196,29 @@ export const conversationsFollowPath = defineChannel(
   z.object({ id: conversationId, messageIds: z.array(z.string().max(256)).max(100_000) }),
   z.string().nullable(),
 );
+
+/** « Compacter » (task 7.3): the conversation summarised and rebased — or why not, nothing changed then. */
+export const conversationsCompact = defineChannel(
+  'conversations.compact',
+  z.object({ id: conversationId }),
+  z.discriminatedUnion('ok', [
+    z.object({
+      ok: z.literal(true),
+      summary: z.string(),
+      compactedTurns: z.number(),
+      keptTurns: z.number(),
+      tokensBefore: z.number(),
+      tokensAfter: z.number(),
+    }),
+    z.object({ ok: z.literal(false), reason: z.enum(['pending', 'not-worth', 'no-room', 'cut', 'empty']) }),
+  ]),
+);
+
+/** « Restaurer » a compaction (aparté's checkpoint): the conversation goes on from before it, on a branch. */
+export const conversationsUncompact = defineChannel('conversations.uncompact', z.object({ id: conversationId }), z.string());
+
+const contextFullSchema = z.object({ kind: z.literal('context-full'), used: z.number(), window: z.number(), compactSeconds: z.number() });
+export type ContextFullView = z.infer<typeof contextFullSchema>;
+
+/** The context nearly full — from 90 % —, with what compacting would take; null below. */
+export const conversationsContext = defineChannel('conversations.context', z.object({ id: conversationId }), contextFullSchema.nullable());

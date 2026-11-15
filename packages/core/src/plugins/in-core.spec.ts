@@ -94,7 +94,8 @@ async function turn(handler: (request: Request) => Promise<Response>, query = ''
 
 const resolved = (lines: Line[]) => lines.filter((line) => line.type === 'tool-resolved').map((line) => String(line['result']));
 
-describe('the plugins inside the core', () => {
+// Several turns each: slow when the whole suite runs at once.
+describe('the plugins inside the core', { timeout: 30_000 }, () => {
   it("a plugin's tool is told to the model and runs in a turn; what it reads is the conversation's", async () => {
     const { handler, prompts } = await setup('<|tool_call>call:count_notes{}<tool_call|>');
     const lines = await turn(handler);

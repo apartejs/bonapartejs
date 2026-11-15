@@ -18,6 +18,8 @@ export interface ProjectedMessage {
   timestamp: number;
   /** An answer's text, as a segment: how the page draws one. */
   segments?: { id: string; type: 'text'; content: string }[];
+  /** A compaction, where the page draws one (aparté's checkpoint): the summary, the messages it stands for. */
+  contextSummary?: { summary: string; count: number; createdAt: number };
 }
 
 export interface ProjectedConversation {
@@ -56,6 +58,11 @@ export function projectToAparte(
       // The rounds of one reply are one answer.
       if (last?.role === 'assistant') last.content = `${last.content}${text}`;
       else messages.push({ id: entry.messageId ?? entry.id, role: 'assistant', content: text, timestamp });
+    } else if (entry.kind === 'rebase') {
+      // A compaction, drawn as the page draws one: a checkpoint on the first message kept, else on the last answer.
+      const kept = entry.keptFrom ? messages.findIndex((message) => message.id === entry.keptFrom) : -1;
+      const anchor = kept >= 0 ? kept : messages.length - 1;
+      if (anchor >= 0) messages[anchor]!.contextSummary = { summary: entry.summary, count: kept >= 0 ? anchor : messages.length, createdAt: timestamp };
     }
   }
   for (const message of messages) {

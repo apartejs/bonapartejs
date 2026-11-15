@@ -15,7 +15,7 @@ import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
-import { announceLoad, type EngineLoadAnnouncement } from './costs/announce.js';
+import { announceLoad, type Announcement, type EngineLoadAnnouncement } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
 import {
   readGpuMemoryBytes,
@@ -56,6 +56,8 @@ import type { MemoryRow } from './conversation/engine.js';
 import type { SeedStats } from './kv/kv-store.js';
 import { exportConversations } from './conversation/export.js';
 import { createBranches, type Branches } from './conversation/branches.js';
+import { CompactionError, type CompactionRefusal } from './conversation/compact.js';
+import type { CompactResult } from './conversation/engine.js';
 import { createRewind, type RewindPreview, type RewindResult, type RewindTarget, type RewindWhat } from './conversation/rewind.js';
 import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
@@ -243,6 +245,14 @@ export interface Core {
   rewindPreview(conversationId: string, target: RewindTarget): Promise<RewindPreview>;
   /** Going back before a message (task 7.1): what it put back, the branch shown from now on. */
   rewind(conversationId: string, target: RewindTarget, what: RewindWhat, options?: { messageId?: string }): Promise<RewindResult>;
+  /**
+   * Compaction (task 7.3): the conversation summarised and rebased — or why not (nothing changed then).
+   */
+  compact(conversationId: string): Promise<({ ok: true } & CompactResult) | { ok: false; reason: CompactionRefusal }>;
+  /** « Restaurer » a compaction: the conversation goes on from before its last rebase, on a branch. */
+  uncompact(conversationId: string): Promise<string>;
+  /** The context nearly full (from 90 %), with what compacting would take; null below. */
+  contextOf(conversationId: string): Promise<Extract<Announcement, { kind: 'context-full' }> | null>;
   /** The branches of a conversation (« Brancher », task 7.2): listed, one shown, the sibling picked followed. */
   readonly branches: Branches;
   /** « Annuler le retour »: until the conversation's next turn begins; null when nothing is left to undo. */
@@ -1170,6 +1180,16 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     branches,
+    async compact(conversationId) {
+      try {
+        return { ok: true, ...(await conversations.compact(conversationId, () => undefined)) };
+      } catch (error) {
+        if (error instanceof CompactionError) return { ok: false, reason: error.code };
+        throw error;
+      }
+    },
+    uncompact: (conversationId) => conversations.uncompact(conversationId),
+    contextOf: (conversationId) => conversations.contextOf(conversationId),
     rewindPreview: (conversationId, target) => rewinds.preview(conversationId, target),
     rewind: (conversationId, target, what, options) => rewinds.rewind(conversationId, target, what, options),
     undoRewind: (conversationId) => rewinds.undo(conversationId),

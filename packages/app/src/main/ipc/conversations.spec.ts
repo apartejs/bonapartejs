@@ -48,6 +48,9 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     },
     undoRewind: async () => null,
     branches: { list: async () => [], switchTo: async () => undefined, follow: async () => null },
+    compact: async () => ({ ok: false, reason: 'not-worth' }),
+    uncompact: async () => 'main',
+    contextOf: async () => null,
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
       removed.push(id);

@@ -85,7 +85,8 @@ export type JournalBody =
    * A compaction (task 7.3): the prompt starts again from here. `stable`: the system turn frozen again (what a
    * seed is keyed by); the facts it froze (`replyLanguage`, `perimeter`, `tools`), as the first system turn's.
    */
-  | { kind: 'rebase'; summary: string; stable?: string; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[] }
+  /** `keptFrom`: the first entry of the turns kept as they were (none kept: absent). */
+  | { kind: 'rebase'; summary: string; keptFrom?: string; stable?: string; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[] }
   | { kind: 'engine'; engineId: string; modelId: string }
   /**
    * Going back before the person's message `toEntryId` (task 7.1). `note`: what the model is told at its
