@@ -23,6 +23,7 @@ export interface RailProps {
   onNewConversation(): void;
   onSearch(): void;
   onOpen(id: string): void;
+  onSettings(): void;
 }
 
 export function Rail(props: RailProps) {
@@ -63,6 +64,7 @@ export function Rail(props: RailProps) {
           </span>
         </span>
       ) : null}
+      <TipButton label={messages.settings.open} icon="settings" side="end" onClick={props.onSettings} />
     </nav>
   );
 }

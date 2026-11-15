@@ -8,6 +8,15 @@
 import { z } from 'zod';
 import { defineChannel } from './contract.js';
 
+/** Every app setting, as the person left it or its default: what the settings pages show. */
+export const settingsAll = defineChannel('settings.all', z.void(), z.array(z.object({ key: z.string(), value: z.unknown() })));
+
+/** A setting changed: checked by the core (its key, its type, its options) before it is kept. */
+export const settingsSet = defineChannel('settings.set', z.object({ key: z.string().min(1).max(64), value: z.unknown() }), z.void());
+
+/** « Ouvrir le dossier »: the data folder, whose path only the main process knows. */
+export const appOpenDataFolder = defineChannel('app.openDataFolder', z.void(), z.void());
+
 /** A setting as the person left it, or its default. An unknown key is refused by the core. */
 export const settingsGet = defineChannel('settings.get', z.object({ key: z.string().min(1).max(64) }), z.unknown());
 

@@ -40,6 +40,7 @@ export interface SidebarProps {
   onNewConversation(): void;
   onSearch(): void;
   onNewProject(): void;
+  onSettings(): void;
 }
 
 function List({ items, activeId, flat }: { items: readonly ListedConversation[]; activeId: string | null; flat: boolean }) {
@@ -144,6 +145,10 @@ export function Sidebar(props: SidebarProps) {
         )}
       </div>
       <EngineCard engine={props.engine} messages={messages} />
+      <button type="button" className="bonaparte-settings-link" onClick={props.onSettings}>
+        <Icon name="settings" />
+        {messages.settings.open}
+      </button>
     </nav>
   );
 }

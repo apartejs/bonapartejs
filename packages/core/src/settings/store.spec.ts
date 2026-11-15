@@ -62,6 +62,15 @@ describe('SettingsStore', () => {
     expect(heard).toEqual([['launchAtLogin', true]]);
   });
 
+  it("lists every app setting with its value, the person's or its default", async () => {
+    const store = new SettingsStore(await configFile());
+    await store.set('theme', 'dark');
+    const all = await store.all();
+    expect(all).toContainEqual({ key: 'theme', value: 'dark' });
+    expect(all).toContainEqual({ key: 'accent', value: 'blue' });
+    expect(all.map((entry) => entry.key)).not.toContain('nCtx');
+  });
+
   it('removes a value with undefined: the default comes back', async () => {
     const store = new SettingsStore(await configFile());
     await store.set('reopenLast', false);

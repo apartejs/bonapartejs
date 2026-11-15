@@ -383,3 +383,25 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// The settings (task 5.7): « Général » and « Apparence ».
+const SETTINGS = { fr: { open: 'Réglages', appearance: 'Apparence', nav: 'Réglages' }, en: { open: 'Settings', appearance: 'Appearance', nav: 'Settings' } };
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the settings, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = SETTINGS[locale];
+      const { page } = await launch({ locale, engine: { responder: () => 'ok' } });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.getByRole('button', { name: words.open, exact: true }).click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `settings-general-${locale}-${scheme}.png`), animations: 'disabled' });
+      await page.getByRole('navigation', { name: words.nav }).getByRole('link', { name: words.appearance }).click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `settings-appearance-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}

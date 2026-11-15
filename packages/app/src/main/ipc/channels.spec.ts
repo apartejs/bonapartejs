@@ -47,6 +47,7 @@ describe('the channels of the bridge', () => {
       version: () => '0',
       locale: () => 'fr',
       chooseFolder: async () => null,
+      openDataFolder: async () => undefined,
     });
     expect([...served].sort()).toEqual(CHANNELS.map((channel) => channel.name).sort());
   });

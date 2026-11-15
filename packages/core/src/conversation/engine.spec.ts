@@ -41,6 +41,7 @@ async function rig(
     budget?: () => number;
     instructions?: () => Promise<string | undefined>;
     mode?: () => Promise<PlayMode>;
+    replyLanguage?: () => string;
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
@@ -71,7 +72,7 @@ async function rig(
       engineCalls += 1;
       return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
     },
-    prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: 'French' }),
+    prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
   });
   const conversation = () => store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
   const say = async (id: string, text: string, signal?: AbortSignal) => {
@@ -286,6 +287,25 @@ describe('ConversationEngine — the memory', () => {
     await engine.flush();
     expect(server.files.size).toBe(0);
     expect(await engine.open(b.id)).toBeNull();
+  });
+});
+
+describe('ConversationEngine — the reply language', () => {
+  it('a change of the language is told at the next message, once, appended after what was said', async () => {
+    let language = 'French';
+    const { say, conversation, prompts } = await rig({ replyLanguage: () => language });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    expect(prompts.at(-1)).not.toContain('[preferences update]');
+    language = 'English';
+    await say(meta.id, 'Hello');
+    const told = prompts.at(-1)!;
+    expect(told).toContain('Write your replies to the person in English.');
+    expect(told.indexOf('Write your replies to the person in English.')).toBeGreaterThan(told.indexOf('Bonjour'));
+    // The frozen prompt is the same: what was read before is still the start of what is sent.
+    expect(told.startsWith(prompts[0]!.slice(0, prompts[0]!.indexOf('Bonjour')))).toBe(true);
+    await say(meta.id, 'Again');
+    expect(prompts.at(-1)!.split('Write your replies to the person in English.').length - 1).toBe(1);
   });
 });
 

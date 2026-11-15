@@ -30,6 +30,12 @@ export class SettingsStore {
     return kept && Object.hasOwn(kept, key) ? kept[key] : field.default;
   }
 
+  /** Every app setting, with the person's value or its default. */
+  async all(): Promise<{ key: string; value: unknown }[]> {
+    const kept = (await this.read()).settings ?? {};
+    return APP_SETTINGS.map((field) => ({ key: field.key, value: Object.hasOwn(kept, field.key) ? kept[field.key] : field.default }));
+  }
+
   /** Keeps a value; `undefined` removes it, and the default comes back. */
   async set(key: string, value: unknown): Promise<void> {
     validateSettingValue(APP_SETTINGS, 'global', key, value);

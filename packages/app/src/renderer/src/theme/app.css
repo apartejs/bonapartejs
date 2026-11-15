@@ -980,3 +980,323 @@ body {
   height: 14px;
 }
 
+/* The shell stays mounted under the settings (a reply goes on): hidden, whatever the kit's display. */
+.bonaparte-shell[hidden] {
+  display: none;
+}
+
+.bonaparte-settings-link {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--aparte-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.bonaparte-settings-link:hover {
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text);
+}
+
+/* The settings (boards « Réglages · … »): the navigation, then the page. */
+.settings {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: var(--aparte-bg);
+}
+
+.settings__nav {
+  display: flex;
+  flex: 0 0 264px;
+  flex-direction: column;
+  gap: 18px;
+  box-sizing: border-box;
+  padding: 16px 12px;
+  background: var(--aparte-surface-1);
+  border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.settings__back {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.settings__back::before {
+  content: '←';
+  margin-inline-end: 8px;
+}
+
+.settings__title {
+  margin: 0;
+  padding: 0 8px;
+  font-size: 18px;
+  font-weight: var(--aparte-font-weight-semibold);
+  line-height: 24px;
+}
+
+.settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings__group-title {
+  padding: 0 8px 6px;
+  font-size: 11px;
+  font-weight: var(--aparte-font-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--aparte-text-muted);
+}
+
+.settings__entry {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--aparte-text);
+  text-decoration: none;
+}
+
+.settings__entry:hover {
+  background: var(--aparte-surface-2);
+}
+
+.settings__entry[aria-current='page'] {
+  background: var(--bonaparte-accent-soft);
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.settings__versions {
+  margin-top: auto;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.settings__page {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 32px 40px 48px;
+}
+
+.settings__heading {
+  max-width: 760px;
+  margin: 0 auto 8px;
+  font-size: 24px;
+  font-weight: var(--aparte-font-weight-semibold);
+  line-height: 32px;
+  letter-spacing: -0.01em;
+}
+
+.settings__sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.setting-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 14px;
+}
+
+.setting-section__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.setting-section__hint {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--aparte-text-muted);
+}
+
+.setting-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.setting-row__text {
+  display: flex;
+  flex: 1 1 300px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.setting-row__hint {
+  font-size: 13px;
+  color: var(--aparte-text-muted);
+}
+
+.setting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A choice among a few values: radios in the kit's segmented track (apartejs/aparte#225). */
+.setting-choice__option {
+  cursor: pointer;
+}
+
+.setting-choice__option:has(input:checked) {
+  background: var(--aparte-bg);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--aparte-text) 8%, transparent);
+  color: var(--aparte-text);
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.setting-choice__option:has(input:focus-visible) {
+  outline: var(--aparte-focus-outline-width, 2px) solid var(--aparte-primary);
+  outline-offset: 1px;
+}
+
+.setting-choice--small {
+  font-size: 12px;
+}
+
+/* The themes, each with its miniature; the accents as swatches. */
+.theme-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.theme-card {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.theme-card:has(input:focus-visible) {
+  outline: 2px solid var(--aparte-primary);
+}
+
+.theme-card__miniature {
+  display: flex;
+  height: 72px;
+  overflow: hidden;
+  border: var(--aparte-border-width) solid var(--bonaparte-preview-light-border);
+  border-radius: 8px;
+}
+
+.theme-card__sidebar {
+  flex: 0 0 28%;
+  background: var(--bonaparte-preview-light-sidebar);
+}
+
+.theme-card__body {
+  flex: 1;
+  background: var(--bonaparte-preview-light-body);
+}
+
+.theme-card__miniature--dark {
+  border-color: var(--bonaparte-preview-dark-border);
+}
+
+.theme-card__miniature--dark .theme-card__sidebar {
+  background: var(--bonaparte-preview-dark-sidebar);
+}
+
+.theme-card__miniature--dark .theme-card__body,
+.theme-card__miniature--system .theme-card__body {
+  background: var(--bonaparte-preview-dark-body);
+}
+
+.theme-card__miniature--system .theme-card__sidebar {
+  flex-basis: 50%;
+}
+
+.theme-card__label {
+  font-size: 13px;
+  font-weight: var(--aparte-font-weight-medium);
+}
+
+.accent-swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.accent-swatch {
+  width: 32px;
+  height: 32px;
+  box-sizing: border-box;
+  border: 3px solid var(--aparte-bg);
+  border-radius: var(--aparte-radius-full);
+  cursor: pointer;
+}
+
+.accent-swatch--blue { background: var(--bonaparte-accent-blue); }
+.accent-swatch--teal { background: var(--bonaparte-accent-teal); }
+.accent-swatch--violet { background: var(--bonaparte-accent-violet); }
+.accent-swatch--orange { background: var(--bonaparte-accent-orange); }
+
+.accent-swatch:has(input:checked),
+.accent-swatch:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px var(--aparte-text);
+}
+
+.code-font {
+  min-width: 200px;
+}
+
+/* A compact density: the rows of the lists closer. */
+[data-bonaparte-density='compact'] {
+  --aparte-conv-item-padding: var(--aparte-space-2) var(--aparte-space-4);
+}
+
+
+/* A radio drawn by its label: transparent over the whole label, so a click and the keyboard reach it. */
+.setting-choice__option,
+.theme-card,
+.accent-swatch {
+  position: relative;
+}
+
+.setting-radio {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* The kit's choice card lines its children up at their start: a miniature takes the card's width. */
+.theme-card {
+  align-items: stretch;
+}
+
+.theme-card__miniature {
+  align-self: stretch;
+}
+

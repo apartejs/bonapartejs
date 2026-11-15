@@ -32,6 +32,21 @@
   --aparte-warning-surface: color-mix(in oklch, var(--aparte-warning) 12%, transparent);
   --aparte-info-surface: color-mix(in oklch, var(--aparte-info) 12%, transparent);
 
+  /*
+   * The four accents as swatches, and the two themes as miniatures (Settings, Appearance): the
+   * same in either theme, since they show what each choice looks like.
+   */
+  --bonaparte-accent-blue: #087EA4;
+  --bonaparte-accent-teal: #0F766E;
+  --bonaparte-accent-violet: #6D4AFF;
+  --bonaparte-accent-orange: #C2410C;
+  --bonaparte-preview-light-sidebar: #F6F6F4;
+  --bonaparte-preview-light-body: #FFFFFF;
+  --bonaparte-preview-light-border: #E6E6E1;
+  --bonaparte-preview-dark-sidebar: #1D1D1B;
+  --bonaparte-preview-dark-body: #161615;
+  --bonaparte-preview-dark-border: #2E2E2B;
+
   /* What aparté does not name. */
   --bonaparte-accent-soft: color-mix(in srgb, var(--bonaparte-accent) 10%, var(--aparte-bg));
   --bonaparte-merged: #7A4BC2;

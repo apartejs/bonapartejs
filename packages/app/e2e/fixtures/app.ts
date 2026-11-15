@@ -188,13 +188,18 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
         FAKE_LLAMA_REQUESTS: requestsFile,
       });
     }
-    const settings = options.settings ? { settings: options.settings } : {};
+    // A later launch on the same folder keeps the settings the app wrote there; the test's are laid over them.
+    const written = await readFile(join(dataDir, 'config', 'global.json'), 'utf8')
+      .then((text) => (JSON.parse(text) as { settings?: Record<string, unknown> }).settings ?? {})
+      .catch(() => ({}));
+    const merged = { ...written, ...options.settings };
+    const settings = Object.keys(merged).length > 0 ? { settings: merged } : {};
     if (!options.managed) {
       await writeFile(
         join(dataDir, 'config', 'global.json'),
         JSON.stringify({ backend: { mode: 'remote', url: server.url }, ...settings }),
       );
-    } else if (options.settings) {
+    } else if (Object.keys(merged).length > 0) {
       await writeFile(join(dataDir, 'config', 'global.json'), JSON.stringify(settings));
     }
 

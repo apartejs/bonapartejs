@@ -4,16 +4,19 @@
  * window never names a path the main process writes to (security rule 1).
  */
 
-import { conversationsExport, settingsGet } from '@aparte/bonaparte-shared';
+import { appOpenDataFolder, conversationsExport, settingsAll, settingsGet, settingsSet } from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
 import type { ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
 
-export type SettingsCore = { settings: Pick<Core['settings'], 'get'> };
+export type SettingsCore = { settings: Pick<Core['settings'], 'get' | 'all' | 'set'> };
 export type ExportCore = Pick<Core, 'exportConversations'>;
 
-export function registerSettingsChannels(ipc: IpcRegistry, core: SettingsCore): void {
+export function registerSettingsChannels(ipc: IpcRegistry, core: SettingsCore, openDataFolder: () => Promise<void>): void {
   ipc.handle(settingsGet, ({ key }) => core.settings.get(key));
+  ipc.handle(settingsAll, () => core.settings.all());
+  ipc.handle(settingsSet, ({ key, value }) => core.settings.set(key, value));
+  ipc.handle(appOpenDataFolder, () => openDataFolder());
 }
 
 export function registerExportChannel(ipc: IpcRegistry, core: ExportCore, chooseFolder: ChooseFolder): void {

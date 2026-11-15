@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 import type { Plugin } from 'vite';
@@ -48,8 +49,12 @@ function contentSecurityPolicy(): Plugin {
   };
 }
 
+/** bonaparte's own version: run from its sources, Electron answers its own to `app.getVersion()`. */
+const appVersion = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version;
+
 export default defineConfig({
   main: {
+    define: { __BONAPARTE_VERSION__: JSON.stringify(appVersion) },
     build: {
       externalizeDeps: { exclude: bundledWorkspace },
     },

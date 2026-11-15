@@ -172,6 +172,78 @@ export interface Messages {
     railConversation(title: string, waiting: boolean): string;
     engine(model: string): string;
   };
+  /** The settings (boards « Réglages · Général », « Apparence »…, task 5.7). */
+  settings: {
+    nav: string;
+    back: string;
+    open: string;
+    groups: { application: string; engine: string; agent: string };
+    pages: { general: string; appearance: string; engine: string; models: string; permissions: string };
+    versions(app: string, llama: string): string;
+    llamaMissing: string;
+    general: {
+      language: string;
+      languageHint: string;
+      startup: string;
+      launchAtLogin: string;
+      launchAtLoginHint: string;
+      closeToTray: string;
+      closeToTrayHint: string;
+      reopenLast: string;
+      conversations: string;
+      sidebar: string;
+      sidebarHint: string;
+      sidebarProject: string;
+      sidebarSingle: string;
+      autoOpen: string;
+      autoOpenHint: string;
+      autoOpenNever: string;
+      autoOpenApproval: string;
+      autoOpenAlways: string;
+      worksIn: string;
+      worksInHint: string;
+      worksInFolder: string;
+      worksInBranch: string;
+      subagents: string;
+      subagentsHint: string;
+      subagentsSequential: string;
+      subagentsParallel: string;
+      notifications: string;
+      notificationsHint: string;
+      notifyReplyDone: string;
+      notifyApproval: string;
+      notifyQuestion: string;
+      notifyFailure: string;
+      banner: string;
+      badge: string;
+      off: string;
+      data: string;
+      dataHint: string;
+      openFolder: string;
+      export: string;
+      exported(count: number, folder: string): string;
+      exportFailed: string;
+      exportLabels: { person: string; assistant: string; untitled: string };
+    };
+    appearance: {
+      theme: string;
+      light: string;
+      dark: string;
+      system: string;
+      accent: string;
+      accentHint: string;
+      accents: { blue: string; teal: string; violet: string; orange: string };
+      reading: string;
+      textSize: string;
+      small: string;
+      normal: string;
+      large: string;
+      density: string;
+      comfortable: string;
+      compact: string;
+      codeFont: string;
+    };
+  };
   /** The conversation's header, and its « Plus d’actions ». */
   header: {
     more: string;

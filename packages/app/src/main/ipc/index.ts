@@ -19,6 +19,8 @@ export interface AppFacts {
   locale(): Locale;
   /** The system's folder dialog (or a test's folder). */
   chooseFolder: ChooseFolder;
+  /** Opens the data folder in the system's file manager (in a test run, only notes it). */
+  openDataFolder(): Promise<void>;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -30,6 +32,6 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   ipc.handle(searchQuery, ({ query, conversationId, projectId }) =>
     core.search(query, { ...(conversationId ? { conversationId } : {}), ...(projectId ? { projectId } : {}) }),
   );
-  registerSettingsChannels(ipc, core);
+  registerSettingsChannels(ipc, core, facts.openDataFolder);
   registerExportChannel(ipc, core, facts.chooseFolder);
 }

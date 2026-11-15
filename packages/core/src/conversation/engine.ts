@@ -28,7 +28,7 @@ import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
-import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta } from '../prompt/deltas.js';
+import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -374,8 +374,9 @@ export class ConversationEngine {
 
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     if (!journal.entries().some((entry) => entry.kind === 'system')) {
-      const prompt = buildSystemPrompt({ ...this.deps.prompt(meta), family, ...(instructions ? { projectInstructions: instructions } : {}) });
-      await journal.append({ kind: 'system', rendered: family.renderSystem(prompt.stable) });
+      const asked = this.deps.prompt(meta);
+      const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
+      await journal.append({ kind: 'system', rendered: family.renderSystem(prompt.stable), replyLanguage: asked.replyLanguage });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
       if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
     }
@@ -404,6 +405,13 @@ export class ConversationEngine {
         const delta = renderModeDelta(running, launched);
         await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       }
+    }
+    if (!input.resume) {
+      // The person changed the language of the interface: the replies follow it, told by a note.
+      const current = this.deps.prompt(meta).replyLanguage;
+      const told = lastToldReplyLanguage(journal.entries());
+      const delta = told === undefined || !current ? null : renderReplyLanguageDelta(told, current);
+      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, language: current }, rendered: family.renderSystemNote(delta.text) });
     }
     const entries = journal.entries();
     const stable = entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
@@ -643,6 +651,19 @@ function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
     if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
   }
   return 'repetition';
+}
+
+/**
+ * The reply language the model last read in this branch: its last note of it, else the frozen
+ * prompt's; unknown for a conversation older than the record (then nothing is told).
+ */
+function lastToldReplyLanguage(entries: readonly JournalEntry[]): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'delta' && entry.delta.kind === 'reply-language' && entry.delta.language) return entry.delta.language;
+    if (entry.kind === 'system' && entry.replyLanguage) return entry.replyLanguage;
+  }
+  return undefined;
 }
 
 /** The window's tools the model last read of in this branch: the last note of them, else none. */

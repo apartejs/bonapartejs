@@ -4,7 +4,7 @@
  * anything about a conversation.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell, Tray } from 'electron';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore, type Core } from '@aparte/bonaparte-core';
@@ -20,10 +20,14 @@ import { applyLaunchAtLogin, claimSingleInstance, hideOnClose, revealWindow, win
 import { trayMenu, type TrayActions } from './tray.js';
 import { createMainWindow } from './windows.js';
 
-/** The language of the interface: French on a French system, English otherwise. */
+/** The language the person chose (the setting « language »), until it is read: the system's. */
+let chosenLanguage: unknown = 'system';
+
+/** The language of the interface: the person's choice, else French on a French system, English otherwise. */
 function interfaceLocale(): Locale {
   const forced = process.env['BONAPARTE_LOCALE'];
   if (forced === 'fr' || forced === 'en') return forced;
+  if (chosenLanguage === 'fr' || chosenLanguage === 'en') return chosenLanguage;
   return app.getLocale().toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
 
@@ -84,9 +88,15 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     devServerUrl,
   });
 
+  // The language before anything asks for it: the window's first words, the replies.
+  chosenLanguage = await core.settings.get('language').catch(() => 'system');
+  core.settings.onChange((key, value) => {
+    if (key === 'language') chosenLanguage = value;
+  });
+
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   registerAllChannels(ipc, core, {
-    version: () => app.getVersion(),
+    version: () => __BONAPARTE_VERSION__,
     locale: interfaceLocale,
     // The system's folder dialog, over the window — or the test's folder in a test run.
     chooseFolder: async () => {
@@ -97,6 +107,16 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
         ? await dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'] })
         : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
       return result.canceled ? null : (result.filePaths[0] ?? null);
+    },
+    // A test run opens no window of the system's: it notes that it would have.
+    openDataFolder: async () => {
+      if (options.e2e) {
+        const record = globalThis as { __openedDataFolder?: string[] };
+        (record.__openedDataFolder ??= []).push(dataDir);
+        return;
+      }
+      const failed = await shell.openPath(dataDir);
+      if (failed) throw new Error(failed);
     },
   });
 

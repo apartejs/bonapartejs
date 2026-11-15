@@ -33,6 +33,7 @@ import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
 import { ConversationHeader } from './shell/ConversationHeader';
 import { Rail } from './shell/Rail';
+import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
 import { Sidebar } from './shell/Sidebar';
 import { useConversationStatuses, useMemoryMarks, useWaitingMarks } from './shell/statuses';
 
@@ -120,6 +121,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       .then((value) => setGrouping(value === 'single' ? 'single' : 'project'))
       .catch(() => undefined);
   }, []);
+  // The sidebar follows its setting as the person changes it.
+  useEffect(() => {
+    const follow = (event: Event): void => {
+      const { key, value } = (event as CustomEvent<{ key: string; value: unknown }>).detail;
+      if (key === 'sidebarGrouping') setGrouping(value === 'single' ? 'single' : 'project');
+    };
+    window.addEventListener(SETTING_CHANGED, follow);
+    return () => window.removeEventListener(SETTING_CHANGED, follow);
+  }, []);
+  // The settings, over the shell: null for the conversations.
+  const [settingsPage, setSettingsPage] = useState<SettingsPageName | null>(null);
   // Where each conversation born here was started: until its first turn tells the core.
   const bornIn = useRef(new Map<string, string | null>());
 
@@ -280,7 +292,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   const style = { locale, units: messages.units };
   return (
-    <div className="aparte-app-shell bonaparte-shell">
+    <>
+    {settingsPage ? (
+      <SettingsView messages={messages} locale={locale} page={settingsPage} onPage={setSettingsPage} onBack={() => setSettingsPage(null)} />
+    ) : null}
+    <div className="aparte-app-shell bonaparte-shell" hidden={settingsPage !== null}>
       {folded ? (
         <Rail
           messages={messages}
@@ -292,6 +308,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           onNewConversation={newConversation}
           onSearch={() => setSearching(true)}
           onOpen={(id) => window.dispatchEvent(new CustomEvent('aparte-conversation-select', { detail: { id } }))}
+          onSettings={() => setSettingsPage('general')}
         />
       ) : (
         <Sidebar
@@ -306,6 +323,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           onNewConversation={newConversation}
           onSearch={() => setSearching(true)}
           onNewProject={() => setCreatingProject(true)}
+          onSettings={() => setSettingsPage('general')}
         />
       )}
       <SearchPalette
@@ -415,6 +433,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       />
       </div>
     </div>
+    </>
   );
 }
 

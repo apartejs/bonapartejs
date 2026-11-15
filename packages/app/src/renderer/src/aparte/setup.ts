@@ -17,6 +17,11 @@ export function setupAparte(locale: Locale): void {
   // The model's question to the person: a tool the window runs, its receipt left in the thread.
   // No keys for it yet (1, 2, 3, Escape) nor « changer » on its receipt: apartejs/aparte#223.
   setupAskUser();
+  setAparteLocale(locale);
+}
+
+/** aparté's own words in the language of the interface: at start, and when the person changes it. */
+export function setAparteLocale(locale: Locale): void {
   if (locale === 'fr') aparteGlobalConfig.setLocale(fr);
   else aparteGlobalConfig.resetLocale();
 }

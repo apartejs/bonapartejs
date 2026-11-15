@@ -48,6 +48,8 @@ export interface Delta {
   mode?: PlayMode;
   /** A note of the window's tools: all of them, as the model knows them after it. */
   windowTools?: ToolDef[];
+  /** A note of the reply language: the language it told. */
+  language?: string;
 }
 
 interface Common {
@@ -63,7 +65,8 @@ interface Common {
 }
 
 export type JournalBody =
-  | { kind: 'system' }
+  /** `replyLanguage`: the language the frozen prompt asks the replies in (the first system turn). */
+  | { kind: 'system'; replyLanguage?: string }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   /** `truncated`: the context ran out in the middle of it — the answer is incomplete. */
   | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true }
