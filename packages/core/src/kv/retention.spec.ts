@@ -77,6 +77,16 @@ describe('enforceRetention', () => {
     expect(report.evicted).toEqual(['other']);
   });
 
+  it('does not count twice the state a save replaces: its old file goes when the new one is written', async () => {
+    const dir = await folder();
+    await state(dir, 'a', 500, 10);
+    await state(dir, 'b', 300, 20);
+    // a is saved again at 510: once written, the folder holds 810 of the 1 000 allowed.
+    const report = await enforceRetention(dir, 1000, ['a'], 510, 'a');
+    expect(report).toMatchObject({ evicted: [], overBudget: false });
+    expect(await readdir(dir)).toContain('b.slot');
+  });
+
   it('evicts seeds like the rest, with their manifest', async () => {
     const dir = await folder();
     const key = 'b'.repeat(32);

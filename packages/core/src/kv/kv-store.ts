@@ -144,10 +144,10 @@ export class KvStore {
   }
 
   /** Room for what is about to be written, before it is: the least recently used go, never `keep`. */
-  private async makeRoom(keep: readonly string[], plan: SavePlan): Promise<void> {
+  private async makeRoom(keep: readonly string[], plan: SavePlan, replacing?: string): Promise<void> {
     const budget = this.options.budgetBytes?.();
     if (budget === undefined || !(budget > 0)) return;
-    const report = await enforceRetention(this.dir, budget, [...keep, ...(plan.keep ?? [])], plan.expectedBytes ?? 0);
+    const report = await enforceRetention(this.dir, budget, [...keep, ...(plan.keep ?? [])], plan.expectedBytes ?? 0, replacing);
     if (report.evicted.length > 0 || report.overBudget) this.options.onRetention?.(report);
   }
 
@@ -217,7 +217,7 @@ export class KvStore {
   }
 
   async saveState(slots: KvSlots, idSlot: number, stateId: string, live: LiveConfig, plan: SavePlan = {}): Promise<KvManifest> {
-    await this.makeRoom([stateIdOf(stateId)], plan);
+    await this.makeRoom([stateIdOf(stateId)], plan, stateIdOf(stateId));
     const saved = await slots.saveSlot(idSlot, this.slotFilename(stateId));
     await mkdir(this.dir, { recursive: true });
     const manifest: KvManifest = {

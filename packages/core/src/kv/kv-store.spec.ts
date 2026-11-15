@@ -172,6 +172,18 @@ describe('KvStore — under a disk budget', () => {
     expect(names).not.toContain('old.slot');
   });
 
+  it('saving a state again makes room for what it adds, not for its whole size a second time', async () => {
+    const { dir, client, prefill } = await rig();
+    const store = new KvStore(dir, { budgetBytes: () => 10_000 });
+    await writeFile(join(dir, 'c1_main.slot'), Buffer.alloc(5_000));
+    await writeFile(join(dir, 'c1_main.manifest.json'), '{}');
+    await writeFile(join(dir, 'other.slot'), Buffer.alloc(3_000));
+    await writeFile(join(dir, 'other.manifest.json'), '{}');
+    await prefill(PROMPT);
+    await store.saveState(client, 0, 'c1_main', LIVE, { expectedBytes: 5_100 });
+    expect(await readdir(dir)).toContain('other.slot');
+  });
+
   it('refuses aloud a state bigger than the whole budget, and asks the server for nothing', async () => {
     const { dir } = await rig();
     const store = new KvStore(dir, { budgetBytes: () => 1_000 });

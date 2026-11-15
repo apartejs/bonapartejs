@@ -86,17 +86,21 @@ async function evict(dir: string, entry: KvEntry): Promise<void> {
 /**
  * Makes room for `needBytes` more under `budgetBytes`, evicting the least
  * recently used states and seeds — never one of `keep` (the state being
- * saved, the one about to be restored).
+ * saved, the one about to be restored). `replacing`: the state the write
+ * replaces — its old file goes when the new one is written, so it does not
+ * count beside it.
  */
 export async function enforceRetention(
   dir: string,
   budgetBytes: number,
   keep: readonly string[],
   needBytes = 0,
+  replacing?: string,
 ): Promise<RetentionReport> {
   if (needBytes > budgetBytes) throw new KvBudgetTooSmallError(needBytes, budgetBytes);
   const usage = await kvUsage(dir);
-  let total = usage.totalBytes;
+  const replaced = usage.entries.find((entry) => entry.kind === 'state' && entry.id === replacing)?.bytes ?? 0;
+  let total = usage.totalBytes - replaced;
   const evicted: string[] = [];
   const candidates = usage.entries
     .filter((entry) => entry.kind === 'seed' || !keep.includes(entry.id))
