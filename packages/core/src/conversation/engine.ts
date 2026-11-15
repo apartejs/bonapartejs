@@ -30,9 +30,10 @@ import {
 } from '../costs/announce.js';
 import { createSlotScheduler, type SlotOwner, type SlotScheduler } from '../engine/slot-scheduler.js';
 import type { MeasureStore } from '../engine/measures.js';
+import { familyLayer } from '../families/index.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
-import { frozenPrompt, openJournal } from '../journal/journal.js';
+import { frozenPrompt, isRefrozen, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
@@ -41,6 +42,7 @@ import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-pr
 import { CompactionError, planCompaction, SUMMARY_MAX_TOKENS, SUMMARY_QUESTION, summaryNote } from './compact.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
+import { branchModel, rerenderConversation } from './switch.js';
 import type { PlayMode } from '@aparte/bonaparte-shared';
 
 /** A rough count, for the checks made before the server's: about three characters a token. */
@@ -319,22 +321,28 @@ export class ConversationEngine {
     if (!entries.some((entry) => entry.kind === 'user')) return null;
     const last = entries.findLast((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
     const key = ownerKey(owner);
-    const manifest = await this.deps.kv.manifest(key);
+    // Frozen for another model: whatever it saved, the conversation is rendered again and read (task 7.4).
+    const switching = onAnotherModel(branchModel(entries), engine);
+    const manifest = switching ? null : await this.deps.kv.manifest(key);
     let refusal: Parameters<typeof announceOpen>[0]['refusal'] = null;
-    if (!manifest) refusal = 'missing';
+    if (switching) refusal = 'other-model';
+    else if (!manifest) refusal = 'missing';
     else {
       const verdict = canRestore(manifest, engine.live);
       if (!verdict.ok) refusal = verdict.reason;
     }
+    const prompt = switching
+      ? (await this.refreezeFor(meta, entries, engine, this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined)).rendered
+      : frozenPrompt(entries);
     const prefill = this.deps.measures?.get(engine.modelPath)?.prefillTokensPerSecond;
     const announced = announceOpen({
-      resident: this.scheduler.isResident(owner),
-      promptTokens: estimateTokens(frozenPrompt(entries)),
+      resident: !switching && this.scheduler.isResident(owner),
+      promptTokens: estimateTokens(prompt),
       saved: refusal === null ? manifest : null,
       refusal,
       behind: manifest !== null && savedBefore(entries, manifest.savedAt),
       ...(manifest ? { behindTokens: estimateTokens(renderedAfter(entries, manifest.savedAt)) } : {}),
-      diedMidAnswer: last?.stopped === 'engine' && (!manifest || manifest.savedAt < last.at),
+      diedMidAnswer: !switching && last?.stopped === 'engine' && (!manifest || manifest.savedAt < last.at),
       evicted: manifest ? null : await this.deps.kv.evicted(key),
       measures: prefill === undefined ? {} : { prefillTokensPerSecond: prefill },
     });
@@ -500,6 +508,11 @@ export class ConversationEngine {
       reason,
       estimated: measured === undefined,
     });
+    // Back to where the prompt was frozen for another model: rendered again for this one, and read (task 7.4).
+    if (onAnotherModel(branchModel(kept), engine)) {
+      const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
+      return reread(estimateTokens((await this.refreezeFor(meta, kept, engine, instructions)).rendered), 'other-model');
+    }
     const owner = this.ownerOf(meta);
     if (!this.scheduler.isResident(owner)) {
       const manifest = await this.deps.kv.manifest(ownerKey(owner));
@@ -755,14 +768,70 @@ export class ConversationEngine {
    * first, and its state given to the new one: the new answer is served by
    * the cache up to the branch point.
    */
-  private async fork(meta: ConversationMeta, journal: Journal, afterEntryId: string): Promise<{ meta: ConversationMeta; journal: Journal }> {
+  private async fork(
+    meta: ConversationMeta,
+    journal: Journal,
+    afterEntryId: string,
+    options: { memory?: boolean } = {},
+  ): Promise<{ meta: ConversationMeta; journal: Journal }> {
     const parent = this.ownerOf(meta);
     // What sits in the slot is saved first — never at the cost of the state the branch starts from.
     await this.scheduler.flush(parent);
     const branch = await journal.fork(afterEntryId);
     const child: SlotOwner = { kind: 'conversation', conversationId: meta.id, branchId: branch.branchId };
-    await this.deps.kv.copyState(ownerKey(parent), ownerKey(child));
+    // A change of model starts from nothing: the state of the branch left is the old model's.
+    if (options.memory !== false) await this.deps.kv.copyState(ownerKey(parent), ownerKey(child));
     return { meta: await this.deps.store.update(meta.id, { branchId: branch.branchId }), journal: branch };
+  }
+
+  /**
+   * What a change of model would freeze (task 7.4): the system prompt frozen again for the engine's family,
+   * with the truth of the moment, then the conversation rendered again by that family.
+   */
+  private async refreezeFor(meta: ConversationMeta, entries: readonly JournalEntry[], engine: EngineView, instructions: string | undefined) {
+    const { family } = engine;
+    const asked = this.deps.prompt(meta);
+    const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
+    const stable = family.renderSystem(prompt.stable);
+    const written = branchModel(entries).family;
+    const rendered = rerenderConversation(entries, {
+      to: family,
+      head: stable + family.renderSystemNote(prompt.project),
+      from: written ? familyLayer(written) : family,
+    });
+    return { asked, stable, rendered };
+  }
+
+  /**
+   * A change of model (task 7.4): a new branch after the last entry — the memory not carried: the branch left
+   * keeps it, for the old model —, opened by an `engine` entry that freezes the prompt again for the new one.
+   */
+  private async changeModel(
+    meta: ConversationMeta,
+    journal: Journal,
+    engine: EngineView,
+    instructions: string | undefined,
+  ): Promise<{ meta: ConversationMeta; journal: Journal }> {
+    const entries = journal.entries();
+    const last = entries.at(-1);
+    const moved = last ? await this.fork(meta, journal, last.id, { memory: false }) : { meta, journal };
+    const { asked, stable, rendered } = await this.refreezeFor(moved.meta, entries, engine, instructions);
+    await moved.journal.append({
+      kind: 'engine',
+      engineId: meta.engineId,
+      modelId: engine.modelPath ?? '',
+      family: engine.family.id,
+      stable,
+      replyLanguage: asked.replyLanguage,
+      perimeter: [...asked.perimeter],
+      tools: [...asked.tools],
+      rendered,
+    });
+    const updated = await this.deps.store.update(meta.id, {
+      ...(engine.modelPath ? { modelId: engine.modelPath } : {}),
+      ...(instructions !== undefined ? { instructions } : {}),
+    });
+    return { meta: updated, journal: moved.journal };
   }
 
   private async runTurn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> {
@@ -778,6 +847,10 @@ export class ConversationEngine {
     const answerOf = input.messageId ? { messageId: input.messageId } : {};
 
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
+    // A branch frozen for another model goes on in a new branch, the conversation rendered again (task 7.4).
+    if (onAnotherModel(branchModel(journal.entries()), engine)) {
+      ({ meta, journal } = await this.changeModel(meta, journal, engine, instructions));
+    }
     if (!journal.entries().some((entry) => entry.kind === 'system')) {
       const asked = this.deps.prompt(meta);
       const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
@@ -787,6 +860,8 @@ export class ConversationEngine {
         replyLanguage: asked.replyLanguage,
         perimeter: [...asked.perimeter],
         tools: [...asked.tools],
+        ...(engine.modelPath ? { modelId: engine.modelPath } : {}),
+        family: family.id,
       });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
       if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
@@ -1095,12 +1170,21 @@ export class ConversationEngine {
 }
 
 /** The mode the model last read in this branch: its last note of the mode, else Répétition (the frozen prompt names none). */
+/**
+ * A branch frozen for another model than the engine's (task 7.4): another model file, or — for a journal older
+ * than the record, which knows only its family — another family.
+ */
+function onAnotherModel(model: ReturnType<typeof branchModel>, engine: EngineView): boolean {
+  if (model.modelId !== undefined && engine.modelPath !== undefined) return model.modelId !== engine.modelPath;
+  return model.family !== undefined && model.family !== engine.family.id;
+}
+
 function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
-    // A rebase froze the system prompt again, which names no mode: told again.
-    if (entry.kind === 'rebase') break;
+    // A rebase or a change of model froze the system prompt again, which names no mode: told again.
+    if (isRefrozen(entry)) break;
   }
   return 'repetition';
 }
@@ -1110,7 +1194,7 @@ function lastToldPerimeter(entries: readonly JournalEntry[]): string[] | undefin
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'perimeter' && entry.delta.roots) return entry.delta.roots;
-    if ((entry.kind === 'system' || entry.kind === 'rebase') && entry.perimeter) return entry.perimeter;
+    if ((entry.kind === 'system' || isRefrozen(entry)) && entry.perimeter) return entry.perimeter;
   }
   return undefined;
 }
@@ -1123,15 +1207,18 @@ function lastToldReplyLanguage(entries: readonly JournalEntry[]): string | undef
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'reply-language' && entry.delta.language) return entry.delta.language;
-    if ((entry.kind === 'system' || entry.kind === 'rebase') && entry.replyLanguage) return entry.replyLanguage;
+    if ((entry.kind === 'system' || isRefrozen(entry)) && entry.replyLanguage) return entry.replyLanguage;
   }
   return undefined;
 }
 
-/** The system turn the branch's prompt starts from (a seed is keyed by it): its last rebase's, else its first. */
+/**
+ * The system turn the branch's prompt starts from (a seed is keyed by it): its last rebase's or change of
+ * model's, else its first.
+ */
 function stableOf(entries: readonly JournalEntry[]): string {
-  const rebase = entries.findLast((entry): entry is Extract<JournalEntry, { kind: 'rebase' }> => entry.kind === 'rebase');
-  return rebase?.stable ?? entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
+  const refrozen = entries.findLast(isRefrozen);
+  return refrozen?.stable ?? entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
 }
 
 /** The window's tools the model last read of in this branch: the last note of them, else none. */
@@ -1140,7 +1227,7 @@ function lastToldTools(entries: readonly JournalEntry[]): ToolDef[] | undefined 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.tools) return entry.delta.tools;
-    if ((entry.kind === 'system' || entry.kind === 'rebase') && entry.tools) return entry.tools;
+    if ((entry.kind === 'system' || isRefrozen(entry)) && entry.tools) return entry.tools;
   }
   return undefined;
 }
@@ -1149,8 +1236,8 @@ function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.windowTools) return entry.delta.windowTools;
-    // A rebase froze the system prompt again, without the window's tools: told again.
-    if (entry.kind === 'rebase') break;
+    // A rebase or a change of model froze the system prompt again, without the window's tools: told again.
+    if (isRefrozen(entry)) break;
   }
   return [];
 }

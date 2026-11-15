@@ -16,9 +16,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, truncate, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
-import type { BranchInfo, Journal, JournalEntry, NewJournalEntry } from './types.js';
+import { isRefrozen, type BranchInfo, type Journal, type JournalEntry, type NewJournalEntry } from './types.js';
 
 export type * from './types.js';
+export { isRefrozen } from './types.js';
 
 const writes = new KeyedQueue();
 /** Ids become file names: letters, digits, `-` and `_` only. */
@@ -27,10 +28,11 @@ const MAIN = 'main';
 
 /**
  * The prompt a branch froze, from what was written — never rendered again:
- * the `rendered` texts from the last rebase (or from the system entry).
+ * the `rendered` texts from the last rebase or change of model (or from the
+ * system entry).
  */
 export function frozenPrompt(entries: readonly JournalEntry[]): string {
-  let start = entries.findLastIndex((entry) => entry.kind === 'rebase');
+  let start = entries.findLastIndex(isRefrozen);
   if (start < 0) start = Math.max(0, entries.findIndex((entry) => entry.kind === 'system'));
   return entries
     .slice(start)

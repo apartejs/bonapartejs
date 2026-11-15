@@ -92,7 +92,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       meta = await core.conversationStore.ensure(conversationId, {
         kind: 'code',
         engineId: 'builtin',
-        modelId: (await core.engineState()).model?.name ?? '',
+        modelId: (await core.engineState()).model?.path ?? '',
         mode: 'repetition',
       });
     } catch (error) {

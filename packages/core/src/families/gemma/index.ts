@@ -14,7 +14,7 @@
 import type { ToolDef, ToolResult } from '../../tools/types.js';
 import { neutralizeControlTokens } from '../control-tokens.js';
 import type { FamilyLayer } from '../types.js';
-import { formatFunctionDeclaration } from './declarations.js';
+import { formatArgument, formatFunctionDeclaration } from './declarations.js';
 import { GemmaStreamDemux } from './demux.js';
 import { buildGemmaGrammarConstraint } from './grammar.js';
 import {
@@ -96,6 +96,15 @@ ${disarm(text).trim()}${TURN_CLOSE}
   beginAssistant: ({ thinking, continuing }) => (continuing ? '' : thinking ? MODEL_HEADER : MODEL_HEADER + EMPTY_THOUGHT),
   // An answer that ended on a call leaves its turn open: its responses follow.
   endAssistant: (raw) => (raw.trimEnd().endsWith(TOOL_CALL_CLOSE) ? '' : `${TURN_CLOSE}\n`),
+  // As the template renders a model's message of the history: no thought, the text trimmed, the calls in its
+  // notation (keys sorted, unquoted), the turn left open for their responses.
+  renderAnswer: ({ text, calls, continuing }) =>
+    (continuing ? '' : MODEL_HEADER) +
+    disarm(text).trim() +
+    calls
+      .map((call) => `${TOOL_CALL_OPEN}call:${disarm(call.name)}${formatArgument(disarmed(call.input), false)}${TOOL_CALL_CLOSE}`)
+      .join('') +
+    (calls.length > 0 ? '' : `${TURN_CLOSE}\n`),
 
   // The declarations are the convention: Gemma was taught them.
   renderToolConvention: () => '',

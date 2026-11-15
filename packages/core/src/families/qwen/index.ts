@@ -49,6 +49,15 @@ export const qwenLayer: FamilyLayer = {
   renderToolResults: (results) => renderUser(results.map(renderToolResult).join('\n\n')),
   beginAssistant: ({ thinking }) => (thinking ? ASSISTANT_HEADER : ASSISTANT_HEADER + EMPTY_THINK),
   endAssistant: () => `${IM_END}\n`,
+  // A turn of its own, even after tool results (they were a turn of the person); the calls as the system
+  // prompt's convention writes them, their JSON disarmed whole.
+  renderAnswer: ({ text, calls }) =>
+    ASSISTANT_HEADER +
+    disarm(text).trim() +
+    calls
+      .map((call) => `${TOOL_CALL_OPEN}${disarm(`{"name": ${JSON.stringify(call.name)}, "arguments": ${JSON.stringify(call.input)}}`)}${TOOL_CALL_CLOSE}`)
+      .join('') +
+    `${IM_END}\n`,
 
   renderToolConvention: () =>
     'To call a tool, emit exactly:\n' +

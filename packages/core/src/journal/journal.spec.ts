@@ -50,10 +50,21 @@ describe('openJournal', () => {
     const journal = await openJournal(dir, 'c1');
     await journal.append({ kind: 'system', rendered: SYSTEM });
     await journal.append({ kind: 'user', text: 'Bonjour', rendered: USER });
-    await journal.append({ kind: 'engine', engineId: 'builtin', modelId: 'gemma' });
+    await journal.append({ kind: 'outcomes', outcomes: {} });
     await journal.append({ kind: 'assistant', raw: 'Bonjour Paul.', rendered: ANSWER });
     const reopened = await openJournal(dir, 'c1');
     expect(frozenPrompt(reopened.entries())).toBe(SYSTEM + USER + ANSWER);
+  });
+
+  it('starts the frozen prompt at the last change of model', async () => {
+    const dir = await folder();
+    const journal = await openJournal(dir, 'c1');
+    await journal.append({ kind: 'system', rendered: SYSTEM });
+    await journal.append({ kind: 'user', text: 'Bonjour', rendered: USER });
+    const switched = '<|im_start|>system\nYou are bonaparte.<|im_end|>\n<|im_start|>user\nBonjour<|im_end|>\n';
+    await journal.append({ kind: 'engine', engineId: 'builtin', modelId: 'qwen.gguf', family: 'qwen', rendered: switched });
+    await journal.append({ kind: 'user', text: 'Et ensuite ?', rendered: 'NEXT' });
+    expect(frozenPrompt(journal.entries())).toBe(`${switched}NEXT`);
   });
 
   it('starts the frozen prompt at the last rebase', async () => {

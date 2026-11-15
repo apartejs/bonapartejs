@@ -13,7 +13,7 @@
  * saves nothing; a conversation too short for it is left as it is.
  */
 
-import type { JournalEntry } from '../journal/types.js';
+import { isRefrozen, type JournalEntry } from '../journal/types.js';
 
 /** What the model is asked — sent to the model: English. Never part of the conversation. */
 export const SUMMARY_QUESTION =
@@ -57,21 +57,26 @@ export interface CompactionPlan {
   compactedTokens: number;
 }
 
-/** The conversation's own part: after the last rebase, else after its system turns. */
-function conversationPart(entries: readonly JournalEntry[]): readonly JournalEntry[] {
-  const rebase = entries.findLastIndex((entry) => entry.kind === 'rebase');
-  if (rebase >= 0) return entries.slice(rebase + 1);
+/**
+ * The conversation's own part: after the last rebase or change of model, else after its system turns.
+ * `folded`: what a change of model rendered again — the conversation before it, folded but never kept.
+ */
+function conversationPart(entries: readonly JournalEntry[]): { part: readonly JournalEntry[]; folded: readonly JournalEntry[] } {
+  const refrozen = entries.findLastIndex(isRefrozen);
+  if (refrozen >= 0) {
+    return { part: entries.slice(refrozen + 1), folded: entries[refrozen]!.kind === 'engine' ? [entries[refrozen]!] : [] };
+  }
   const first = entries.findIndex((entry) => entry.kind !== 'system');
-  return first < 0 ? [] : entries.slice(first);
+  return { part: first < 0 ? [] : entries.slice(first), folded: [] };
 }
 
 /** What a compaction would fold and keep — or why it is not worth it. */
 export function planCompaction(entries: readonly JournalEntry[], estimate: (text: string) => number): CompactionPlan {
   if (entries.at(-1)?.kind === 'pending') throw new CompactionError('pending', 'A call waits for an answer: answer it before compacting.');
-  const part = conversationPart(entries);
+  const { part, folded } = conversationPart(entries);
   const weigh = (list: readonly JournalEntry[]): number => estimate(list.map((entry) => entry.rendered ?? '').join(''));
   const starts = part.flatMap((entry, index) => (entry.kind === 'user' ? [index] : []));
-  const total = weigh(part);
+  const total = weigh([...folded, ...part]);
   let keptAt = part.length;
   if (starts.length > KEPT_TURNS) {
     const from = starts[starts.length - KEPT_TURNS]!;

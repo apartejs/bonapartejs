@@ -32,3 +32,18 @@ export function layerForModel(model: { chatTemplate?: string | undefined }): Fam
   if (family === null) throw new UnsupportedFamilyError('unsupported-family');
   return familyLayer(family);
 }
+
+/** What a family's system turn opens with, before its text. */
+function systemOpening(layer: FamilyLayer): string {
+  const one = layer.renderSystem('a');
+  const other = layer.renderSystem('b');
+  let at = 0;
+  while (at < one.length && one[at] === other[at]) at += 1;
+  return one.slice(0, at);
+}
+
+/** The family a prompt was rendered by, read from how its system turn opens; null when none says. */
+export function familyOfPrompt(prompt: string): FamilyId | null {
+  for (const layer of Object.values(LAYERS)) if (layer && prompt.startsWith(systemOpening(layer))) return layer.id;
+  return null;
+}

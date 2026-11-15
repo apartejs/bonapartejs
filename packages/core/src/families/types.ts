@@ -28,6 +28,13 @@ export type DemuxEvent =
   /** A call the model opened and that cannot be read: nothing of it is shown. */
   | { type: 'tool-call-malformed'; raw: string };
 
+/** What an earlier answer said, read back from what its model wrote. */
+export interface EarlierAnswer {
+  text: string;
+  calls: readonly { name: string; input: Record<string, unknown> }[];
+  continuing?: boolean;
+}
+
 export interface StreamDemux {
   push(delta: string): DemuxEvent[];
   /** At the end of the generation: what was held back, and an unclosed call. */
@@ -60,6 +67,13 @@ export interface FamilyLayer {
   beginAssistant(options: { thinking: boolean; continuing?: boolean }): string;
   /** What closes what the model wrote: an answer that ended on a tool call may leave its turn open. */
   endAssistant(raw: string): string;
+  /**
+   * An answer of an earlier model, as this family's template renders history (task 7.4: a conversation that
+   * changes model is rendered again): its text, then its calls in the family's syntax — no reasoning. Text and
+   * arguments come from elsewhere, and are disarmed. `continuing`: it follows tool results in the same turn.
+   * An answer with calls leaves its turn as the family's own does: their results follow.
+   */
+  renderAnswer(answer: EarlierAnswer): string;
   /** How to call a tool, said in the system prompt. Sent to the model: English. */
   renderToolConvention(): string;
   /**

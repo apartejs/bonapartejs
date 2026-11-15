@@ -9,6 +9,7 @@
  */
 
 import type { PlayMode } from '@aparte/bonaparte-shared';
+import type { FamilyId } from '../families/types.js';
 import type { ToolDef } from '../tools/types.js';
 
 import type { ToolResult } from '../tools/types.js';
@@ -73,7 +74,8 @@ export type JournalBody =
   /** `replyLanguage`: the language the frozen prompt asks the replies in (the first system turn). */
   /** `perimeter`: the folders the frozen prompt names (the first system turn). */
   /** `tools`: the core's tools the frozen prompt lists (the first system turn). */
-  | { kind: 'system'; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[] }
+  /** `modelId` (the model file's path) and `family`: what the branch's prompt was first frozen for (task 7.4). */
+  | { kind: 'system'; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[]; modelId?: string; family?: FamilyId }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   /** `truncated`: the context ran out in the middle of it — the answer is incomplete. */
   | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true }
@@ -86,8 +88,12 @@ export type JournalBody =
    * seed is keyed by); the facts it froze (`replyLanguage`, `perimeter`, `tools`), as the first system turn's.
    */
   /** `keptFrom`: the first entry of the turns kept as they were (none kept: absent). */
-  | { kind: 'rebase'; summary: string; keptFrom?: string; stable?: string; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[] }
-  | { kind: 'engine'; engineId: string; modelId: string }
+  | ({ kind: 'rebase'; summary: string; keptFrom?: string } & Refrozen)
+  /**
+   * A change of model (task 7.4): the prompt starts again from here, the conversation rendered again by the
+   * new model's `family` (its `rendered`). `modelId`: the model file's path.
+   */
+  | ({ kind: 'engine'; engineId: string; modelId: string; family: FamilyId } & Refrozen)
   /**
    * Going back before the person's message `toEntryId` (task 7.1). `note`: what the model is told at its
    * next turn (English); `undo`: the going back was undone before that turn — nothing is told.
@@ -97,6 +103,19 @@ export type JournalBody =
   | { kind: 'withdrawn'; entryId: string };
 
 export type JournalEntry = Common & JournalBody;
+
+/** The system turn frozen again (what a seed is keyed by), and the facts it froze, as the first system turn's. */
+export interface Refrozen {
+  stable?: string;
+  replyLanguage?: string;
+  perimeter?: string[];
+  tools?: ToolDef[];
+}
+
+/** Where a branch's prompt starts again: a compaction, or a change of model. */
+export function isRefrozen(entry: JournalEntry): entry is Extract<JournalEntry, { kind: 'rebase' | 'engine' }> {
+  return entry.kind === 'rebase' || entry.kind === 'engine';
+}
 
 /** What a caller writes: the journal gives the id and the time. */
 export type NewJournalEntry = Omit<Common, 'id' | 'at'> & JournalBody;
