@@ -32,12 +32,15 @@ export interface SlotScheduler {
   isResident(owner: SlotOwner): boolean;
   /** Forgets what a slot holds for this owner, without saving it: the engine died, or the conversation was deleted. */
   evict(owner: SlotOwner): void;
+  /** Forgets every resident, saving none: the engine was relaunched, and its slots are empty. */
+  reset(): void;
   onChange(listener: () => void): () => void;
 }
 
 export interface SlotSchedulerOptions {
   slots: number;
-  save(owner: SlotOwner, slotId: number): Promise<void>;
+  /** `incoming`: the owner about to take the slot — its saved state must survive the room this save makes. */
+  save(owner: SlotOwner, slotId: number, incoming?: SlotOwner): Promise<void>;
   restore(owner: SlotOwner, slotId: number): Promise<void>;
   /** A save that failed: the state is lost (a re-read later), the next owner goes on. */
   onError?(error: unknown, owner: SlotOwner): void;
@@ -99,11 +102,11 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
     }
   }
 
-  async function save(slot: Slot): Promise<void> {
+  async function save(slot: Slot, incoming?: SlotOwner): Promise<void> {
     const resident = slot.resident;
     if (!resident || !slot.dirty) return;
     try {
-      await options.save(resident, slot.id);
+      await options.save(resident, slot.id, incoming);
       slot.dirty = false;
     } catch (error) {
       options.onError?.(error, resident);
@@ -114,7 +117,7 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
 
   async function take(slot: Slot, owner: SlotOwner): Promise<void> {
     if (owner.kind === 'side' || (slot.resident && keyOf(slot.resident) === keyOf(owner))) return;
-    await save(slot);
+    await save(slot, owner);
     slot.resident = null;
     await options.restore(owner, slot.id);
     slot.resident = owner;
@@ -198,6 +201,13 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
           slot.resident = null;
           slot.dirty = false;
         }
+      }
+    },
+
+    reset() {
+      for (const slot of slots) {
+        slot.resident = null;
+        slot.dirty = false;
       }
     },
 

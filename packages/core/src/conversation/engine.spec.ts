@@ -31,7 +31,9 @@ afterEach(async () => {
   dirs = [];
 });
 
-async function rig(options: { server?: FakeLlamaServerOptions; live?: LiveConfig | null; dir?: string } = {}) {
+async function rig(
+  options: { server?: FakeLlamaServerOptions; live?: LiveConfig | null; dir?: string; budget?: () => number } = {},
+) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
   if (!options.dir) dirs.push(dir);
   const kvDir = join(dir, 'kv-slots');
@@ -45,7 +47,7 @@ async function rig(options: { server?: FakeLlamaServerOptions; live?: LiveConfig
   servers.push(server);
   const client = new LlamaCppHttpClient(server.url);
   const store = new ConversationStore(join(dir, 'conversations'));
-  const kv = new KvStore(kvDir);
+  const kv = new KvStore(kvDir, options.budget ? { budgetBytes: options.budget } : {});
   const live = options.live === undefined ? LIVE : options.live;
   const engine = new ConversationEngine({
     store,
@@ -100,6 +102,23 @@ describe('ConversationEngine — the memory', () => {
     expect(result.usage.cacheReadTokens).toBeGreaterThan(20);
     const seeds = await kv.usage();
     expect(seeds.entries.some((entry) => entry.kind === 'seed')).toBe(true);
+  });
+
+  it('saving the conversation that leaves never evicts the state of the one arriving', async () => {
+    let budget = Number.POSITIVE_INFINITY;
+    const { kv, server, conversation, say } = await rig({ budget: () => budget });
+    const a = await conversation();
+    const b = await conversation();
+    await say(b.id, 'Salut');
+    await say(a.id, 'Bonjour');
+    await say(a.id, 'Et encore une chose');
+    // Room for A's new state only if B's, or the seed and more, goes.
+    const aBytes = server.getSlotTokens(0).length * 100;
+    const bBytes = (await kv.usage()).entries.find((entry) => entry.id === `${b.id}_main`)!.bytes;
+    budget = aBytes + bBytes - 1;
+    const { events } = await say(b.id, 'Et toi ?');
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'end' });
+    expect(events.filter((event) => event.type === 'step' && event.name === 'reread')).toEqual([]);
   });
 
   it('going from A to B and back: A is saved, then restored from its state, served by the cache', async () => {

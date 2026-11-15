@@ -166,6 +166,32 @@ describe('createSlotScheduler', () => {
     expect(String(errors[0])).toMatch(/no space/);
   });
 
+  it('tells the save of the owner leaving which owner arrives: its state must survive the room made', async () => {
+    const saves: string[] = [];
+    const scheduler = createSlotScheduler({
+      slots: 1,
+      save: async (owner, _slot, incoming) => void saves.push(`${name(owner)} for ${incoming ? name(incoming) : 'nobody'}`),
+      restore: async () => undefined,
+    });
+    await scheduler.run(A, async () => undefined);
+    await scheduler.run(B, async () => undefined);
+    await scheduler.flush();
+    expect(saves).toEqual(['a for b', 'b for nobody']);
+  });
+
+  it('a relaunched engine holds nothing: every resident is forgotten, none is saved', async () => {
+    const { scheduler, calls, work } = rig(2);
+    await scheduler.run(A, work('a'));
+    await scheduler.run(B, work('b'));
+    scheduler.reset();
+    expect(scheduler.isResident(A)).toBe(false);
+    expect(scheduler.isResident(B)).toBe(false);
+    await scheduler.flush();
+    await scheduler.run(A, work('a again'));
+    // Nothing saved over the states on disk: the slots of the new server are empty.
+    expect(calls).toEqual(['restore a@0', 'run a', 'restore b@1', 'run b', 'restore a@0', 'run a again']);
+  });
+
   it('says whether an owner sits in a slot, and forgets one without saving it', async () => {
     const { scheduler, calls, work } = rig();
     expect(scheduler.isResident(A)).toBe(false);

@@ -147,7 +147,8 @@ export class KvStore {
   private async makeRoom(keep: readonly string[], plan: SavePlan, replacing?: string): Promise<void> {
     const budget = this.options.budgetBytes?.();
     if (budget === undefined || !(budget > 0)) return;
-    const report = await enforceRetention(this.dir, budget, [...keep, ...(plan.keep ?? [])], plan.expectedBytes ?? 0, replacing);
+    const kept = [...keep, ...(plan.keep ?? []).map(stateIdOf)];
+    const report = await enforceRetention(this.dir, budget, kept, plan.expectedBytes ?? 0, replacing);
     if (report.evicted.length > 0 || report.overBudget) this.options.onRetention?.(report);
   }
 

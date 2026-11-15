@@ -140,7 +140,7 @@ export class ConversationEngine {
   constructor(private readonly deps: ConversationEngineDeps) {
     this.scheduler = createSlotScheduler({
       slots: deps.slots ?? 1,
-      save: (owner, slot) => this.save(owner, slot),
+      save: (owner, slot, incoming) => this.save(owner, slot, incoming),
       restore: (owner, slot) => this.restore(owner, slot),
     });
   }
@@ -396,13 +396,17 @@ export class ConversationEngine {
     }
   }
 
-  /** The slot hook: the conversation leaving is saved, room made first for what it will weigh. */
-  private async save(owner: SlotOwner, slotId: number): Promise<void> {
+  /**
+   * The slot hook: the conversation leaving is saved, room made first for
+   * what it will weigh — never at the cost of the state of the one arriving.
+   */
+  private async save(owner: SlotOwner, slotId: number, incoming?: SlotOwner): Promise<void> {
     const last = this.lastRun.get(ownerKey(owner));
     const live = last?.engine.live;
     if (!last || !live) return;
     await this.deps.kv.saveState(last.engine.client, slotId, ownerKey(owner), live, {
       expectedBytes: last.tokens * (last.engine.kvBytesPerToken ?? 0),
+      keep: incoming?.kind === 'conversation' ? [ownerKey(incoming)] : [],
     });
   }
 }
