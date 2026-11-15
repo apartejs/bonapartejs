@@ -28,6 +28,8 @@ export interface ConversationMeta {
   branch?: string;
   /** A context smaller than the engine's, for this conversation. */
   contextCap?: number;
+  /** The project's instructions as the model last read them: a change is appended as a note (task 4.7). */
+  instructions?: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;

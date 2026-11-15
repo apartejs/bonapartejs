@@ -33,7 +33,13 @@ afterEach(async () => {
 });
 
 async function rig(
-  options: { server?: FakeLlamaServerOptions; live?: LiveConfig | null; dir?: string; budget?: () => number } = {},
+  options: {
+    server?: FakeLlamaServerOptions;
+    live?: LiveConfig | null;
+    dir?: string;
+    budget?: () => number;
+    instructions?: () => Promise<string | undefined>;
+  } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
   if (!options.dir) dirs.push(dir);
@@ -57,6 +63,7 @@ async function rig(
     store,
     kv,
     onSaveError: (error) => saveErrors.push(error),
+    ...(options.instructions ? { instructions: options.instructions } : {}),
     engine: async () => {
       engineCalls += 1;
       return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation };
@@ -520,5 +527,30 @@ describe('ConversationEngine — the tools', () => {
     const result = await engine.turn(meta.id, { text: 'Lis a.ts', tools: { defs: [READ_FILE], onCalls: async () => ({ stop: 'limit' as const }) } }, () => undefined);
     expect(result.limited).toBe(true);
     expect(prompts.filter((prompt) => prompt.includes('Lis a.ts'))).toHaveLength(1);
+  });
+});
+
+describe('ConversationEngine — the project instructions', () => {
+  it('are frozen in the system prompt; a change is a note at the start of the next turn, the frozen text untouched', async () => {
+    let instructions: string | undefined = 'Indent with tabs.';
+    const { store, prompts, conversation, say } = await rig({ instructions: async () => instructions });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const first = prompts.filter((prompt) => prompt.includes('Bonjour')).at(-1)!;
+    expect(first).toContain('Indent with tabs.');
+
+    instructions = 'Indent with two spaces.';
+    await say(meta.id, 'Encore');
+    const second = prompts.at(-1)!;
+    // What the model read stays as it was; the change is appended.
+    expect(second.startsWith(first.slice(0, first.indexOf('Bonjour')))).toBe(true);
+    expect(second).toContain('[project update]');
+    expect(second).toContain('Indent with two spaces.');
+    const kinds = (await openJournal(store.dir, meta.id)).entries().map((entry) => entry.kind);
+    expect(kinds.slice(-3)).toEqual(['delta', 'user', 'assistant']);
+
+    await say(meta.id, 'Et puis ?');
+    const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
+    expect(notes).toHaveLength(1);
   });
 });

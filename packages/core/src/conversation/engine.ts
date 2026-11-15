@@ -28,6 +28,7 @@ import { KeyedQueue } from '../fs/json-file.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
+import { renderInstructionsDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -67,6 +68,8 @@ export interface ConversationEngineDeps {
   slots?: number;
   /** A save that failed (a full disk, a state bigger than the budget): said, never dropped in silence. */
   onSaveError?(error: unknown, conversationId: string): void;
+  /** The project's instructions now (its `.bonaparte/instructions.md`, `AGENTS.md` or `CLAUDE.md`). */
+  instructions?(meta: ConversationMeta): Promise<string | undefined>;
 }
 
 export type TurnEvent =
@@ -340,10 +343,17 @@ export class ConversationEngine {
     let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
     if (input.forkAfter) ({ meta, journal } = await this.fork(meta, journal, input.forkAfter));
 
+    const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     if (!journal.entries().some((entry) => entry.kind === 'system')) {
-      const prompt = buildSystemPrompt({ ...this.deps.prompt(meta), family });
+      const prompt = buildSystemPrompt({ ...this.deps.prompt(meta), family, ...(instructions ? { projectInstructions: instructions } : {}) });
       await journal.append({ kind: 'system', rendered: family.renderSystem(prompt.stable) });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
+      if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
+    } else if (instructions !== undefined && instructions !== (meta.instructions ?? '')) {
+      // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
+      const delta = renderInstructionsDelta(meta.instructions ?? '', instructions);
+      if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
+      meta = await this.deps.store.update(id, { instructions });
     }
     const entries = journal.entries();
     const stable = entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
