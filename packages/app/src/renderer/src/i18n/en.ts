@@ -97,6 +97,7 @@ export const en: Messages = {
     ready: 'Engine ready',
     line: (context) => `Ready · context ${context} · 1 slot`,
   },
+  modes: { lecture: 'Lecture', repetition: 'Répétition', plume: 'Plume', impro: 'Impro' },
   approval: {
     region: 'Approval request',
     verbs: { edit: 'Edit', write: 'Write', run: 'Run', fetch: 'Open', other: 'Use' },

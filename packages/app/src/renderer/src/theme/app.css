@@ -357,3 +357,9 @@ body {
   font-size: var(--aparte-font-size-xs);
   color: var(--aparte-text-muted);
 }
+
+/* The mode switch leads the composer's toolbar; the gauge goes to its end. */
+.mode-switch {
+  display: inline-flex;
+  margin-inline-end: auto;
+}

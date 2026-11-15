@@ -96,6 +96,8 @@ export interface Messages {
     ready: string;
     line(context: string): string;
   };
+  /** The four modes: the product's names, the same in every language. */
+  modes: Record<'lecture' | 'repetition' | 'plume' | 'impro', string>;
   /** The card of a call the core asks about (canvas « Conversation au travail »). */
   approval: {
     /** The card's accessible name. */

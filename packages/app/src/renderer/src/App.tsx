@@ -18,6 +18,7 @@ import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
 import { MemoryBanner } from './chat/MemoryBanner';
+import { ModeSwitch } from './chat/ModeSwitch';
 import type { Messages } from './i18n/index';
 import { EngineSetup } from './screens/EngineSetup';
 import { EngineCard } from './shell/EngineCard';
@@ -139,7 +140,20 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             <MemoryBanner announcement={memory} messages={messages} style={style} onContinue={() => setMemory(null)} />
           ) : undefined
         }
-        toolbar={engine.model ? <AparteContext window={String(engine.model.nCtx)} variant="ring" /> : undefined}
+        toolbar={
+          <>
+            <ModeSwitch
+              mode={mode}
+              messages={messages}
+              onChange={(next) => {
+                setMode(next);
+                // The core keeps it: the next call of the conversation is decided in it.
+                if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
+              }}
+            />
+            {engine.model ? <AparteContext window={String(engine.model.nCtx)} variant="ring" /> : null}
+          </>
+        }
       />
     </div>
   );

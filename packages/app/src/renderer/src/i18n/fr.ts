@@ -97,6 +97,7 @@ export const fr: Messages = {
     ready: 'Moteur prêt',
     line: (context) => `Prêt · contexte ${context} · 1 slot`,
   },
+  modes: { lecture: 'Lecture', repetition: 'Répétition', plume: 'Plume', impro: 'Impro' },
   approval: {
     region: 'Demande d’accord',
     verbs: { edit: 'Modifier', write: 'Écrire', run: 'Lancer', fetch: 'Ouvrir', other: 'Utiliser' },

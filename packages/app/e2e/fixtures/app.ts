@@ -122,6 +122,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   const server = await startFakeLlamaServer(options.engine);
   const dataDir = options.dataDir ?? (await mkdtemp(join(tmpdir(), 'bonaparte-e2e-')));
   const requestsFile = join(dataDir, 'engine-requests.jsonl');
+  const home = `${dataDir}-home`;
   const lines: string[] = [];
   const output = (): string => lines.join('');
   let app: ElectronApplication | undefined;
@@ -134,7 +135,10 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       if (app) await closeApp(app);
       await server.close();
       await releases?.close();
-      if (!options.keepData && !options.dataDir) await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
+      if (!options.keepData && !options.dataDir) {
+        await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
+        await rm(home, { recursive: true, force: true }).catch(() => undefined);
+      }
     })());
   const engineRequests = async (): Promise<EngineRequest[]> => {
     const text = await readFile(requestsFile, 'utf8').catch(() => '');
@@ -146,7 +150,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
 
   try {
     await mkdir(join(dataDir, 'config'), { recursive: true });
-    const home = join(dataDir, 'home');
+    // Beside the data folder, never in it: bonaparte's own data is a path the policy always asks about.
     await mkdir(home, { recursive: true });
     const managedEnv: Record<string, string> = {};
     let enginePort: number | undefined;
@@ -273,6 +277,7 @@ export const test = base.extend<{ launch: (options?: LaunchOptions) => Promise<L
     // A data folder kept for a later launch goes at the end of the test.
     for (const dir of new Set(launched.map((one) => one.dataDir))) {
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      await rm(`${dir}-home`, { recursive: true, force: true }).catch(() => undefined);
     }
   },
 });
