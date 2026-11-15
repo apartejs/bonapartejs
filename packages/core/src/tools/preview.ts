@@ -24,7 +24,8 @@ export interface PreviewPaths {
   display(absolute: string): string;
 }
 
-function lineCount(text: string | null): number {
+/** The lines of a text: a last newline closes the last line, it opens none. */
+export function lineCount(text: string | null): number {
   if (text === null || text === '') return 0;
   const lines = text.split('\n').length;
   return text.endsWith('\n') ? lines - 1 : lines;

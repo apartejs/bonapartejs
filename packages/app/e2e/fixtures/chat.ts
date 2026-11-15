@@ -27,6 +27,8 @@ export interface ChatDriver {
   /** The replies still being written. */
   streamingReplies: Locator;
   errors: Locator;
+  /** The line of a tool's call in a reply: aparté keeps the tool's name on it, for a test. */
+  toolLine(name: string): Locator;
   send(text: string): Promise<void>;
 }
 
@@ -47,6 +49,7 @@ export function chat(page: Page): ChatDriver {
     replyText: replies.locator('.aparte-segment-text .aparte-segment-content').last(),
     streamingReplies: replies.locator('[aria-busy="true"]'),
     errors: root.locator('[data-error-code]'),
+    toolLine: (name) => replies.locator(`[data-tool-name="${name}"]`),
 
     async send(text) {
       await editor.fill(text);

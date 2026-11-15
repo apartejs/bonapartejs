@@ -121,4 +121,24 @@ export const fr: Messages = {
       ambiguous: (times) => `Le texte à remplacer y est ${times} fois : la modification échouera.`,
     },
   },
+  tools: {
+    labels: {
+      read_file: { running: 'Lit', done: 'Lu', name: 'Lire' },
+      list_files: { running: 'Liste', done: 'Listé', name: 'Lister' },
+      search: { running: 'Cherche', done: 'Cherché', name: 'Chercher' },
+      edit_file: { running: 'Modifie', done: 'Modifié', name: 'Modifier' },
+      write_file: { running: 'Écrit', done: 'Écrit', name: 'Écrire' },
+      run_command: { running: 'Lance', done: 'Lancé', name: 'Lancer' },
+      web_fetch: { running: 'Ouvre', done: 'Ouvert', name: 'Ouvrir' },
+    },
+    lines: (count) => `${count.toLocaleString('fr-FR')} ${count > 1 ? 'lignes' : 'ligne'}`,
+    entries: (count) => (count === 0 ? 'vide' : `${count.toLocaleString('fr-FR')} ${count > 1 ? 'éléments' : 'élément'}`),
+    matches: (count, more) =>
+      count === 0 ? 'aucun résultat' : `${more ? 'plus de ' : ''}${count.toLocaleString('fr-FR')} ${count > 1 ? 'résultats' : 'résultat'}`,
+    exitCode: (code) => `code de sortie ${code}`,
+    timedOut: 'temps dépassé',
+    stopped: 'arrêté',
+    created: 'nouveau fichier',
+    waiting: 'Attend ton accord',
+  },
 };

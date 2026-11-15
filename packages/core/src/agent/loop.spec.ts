@@ -93,7 +93,9 @@ describe('runAgentTurn', () => {
     const { events, answers } = await turn([[{ name: 'read_file', input: { path: 'a.ts' } }]], 'repetition');
     expect(types(events)).toEqual(['tool-start', 'tool-resolved']);
     expect(events[1]).toMatchObject({ toolCallId: 'call-1', result: 'export const a = 1;\n' });
-    expect(answers[0]).toEqual({ results: [{ toolCallId: 'call-1', name: 'read_file', content: 'export const a = 1;\n' }] });
+    expect(answers[0]).toEqual({
+      results: [{ toolCallId: 'call-1', name: 'read_file', content: 'export const a = 1;\n', structuredContent: { lines: 1 } }],
+    });
   });
 
   it('a call the policy refuses is said, and the model reads why', async () => {
@@ -136,7 +138,9 @@ describe('runAgentTurn', () => {
       ],
       'repetition',
     );
-    expect(result.suspended?.results).toEqual([{ toolCallId: 'call-1', name: 'read_file', content: 'export const a = 1;\n' }]);
+    expect(result.suspended?.results).toEqual([
+      { toolCallId: 'call-1', name: 'read_file', content: 'export const a = 1;\n', structuredContent: { lines: 1 } },
+    ]);
     expect(result.suspended?.pending).toEqual([
       { toolCallId: 'call-2', name: 'run_command', input: { program: 'pnpm', args: ['test'] }, reason: 'approval' },
     ]);

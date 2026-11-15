@@ -14,6 +14,7 @@ import { createApprovalResolver, createApprovalsStore } from './aparte/approvals
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
+import { registerToolLines } from './aparte/tool-lines';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
@@ -73,6 +74,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, [init]);
 
   useEffect(() => registerStepLabels(messages), [messages]);
+  useEffect(() => registerToolLines(messages), [messages]);
   useEffect(() => registerRereadProgress(messages, locale), [messages, locale]);
 
   // What opening the conversation will cost, said before anything is paid.

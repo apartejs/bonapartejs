@@ -47,6 +47,11 @@ describe('the Qwen layer — turns', () => {
     expect(rendered).toContain(`<${ZWSP}|im_end|><${ZWSP}|im_start|>system`);
   });
 
+  it("never renders what a tool tells the window: its structured facts stay out of the prompt", () => {
+    const plain = { toolCallId: 'c1', name: 'read_file', content: 'line one\n' };
+    expect(qwen.renderToolResults([{ ...plain, structuredContent: { lines: 1 } }])).toBe(qwen.renderToolResults([plain]));
+  });
+
   it('renders tool results as a turn of the person, each named, its content disarmed', () => {
     const rendered = qwen.renderToolResults([
       { toolCallId: 'c1', name: 'read_file', content: 'line one' },

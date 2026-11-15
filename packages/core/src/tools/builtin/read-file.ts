@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { lineCount } from '../preview.js';
 import { describeError, inPerimeter, refused, text, wholeNumber, type BuiltinTool } from './common.js';
 
 export const readFileTool: BuiltinTool = {
@@ -36,6 +37,7 @@ export const readFileTool: BuiltinTool = {
       const start = Math.max(0, (offset ?? 1) - 1);
       content = lines.slice(start, limit !== undefined ? start + Math.max(0, limit) : lines.length).join('\n');
     }
-    return { content };
+    // For the window's line: « Lu a.ts · 3 lignes ».
+    return { content, structuredContent: { lines: lineCount(content) } };
   },
 };

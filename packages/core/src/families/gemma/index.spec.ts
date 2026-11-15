@@ -197,6 +197,11 @@ describe('the Gemma layer — what comes from elsewhere', () => {
     expect(rendered).toContain(ZWSP);
   });
 
+  it("never renders what a tool tells the window: its structured facts stay out of the prompt", () => {
+    const plain = { toolCallId: 'c1', name: 'read_file', content: 'line one\n' };
+    expect(gemma.renderToolResults([{ ...plain, structuredContent: { lines: 1 } }])).toBe(gemma.renderToolResults([plain]));
+  });
+
   it('a failed tool says so in its response', () => {
     expect(gemma.renderToolResults([{ toolCallId: 'c1', name: 'read_file', content: 'No such file.', failed: true }])).toBe(
       `<|tool_response>response:read_file{error:${Q}No such file.${Q}}<tool_response|>`,

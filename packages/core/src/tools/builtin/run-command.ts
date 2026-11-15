@@ -99,7 +99,10 @@ export const runCommand: BuiltinTool = {
             : ended === 'stop'
               ? '[The command was stopped: the turn was stopped.]'
               : `[exit code ${code ?? 'unknown'}]`;
-        finish({ content: `$ ${shown}\n${printed === '' ? '(no output)' : printed}\n${end}` });
+        finish({
+          content: `$ ${shown}\n${printed === '' ? '(no output)' : printed}\n${end}`,
+          structuredContent: { exitCode: code, ...(ended ? { stopped: ended } : {}) },
+        });
       });
     });
   },

@@ -42,8 +42,8 @@ describe('read_file', () => {
   it('reads a file of the project, whole or a slice of its lines', async () => {
     const { root, ctx } = await project();
     await writeFile(join(root, 'a.ts'), 'one\ntwo\nthree\n');
-    expect(await call(readFileTool.handler, { path: 'a.ts' }, ctx)).toEqual({ content: 'one\ntwo\nthree\n' });
-    expect(await call(readFileTool.handler, { path: 'a.ts', offset: 2, limit: 1 }, ctx)).toEqual({ content: 'two' });
+    expect(await call(readFileTool.handler, { path: 'a.ts' }, ctx)).toMatchObject({ content: 'one\ntwo\nthree\n' });
+    expect(await call(readFileTool.handler, { path: 'a.ts', offset: 2, limit: 1 }, ctx)).toMatchObject({ content: 'two' });
   });
 
   it('says what is wrong: no path, no file, a path outside — naming the folders', async () => {
@@ -62,8 +62,8 @@ describe('list_files', () => {
     await mkdir(join(root, 'src'));
     await writeFile(join(root, 'b.ts'), '');
     await writeFile(join(root, 'a.ts'), '');
-    expect(await call(listFiles.handler, {}, ctx)).toEqual({ content: 'a.ts\nb.ts\nsrc/' });
-    expect(await call(listFiles.handler, { path: 'src' }, ctx)).toEqual({ content: '(empty folder)' });
+    expect(await call(listFiles.handler, {}, ctx)).toMatchObject({ content: 'a.ts\nb.ts\nsrc/' });
+    expect(await call(listFiles.handler, { path: 'src' }, ctx)).toMatchObject({ content: '(empty folder)' });
   });
 });
 
@@ -72,7 +72,7 @@ describe('edit_file', () => {
     const { root, ctx, written } = await project();
     await writeFile(join(root, 'a.ts'), 'const a = 1;\nconst b = 2;\n');
     const result = await call(editFile.handler, { path: 'a.ts', old_string: 'b = 2', new_string: 'b = 3' }, ctx);
-    expect(result).toEqual({ content: 'Edited: a.ts' });
+    expect(result).toMatchObject({ content: 'Edited: a.ts' });
     expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('const a = 1;\nconst b = 3;\n');
     expect(written).toEqual(['before a.ts', 'after']);
   });
@@ -98,7 +98,7 @@ describe('edit_file', () => {
 describe('write_file', () => {
   it('writes a file, creating its folders, keeping the original first', async () => {
     const { root, ctx, written } = await project();
-    expect(await call(writeFileTool.handler, { path: 'src/new/a.ts', content: 'hello' }, ctx)).toEqual({
+    expect(await call(writeFileTool.handler, { path: 'src/new/a.ts', content: 'hello' }, ctx)).toMatchObject({
       content: 'Wrote: src/new/a.ts (5 characters)',
     });
     expect(await readFile(join(root, 'src', 'new', 'a.ts'), 'utf8')).toBe('hello');

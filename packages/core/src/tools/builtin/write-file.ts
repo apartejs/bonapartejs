@@ -1,6 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { displayInPerimeter } from '../../project/paths.js';
+import { unifiedDiff } from '../preview.js';
 import { describeError, inPerimeter, refused, text, type BuiltinTool } from './common.js';
 
 export const writeFileTool: BuiltinTool = {
@@ -27,6 +28,8 @@ export const writeFileTool: BuiltinTool = {
     const resolved = inPerimeter(ctx, requested);
     if ('error' in resolved) return refused(resolved.error);
     const shown = displayInPerimeter(ctx.roots, resolved.path);
+    // What it replaces, for the change the window shows: nothing when the file is new.
+    const before = await readFile(resolved.path, 'utf8').catch(() => null);
     try {
       await ctx.beforeWrite?.(resolved.path, shown);
       await mkdir(dirname(resolved.path), { recursive: true });
@@ -35,6 +38,9 @@ export const writeFileTool: BuiltinTool = {
     } catch (error) {
       return refused(`Cannot write file: ${requested} (${describeError(error)})`);
     }
-    return { content: `Wrote: ${shown} (${content.length} characters)` };
+    return {
+      content: `Wrote: ${shown} (${content.length} characters)`,
+      structuredContent: { created: before === null, diff: unifiedDiff(shown, before, content) },
+    };
   },
 };

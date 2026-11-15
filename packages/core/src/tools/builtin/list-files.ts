@@ -19,9 +19,9 @@ export const listFiles: BuiltinTool = {
     if ('error' in resolved) return refused(resolved.error);
     try {
       const entries = await readdir(resolved.path, { withFileTypes: true });
-      if (entries.length === 0) return { content: '(empty folder)' };
+      if (entries.length === 0) return { content: '(empty folder)', structuredContent: { entries: 0 } };
       const names = entries.map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name)).sort((a, b) => a.localeCompare(b));
-      return { content: names.join('\n') };
+      return { content: names.join('\n'), structuredContent: { entries: names.length } };
     } catch (error) {
       return refused(`Cannot read folder: ${requested} (${describeError(error)})`);
     }

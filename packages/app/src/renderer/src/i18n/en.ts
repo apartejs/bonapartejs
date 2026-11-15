@@ -121,4 +121,24 @@ export const en: Messages = {
       ambiguous: (times) => `The text to replace is there ${times} times: the edit will fail.`,
     },
   },
+  tools: {
+    labels: {
+      read_file: { running: 'Reading', done: 'Read', name: 'Read' },
+      list_files: { running: 'Listing', done: 'Listed', name: 'List' },
+      search: { running: 'Searching', done: 'Searched', name: 'Search' },
+      edit_file: { running: 'Editing', done: 'Edited', name: 'Edit' },
+      write_file: { running: 'Writing', done: 'Wrote', name: 'Write' },
+      run_command: { running: 'Running', done: 'Ran', name: 'Run' },
+      web_fetch: { running: 'Opening', done: 'Opened', name: 'Open' },
+    },
+    lines: (count) => `${count.toLocaleString('en-US')} ${count === 1 ? 'line' : 'lines'}`,
+    entries: (count) => (count === 0 ? 'empty' : `${count.toLocaleString('en-US')} ${count === 1 ? 'entry' : 'entries'}`),
+    matches: (count, more) =>
+      count === 0 ? 'no match' : `${more ? 'over ' : ''}${count.toLocaleString('en-US')} ${count === 1 ? 'match' : 'matches'}`,
+    exitCode: (code) => `exit code ${code}`,
+    timedOut: 'timed out',
+    stopped: 'stopped',
+    created: 'new file',
+    waiting: 'Waiting for your approval',
+  },
 };

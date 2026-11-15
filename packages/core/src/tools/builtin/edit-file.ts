@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { displayInPerimeter } from '../../project/paths.js';
+import { unifiedDiff } from '../preview.js';
 import { describeError, inPerimeter, refused, text, type BuiltinTool } from './common.js';
 
 export const editFile: BuiltinTool = {
@@ -41,14 +42,17 @@ export const editFile: BuiltinTool = {
       return refused(`The text stands ${occurrences} times in ${requested} (${occurrences} occurrences): widen old_string so that it stands once. The file is unchanged.`);
     }
     const shown = displayInPerimeter(ctx.roots, resolved.path);
+    let after: string;
     try {
       await ctx.beforeWrite?.(resolved.path, shown);
       // A function: `$&` or `$1` in the new text are written as they are.
-      await writeFile(resolved.path, content.replace(oldString, () => newString), 'utf8');
+      after = content.replace(oldString, () => newString);
+      await writeFile(resolved.path, after, 'utf8');
       await ctx.afterWrite?.(resolved.path);
     } catch (error) {
       return refused(`Cannot write file: ${requested} (${describeError(error)})`);
     }
-    return { content: `Edited: ${shown}` };
+    // The change, behind the window's line of the call.
+    return { content: `Edited: ${shown}`, structuredContent: { diff: unifiedDiff(shown, content, after) } };
   },
 };

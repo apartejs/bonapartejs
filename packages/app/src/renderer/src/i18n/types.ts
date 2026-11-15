@@ -117,4 +117,21 @@ export interface Messages {
     hint: string;
     fails: { missing: string; notFound: string; ambiguous(times: number): string };
   };
+  /** The line of a tool's call in a reply (canvas « Conversation au travail »): « Lu src/a.ts · 12 lignes ». */
+  tools: {
+    /** What the call does, in a word: while it runs, once it is done, and its plain name (asked, refused, failed). */
+    labels: Record<ToolLineName, { running: string; done: string; name: string }>;
+    lines(count: number): string;
+    entries(count: number): string;
+    matches(count: number, more: boolean): string;
+    exitCode(code: number): string;
+    timedOut: string;
+    stopped: string;
+    created: string;
+    /** The state word of a call that waits for the person. */
+    waiting: string;
+  };
 }
+
+/** The tools of the core whose calls have a line of their own. */
+export type ToolLineName = 'read_file' | 'list_files' | 'search' | 'edit_file' | 'write_file' | 'run_command' | 'web_fetch';

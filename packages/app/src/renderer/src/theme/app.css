@@ -363,3 +363,23 @@ body {
   display: inline-flex;
   margin-inline-end: auto;
 }
+
+/* The line of a tool's call: its target is a path, a pattern or a command — code, as the
+   board draws it, where aparté's quiet line sets it in the chat's font. */
+.aparte-segment-tool-call[data-quiet] .aparte-tool-target:not(.aparte-tool-target--words) {
+  font-family: var(--aparte-code-font-family);
+}
+
+/* What a command printed, behind its line. */
+.tool-output {
+  margin: 0;
+  max-height: var(--aparte-tool-part-max-height, 300px);
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--aparte-surface-2);
+  font-family: var(--aparte-code-font-family);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+

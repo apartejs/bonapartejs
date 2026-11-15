@@ -125,12 +125,12 @@ export function createSearchTool(options: { timeoutMs?: number } = {}): BuiltinT
         if (ctx.signal.aborted) onAbort();
         worker.on('message', (message: { hits: Hit[]; more: boolean }) => {
           if (message.hits.length === 0) {
-            finish({ content: 'No match.' });
+            finish({ content: 'No match.', structuredContent: { matches: 0, more: false } });
             return;
           }
           const lines = message.hits.map(([path, line, found]) => `${displayInPerimeter(ctx.roots, path)}:${line}: ${found}`);
           if (message.more) lines.push(`[More matches were not shown: narrow the pattern, or the folder.]`);
-          finish({ content: lines.join('\n') });
+          finish({ content: lines.join('\n'), structuredContent: { matches: message.hits.length, more: message.more } });
         });
         worker.on('error', (error) => finish(refused(`The search failed: ${describeError(error)}`)));
       });
