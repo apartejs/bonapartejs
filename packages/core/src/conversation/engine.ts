@@ -86,7 +86,8 @@ export interface ModelCall {
 /** What answers the calls of a round: their results, a pause for a person, or the end of the turn. */
 export type CallsAnswer =
   | { results: ToolResult[] }
-  | { suspend: { pending: PendingCall[]; ticket: string } }
+  /** A pause: the calls that wait, the ticket that resumes them, the results of those that ran before. */
+  | { suspend: { pending: PendingCall[]; ticket: string; results?: ToolResult[] } }
   | { stop: 'limit' };
 
 export interface TurnTools {
@@ -115,7 +116,7 @@ export interface TurnResult {
   /** The context ran out in the middle of the answer: it is incomplete. */
   truncated?: true;
   /** The turn waits for a person, or for the window: its calls, and the ticket that resumes it. */
-  suspended?: { pending: PendingCall[]; ticket: string };
+  suspended?: { pending: PendingCall[]; ticket: string; results?: ToolResult[] };
   /** The tool rounds reached their limit. */
   limited?: true;
 }
@@ -444,7 +445,9 @@ export class ConversationEngine {
             const answer = await input.tools.onCalls(calls);
             if ('stop' in answer) return { usage, limited: true as const };
             if ('suspend' in answer) {
-              // Nothing enters the prompt until the calls are answered (task 4.5 resumes from here).
+              // What ran before the pause is kept; the calls that wait enter the prompt once answered (4.5).
+              const ran = answer.suspend.results ?? [];
+              if (ran.length > 0) await journal.append({ kind: 'tool-results', results: ran, rendered: family.renderToolResults(ran) });
               await journal.append({ kind: 'pending', calls: answer.suspend.pending, ticket: answer.suspend.ticket, rendered: '' });
               return { usage, suspended: answer.suspend };
             }
