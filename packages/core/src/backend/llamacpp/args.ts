@@ -58,6 +58,9 @@ export function buildLlamaServerArgs(config: LlamaCppLaunchConfig): string[] {
     '--no-context-shift',
     // Nobody browses to our server: the web UI is surface for nothing.
     '--no-webui',
+    // The server would keep copies of slot states in its own RAM (8 GiB by
+    // default), unannounced: the app keeps the memory, and says its cost.
+    '--cache-ram', '0',
   ];
 
   if (config.nCtx !== undefined) args.push('-c', String(config.nCtx));

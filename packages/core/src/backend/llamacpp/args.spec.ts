@@ -89,6 +89,10 @@ describe('buildLlamaServerArgs', () => {
     expect(buildLlamaServerArgs(base)).toContain('--no-webui');
   });
 
+  it('keeps no prompt cache of its own in the server: the app keeps the memory, and says what it costs', () => {
+    expect(pair(buildLlamaServerArgs(base), '--cache-ram')).toBe('0');
+  });
+
   it('never carries the key: it travels in the environment', () => {
     const args = buildLlamaServerArgs(base);
     expect(args).not.toContain('--api-key');
