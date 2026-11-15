@@ -81,7 +81,11 @@ export type JournalBody =
   | { kind: 'pending'; calls: PendingCall[]; ticket: string }
   | { kind: 'outcomes'; outcomes: Record<string, Outcome> }
   | { kind: 'delta'; delta: Delta }
-  | { kind: 'rebase'; summary: string }
+  /**
+   * A compaction (task 7.3): the prompt starts again from here. `stable`: the system turn frozen again (what a
+   * seed is keyed by); the facts it froze (`replyLanguage`, `perimeter`, `tools`), as the first system turn's.
+   */
+  | { kind: 'rebase'; summary: string; stable?: string; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[] }
   | { kind: 'engine'; engineId: string; modelId: string }
   /**
    * Going back before the person's message `toEntryId` (task 7.1). `note`: what the model is told at its

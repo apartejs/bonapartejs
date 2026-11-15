@@ -31,6 +31,7 @@ import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
 import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
+import { CompactionError, planCompaction, SUMMARY_MAX_TOKENS, SUMMARY_QUESTION, summaryNote } from './compact.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
 import type { PlayMode } from '@aparte/bonaparte-shared';
@@ -190,6 +191,17 @@ export interface RewindLook {
   /** The entry the new branch starts after. */
   previousId: string;
 }
+
+/** What a compaction did: the summary, the turns folded and kept, the prompt before and after (tokens). */
+export interface CompactResult {
+  summary: string;
+  compactedTurns: number;
+  keptTurns: number;
+  tokensBefore: number;
+  tokensAfter: number;
+}
+
+export { CompactionError };
 
 /** Tokens read again so few that the memory is said kept: « aucune relecture ». */
 const KEPT_REREAD_TOKENS = 32;
@@ -473,6 +485,110 @@ export class ConversationEngine {
     return tokens <= KEPT_REREAD_TOKENS ? 'kept' : reread(tokens, 'rewind');
   }
 
+  /**
+   * Compaction (task 7.3): the model summarises the conversation — asked as the conversation itself, its
+   * memory serving the prefix —, then a rebase. Nothing changes on a summary cut or empty, or when it is not
+   * worth it (CompactionError). The slot, which holds the old prompt and the question, is never saved as the
+   * conversation's memory, and its saved memory is let go: the next turn reads from the rebase.
+   */
+  compact(id: string, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<CompactResult> {
+    return this.exclusive.run(id, async () => {
+      const meta = await this.deps.store.get(id);
+      if (!meta) throw new Error(`There is no conversation ${id}.`);
+      const engine = await this.deps.engine();
+      if (!engine) throw new NoEngineError();
+      this.follow(engine);
+      const { family, client } = engine;
+      const journal = await openJournal(this.deps.store.dir, id, meta.branchId);
+      const entries = journal.entries();
+      const plan = planCompaction(entries, estimateTokens);
+      const frozen = frozenPrompt(entries);
+      const question = family.renderUser(SUMMARY_QUESTION) + family.beginAssistant({ thinking: false });
+      const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
+      const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
+      const used = estimateTokens(frozen + question);
+      const nPredict = Math.min(SUMMARY_MAX_TOKENS, Math.floor(window - used - 64));
+      if (nPredict < 256) throw new CompactionError('There is no room left in the context for a summary: nothing was compacted.');
+
+      const owner = this.ownerOf(meta);
+      const key = ownerKey(owner);
+      const saved = engine.live ? await this.deps.kv.manifest(key) : null;
+      this.turning.set(key, {
+        engine,
+        stable: stableOf(entries),
+        history: true,
+        sink,
+        rereading: false,
+        behind: saved !== null && savedBefore(entries, saved.savedAt),
+      });
+      this.lastRun.set(key, { engine, tokens: used });
+      let summary = '';
+      let cut = false;
+      try {
+        await this.scheduler.run(
+          owner,
+          async (slot) => {
+            const demux = family.createDemux();
+            const take = (pieces: DemuxEvent[]): void => {
+              for (const piece of pieces) if (piece.type === 'text') summary += piece.delta;
+            };
+            for await (const event of client.complete({
+              prompt: frozen + question,
+              idSlot: slot.id,
+              cachePrompt: true,
+              nPredict,
+              sampling: { stop: [...family.stop] },
+              ...(signal ? { signal } : {}),
+            })) {
+              if (event.type === 'token') take(demux.push(event.text));
+              else if (event.type === 'done') cut = event.stats.truncated || event.stats.predictedTokens >= nPredict;
+            }
+            take(demux.flush());
+          },
+          signal ? { signal } : {},
+        );
+      } finally {
+        this.turning.delete(key);
+        // The slot holds the old prompt and the question: never saved as this conversation's memory.
+        this.scheduler.evict(owner);
+        this.lastRun.delete(key);
+      }
+      if (cut) throw new CompactionError('The summary was cut before its end: nothing was compacted.');
+      summary = summary.trim();
+      if (!summary) throw new CompactionError('The summary came back empty: nothing was compacted.');
+
+      // The system prompt frozen again, with the truth of the moment: every note folded in.
+      const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
+      const asked = this.deps.prompt(meta);
+      const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
+      const stable = family.renderSystem(prompt.stable);
+      const rendered =
+        stable +
+        family.renderSystemNote(prompt.project) +
+        family.renderSystemNote(summaryNote(summary)) +
+        plan.kept.map((entry) => entry.rendered ?? '').join('');
+      await journal.append({
+        kind: 'rebase',
+        summary,
+        stable,
+        replyLanguage: asked.replyLanguage,
+        perimeter: [...asked.perimeter],
+        tools: [...asked.tools],
+        rendered,
+      });
+      if (instructions !== undefined) await this.deps.store.update(id, { instructions });
+      // The memory of the old prompt serves nothing any more.
+      await this.deps.kv.forget(key);
+      return {
+        summary,
+        compactedTurns: plan.compactedTurns,
+        keptTurns: plan.keptTurns,
+        tokensBefore: estimateTokens(frozen),
+        tokensAfter: estimateTokens(rendered),
+      };
+    });
+  }
+
   /** « Annuler le retour »: the branch it left active again — or, for the code only, nothing told to the model. */
   undoRewind(id: string, rewound: NonNullable<ConversationMeta['rewound']>): Promise<void> {
     return this.exclusive.run(id, async () => {
@@ -672,7 +788,7 @@ export class ConversationEngine {
       if (delta) await journal.append({ kind: 'delta', delta: { ...delta, language: current }, rendered: family.renderSystemNote(delta.text) });
     }
     const entries = journal.entries();
-    const stable = entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
+    const stable = stableOf(entries);
     const frozen = frozenPrompt(entries);
     // Answering the last message again appends no message.
     const userRendered = input.text === undefined ? '' : family.renderUser(input.text);
@@ -927,6 +1043,8 @@ function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
+    // A rebase froze the system prompt again, which names no mode: told again.
+    if (entry.kind === 'rebase') break;
   }
   return 'repetition';
 }
@@ -936,7 +1054,7 @@ function lastToldPerimeter(entries: readonly JournalEntry[]): string[] | undefin
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'perimeter' && entry.delta.roots) return entry.delta.roots;
-    if (entry.kind === 'system' && entry.perimeter) return entry.perimeter;
+    if ((entry.kind === 'system' || entry.kind === 'rebase') && entry.perimeter) return entry.perimeter;
   }
   return undefined;
 }
@@ -949,9 +1067,15 @@ function lastToldReplyLanguage(entries: readonly JournalEntry[]): string | undef
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'reply-language' && entry.delta.language) return entry.delta.language;
-    if (entry.kind === 'system' && entry.replyLanguage) return entry.replyLanguage;
+    if ((entry.kind === 'system' || entry.kind === 'rebase') && entry.replyLanguage) return entry.replyLanguage;
   }
   return undefined;
+}
+
+/** The system turn the branch's prompt starts from (a seed is keyed by it): its last rebase's, else its first. */
+function stableOf(entries: readonly JournalEntry[]): string {
+  const rebase = entries.findLast((entry): entry is Extract<JournalEntry, { kind: 'rebase' }> => entry.kind === 'rebase');
+  return rebase?.stable ?? entries.find((entry) => entry.kind === 'system')?.rendered ?? '';
 }
 
 /** The window's tools the model last read of in this branch: the last note of them, else none. */
@@ -960,7 +1084,7 @@ function lastToldTools(entries: readonly JournalEntry[]): ToolDef[] | undefined 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.tools) return entry.delta.tools;
-    if (entry.kind === 'system' && entry.tools) return entry.tools;
+    if ((entry.kind === 'system' || entry.kind === 'rebase') && entry.tools) return entry.tools;
   }
   return undefined;
 }
@@ -969,6 +1093,8 @@ function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.windowTools) return entry.delta.windowTools;
+    // A rebase froze the system prompt again, without the window's tools: told again.
+    if (entry.kind === 'rebase') break;
   }
   return [];
 }
