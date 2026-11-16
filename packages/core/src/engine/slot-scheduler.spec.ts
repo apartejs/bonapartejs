@@ -287,3 +287,27 @@ describe('a turn lends its slot to its sub-agents (task 8.1)', () => {
   });
 });
 
+
+describe('the slots follow the engine (task 8.3)', () => {
+  it('says how many slots are free, and takes a new number once the engine relaunched with it', async () => {
+    const { scheduler, calls } = rig(1);
+    expect(scheduler.size).toBe(1);
+    expect(scheduler.idle).toBe(1);
+    scheduler.reset();
+    scheduler.resize(2);
+    expect(scheduler.size).toBe(2);
+    expect(scheduler.idle).toBe(2);
+    let release!: () => void;
+    const held = scheduler.run(A, () => new Promise<void>((resolve) => (release = resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(scheduler.idle).toBe(1);
+    // A second owner runs at once beside it, on the other slot.
+    await scheduler.run(B, async (slot) => void calls.push(`run b@${slot.id}`));
+    release();
+    await held;
+    expect(calls).toContain('run b@1');
+    scheduler.reset();
+    scheduler.resize(1);
+    expect(scheduler.size).toBe(1);
+  });
+});

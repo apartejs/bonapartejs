@@ -68,7 +68,7 @@ function model(missions: Record<string, string>[], work: (name: string) => strin
 }
 
 /** A conversation engine on a managed engine (its memory kept), the loop over it, and what the slot saw. */
-async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume') {
+async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume', options: { slots?: number; paceMs?: number } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-subagents-'));
   dirs.push(dir);
   const root = join(dir, 'project');
@@ -80,6 +80,8 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
   const server = await startFakeLlamaServer({
     slotDir: kvDir,
     responder,
+    ...(options.slots ? { totalSlots: options.slots } : {}),
+    ...(options.paceMs ? { paceMs: options.paceMs } : {}),
     onCompletion: (body) => {
       const prompt = String(body['prompt']);
       order.push(`${isSubagent(prompt) ? `complete ${subagentName(prompt)}` : 'complete conversation'}${body['n_predict'] === 0 ? ' (read)' : ''}`);
@@ -103,7 +105,16 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
   const engine = new ConversationEngine({
     store,
     kv: new KvStore(kvDir),
-    engine: async () => ({ client, family: familyLayer('gemma'), live: LIVE, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation: 1 }),
+    ...(options.slots ? { slots: options.slots } : {}),
+    engine: async () => ({
+      client,
+      family: familyLayer('gemma'),
+      live: LIVE,
+      modelPath: 'gemma.gguf',
+      kvBytesPerToken: 100,
+      generation: 1,
+      ...(options.slots ? { slots: options.slots } : {}),
+    }),
     prompt: () => ({ kind: 'code', tools: registry.list(), perimeter: [root], replyLanguage: 'French' }),
   });
   const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode });
@@ -258,6 +269,22 @@ describe('a sub-agent on the built-in engine', () => {
     expect(seen.filter((name) => name !== null)).toEqual(['Lecteur', 'Lecteur']);
     expect(engine.subagentAtWork).toBeNull();
     expect(changes).toEqual(['Lecteur', null]);
+  });
+
+  it('in parallel (two slots, task 8.3), two sub-agents of a step work at the same time: nobody waits for the slot', async () => {
+    const missions = ['Un', 'Deux'].map((name) => ({ name, mission: `Lead ${name}.`, tools: 'read' }));
+    const { run, order } = await rig(model(missions), 'plume', { slots: 2, paceMs: 15 });
+    const { events } = await run('Deux pistes.');
+    const worked = order.filter((line) => line.startsWith('complete ') && !line.includes('conversation') && !line.endsWith('(read)'));
+    // The second starts before the first is done: its first completion comes before the first's last.
+    expect(worked.indexOf('complete Deux')).toBeLessThan(worked.lastIndexOf('complete Un'));
+    expect(events.filter((event) => event.type === 'step-start' && (event as { name?: string }).name === 'slot-wait')).toEqual([]);
+    expect(of(events, 'agent-end').map((event) => event['status'])).toEqual(['done', 'done']);
+    // Their results, in the order the model wrote the calls.
+    expect(of(events, 'tool-resolved').filter((event) => !event['agentId']).map((event) => event['result'])).toEqual([
+      'Result of Un: a is 1.',
+      'Result of Deux: a is 1.',
+    ]);
   });
 
   it('Stop stops the sub-agents too', async () => {

@@ -112,3 +112,17 @@ test('a request of a sub-agent names it; refusing it stops only it — it return
   await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Sous-agents', exact: true }).click();
   await expect(pane(page).locator('.subagents-pane__summary')).toHaveText('1 sous-agent · 1 fini');
 });
+
+test('« En parallèle » says first what it costs — one slot more, a restart — and keeps nothing before a choice (task 8.3)', async ({ launch }) => {
+  const { page } = await launch();
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  const choice = page.getByRole('radiogroup', { name: 'Sous-agents du moteur intégré' });
+  await choice.locator('label', { hasText: 'En parallèle' }).click();
+  const card = page.locator('.launch-restart');
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('« Sous-agents du moteur intégré » s’applique au redémarrage du moteur');
+  await expect(card).toContainText('un slot de plus pour les sous-agents');
+  await card.getByRole('button', { name: 'Annuler' }).click();
+  await expect(card).toHaveCount(0);
+  await expect(choice.getByRole('radio', { name: 'L’un après l’autre' })).toBeChecked();
+});

@@ -8,23 +8,14 @@
  * the end of the reply, or later (the next load).
  */
 
-import {
-  engineApplySettings,
-  engineRestartCost,
-  engineSettingsGet,
-  type EngineLaunchSettingsView,
-  type RestartAnnouncementView,
-} from '@aparte/bonaparte-shared';
+import { engineSettingsGet, type EngineLaunchSettingsView } from '@aparte/bonaparte-shared';
 import { useEffect, useState } from 'react';
 import { bridge } from '../bridge';
-import { formatDuration } from '../format';
 import type { Messages } from '../i18n/index';
 import { Choice, Row } from './controls';
+import { RestartCard, useRestartAsk } from './RestartAsk';
 
-/** Asked of the window: stop the replies that run (« Maintenant »). */
-export const STOP_REPLIES = 'bonaparte-stop-replies';
-
-type LaunchChange = { nCtx: number } | { cacheType: EngineLaunchSettingsView['cacheType'] };
+export { STOP_REPLIES } from './RestartAsk';
 
 const CONTEXTS = [4096, 8192, 16_384, 32_768, 65_536];
 const IDLE = [5, 15, 30, 60, 0];
@@ -41,51 +32,20 @@ export interface LaunchSettingsProps {
 export function LaunchSettings({ messages, locale, idleMinutes, change, onKept }: LaunchSettingsProps) {
   const words = messages.settings.engine;
   const [kept, setKept] = useState<EngineLaunchSettingsView | null>(null);
-  const [asking, setAsking] = useState<{ change: LaunchChange; cost: RestartAnnouncementView | null } | null>(null);
-  const [pending, setPending] = useState(false);
-
   const read = (): void => {
     void bridge.invoke(engineSettingsGet, undefined).then(setKept).catch(() => undefined);
   };
   useEffect(read, []);
-  // The engine changed: the restart asked for the end of the reply is under way.
-  useEffect(
-    () =>
-      bridge.on((event) => {
-        if (event.kind === 'engine') setPending(false);
-      }),
-    [],
-  );
-
-  if (!kept) return null;
-  const shown = { ...kept, ...(asking?.change ?? {}) };
-  const ask = (next: LaunchChange): void => {
-    const same = 'nCtx' in next ? next.nCtx === kept.nCtx : next.cacheType === kept.cacheType;
-    if (same) {
-      setAsking(null);
-      return;
-    }
-    setAsking({ change: next, cost: null });
-    void bridge
-      .invoke(engineRestartCost, next)
-      .then((cost) => setAsking((was) => (was && was.change === next ? { ...was, cost } : was)))
-      .catch(() => undefined);
-  };
-  const keep = async (restart: boolean, cutting = false): Promise<void> => {
-    if (!asking) return;
-    // « Maintenant » under a reply: the window stops it, and the engine restarts once it has.
-    if (cutting) window.dispatchEvent(new CustomEvent(STOP_REPLIES));
-    const replyRunning = asking.cost?.replyRunning ?? false;
-    await bridge.invoke(engineApplySettings, { changes: asking.change, restart }).catch(() => undefined);
-    setAsking(null);
-    setPending(restart && replyRunning && !cutting);
+  const restart = useRestartAsk(() => {
     read();
     onKept();
-  };
+  });
+
+  if (!kept) return null;
+  const { asking } = restart;
+  const shown = { ...kept, ...(asking?.change ?? {}) };
 
   const contexts = CONTEXTS.includes(kept.nCtx) ? CONTEXTS : [...CONTEXTS, kept.nCtx].sort((a, b) => a - b);
-  const cost = asking?.cost ?? null;
-  const setting = asking ? words.launchSettingNames['nCtx' in asking.change ? 'nCtx' : 'cacheType'] : '';
   return (
     <div className="launch-settings">
       <Row
@@ -97,7 +57,7 @@ export function LaunchSettings({ messages, locale, idleMinutes, change, onKept }
             label={words.launchContext}
             value={String(shown.nCtx)}
             options={contexts.map((size) => ({ value: String(size), label: words.launchContextValue(String(Math.round(size / 1024))) }))}
-            onChange={(next) => ask({ nCtx: Number(next) })}
+            onChange={(next) => restart.ask(Number(next) === kept.nCtx ? null : { nCtx: Number(next) })}
           />
         }
       />
@@ -110,58 +70,11 @@ export function LaunchSettings({ messages, locale, idleMinutes, change, onKept }
             label={words.launchCache}
             value={shown.cacheType}
             options={(['f16', 'q8_0', 'q4_0'] as const).map((type) => ({ value: type, label: words.launchCacheTypes[type] }))}
-            onChange={(next) => ask({ cacheType: next })}
+            onChange={(next) => restart.ask(next === kept.cacheType ? null : { cacheType: next })}
           />
         }
       />
-      {asking ? (
-        <div className="aparte-alert launch-restart" role="status">
-          <div className="aparte-alert__body">
-            <p className="aparte-alert__title">{words.launchRestartTitle(setting)}</p>
-            {cost ? (
-              <>
-                <p className="aparte-alert__message">
-                  {cost.loaded ? words.launchRestartReload(formatDuration(cost.reloadSeconds, locale)) : words.launchNextLoad}
-                </p>
-                {cost.memoriesLost > 0 ? <p className="launch-restart__detail">{words.launchMemories(cost.memoriesLost)}</p> : null}
-                {cost.loaded && cost.replyRunning ? <p className="launch-restart__detail">{words.launchReply}</p> : null}
-              </>
-            ) : null}
-            <div className="launch-restart__actions">
-              {!cost ? null : !cost.loaded ? (
-                <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={() => void keep(false)}>
-                  {words.launchSave}
-                </button>
-              ) : cost.replyRunning ? (
-                <>
-                  <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={() => void keep(true)}>
-                    {words.launchAfterReply}
-                  </button>
-                  <button type="button" className="aparte-btn aparte-btn--outline" onClick={() => void keep(true, true)}>
-                    {words.launchNowCut}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={() => void keep(true)}>
-                    {words.launchNow}
-                  </button>
-                  <button type="button" className="aparte-btn aparte-btn--outline" onClick={() => void keep(false)}>
-                    {words.launchLater}
-                  </button>
-                </>
-              )}
-              <button type="button" className="aparte-btn aparte-btn--ghost" onClick={() => setAsking(null)}>
-                {words.launchCancel}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : pending ? (
-        <p className="setting-section__hint" role="status">
-          {words.launchPending}
-        </p>
-      ) : null}
+      <RestartCard messages={messages} locale={locale} {...restart} />
       <Row
         label={words.launchIdle}
         hint={words.launchIdleHint}

@@ -507,6 +507,29 @@ describe('createCore — what the review of phase 2 found', () => {
     expect((await core.engineState()).model?.nCtx).toBe(2048);
   }, 40_000);
 
+  it('sub-agents in parallel (task 8.3): said first — one slot more, its video memory, a restart —, kept only on a choice; then two slots, each with the context asked', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    expect(await core.engineSettings()).toMatchObject({ subagents: 'sequential' });
+    const cost = await core.restartCost({ subagents: 'parallel' });
+    expect(cost).toMatchObject({ kind: 'restart', setting: 'subagents', loaded: true, parallel: { slots: 2 } });
+    expect(cost.parallel!.vramBytesEach).toBeGreaterThan(0);
+    // Nothing restarts, nothing is kept, by asking.
+    expect((await core.memory()).engine.slots).toBe(1);
+    expect(await core.engineSettings()).toMatchObject({ subagents: 'sequential' });
+
+    await core.applyEngineSettings({ subagents: 'parallel' }, { restart: true });
+    await expect.poll(async () => (await core.memory()).engine.slots, { timeout: 15_000 }).toBe(2);
+    expect(await core.engineSettings()).toMatchObject({ subagents: 'parallel' });
+    // Each slot keeps the context asked: -c is shared between them.
+    expect((await core.engineState()).model?.nCtx).toBe(8192);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    expect(core.conversations.slotCount).toBe(2);
+    // Back to one after the other: no slot more to announce.
+    expect((await core.restartCost({ subagents: 'sequential' })).parallel).toBeUndefined();
+  }, 40_000);
+
   it('an engine being unloaded serves no new turn: it would be cut under it (review of phase 7)', async () => {
     const { core, gemma } = await setup();
     await core.loadModel(gemma);

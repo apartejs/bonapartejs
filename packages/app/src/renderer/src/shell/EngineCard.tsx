@@ -24,7 +24,7 @@ export function EngineCard({ engine, messages }: { engine: EngineStateView; mess
         <span className="engine-card__model">{engine.model.name}</span>
       </div>
       <p className="engine-card__line">
-        {subagent ? messages.engineCard.working(subagent) : messages.engineCard.line(contextSize(engine.model.nCtx))}
+        {subagent ? messages.engineCard.working(subagent) : messages.engineCard.line(contextSize(engine.model.nCtx), engine.model.slots ?? 1)}
       </p>
     </div>
   );

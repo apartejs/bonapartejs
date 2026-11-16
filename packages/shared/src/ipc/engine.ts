@@ -20,6 +20,8 @@ export const engineStateSchema = z.object({
       name: z.string(),
       family: familyIdSchema.nullable(),
       nCtx: z.number(),
+      /** The slots it runs: two when the sub-agents work in parallel (task 8.3). */
+      slots: z.number().optional(),
     })
     .optional(),
   /** Nothing runs: the model a load would bring back (« Charger et envoyer », task 7.4); absent at the first launch. */
@@ -165,14 +167,20 @@ export const engineLaunchSettingsSchema = z.object({
   nCtx: z.number(),
   cacheType: z.enum(['f16', 'q8_0', 'q4_0']),
   gpuLayers: z.union([z.literal('all'), z.number()]),
+  /** The built-in engine's sub-agents (task 8.3): one after another, or in parallel in a second slot. */
+  subagents: z.enum(['sequential', 'parallel']),
 });
 
 export type EngineLaunchSettingsView = z.infer<typeof engineLaunchSettingsSchema>;
 
 /** A change of them, as the window asks it: checked again by the core against its catalogue. */
 const launchChangeSchema = z
-  .object({ nCtx: z.number().int().min(512).max(1_048_576).optional(), cacheType: z.enum(['f16', 'q8_0', 'q4_0']).optional() })
-  .refine((change) => change.nCtx !== undefined || change.cacheType !== undefined);
+  .object({
+    nCtx: z.number().int().min(512).max(1_048_576).optional(),
+    cacheType: z.enum(['f16', 'q8_0', 'q4_0']).optional(),
+    subagents: z.enum(['sequential', 'parallel']).optional(),
+  })
+  .refine((change) => change.nCtx !== undefined || change.cacheType !== undefined || change.subagents !== undefined);
 
 /** What a setting that restarts the engine costs (board « Coûts annoncés », 6). */
 export const restartAnnouncementSchema = z.object({
@@ -183,6 +191,8 @@ export const restartAnnouncementSchema = z.object({
   memoriesLost: z.number(),
   replyRunning: z.boolean(),
   loaded: z.boolean(),
+  /** Sub-agents in parallel (task 8.3): the slot more, and its video memory (null with no model loaded). */
+  parallel: z.object({ slots: z.number(), vramBytesEach: z.number().nullable() }).optional(),
 });
 
 export type RestartAnnouncementView = z.infer<typeof restartAnnouncementSchema>;

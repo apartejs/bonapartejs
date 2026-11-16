@@ -90,6 +90,8 @@ export interface EngineView {
    * tokens in those layers, and resumes a shorter prefix from a context checkpoint (task 7.0).
    */
   slidingWindow?: number;
+  /** The slots the server runs (task 8.3): two when sub-agents work in parallel; one by default. */
+  slots?: number;
 }
 
 export interface ConversationEngineDeps {
@@ -844,6 +846,19 @@ export class ConversationEngine {
       this.lastRun.clear();
     }
     this.generation = engine.generation;
+    // The server runs as many slots as it was launched with (task 8.3).
+    const slots = engine.slots ?? this.deps.slots ?? 1;
+    if (slots !== this.scheduler.size) this.scheduler.resize(slots);
+  }
+
+  /** How many slots the engine runs: more than one, and a step's sub-agents work together (task 8.3). */
+  get slotCount(): number {
+    return this.scheduler.size;
+  }
+
+  /** Would a new owner wait for a slot now — none free, or others before it? */
+  private get crowded(): boolean {
+    return this.scheduler.idle === 0 || this.scheduler.waiting.length > 0;
   }
 
   /**
@@ -989,7 +1004,7 @@ export class ConversationEngine {
           return done;
         });
       } else {
-        const waits = this.scheduler.busy.length > 0;
+        const waits = this.crowded;
         if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'start' });
         result = await this.scheduler.run(
           owner,
@@ -1318,7 +1333,7 @@ export class ConversationEngine {
     this.turning.set(key, turning);
     this.lastRun.set(key, { engine, tokens: used });
 
-    const waits = this.scheduler.busy.length > 0;
+    const waits = this.crowded;
     if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'start' });
     try {
       return await this.scheduler.run(

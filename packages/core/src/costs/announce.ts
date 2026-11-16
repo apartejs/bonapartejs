@@ -9,7 +9,7 @@
  */
 
 import { estimateLoad, memoryVerdict, type MemoryVerdict } from '../models/cost.js';
-import type { GgufInfo, KvCacheTypeName } from '../models/gguf.js';
+import { kvCacheBytes, type GgufInfo, type KvCacheTypeName } from '../models/gguf.js';
 
 export type Announcement =
   | RestoreAnnouncement
@@ -122,6 +122,21 @@ export interface RestartAnnouncement {
   memoriesLost: number;
   replyRunning: boolean;
   loaded: boolean;
+  /** Sub-agents in parallel (task 8.3): the slot more, and what it holds (unknown with no model loaded). */
+  parallel?: { slots: number; vramBytesEach: number | null };
+}
+
+/**
+ * Sub-agents in parallel (task 8.3): one slot more, and what it holds — its whole KV cache, the windows of a
+ * model with a sliding window included (the plan's « ~0.6 Go at 32 k » is the marginal cost only, a minimum).
+ * The weights are paid once; the restart is said beside it (`announceRestart`).
+ */
+export function announceParallelSlots(
+  info: GgufInfo,
+  nCtx: number,
+  cacheType: KvCacheTypeName,
+): Extract<Announcement, { kind: 'parallel-slots' }> {
+  return { kind: 'parallel-slots', slots: 2, vramBytesEach: kvCacheBytes(info, nCtx, cacheType) };
 }
 
 export function announceRestart(facts: {

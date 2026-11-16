@@ -46,6 +46,14 @@ export interface SlotScheduler {
   readonly busy: readonly SlotOwner[];
   /** The owners waiting for a slot, in order. */
   readonly waiting: readonly SlotOwner[];
+  /** How many slots the engine has, and how many no owner works in now. */
+  readonly size: number;
+  readonly idle: number;
+  /**
+   * The engine relaunched with another number of slots (task 8.3): slots are added, or the idle ones last in
+   * line taken away. Called once its residents are forgotten (`reset`).
+   */
+  resize(slots: number): void;
   /** Saves every owner whose state changed (the app closes); `keepFor`: an owner whose saved state must survive the room made. */
   flush(keepFor?: SlotOwner): Promise<void>;
   /** Does this owner sit in a slot — would its next turn find its state there? */
@@ -88,14 +96,8 @@ function keyOf(owner: SlotOwner): string {
 }
 
 export function createSlotScheduler(options: SlotSchedulerOptions): SlotScheduler {
-  const slots: Slot[] = Array.from({ length: Math.max(1, options.slots) }, (_, id) => ({
-    id,
-    resident: null,
-    dirty: false,
-    running: null,
-    borrower: null,
-    usedAt: 0,
-  }));
+  const fresh = (id: number): Slot => ({ id, resident: null, dirty: false, running: null, borrower: null, usedAt: 0 });
+  const slots: Slot[] = Array.from({ length: Math.max(1, options.slots) }, (_, id) => fresh(id));
   const queue: Waiter[] = [];
   const listeners = new Set<() => void>();
   let clock = 0;
@@ -234,6 +236,23 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
 
     get waiting() {
       return queue.map((waiter) => waiter.owner);
+    },
+
+    get size() {
+      return slots.length;
+    },
+
+    get idle() {
+      return slots.filter((slot) => slot.running === null).length;
+    },
+
+    resize(wanted) {
+      const target = Math.max(1, wanted);
+      while (slots.length < target) slots.push(fresh(slots.length));
+      // Only a slot nobody works in goes; one that works stays until it is done.
+      while (slots.length > target && slots.at(-1)!.running === null) slots.pop();
+      emit();
+      dispatch();
     },
 
     async flush(keepFor) {

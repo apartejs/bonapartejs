@@ -18,6 +18,7 @@ import type { BackendStatus } from './backend/types.js';
 import {
   announceLoad,
   announceModelSwitch,
+  announceParallelSlots,
   announceRestart,
   type Announcement,
   type EngineLoadAnnouncement,
@@ -160,7 +161,7 @@ export interface EngineState {
   mode: 'managed' | 'remote';
   status: BackendStatus;
   /** The model the engine serves, once it serves one. */
-  model?: { path: string; name: string; family: FamilyId | null; nCtx: number };
+  model?: { path: string; name: string; family: FamilyId | null; nCtx: number; slots?: number };
   /**
    * Nothing runs (managed engine): the model a load would bring back (task 7.4, « Charger et envoyer ») — the
    * one unloaded (when, and after how many minutes without work when it was for want of work), else the default
@@ -216,7 +217,12 @@ export interface EngineLaunchSettings {
   nCtx: number;
   cacheType: 'f16' | 'q8_0' | 'q4_0';
   gpuLayers: number | 'all';
+  /** The sub-agents of the built-in engine (task 8.3): one after another in one slot, or in parallel in two. */
+  subagents: 'sequential' | 'parallel';
 }
+
+/** The launch settings a person changes in the window: each restarts the engine, its cost said first. */
+export type LaunchChange = Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType' | 'subagents'>>;
 
 /** Changing model, said before (task 7.4): to what, from what (null when none runs), and what it costs. */
 export interface ModelSwitchView {
@@ -252,12 +258,12 @@ export interface Core {
   /** The settings llama.cpp is launched with, as kept. */
   engineSettings(): Promise<EngineLaunchSettings>;
   /** What changing them costs, said before anything is kept (task 7.4; board « Coûts annoncés », 6). */
-  restartCost(changes: Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType'>>): Promise<RestartAnnouncement>;
+  restartCost(changes: LaunchChange): Promise<RestartAnnouncement>;
   /**
    * Keeps them. `restart`: the engine relaunches with them — at once, or when the reply that runs ends (the
    * memory saved first); without, or with no model loaded: at the next load.
    */
-  applyEngineSettings(changes: Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType'>>, options: { restart: boolean }): Promise<void>;
+  applyEngineSettings(changes: LaunchChange, options: { restart: boolean }): Promise<void>;
   /** A turn in progress: the model is not unloaded while one is held. */
   hold(): () => void;
   stop(): Promise<void>;
@@ -553,14 +559,19 @@ export function createCore(deps: CoreDeps): Core {
 
   async function launchSettings() {
     const read = await readConfig();
+    const subagents = await appSettings.get('subagentsOnBuiltin').catch(() => 'sequential');
     return {
       nCtx: read.engine?.nCtx ?? (settingDefault('nCtx') as number),
       cacheType: (read.engine?.cacheType ??
         settingDefault('cacheType')) as KvCacheType,
       gpuLayers: (read.engine?.gpuLayers ?? settingDefault('gpuLayers')) as
         number | 'all',
+      subagents: (subagents === 'parallel' ? 'parallel' : 'sequential') as EngineLaunchSettings['subagents'],
     };
   }
+
+  /** The slots llama.cpp runs: one, or two when the sub-agents work in parallel (task 8.3). */
+  const slotsFor = (launch: { subagents: EngineLaunchSettings['subagents'] }): number => (launch.subagents === 'parallel' ? 2 : 1);
 
   /** Which engine the configuration names: a server to join, or one to launch. Reaches nothing. */
   async function mode(): Promise<'managed' | 'remote'> {
@@ -592,7 +603,8 @@ export function createCore(deps: CoreDeps): Core {
       current.binPath === binPath &&
       current.nCtx === launch.nCtx &&
       (current.cacheType ?? 'f16') === launch.cacheType &&
-      (current.gpuLayers ?? 'all') === launch.gpuLayers;
+      (current.gpuLayers ?? 'all') === launch.gpuLayers &&
+      (current.slots ?? 1) === slotsFor(launch);
     // Kept as it is while the model that runs stays; another model takes the settings kept since, as its
     // announcement said (review of phase 7) — the memory of the one that runs saved first, as a load does.
     const stays = supervisor.loaded !== null && (forPath === undefined || samePath(supervisor.loaded.modelPath, forPath));
@@ -600,10 +612,12 @@ export function createCore(deps: CoreDeps): Core {
     if (supervisor.loaded) {
       await conversations.flush().catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
     }
+    const { subagents: _subagents, ...settings } = launch;
     await supervisor.configure({
       mode: 'managed',
       binPath,
-      ...launch,
+      ...settings,
+      slots: slotsFor(launch),
     });
     return supervisor.engine!;
   }
@@ -814,6 +828,7 @@ export function createCore(deps: CoreDeps): Core {
                   ? (loaded?.info.family ?? null)
                   : (remoteFamily?.id ?? null),
               nCtx: model.nCtx,
+              ...(engine.mode === 'managed' ? { slots: supervisor.engine?.mode === 'managed' ? (supervisor.engine.slots ?? 1) : 1 } : {}),
             },
           }
         : {}),
@@ -1094,6 +1109,8 @@ export function createCore(deps: CoreDeps): Core {
           loaded && live ? kvBytesPerToken(loaded.info, live.cacheTypeK) : null,
         generation: supervisor.generation,
         ...(loaded && live ? { slidingWindow: loaded.info.slidingWindow } : {}),
+        // The slots the server was launched with (task 8.3); one for a server that runs elsewhere.
+        slots: live && supervisor.engine?.mode === 'managed' ? (supervisor.engine.slots ?? 1) : 1,
       };
     },
     prompt: (meta) => ({
@@ -1298,11 +1315,16 @@ export function createCore(deps: CoreDeps): Core {
     async restartCost(changes) {
       const current = (await launchSettings()) as EngineLaunchSettings;
       const next = { ...current, ...changes };
+      // In parallel (task 8.3): one slot more, and what it holds — said beside the restart.
+      const parallel =
+        next.subagents === 'parallel' && current.subagents !== 'parallel'
+          ? { slots: 2, vramBytesEach: loaded ? announceParallelSlots(loaded.info, next.nCtx, next.cacheType).vramBytesEach : null }
+          : undefined;
       // The memories these settings would refuse that the current ones serve: those it makes to read again.
       const states = await kv.savedStates();
       const served = states.filter((state) => memoriesRefusedBy([state], current) === 0);
       const running = (await currentEngine()) && loaded ? (await models()).find((model) => samePath(model.path, loaded!.path)) : undefined;
-      return announceRestart({
+      const restart = announceRestart({
         setting: Object.keys(changes)[0] ?? 'nCtx',
         loadSeconds: running?.announcement?.seconds ?? 0,
         loadEstimated: running?.announcement?.secondsEstimated ?? true,
@@ -1310,10 +1332,14 @@ export function createCore(deps: CoreDeps): Core {
         replyRunning: supervisor.held,
         loaded: running !== undefined,
       });
+      return parallel ? { ...restart, parallel } : restart;
     },
 
     async applyEngineSettings(changes, options) {
-      await appSettings.setEngine(changes);
+      const { subagents, ...engine } = changes;
+      if (Object.keys(engine).length > 0) await appSettings.setEngine(engine);
+      // The sub-agents' setting is the app's (« Général »): it reaches the engine at its next launch (task 8.3).
+      if (subagents !== undefined) await appSettings.set('subagentsOnBuiltin', subagents);
       // Read again at the next load: the file changed.
       config = undefined;
       if (!options.restart || !loaded) return;
@@ -1494,7 +1520,7 @@ export function createCore(deps: CoreDeps): Core {
           // What runs: a setting kept for later is not the engine's until it restarts (task 7.4).
           nCtx: running ? (supervisor.loaded?.nCtx ?? launch.nCtx) : launch.nCtx,
           cacheType: running ? (supervisor.live?.cacheTypeK ?? launch.cacheType) : launch.cacheType,
-          slots: 1,
+          slots: running && supervisor.engine?.mode === 'managed' ? (supervisor.engine.slots ?? 1) : 1,
         },
         budgetBytes: typeof chosen === 'number' ? chosen : kvBudget,
         usedBytes: usage.totalBytes,

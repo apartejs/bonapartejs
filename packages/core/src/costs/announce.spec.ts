@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { GgufInfo } from '../models/gguf.js';
-import { announceContext, announceLoad, announceOpen, suggestOffload, type LoadModel } from './announce.js';
+import { announceContext, announceLoad, announceOpen, announceParallelSlots, suggestOffload, type LoadModel } from './announce.js';
 
 const GiB = 1024 ** 3;
 
@@ -205,5 +205,18 @@ describe('announceContext', () => {
   it('speaks from 90 % of the window, with the time a compaction would take', () => {
     expect(announceContext(7_000, 8_192, 12)).toBeNull();
     expect(announceContext(7_400, 8_192, 12)).toEqual({ kind: 'context-full', used: 7_400, window: 8_192, compactSeconds: 12 });
+  });
+});
+
+describe('announceParallelSlots (task 8.3)', () => {
+  it('one slot more: its whole KV cache — 32 768 tokens at 20 480 bytes, 0.625 GiB', () => {
+    expect(announceParallelSlots(info, 32_768, 'f16')).toEqual({ kind: 'parallel-slots', slots: 2, vramBytesEach: 0.625 * GiB });
+  });
+
+  it('a model with a sliding window pays its windows too, in each slot: more than its tokens at the marginal cost', () => {
+    const gemma: GgufInfo = { ...info, swaKvLayers: 25, slidingWindow: 1024, swaKvElementsPerToken: 25_600 };
+    const each = announceParallelSlots(gemma, 32_768, 'f16').vramBytesEach;
+    expect(each).toBe(Math.round((10_240 * 32_768 + 25_600 * 1024) * 2));
+    expect(each).toBeGreaterThan(0.625 * GiB);
   });
 });

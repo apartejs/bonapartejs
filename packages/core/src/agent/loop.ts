@@ -103,6 +103,10 @@ export async function runAgentTurn(
         subagentTurn: subagentTurn.bind(ctx.conversations),
         subagentPaused: subagentPaused.bind(ctx.conversations),
         recordSubagentAnswers: recordSubagentAnswers.bind(ctx.conversations),
+        // Read each time: the engine may have relaunched with another number of slots.
+        get slotCount() {
+          return ctx.conversations.slotCount ?? 1;
+        },
       },
       emit,
       ...(ctx.maxToolRounds !== undefined ? { maxToolRounds: ctx.maxToolRounds } : {}),

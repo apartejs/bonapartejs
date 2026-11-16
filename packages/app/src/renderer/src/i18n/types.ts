@@ -96,7 +96,7 @@ export interface Messages {
   };
   engineCard: {
     ready: string;
-    line(context: string): string;
+    line(context: string, slots: number): string;
     /** A sub-agent works in the engine (task 8.2): the dot's name, and the line. */
     busy: string;
     working(subagent: string): string;
@@ -311,7 +311,10 @@ export interface Messages {
       launchIdleMinutes(minutes: number): string;
       launchIdleNever: string;
       /** A setting that restarts the engine (board « Coûts annoncés », 6). */
-      launchSettingNames: Record<'nCtx' | 'cacheType', string>;
+      launchSettingNames: Record<'nCtx' | 'cacheType' | 'subagents', string>;
+      /** Sub-agents in parallel (task 8.3): the slot more and its video memory, or unknown with no model loaded. */
+      launchParallel(bytes: string): string;
+      launchParallelUnknown: string;
       launchRestartTitle(setting: string): string;
       launchRestartReload(duration: string): string;
       launchNextLoad: string;

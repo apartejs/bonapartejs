@@ -48,6 +48,8 @@ export interface SubagentRunner {
   run(call: ModelCall, slot: CallsSlot | undefined, waited: boolean): Promise<SubagentEnd>;
   /** Its `agentId`, for the pause that keeps its call aside. */
   idOf(call: ModelCall): string;
+  /** The engine runs more than one slot (task 8.3): a step's sub-agents work together. */
+  parallel(): boolean;
 }
 
 export interface CallScope {
@@ -95,7 +97,10 @@ export async function answerCalls(
   const holds: SubagentHold[] = [];
   // The sub-agents of the step already said: their tool-start is out, and those after the first wait.
   const announced = new Map<string, boolean>();
+  // The sub-agents run together with one before them (in parallel): answered already.
+  const ran = new Set<string>();
   for (const [index, call] of calls.entries()) {
+    if (ran.has(call.id)) continue;
     if (pending.length > 0) {
       // A call before it waits for someone: this one waits behind it.
       if (!announced.has(call.id)) say({ type: 'tool-start', toolCallId: call.id, name: call.name, input: call.input, queued: true });
@@ -112,6 +117,39 @@ export async function answerCalls(
     }
     if (launch) {
       const runner = scope.subagents!;
+      /** A sub-agent's end: the result of its run_subagent call, or the calls it waits on the person for. */
+      const settle = (member: ModelCall, end: SubagentEnd): void => {
+        if (end.kind === 'paused') {
+          pending.push(...end.pending);
+          holds.push({ toolCallId: member.id, agentId: runner.idOf(member), name: member.name, input: member.input });
+          return;
+        }
+        const content = capToolOutput(end.result, scope.nCtx);
+        if (end.kind === 'done') say({ type: 'tool-resolved', toolCallId: member.id, result: content });
+        else if (end.kind === 'stopped') say({ type: 'tool-aborted', toolCallId: member.id, cause: 'stopped' });
+        else say({ type: 'tool-failed', toolCallId: member.id, error: content });
+        results.push({ toolCallId: member.id, name: member.name, content, ...(end.kind === 'done' ? {} : { failed: true }) });
+      };
+      if (runner.parallel() && !announced.has(call.id)) {
+        // In parallel (task 8.3): this sub-agent and those right after it work together — the first on the slot
+        // the turn lends, the others on slots of their own, waiting (and saying so) only when none is free.
+        const group = [call];
+        for (const later of calls.slice(index + 1)) {
+          if (later.name !== RUN_SUBAGENT) break;
+          group.push(later);
+        }
+        for (const [at, member] of group.entries()) {
+          if (at > 0) say({ type: 'tool-start', toolCallId: member.id, name: member.name, input: member.input });
+          announced.set(member.id, false);
+          runner.announce(member, false);
+        }
+        const ends = await Promise.all(group.map((member, at) => runner.run(member, at === 0 ? slot : undefined, false)));
+        for (const [at, member] of group.entries()) {
+          ran.add(member.id);
+          settle(member, ends[at]!);
+        }
+        continue;
+      }
       if (!announced.has(call.id)) {
         // This sub-agent and those after it in the step: said now, the others waiting for the slot.
         announced.set(call.id, false);
@@ -123,17 +161,7 @@ export async function answerCalls(
           runner.announce(later, true);
         }
       }
-      const end = await runner.run(call, slot, announced.get(call.id) === true);
-      if (end.kind === 'paused') {
-        pending.push(...end.pending);
-        holds.push({ toolCallId: call.id, agentId: runner.idOf(call), name: call.name, input: call.input });
-        continue;
-      }
-      const content = capToolOutput(end.result, scope.nCtx);
-      if (end.kind === 'done') say({ type: 'tool-resolved', toolCallId: call.id, result: content });
-      else if (end.kind === 'stopped') say({ type: 'tool-aborted', toolCallId: call.id, cause: 'stopped' });
-      else say({ type: 'tool-failed', toolCallId: call.id, error: content });
-      results.push({ toolCallId: call.id, name: call.name, content, ...(end.kind === 'done' ? {} : { failed: true }) });
+      settle(call, await runner.run(call, slot, announced.get(call.id) === true));
       continue;
     }
     if (scope.windowTools?.has(call.name)) {

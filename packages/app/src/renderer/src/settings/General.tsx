@@ -9,6 +9,7 @@ import { appOpenDataFolder, conversationsExport } from '@aparte/bonaparte-shared
 import { useState } from 'react';
 import { bridge } from '../bridge';
 import { Choice, Row, Section, Switch } from './controls';
+import { RestartCard, useRestartAsk } from './RestartAsk';
 import type { PageProps } from './SettingsView';
 
 /** Said on the window when the language changed: the page asks the main process its words again. */
@@ -19,6 +20,10 @@ type Notify = 'banner' | 'badge' | 'off';
 export function GeneralPage({ messages, locale, values, change }: PageProps) {
   const words = messages.settings.general;
   const [exported, setExported] = useState<string | null>(null);
+  // The sub-agents in parallel restart the engine (task 8.3): said first, kept only on a choice.
+  const restart = useRestartAsk(() => undefined);
+  const subagentsKept = values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential';
+  const asked = restart.asking && 'subagents' in restart.asking.change ? restart.asking.change.subagents : null;
   const language = values['language'] === 'fr' || values['language'] === 'en' ? values['language'] : locale;
   const notify = (key: string, label: string) => (
     <Row
@@ -124,15 +129,16 @@ export function GeneralPage({ messages, locale, values, change }: PageProps) {
             <Choice
               small
               label={words.subagents}
-              value={values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential'}
+              value={asked ?? subagentsKept}
               options={[
                 { value: 'sequential', label: words.subagentsSequential },
                 { value: 'parallel', label: words.subagentsParallel },
               ]}
-              onChange={(next) => change('subagentsOnBuiltin', next)}
+              onChange={(next) => restart.ask(next === subagentsKept ? null : { subagents: next })}
             />
           }
         />
+        <RestartCard messages={messages} locale={locale} {...restart} />
       </Section>
       <Section title={words.notifications} hint={words.notificationsHint}>
         {notify('notifications.replyDone', words.notifyReplyDone)}
