@@ -7,6 +7,12 @@
  * conversation. Work beside a conversation runs on its slot without moving it
  * out — what it adds after the conversation's prefix is dropped by the
  * server at the next turn (cache_prompt keeps the common prefix).
+ *
+ * A turn lends its slot to its sub-agents (task 8.1): it holds the slot while
+ * its tools run, so a sub-agent could never get one of its own. Lending saves
+ * the conversation and restores the sub-agent; `home()` brings the
+ * conversation back before its next completion — saved once and restored
+ * once, however many sub-agents its step ran.
  */
 
 export type SlotOwner =
@@ -18,6 +24,20 @@ export interface SlotHandle {
   readonly id: number;
   /** This job left the slot as it found it: the owner need not be saved again for it. */
   unchanged(): void;
+  /**
+   * Lends the slot to another owner (a sub-agent) while this job holds it: the owner in the slot is saved
+   * if it changed, the borrower restored, its job run. What the borrower leaves is saved when someone else
+   * sits there — unless it says it is worth nothing (`discard`).
+   */
+  lend<T>(owner: SlotOwner, job: (slot: LentSlot) => Promise<T>): Promise<T>;
+  /** Brings this job's owner back into its slot after lending it; nothing when it never left. */
+  home(): Promise<void>;
+}
+
+export interface LentSlot {
+  readonly id: number;
+  /** What this borrower leaves in the slot is worth nothing (it finished): it is not saved. */
+  discard(): void;
 }
 
 export interface SlotScheduler {
@@ -51,6 +71,8 @@ interface Slot {
   resident: SlotOwner | null;
   dirty: boolean;
   running: SlotOwner | null;
+  /** Who works in the slot now, lent by the owner running there. */
+  borrower: SlotOwner | null;
   usedAt: number;
 }
 
@@ -71,6 +93,7 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
     resident: null,
     dirty: false,
     running: null,
+    borrower: null,
     usedAt: 0,
   }));
   const queue: Waiter[] = [];
@@ -149,11 +172,39 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
               let changed = true;
               try {
                 await take(slot, owner);
+                const mine = (): boolean => slot.resident !== null && keyOf(slot.resident) === keyOf(owner);
                 const result = await job({
                   id: slot.id,
                   unchanged: () => {
                     changed = false;
                   },
+                  lend: async (borrower, lentJob) => {
+                    // The owner, changed by this job: saved before anyone else sits there.
+                    if (changed && mine()) slot.dirty = true;
+                    await take(slot, borrower);
+                    slot.borrower = borrower;
+                    emit();
+                    let keep = true;
+                    try {
+                      return await lentJob({
+                        id: slot.id,
+                        discard: () => {
+                          keep = false;
+                        },
+                      });
+                    } finally {
+                      slot.borrower = null;
+                      if (slot.resident && keyOf(slot.resident) === keyOf(borrower)) {
+                        if (keep) slot.dirty = true;
+                        else {
+                          slot.resident = null;
+                          slot.dirty = false;
+                        }
+                      }
+                      emit();
+                    }
+                  },
+                  home: () => take(slot, owner),
                 });
                 resolve(result);
               } catch (error) {
@@ -178,7 +229,7 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
     },
 
     get busy() {
-      return slots.flatMap((slot) => (slot.running ? [slot.running] : []));
+      return slots.flatMap((slot) => (slot.running ? [slot.borrower ?? slot.running] : []));
     },
 
     get waiting() {

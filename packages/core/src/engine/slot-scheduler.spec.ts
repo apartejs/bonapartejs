@@ -205,3 +205,85 @@ describe('createSlotScheduler', () => {
   });
 });
 
+describe('a turn lends its slot to its sub-agents (task 8.1)', () => {
+  const sub = (agentId: string): SlotOwner => ({ kind: 'subagent', conversationId: 'a', agentId, name: agentId });
+
+  it('the conversation is saved, the sub-agent restored; then the conversation comes home, restored', async () => {
+    const { scheduler, calls } = rig();
+    await scheduler.run(A, async (slot) => {
+      calls.push('run a');
+      await slot.lend(sub('s1'), async (lent) => {
+        calls.push(`run s1@${lent.id}`);
+        lent.discard();
+      });
+      await slot.home();
+      calls.push('run a again');
+    });
+    expect(calls).toEqual(['restore a@0', 'run a', 'save a@0', 'restore s1@0', 'run s1@0', 'restore a@0', 'run a again']);
+  });
+
+  it('three sub-agents of one step: the conversation is saved once, and restored once', async () => {
+    const { scheduler, calls } = rig();
+    await scheduler.run(A, async (slot) => {
+      for (const agent of ['s1', 's2', 's3']) {
+        await slot.lend(sub(agent), async (lent) => {
+          calls.push(`run ${agent}`);
+          lent.discard();
+        });
+      }
+      await slot.home();
+    });
+    expect(calls).toEqual(['restore a@0', 'save a@0', 'restore s1@0', 'run s1', 'restore s2@0', 'run s2', 'restore s3@0', 'run s3', 'restore a@0']);
+  });
+
+  it('a sub-agent that stops to ask keeps its state: saved when the conversation comes home, or when another owner takes the slot', async () => {
+    const { scheduler, calls } = rig();
+    await scheduler.run(A, async (slot) => {
+      await slot.lend(sub('s1'), async () => void calls.push('run s1, then ask'));
+      await slot.home();
+    });
+    await scheduler.run(A, async (slot) => {
+      await slot.lend(sub('s2'), async () => void calls.push('run s2, then ask'));
+    });
+    // The turn paused right after its sub-agent did: whoever comes next finds it in the slot, and saves it.
+    await scheduler.run(B, async () => void calls.push('run b'));
+    expect(calls).toEqual([
+      'restore a@0',
+      'save a@0',
+      'restore s1@0',
+      'run s1, then ask',
+      'save s1@0',
+      'restore a@0',
+      'save a@0',
+      'restore s2@0',
+      'run s2, then ask',
+      'save s2@0',
+      'restore b@0',
+      'run b',
+    ]);
+  });
+
+  it('while the slot is lent, the sub-agent is the one at work', async () => {
+    const { scheduler } = rig();
+    const seen: SlotOwner[][] = [];
+    await scheduler.run(A, async (slot) => {
+      seen.push([...scheduler.busy]);
+      await slot.lend(sub('s1'), async (lent) => {
+        seen.push([...scheduler.busy]);
+        lent.discard();
+      });
+      seen.push([...scheduler.busy]);
+    });
+    expect(seen.map((owners) => owners.map(name))).toEqual([['a'], ['s1'], ['a']]);
+  });
+
+  it('a conversation that never lent its slot is already home', async () => {
+    const { scheduler, calls } = rig();
+    await scheduler.run(A, async (slot) => {
+      calls.push('run a');
+      await slot.home();
+    });
+    expect(calls).toEqual(['restore a@0', 'run a']);
+  });
+});
+
