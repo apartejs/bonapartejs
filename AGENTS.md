@@ -83,7 +83,21 @@ branch: a worktree made at its first change, its row and its header saying
 it; its pull request and CI through GitHub's CLI; archived with what is not
 committed asked first. The core hosts plugins: one context torn down as
 one, a tool holding only what its effect allows, the terminal the first
-built-in one. A section below that names something not built yet says so.
+built-in one. Phase 7 is done: going back, branches, compaction and the
+costs said before they are paid. A message of the person's offers
+« Revenir avant » (the code and the conversation, the conversation only,
+or the code only: what moves is said first, the commands already run
+named, « Annuler le retour » until the next turn) and « Brancher » (every
+branch kept, the one shown followed). A compaction is a rebase: the
+summary (facts quoted, then the work), the turns kept when they weigh
+little, « Restaurer », « / compact », the context nearly full said from
+90 %. The six announcements of the board are on the screen: a restore, a
+re-read (« Compacter d'abord »), a change of model (aparté's model
+selector, « Passer à … ? » with « Changer » and « Brancher sur ce
+modèle »), the context nearly full, the engine unloaded (« Charger et
+envoyer », a send held meanwhile) and a launch setting that restarts the
+engine (« À la fin de la réponse » or « Maintenant »). A section below that
+names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -290,6 +304,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   BONAPARTE_SMOKE_MODEL=<path to a .gguf> BONAPARTE_SMOKE_LLAMA=<llama-server> npx vitest run src/smoke
   ```
 
+  `BONAPARTE_SMOKE_MODEL2` names a model of another family: the change of
+  model (task 7.4), skipped without it. In the end-to-end tests the fake
+  engine answers `FAKE_LLAMA_ANSWER` instead of « ok » (with
+  `FAKE_LLAMA_PACE_MS`, a reply that lasts).
+
 ## Landmarks
 
 - **Private notes** (`docs/superpowers/`, absent from a public checkout): the
@@ -339,8 +358,12 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   kit's hover tooltip. **aparté 1.10.1** (2026-11-15) types the mode
   switch's event (`ApprovalModeChangeDetail`) and the list's selection
   (`AparteConversationSelectDetail`, `id` null for a new conversation), and
-  a chat mounted with `conversationId` draws it at once. bonaparte runs on
-  1.10.1.
+  a chat mounted with `conversationId` draws it at once. **aparté 1.11.0**
+  (2026-11-16) lets a registered bubble action show its words
+  (`display: 'label' | 'both'`) and stand before the built-in buttons
+  (`position: 'start'`), names what a history opens with after a
+  checkpoint (`_meta.historySummary`), and spaces the diff's line numbers:
+  apartejs/aparte#240, #241 and #243 are fixed. bonaparte runs on 1.11.0.
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -403,6 +426,44 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   states live under `<data>/kv-slots/`, the conversations under
   `<data>/conversations/<id>/` (`meta.json`, one `<branch>.jsonl` per branch,
   `branches.json`, aparté's `aparte.json`).
+- **Going back and branches** (`core/src/conversation/rewind.ts`,
+  `branches.ts`, `kv/reread.ts`; `renderer/src/chat/useRewind.ts`): going
+  back is a new journal branch before the message (a `rewind` entry, the old
+  branch kept with its memory); the files go back by undoing the checkpoint
+  turns written since, the commands run named. What its memory costs follows
+  llama.cpp's checkpoint rules (`rereadBeforeMessage`). The window takes a
+  chat down before the core moves its branch, and mounts it again on what
+  the core shows: a chat writes its thread back as it leaves.
+- **Compaction** (`core/src/conversation/compact.ts`,
+  `renderer/src/chat/useCompaction.ts`): a `rebase` entry — the system prompt
+  frozen again, the summary as a note, the last two turns as they were frozen
+  when they weigh at most a third. aparté's checkpoint (`contextSummary`)
+  sits where the core's rebase begins; after it aparté sends the summary as
+  the first user message and names it (`_meta.historySummary`), which the
+  divergence takes off as it is (apartejs/aparte#243). With no turn kept,
+  the checkpoint sits on the last answer, and the gauge counts that answer
+  until the next turn (apartejs/aparte#246). A fork among the kept turns
+  keeps the compaction (a rebase frozen again, the kept turns cut and copied
+  after it); a fork before a compaction or a change of model never carries
+  the parent's memory.
+- **A change of model** (`core/src/conversation/switch.ts`, the `engine`
+  entry): a branch knows the model and family its prompt was frozen for. A
+  turn on another model opens a new branch with an `engine` entry — the
+  system prompt frozen again, the conversation rendered again by the new
+  family (`renderAnswer`: text and calls, no reasoning) — a boundary of the
+  frozen prompt like a rebase. « Changer » loads the model; « Brancher sur ce
+  modèle » copies the conversation (`ConversationEngine.copy`).
+- **The costs announced** (`core/src/costs/announce.ts`; the window's
+  `MemoryBanner`, `ContextBanner`, `EngineUnloadedCard`, `ModelSwitchDialog`,
+  `settings/LaunchSettings.tsx`): the engine unloaded keeps the conversations
+  (« Préparons le moteur » only when no model is known; `EngineState.resume`
+  names the one to bring back), its card first above the composer; a send
+  meanwhile is held by a capture listener on `window` (apartejs/aparte#245).
+  The model is chosen in aparté's `<aparte-model-selector>`, fed by one
+  descriptive provider (apartejs/aparte#244). The engine says « ready » only
+  when the core serves a turn, and pushes its changes (`AppEvent` `engine`).
+  The launch settings (context, K/V cache) are kept only on a choice, once
+  their cost is said; « Moteur et mémoire » shows what runs.
 - **The shell** (`renderer/src/shell/`): `.aparte-app-shell` holds the
   sidebar (`Sidebar.tsx`) or its rail (`Rail.tsx`), the header
   (`ConversationHeader.tsx`) and the chat. A project is a header of ours
@@ -628,10 +689,14 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **Bash's heredocs eat backslashes** in this environment: a file with
   `\n`, `\u0000` or a Windows path is written with the Write tool, never
   through a shell heredoc — one edit left raw control characters in a
-  source file.
+  source file. And Python's text mode writes CRLF on Windows: a script that
+  edits a file opens it with `newline=''`.
 - **Windows' `core.autocrlf`** turns a test repository's checkout into
   CRLF: the temporary repository sets it off. On Windows a folder also
   stays busy while a git that just ran in it exits: its removal is retried.
+  A launch of the fake engine takes about a second there, so the core's
+  tests have 30 s each (`vitest.config.ts`): a test of a relaunch after a
+  crash takes 8 s alone, more under the load of every package.
 - **xterm 6 keeps its old viewport** behind the scrollbar it draws itself:
   black, with a native bar, seen under the last row the fit leaves unless
   it is styled (`.xterm-viewport`).
@@ -641,11 +706,70 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **A test that relaunches on the same data folder** must keep what the app
   wrote there: the fixture merges the settings it finds.
 
+- **llama.cpp resumes a sliding-window model from a checkpoint** (b11558,
+  read in its source and checked by two readers): a shorter prefix, and the
+  first request after a restore, resume from the newest checkpoint at or
+  before it; checkpoints are made only while a prompt is read — at the start
+  of an appended segment of at most 516 tokens, else 516 before its end,
+  and 4 before its end —, the oldest and the 30 newest kept, about 200 MiB
+  each in f16, saved with the slot. A state saved right after an answer
+  would re-read that answer: the engine reads the prompt to its end first
+  (`nPredict: 0`, `settle`). `--cache-ram 0`: no hidden copies in RAM.
+- **A chat writes its thread back when it unmounts**, and aparté's React
+  chat only moves its head on `truncateFrom`: take the chat down before the
+  core swaps a branch's document, then mount it again.
+- **llama-server says « ready » before the core knows the model it loaded**:
+  a window told « ready » sent into a 409. The engine is « ready » only when
+  the core serves; a load ends by telling the window again.
+- **`supervisor.configure` tears the server down without saving**: the
+  memory is flushed first when another model replaces the one that runs.
+- **A real model summarising long prose drops a fact a file gave**: asked
+  only to « keep the facts », Gemma 4 26B lost the code word; asked to « keep
+  every fact word for word », it wrote past its cap. A summary in two parts
+  — « Facts: » quoted exactly, then « Work: », at most 500 words — kept it.
+- **A state is « behind » only for text frozen before the turn**: a going
+  back, a pause or its answer freeze none, and the notes a turn appends are
+  read with its message — else a restore that served everything was said
+  as a re-reading.
+- **aparté's `setModelConfig` merges**: a model chosen cannot be cleared by
+  leaving it out. And `aparte-send` cannot be cancelled: a capture listener
+  on `window` runs before the client (bubble) and the controller (capture
+  on the chat) — `stopImmediatePropagation`, the text put back after.
+- **The context is the engine's count, not an estimate.** Three characters a
+  token overcounts prose: the banner said 92 % beside a gauge at 69 %, a
+  message the engine had room for was refused, and « Compacter » found no
+  room in a conversation the engine held at 90 %. An answer keeps what the
+  engine held once it was written (`usage.contextTokens`, llama.cpp's
+  `tokens_cached`); the banner and the room checks start from it
+  (`countedContext`), with an estimate only for what was frozen since. The
+  fake server counts four characters a token: a test that fills the context
+  fills it as the engine counts.
+
 ## Real-model smoke results
 
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
+- **2026-11-16, phase 7 — 16/16 green.** Gemma 4 26B-A4B-it UD-Q4_K_XL,
+  llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`, K/V f16, one slot,
+  `--cache-ram 0`, loaded in 45 s (58.4 GiB of RAM free, for 16.7 GiB
+  announced); Qwen3-1.7B Q4_K_M for the change of model. The twelve cases of
+  phase 5 again (restore of 1,254 tokens in 1.1 s, all served; branch 1,276
+  of 1,286; seed 1,171 of 1,171; the agent's last round 1,275 of 1,298; the
+  reply language 1,256 of 1,306; unload and reload restored in 958 ms,
+  restart in 26.6 s restored in 1.5 s; Stop 122 ms), and four of phase 7: a
+  conversation saved right after a long answer (163 tokens) comes back with
+  1,416 of 1,434 tokens served — 18 read, its last answer not read again
+  (the state file: 1,156 MiB for 1,416 tokens, llama.cpp's checkpoints in
+  it); going back before the last message was announced « kept » and read
+  30 of 1,325 tokens; a compaction (5,349 → 1,880 tokens, estimated) kept
+  the code word a file gave, and the model answered it from the summary; a
+  change to Qwen announced 1,580 tokens to read again for a prompt of
+  1,112, and the conversation answered « SAFFRON » in the new family. Three
+  findings, fixed before this run: a going back said as a re-reading the
+  restore served; the summary lost the code word under five long essays
+  (now asked in two parts, « Facts: » quoted exactly, then « Work: »); and,
+  once asked to keep every fact word for word, it wrote past its cap.
 - **2026-11-15, phase 5 — 12/12 green.** Same model and build (Gemma 4
   26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`,
   K/V f16, one slot), loaded in 14 s, after checking the free memory of
