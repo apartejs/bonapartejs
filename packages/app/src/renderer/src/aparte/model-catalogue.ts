@@ -42,7 +42,17 @@ function provider(models: AparteAIModel[], name: string): AparteAIProvider {
  * built from change.
  */
 export function showCatalogue(models: AparteAIModel[], name: string, current: string): void {
+  // The same list again tells aparté nothing: any change of its config draws every conversation list again
+  // at once, an open row menu with it (apartejs/aparte#251).
+  const shown = JSON.stringify([models, name]);
+  const registered = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER);
+  if (registered && shownList.get(registered) === shown && aparteGlobalConfig.getModelConfig().defaultModel === current) return;
   aparteGlobalConfig.unregisterAIProvider(ENGINE_PROVIDER);
-  aparteGlobalConfig.registerAIProvider(provider(models, name));
+  const made = provider(models, name);
+  shownList.set(made, shown);
+  aparteGlobalConfig.registerAIProvider(made);
   aparteGlobalConfig.setModelConfig({ defaultProvider: ENGINE_PROVIDER, defaultModel: current });
 }
+
+/** What each provider registered here lists: one taken down elsewhere is listed again. */
+const shownList = new WeakMap<AparteAIProvider, string>();

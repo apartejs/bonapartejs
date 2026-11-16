@@ -72,6 +72,7 @@ import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
+import { readInbox, type Inbox } from './conversation/inbox.js';
 import { resumeSubagent, runQueuedSubagent, subagentId } from './agent/subagents.js';
 import {
   createTickets,
@@ -292,6 +293,8 @@ export interface Core {
   branchOf(conversationId: string): Promise<{ name: string; base: string; worktree: string } & BranchStatus | null>;
   /** The pull request of a conversation's branch, and its CI (task 6.8): none without one, or without GitHub's CLI. */
   prOf(conversationId: string): Promise<PrStatus | null>;
+  /** « À traiter » (task 8.4): what waits for the person, across the conversations. */
+  inbox(): Promise<Inbox>;
   /** « Ouvrir une PR », on the person's word: the branch pushed, its pull request opened. */
   openPr(conversationId: string): Promise<PrStatus | null>;
   /** What archiving a conversation on its branch would leave uncommitted: its files. */
@@ -1367,6 +1370,10 @@ export function createCore(deps: CoreDeps): Core {
       list: async (scope, dir) => listEntries(await scopeRoots(scope), dir, deps.home),
       read: async (scope, path) => readText(await scopeRoots(scope), path, undefined, deps.home),
       changed: (conversationId) => checkpoints.files(conversationId),
+    },
+
+    async inbox(this: Core) {
+      return readInbox({ store: conversationStore, conversations, prOf: (id) => this.prOf(id) });
     },
 
     async prOf(conversationId) {

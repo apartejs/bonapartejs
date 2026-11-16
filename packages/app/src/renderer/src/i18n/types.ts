@@ -125,6 +125,30 @@ export interface Messages {
     askedBy(name: string): string;
     onlyIt: string;
   };
+  /** « À traiter » (board « À traiter », task 8.4). */
+  inbox: {
+    title: string;
+    lede: string;
+    none: string;
+    kinds: Record<'approval' | 'subagent' | 'question' | 'ci' | 'cost', string>;
+    open: string;
+    untitled: string;
+    /** An approval whose chat is not there to answer it: answered in its conversation. */
+    answerThere: string;
+    answer: string;
+    pr(number: number): string;
+    ciTitle(number: number): string;
+    fix: string;
+    /** What « Demander à l'agent de corriger » sends, in the person's words. */
+    fixMessage(number: number): string;
+    showPr: string;
+    costTitle(tokens: string, duration: string): string;
+    readAgain: string;
+    reading: string;
+    later: string;
+    unreadTitle: string;
+    unreadDot: string;
+  };
   /** The sub-agents pane (board « Une conversation avec des sous-agents au travail », task 8.2). */
   subagentsPane: {
     /** « 3 sous-agents · 1 fini, 1 en cours, 1 attend ton accord, 1 en file ». */
@@ -177,6 +201,12 @@ export interface Messages {
   aparteWords: Record<AparteWord, string>;
   /** The shell (board « Conversation au travail »): the sidebar, open and folded into icons. */
   shell: {
+    /** A reply finished since the person last looked (task 8.4): the row's blue dot. */
+    unread: string;
+    /** The entry of « À traiter » in the sidebar, its count named, and its key. */
+    inbox: string;
+    inboxCount(count: number): string;
+    inboxShortcut: string;
     brand: string;
     nav: string;
     navCollapsed: string;

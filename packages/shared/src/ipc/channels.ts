@@ -35,6 +35,9 @@ import {
   conversationsCompact,
   conversationsUncompact,
   conversationsContext,
+  conversationsInbox,
+  conversationsSeen,
+  conversationsReadAgain,
 } from './conversations.js';
 import {
   engineApplySettings,
@@ -79,6 +82,9 @@ export const CHANNELS = [
   conversationsCompact,
   conversationsUncompact,
   conversationsContext,
+  conversationsInbox,
+  conversationsSeen,
+  conversationsReadAgain,
   pluginsInvoke,
   pluginsAck,
   engineState,

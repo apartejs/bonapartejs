@@ -73,10 +73,18 @@ export function memoryMarkOf(memory: Memory, words: Messages['shell']['memory'])
 }
 
 /** The marks of a row: its memory (drawn before the title), its branch and its files (after it). */
-export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages, pr?: RowPr): HTMLElement {
+export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages, pr?: RowPr, unread = false): HTMLElement {
   const marks = document.createElement('span');
   marks.className = 'conv-marks';
   marks.append(memoryMark(memory, words.shell.memory));
+  if (unread) {
+    // A reply finished since the person last looked (task 8.4): a blue dot, named.
+    const mark = document.createElement('span');
+    mark.className = 'conv-unread';
+    mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', words.shell.unread);
+    marks.append(mark);
+  }
   if (branchFiles !== undefined) {
     const branch = document.createElement('span');
     branch.className = 'conv-branch';

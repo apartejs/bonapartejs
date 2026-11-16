@@ -39,23 +39,25 @@ export interface SidebarProps {
   /** The project each conversation works in: what the core says, else where it was started here. */
   projectOf(id: string): string | null;
   /** Where each conversation's memory is, and its branch's changed files, as the core says. */
-  marksOf(id: string): { memory: Memory; branchFiles?: number; pr?: RowPr };
+  marksOf(id: string): { memory: Memory; branchFiles?: number; pr?: RowPr; unread?: boolean };
   grouping: 'project' | 'single';
   onCollapse(): void;
   onNewConversation(): void;
   onSearch(): void;
   onNewProject(): void;
   onSettings(): void;
+  /** « À traiter » (task 8.4): what waits for the person, counted; the page open. */
+  inbox: { count: number; open: boolean; onOpen(): void };
 }
 
 /** A row as the list draws it: the conversation, where its memory is, its branch's files. */
-type Row = ListedConversation & { memory: Memory; branchFiles?: number; pr?: RowPr };
+type Row = ListedConversation & { memory: Memory; branchFiles?: number; pr?: RowPr; unread?: boolean };
 
 function List({ items, activeId, flat, words }: { items: readonly Row[]; activeId: string | null; flat: boolean; words: Messages }) {
   // aparté's list draws itself again whenever it is given a new array — closing a row's open
   // menu: it gets a new one only when what it draws has changed.
   const drawn = items
-    .map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt, item.memory, item.branchFiles, item.pr ? `${item.pr.number}${item.pr.state}${item.pr.ci}` : ''].join('\u0000'))
+    .map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt, item.memory, item.branchFiles, item.pr ? `${item.pr.number}${item.pr.state}${item.pr.ci}` : '', item.unread ? 'unread' : ''].join('\u0000'))
     .join('\u0001');
   // A flat list has no « Épinglées » group: a pinned conversation comes first, the last pinned at the top.
   const conversations = useMemo(
@@ -65,7 +67,8 @@ function List({ items, activeId, flat, words }: { items: readonly Row[]; activeI
   // A new function draws the rows again: one only when what they show has changed.
   const renderMeta = useMemo(() => {
     const marks = new Map(items.map((item) => [item.id, item]));
-    return (item: { id: string }) => rowMarks(marks.get(item.id)?.memory ?? null, marks.get(item.id)?.branchFiles, words, marks.get(item.id)?.pr);
+    return (item: { id: string }) =>
+      rowMarks(marks.get(item.id)?.memory ?? null, marks.get(item.id)?.branchFiles, words, marks.get(item.id)?.pr, marks.get(item.id)?.unread === true);
   }, [drawn, words]);
   return (
     <AparteConversationList
@@ -122,6 +125,7 @@ export function Sidebar(props: SidebarProps) {
       memory: marks.memory,
       ...(marks.branchFiles !== undefined ? { branchFiles: marks.branchFiles } : {}),
       ...(marks.pr ? { pr: marks.pr } : {}),
+      ...(marks.unread ? { unread: true } : {}),
     };
   });
   const known = new Set(projects.map((project) => project.id));
@@ -141,6 +145,22 @@ export function Sidebar(props: SidebarProps) {
         <Icon name="search" />
         <span className="bonaparte-search-field__text">{words.search}</span>
         <kbd className="aparte-kbd">{messages.search.shortcut}</kbd>
+      </button>
+      <button
+        type="button"
+        className="bonaparte-inbox-entry"
+        aria-current={props.inbox.open ? 'page' : undefined}
+        aria-label={props.inbox.count > 0 ? words.inboxCount(props.inbox.count) : words.inbox}
+        title={`${words.inbox} · ${words.inboxShortcut}`}
+        onClick={props.inbox.onOpen}
+      >
+        <Icon name="inbox" />
+        <span className="bonaparte-inbox-entry__text">{words.inbox}</span>
+        {props.inbox.count > 0 ? (
+          <span className="bonaparte-inbox-entry__count" aria-hidden="true">
+            {props.inbox.count}
+          </span>
+        ) : null}
       </button>
       <div className="bonaparte-sidebar__body">
         {props.grouping === 'single' ? (

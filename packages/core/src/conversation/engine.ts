@@ -36,6 +36,7 @@ import { familyLayer } from '../families/index.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
 import { copyJournal, frozenPrompt, isRefrozen, openJournal } from '../journal/journal.js';
+import { unreadAnswer } from './inbox.js';
 import type { Journal, JournalEntry, NewJournalEntry, Outcome, PendingCall, SubagentHold, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
@@ -191,6 +192,8 @@ export interface MemoryRow {
 export interface ConversationStatus {
   memory: 'engine' | 'saved' | 'reread' | null;
   waiting: boolean;
+  /** A reply finished since the window last showed it (task 8.4): « Pas encore lu ». */
+  unread: boolean;
 }
 
 export interface TurnResult {
@@ -477,14 +480,61 @@ export class ConversationEngine {
     if (!meta) return null;
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
     const waiting = entries.at(-1)?.kind === 'pending';
+    const unread = unreadAnswer(entries, meta) !== null;
     const engine = await this.deps.engine();
     if (engine) this.follow(engine);
-    if (!engine?.live || !entries.some((entry) => entry.kind === 'user')) return { memory: null, waiting };
+    if (!engine?.live || !entries.some((entry) => entry.kind === 'user')) return { memory: null, waiting, unread };
     const owner = this.ownerOf(meta);
-    if (this.scheduler.isResident(owner)) return { memory: 'engine', waiting };
+    if (this.scheduler.isResident(owner)) return { memory: 'engine', waiting, unread };
     const manifest = await this.deps.kv.manifest(ownerKey(owner));
     const memory = manifest && canRestore(manifest, engine.live).ok ? 'saved' : 'reread';
-    return { memory, waiting };
+    return { memory, waiting, unread };
+  }
+
+  /** The window shows the conversation (task 8.4): what it finished so far is read. Not activity: the list keeps its order. */
+  async markSeen(id: string): Promise<void> {
+    if (await this.deps.store.get(id)) await this.deps.store.mark(id, { seenAt: new Date().toISOString() });
+  }
+
+  /**
+   * « Relire et continuer » (task 8.4): the conversation read again now, nothing generated — its saved state
+   * restored, else its seed, then the rest of its prompt read — so that going on costs nothing more.
+   */
+  async readAgain(id: string, sink: (event: TurnEvent) => void = () => undefined, signal?: AbortSignal): Promise<void> {
+    const meta = await this.deps.store.get(id);
+    if (!meta) throw new Error(`There is no conversation ${id}.`);
+    const engine = await this.deps.engine();
+    if (!engine) throw new NoEngineError();
+    this.follow(engine);
+    const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
+    const prompt = frozenPrompt(entries);
+    if (!prompt) return;
+    const owner = this.ownerOf(meta);
+    const key = ownerKey(owner);
+    const used = countedContext(entries) ?? estimateTokens(prompt);
+    const saved = engine.live ? await this.deps.kv.manifest(key) : null;
+    this.turning.set(key, {
+      engine,
+      stable: stableOf(entries),
+      history: true,
+      sink,
+      rereading: false,
+      behind: saved !== null && savedBefore(entries, saved.savedAt),
+    });
+    this.lastRun.set(key, { engine, tokens: used });
+    try {
+      await this.scheduler.run(
+        owner,
+        async (slot) => {
+          for await (const event of engine.client.complete({ prompt, idSlot: slot.id, cachePrompt: true, nPredict: 0, returnProgress: true, ...(signal ? { signal } : {}) })) {
+            if (event.type === 'progress') sink({ type: 'progress', done: event.progress.processed, total: event.progress.total });
+          }
+        },
+        signal ? { signal } : {},
+      );
+    } finally {
+      this.turning.delete(key);
+    }
   }
 
   /**

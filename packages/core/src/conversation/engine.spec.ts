@@ -419,23 +419,23 @@ describe('ConversationEngine — what the sidebar shows', () => {
     const a = await conversation();
     const b = await conversation();
     await say(a.id, 'Bonjour');
-    expect(await engine.status(a.id)).toEqual({ memory: 'engine', waiting: false });
+    expect(await engine.status(a.id)).toMatchObject({ memory: 'engine', waiting: false });
     await say(b.id, 'Salut');
-    expect(await engine.status(a.id)).toEqual({ memory: 'saved', waiting: false });
-    expect(await engine.status(b.id)).toEqual({ memory: 'engine', waiting: false });
+    expect(await engine.status(a.id)).toMatchObject({ memory: 'saved', waiting: false });
+    expect(await engine.status(b.id)).toMatchObject({ memory: 'engine', waiting: false });
     await kv.forget(`${a.id}_main`);
-    expect(await engine.status(a.id)).toEqual({ memory: 'reread', waiting: false });
+    expect(await engine.status(a.id)).toMatchObject({ memory: 'reread', waiting: false });
   });
 
   it('shows no memory where nothing was said, nor with a server that keeps none', async () => {
     const fresh = await rig();
     const empty = await fresh.conversation();
-    expect(await fresh.engine.status(empty.id)).toEqual({ memory: null, waiting: false });
+    expect(await fresh.engine.status(empty.id)).toMatchObject({ memory: null, waiting: false });
 
     const remote = await rig({ live: null });
     const said = await remote.conversation();
     await remote.say(said.id, 'Bonjour');
-    expect(await remote.engine.status(said.id)).toEqual({ memory: null, waiting: false });
+    expect(await remote.engine.status(said.id)).toMatchObject({ memory: null, waiting: false });
   });
 
   it('a conversation whose last turn waits for the person is waiting', async () => {

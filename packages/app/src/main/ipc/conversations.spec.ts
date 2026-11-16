@@ -33,11 +33,14 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     conversationStore: store,
     conversations: {
       open: open as never,
-      status: async (id: string) => (id === 'c-1' ? { memory: 'saved' as const, waiting: true } : null),
+      status: async (id: string) => (id === 'c-1' ? { memory: 'saved' as const, waiting: true, unread: false } : null),
+      markSeen: async () => undefined,
+      readAgain: async () => undefined,
     },
     conversationDocument: (id: string) => store.loadDocument(id),
     branchOf: async () => null,
     prOf: async () => null,
+    inbox: async () => ({ approvals: [], subagentRequests: [], questions: [], ciFailures: [], costs: [], unread: [] }),
     openPr: async () => null,
     uncommitted: async () => 0,
     commitBranch: async () => false,
@@ -121,12 +124,16 @@ describe('the conversation channels', () => {
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBe('Une idée');
   });
 
-  it("say what the sidebar shows of each conversation asked: its memory, and whether it waits — nothing for one that is gone", async () => {
+  it("say what the sidebar shows of each conversation asked: its memory, whether it waits, whether it was read — nothing for one that is gone", async () => {
     const { call, store } = await setup();
     await call('conversations.save', { document: DOC });
-    await expect(call('conversations.status', { ids: ['c-1', 'gone'] })).resolves.toEqual({ 'c-1': { projectId: null, memory: 'saved', waiting: true } });
+    await expect(call('conversations.status', { ids: ['c-1', 'gone'] })).resolves.toEqual({
+      'c-1': { projectId: null, memory: 'saved', waiting: true, unread: false },
+    });
     await store.update('c-1', { projectId: 'p-1' });
-    await expect(call('conversations.status', { ids: ['c-1'] })).resolves.toEqual({ 'c-1': { projectId: 'p-1', memory: 'saved', waiting: true } });
+    await expect(call('conversations.status', { ids: ['c-1'] })).resolves.toEqual({
+      'c-1': { projectId: 'p-1', memory: 'saved', waiting: true, unread: false },
+    });
     await expect(call('conversations.status', { ids: Array.from({ length: 501 }, (_, n) => `c-${n}`) })).rejects.toThrow();
   });
 });

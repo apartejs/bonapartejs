@@ -81,6 +81,8 @@ export const conversationStatusSchema = z.object({
     .optional(),
   /** Its branch's pull request and CI (task 6.8); absent without one. */
   pr: prSchema.optional(),
+  /** A reply finished since the window last showed it (task 8.4): « Pas encore lu ». */
+  unread: z.boolean().optional(),
 });
 export type ConversationStatusView = z.infer<typeof conversationStatusSchema>;
 
@@ -89,6 +91,27 @@ export const conversationsStatus = defineChannel(
   z.object({ ids: z.array(z.string().min(1).max(128)).max(500) }),
   z.record(z.string(), conversationStatusSchema),
 );
+
+/* « À traiter » (task 8.4): what waits for the person, across the conversations. */
+const inboxItem = { conversationId: z.string(), title: z.string(), at: z.string() };
+const inboxCall = z.object({ id: z.string(), name: z.string(), input: z.unknown() });
+export const inboxSchema = z.object({
+  approvals: z.array(z.object({ ...inboxItem, call: inboxCall })),
+  subagentRequests: z.array(z.object({ ...inboxItem, call: inboxCall, agent: z.string() })),
+  questions: z.array(z.object({ ...inboxItem, call: inboxCall, question: z.string() })),
+  ciFailures: z.array(z.object({ ...inboxItem, pr: z.object({ number: z.number(), url: z.string() }) })),
+  costs: z.array(z.object({ ...inboxItem, tokens: z.number(), seconds: z.number() })),
+  unread: z.array(z.object({ ...inboxItem, said: z.string() })),
+});
+export type InboxView = z.infer<typeof inboxSchema>;
+
+export const conversationsInbox = defineChannel('conversations.inbox', z.void(), inboxSchema);
+
+/** The window shows a conversation: what it finished so far is read. */
+export const conversationsSeen = defineChannel('conversations.seen', z.object({ id: z.string().min(1).max(128) }), z.void());
+
+/** « Relire et continuer »: the conversation read again now, nothing generated. */
+export const conversationsReadAgain = defineChannel('conversations.readAgain', z.object({ id: z.string().min(1).max(128) }), z.void());
 
 /** The card of a conversation, as aparté's list reads it: no message, so the sidebar never loads a document. */
 export const conversationCardSchema = z.object({

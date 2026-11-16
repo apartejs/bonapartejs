@@ -10,7 +10,7 @@
 import '@aparte/plugin-diff';
 import type { AparteDiff } from '@aparte/plugin-diff';
 import { toolsPreview, type PlayMode, type ToolPreviewView } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { createElement, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { ApprovalAnswer, ApprovalRequest } from '../aparte/approvals';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
@@ -38,13 +38,19 @@ function targetOf(request: ApprovalRequest, preview: ToolPreviewView | null): st
 
 export interface ApprovalCardProps {
   request: ApprovalRequest;
-  mode: PlayMode;
+  /** The conversation's mode, said on the card; absent on « À traiter », which does not know it. */
+  mode?: PlayMode;
   messages: Messages;
   onAnswer(answer: ApprovalAnswer): void;
-  onAllowAndPlume(): void;
+  /** « Autoriser et passer en Plume »: only where the conversation is open. */
+  onAllowAndPlume?(): void;
+  /** The card takes the focus on « Autoriser » (the composer's); not one card among others (« À traiter »). */
+  focus?: boolean;
+  /** More actions after its own (« Ouvrir la conversation »). */
+  children?: ReactNode;
 }
 
-export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlume }: ApprovalCardProps) {
+export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlume, focus = true, children }: ApprovalCardProps) {
   const text = messages.approval;
   const kind = kindOf(request.name);
   const [preview, setPreview] = useState<ToolPreviewView | null>(null);
@@ -74,7 +80,9 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
   }, [preview]);
 
   // The card takes the focus, on « Autoriser »: Enter allows, Escape refuses.
-  useEffect(() => allow.current?.focus(), [request]);
+  useEffect(() => {
+    if (focus) allow.current?.focus();
+  }, [request, focus]);
 
   const refuse = (): void => onAnswer({ approved: false, ...(instruction.trim() ? { instruction: instruction.trim() } : {}) });
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
@@ -112,7 +120,7 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
         </p>
         {/* A sub-agent's call (task 8.2): who asks is named — never more than its conversation may. */}
         {request.agent?.name ? <span className="aparte-badge approval-card__asker">{text.askedBy(request.agent.name)}</span> : null}
-        <p className="approval-card__mode">{text.modeNote[mode]}</p>
+        {mode ? <p className="approval-card__mode">{text.modeNote[mode]}</p> : null}
         {request.agent ? <p className="approval-card__only">{text.onlyIt}</p> : null}
       </div>
       {/* aparté's element, which JSX does not list: made as it is, given its texts through its property. */}
@@ -141,7 +149,7 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
             <button ref={allow} type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={() => onAnswer({ approved: true })}>
               {text.allow}
             </button>
-            {(kind === 'edit' || kind === 'write') && mode === 'repetition' ? (
+            {(kind === 'edit' || kind === 'write') && mode === 'repetition' && onAllowAndPlume ? (
               <button type="button" className="aparte-btn aparte-btn--outline" onClick={onAllowAndPlume}>
                 {text.allowAndPlume}
               </button>
@@ -151,6 +159,7 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
             </button>
           </>
         )}
+        {children}
         <span className="approval-card__hint">{text.hint}</span>
       </div>
     </section>

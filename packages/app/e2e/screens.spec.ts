@@ -790,3 +790,82 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Phase 8: « À traiter » (board « À traiter »): an approval, a question and a reply not read yet, in three
+ * conversations; Ctrl J opens the page.
+ * ---------------------------------------------------------------------------------------------------------------- */
+
+const INBOX = {
+  fr: {
+    fresh: 'Nouvelle conversation',
+    edit: 'Corrige l’affichage des dates dans src/format.ts',
+    ask: 'Ajoute la validation zod au formulaire d’inscription',
+    question: 'Une date vide : je la garde vide ou je la refuse ?',
+    night: 'Pourquoi la CI a-t-elle échoué cette nuit ?',
+    marker: 'cette nuit',
+    synthesis:
+      'La CI a échoué cette nuit sur le test « export des factures » : le fuseau horaire du runner a changé, et deux dates passent au lendemain. Le correctif tient en une ligne.',
+  },
+  en: {
+    fresh: 'New conversation',
+    edit: 'Fix how dates are shown in src/format.ts',
+    ask: 'Add zod validation to the sign-up form',
+    question: 'An empty date: keep it empty or refuse it?',
+    night: 'Why did CI fail last night?',
+    marker: 'last night',
+    synthesis:
+      'CI failed last night on the « invoice export » test: the runner’s time zone changed, and two dates moved to the next day. The fix is one line.',
+  },
+};
+
+/** An edit when the message names src/format.ts, a question when it says zod, a synthesis for last night's CI. */
+function inboxModel(locale: 'fr' | 'en') {
+  const words = INBOX[locale];
+  return (prompt: string): string => {
+    const user = prompt.lastIndexOf('<|turn>user');
+    if (prompt.lastIndexOf('<|tool_response>') > user) return locale === 'fr' ? 'Fait.' : 'Done.';
+    const asked = prompt.slice(user);
+    if (asked.includes('src/format.ts')) {
+      return subCall('edit_file', { path: 'src/format.ts', old_string: 'return date.toString();', new_string: 'return date.toLocaleDateString();' });
+    }
+    if (asked.includes('zod')) return subCall('ask_user', { question: words.question });
+    if (asked.includes(words.marker)) return words.synthesis;
+    return 'ok';
+  };
+}
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`what waits for the person (À traiter), ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = INBOX[locale];
+      const { page, home } = await launch({ locale, engine: { responder: inboxModel(locale), paceMs: 40 } });
+      await mkdir(join(home, 'src'), { recursive: true });
+      await writeFile(join(home, 'src', 'format.ts'), 'export function label(date: Date): string {\n  return date.toString();\n}\n');
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      const fresh = () => page.getByRole('button', { name: words.fresh }).first().click();
+
+      await ui.send(words.edit);
+      await expect(page.locator('.approval-card')).toBeVisible({ timeout: 20_000 });
+      await fresh();
+      await ui.send(words.ask);
+      await expect(ui.question).toBeVisible({ timeout: 20_000 });
+      await fresh();
+      await ui.send(words.night);
+      await fresh();
+      await expect(page.locator('.conv-unread')).toBeVisible({ timeout: 30_000 });
+      // The last click leaves its tooltip under the pointer: move it out of the way.
+      await page.mouse.move(1, 1);
+
+      await page.keyboard.press('Control+j');
+      await expect(page.locator('.inbox-page .inbox-card')).toHaveCount(2, { timeout: 10_000 });
+      await expect(page.locator('.inbox-page__unread')).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `inbox-${locale}-${scheme}.png`) });
+    });
+  }
+}

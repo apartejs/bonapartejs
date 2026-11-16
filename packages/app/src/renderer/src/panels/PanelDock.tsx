@@ -28,16 +28,20 @@ export interface PanelDockProps {
   narrow: boolean;
   content: Partial<Record<PaneName, PaneContent>>;
   onClose(pane: PaneName): void;
+  /** A page over the conversation (« À traiter »): the panes stay mounted, out of sight, a terminal view included. */
+  hidden?: boolean;
 }
 
-export function PanelDock({ messages, shown, narrow, content, onClose }: PanelDockProps) {
+export function PanelDock({ messages, shown, narrow, content, onClose, hidden = false }: PanelDockProps) {
   const words = messages.panels;
   if (shown.length === 0) return null;
   const others = shown.length > 1;
   return (
     <>
-      {narrow ? <div className="bonaparte-panes__scrim" aria-hidden="true" onClick={() => shown.forEach((pane) => onClose(pane))} /> : null}
-      <div className={`bonaparte-panes${narrow ? ' bonaparte-panes--over' : ''}`}>
+      {narrow && !hidden ? (
+        <div className="bonaparte-panes__scrim" aria-hidden="true" onClick={() => shown.forEach((pane) => onClose(pane))} />
+      ) : null}
+      <div className={`bonaparte-panes${narrow ? ' bonaparte-panes--over' : ''}`} hidden={hidden}>
         {shown.map((pane) => {
           const name = words[pane];
           const what = content[pane];

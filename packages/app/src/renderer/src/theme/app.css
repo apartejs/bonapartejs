@@ -2669,3 +2669,257 @@ body {
 .subagents-pane__thread .aparte-subagent-task {
   display: none;
 }
+
+/* « À traiter » (task 8.4, board « À traiter »): the sidebar's entry, the page, its cards, the unread rows. */
+.bonaparte-inbox-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-4);
+  height: 34px;
+  margin-block-start: var(--aparte-space-3);
+  padding: 0 var(--aparte-space-4);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.bonaparte-inbox-entry:hover {
+  background: var(--aparte-surface-2);
+}
+
+.bonaparte-inbox-entry[aria-current='page'] {
+  background: var(--bonaparte-accent-soft);
+  font-weight: 600;
+}
+
+.bonaparte-inbox-entry:focus-visible {
+  outline: 2px solid var(--aparte-primary);
+  outline-offset: -2px;
+}
+
+.bonaparte-inbox-entry__text {
+  flex: 1;
+}
+
+.bonaparte-inbox-entry__count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--aparte-warning);
+  color: var(--aparte-bg);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.bonaparte-conversation[hidden],
+.conversation-header[hidden],
+.bonaparte-panes[hidden] {
+  display: none;
+}
+
+/* The page takes the focus as it opens (a target for the keyboard, not a control): no ring around all of it. */
+.inbox-page:focus {
+  outline: none;
+}
+
+.inbox-page {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 32px 40px 48px;
+}
+
+.inbox-page__header,
+.inbox-page__cards,
+.inbox-page__unread {
+  max-width: 900px;
+}
+
+.inbox-page__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+}
+
+.inbox-page__lede {
+  margin: 4px 0 24px;
+  color: var(--aparte-text-muted);
+}
+
+.inbox-page__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inbox-page__none {
+  margin: 0;
+  color: var(--aparte-text-muted);
+}
+
+.inbox-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 12px;
+  background: var(--aparte-bg);
+}
+
+.inbox-card--approval,
+.inbox-card--subagent {
+  border-color: color-mix(in srgb, var(--aparte-warning) 35%, var(--aparte-border));
+  background: var(--aparte-warning-surface);
+}
+
+.inbox-card--ci {
+  border-color: color-mix(in srgb, var(--aparte-error) 30%, var(--aparte-border));
+  background: var(--aparte-error-surface);
+}
+
+.inbox-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--aparte-space-3);
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+.inbox-card__kind {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inbox-card--approval .inbox-card__kind,
+.inbox-card--subagent .inbox-card__kind {
+  color: var(--aparte-warning-ink);
+}
+
+.inbox-card--ci .inbox-card__kind {
+  color: var(--aparte-error-ink);
+}
+
+/* « · » between the kind and its conversation: the layout's, not a string. */
+.inbox-card__where::before,
+.inbox-card__extra::before {
+  content: '·';
+  margin-inline-end: var(--aparte-space-3);
+}
+
+.inbox-card__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.inbox-card__link:hover {
+  color: var(--aparte-primary);
+}
+
+.inbox-card__spacer {
+  flex: 1;
+}
+
+.inbox-card__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.inbox-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-4);
+}
+
+.inbox-card__note {
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+}
+
+/* The card of an approval, inside « À traiter »: the card's own frame is the inbox card's. */
+.inbox-card .approval-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.inbox-page__unread {
+  margin-block-start: 28px;
+}
+
+.inbox-page__subtitle {
+  margin: 0 0 8px;
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.inbox-page__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-5);
+  width: 100%;
+  padding: 14px 18px;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 12px;
+  background: var(--aparte-surface-1);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.inbox-row:hover {
+  border-color: var(--aparte-primary);
+}
+
+.inbox-row__dot,
+.conv-unread {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--aparte-radius-full);
+  background: var(--aparte-primary);
+}
+
+.inbox-row__what {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-row__said {
+  margin-inline-start: 0.4em;
+  color: var(--aparte-text-muted);
+}
+
+.inbox-row__at {
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}

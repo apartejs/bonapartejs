@@ -33,6 +33,9 @@ import {
   conversationsMemory,
   conversationsSave,
   conversationsStatus,
+  conversationsInbox,
+  conversationsSeen,
+  conversationsReadAgain,
   type ConversationDocument,
   type ConversationMemoryView,
 } from '@aparte/bonaparte-shared';
@@ -47,10 +50,11 @@ interface ConversationCore {
     'ensure' | 'get' | 'list' | 'loadDocument' | 'saveDocument' | 'mark' | 'rename' | 'loadDraft' | 'saveDraft'
   >;
   conversationDocument: Core['conversationDocument'];
-  conversations: Pick<Core['conversations'], 'open' | 'status'>;
+  conversations: Pick<Core['conversations'], 'open' | 'status' | 'markSeen' | 'readAgain'>;
   removeConversation: Core['removeConversation'];
   branchOf: Core['branchOf'];
   prOf: Core['prOf'];
+  inbox: Core['inbox'];
   openPr: Core['openPr'];
   uncommitted: Core['uncommitted'];
   commitBranch: Core['commitBranch'];
@@ -137,6 +141,9 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     return { announcement: announcement?.kind === 'restore' || announcement?.kind === 'reread' ? announcement : null };
   });
 
+  ipc.handle(conversationsInbox, () => core.inbox());
+  ipc.handle(conversationsSeen, ({ id }) => core.conversations.markSeen(id));
+  ipc.handle(conversationsReadAgain, ({ id }) => core.conversations.readAgain(id));
   ipc.handle(conversationsStatus, async ({ ids }) => {
     const found = await Promise.all(
       ids.map(async (id) => {

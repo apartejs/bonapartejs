@@ -7,7 +7,7 @@
 
 import { aparteGlobalConfig } from '@aparte/core';
 import type { ModelChoiceView } from '@aparte/bonaparte-shared';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fr } from '../i18n/fr';
 import { catalogueOf, ENGINE_PROVIDER, showCatalogue } from './model-catalogue';
 
@@ -53,5 +53,27 @@ describe('the models of the picker', () => {
     showCatalogue(catalogueOf([model('gemma')], fr, STYLE), fr.modelSwitch.provider, 'C:/models/gemma.gguf');
     expect(aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER)!.getModels()).toHaveLength(1);
     expect(aparteGlobalConfig.getModelConfig().defaultModel).toBe('C:/models/gemma.gguf');
+  });
+
+  it('listed again as it is, tells aparté nothing: a change of its config draws every conversation list again, an open row menu with it', () => {
+    // Every one of these tells aparté's config it changed (`aparte-config-change`).
+    const told = [
+      vi.spyOn(aparteGlobalConfig, 'setModelConfig'),
+      vi.spyOn(aparteGlobalConfig, 'registerAIProvider'),
+      vi.spyOn(aparteGlobalConfig, 'unregisterAIProvider'),
+    ];
+    const changes = (): number => told.reduce((sum, spy) => sum + spy.mock.calls.length, 0);
+    try {
+      showCatalogue(catalogueOf([model('gemma')], fr, STYLE), fr.modelSwitch.provider, 'C:/models/gemma.gguf');
+      expect(changes()).toBeGreaterThan(0);
+      const once = changes();
+      showCatalogue(catalogueOf([model('gemma')], fr, STYLE), fr.modelSwitch.provider, 'C:/models/gemma.gguf');
+      expect(changes()).toBe(once);
+      // Anything it shows that changed is told.
+      showCatalogue(catalogueOf([model('gemma'), model('qwen')], fr, STYLE), fr.modelSwitch.provider, 'C:/models/gemma.gguf');
+      expect(changes()).toBeGreaterThan(once);
+    } finally {
+      for (const spy of told) spy.mockRestore();
+    }
   });
 });

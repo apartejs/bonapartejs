@@ -13,6 +13,8 @@ import type { Messages } from '../i18n/index';
 import { Icon } from './icons';
 
 export interface ConversationHeaderProps {
+  /** « À traiter » is shown in the conversation's place (task 8.4). */
+  hidden?: boolean;
   messages: Messages;
   /** null: a new conversation, nothing said yet — no actions. */
   conversationId: string | null;
@@ -80,7 +82,7 @@ export function ConversationHeader(props: ConversationHeaderProps) {
 
   const title = props.title || props.messages.search.untitled;
   return (
-    <header className="aparte-app-header conversation-header">
+    <header className="aparte-app-header conversation-header" hidden={props.hidden}>
       {renaming ? (
         <input
           className="aparte-field conversation-header__field"

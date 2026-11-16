@@ -42,13 +42,18 @@ export interface ConversationMeta {
   updatedAt: string;
   archivedAt?: string;
   pinnedAt?: string;
+  /**
+   * When the window last showed it (task 8.4): a reply finished after is « pas encore lu ». Absent for a
+   * conversation older than the record — never unread then.
+   */
+  seenAt?: string;
 }
 
 export type NewConversation = Pick<ConversationMeta, 'kind' | 'engineId' | 'modelId' | 'mode'> &
   Partial<Pick<ConversationMeta, 'projectId' | 'title'>>;
 
-type Changes = Partial<Omit<ConversationMeta, 'id' | 'createdAt' | 'updatedAt' | 'pinnedAt' | 'archivedAt'>>;
-type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt'>>;
+type Changes = Partial<Omit<ConversationMeta, 'id' | 'createdAt' | 'updatedAt' | 'pinnedAt' | 'archivedAt' | 'seenAt'>>;
+type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt' | 'seenAt'>>;
 
 /** The window's document of a conversation, beside its journal. */
 const DOCUMENT = 'aparte.json';
@@ -91,7 +96,7 @@ export class ConversationStore {
   async create(input: NewConversation, givenId?: string): Promise<ConversationMeta> {
     const id = givenId === undefined ? `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}` : idOf(givenId);
     const now = new Date().toISOString();
-    const meta: ConversationMeta = { title: '', ...input, id, branchId: 'main', createdAt: now, updatedAt: now };
+    const meta: ConversationMeta = { title: '', ...input, id, branchId: 'main', createdAt: now, updatedAt: now, seenAt: now };
     await mkdir(join(this.dir, id), { recursive: true });
     await this.writes.run(id, () => writeJsonFile(this.metaPath(id), meta));
     return meta;
@@ -152,7 +157,7 @@ export class ConversationStore {
     return this.change(id, (meta) => ({ ...meta, ...changes, updatedAt: new Date().toISOString() }));
   }
 
-  /** Pinning or archiving is not activity: the order of the list does not move. */
+  /** Pinning, archiving or being seen is not activity: the order of the list does not move. */
   mark(id: string, marks: Marks): Promise<ConversationMeta> {
     return this.change(id, (meta) => ({ ...meta, ...marks }));
   }

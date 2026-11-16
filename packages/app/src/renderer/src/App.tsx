@@ -26,6 +26,10 @@ import {
   conversationsOpenPr,
   conversationsShowPr,
   conversationsBranches,
+  conversationsInbox,
+  conversationsSeen,
+  conversationsReadAgain,
+  type InboxView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -79,6 +83,7 @@ import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings
 import { Sidebar } from './shell/Sidebar';
 import { createSubagentTracker, setupSubagentLines } from './aparte/subagents';
 import { SubagentsPanel } from './panels/SubagentsPanel';
+import { InboxPage } from './screens/Inbox';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -136,6 +141,21 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         // Over the settings: they close, and the search opens over the conversations.
         setSettingsPage(null);
         setSearching(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  // « À traiter » (task 8.4, Ctrl J): a page in the conversation's place; the chats stay mounted under it.
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inbox, setInbox] = useState<InboxView | null>(null);
+  const [costLater, setCostLater] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'j') {
+        event.preventDefault();
+        setSettingsPage(null);
+        setInboxOpen((was) => !was);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -407,7 +427,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     return approvals.list(chat.conversationId).length > 0 || statusesNow.current[chat.conversationId]?.waiting === true;
   };
   // Opens a conversation — a new one for null —: its chat shown, mounted first if it was not living.
-  const goTo = (id: string | null): void => setDeck((was) => prune(openIn(was, id), worksOrWaits));
+  const goTo = (id: string | null): void => {
+    // Opening a conversation leaves « À traiter ».
+    setInboxOpen(false);
+    setDeck((was) => prune(openIn(was, id), worksOrWaits));
+  };
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
   const newConversation = (): void => goTo(null);
@@ -435,6 +459,31 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => setupCommands({ onNew: () => startOver.current() }), []);
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
+  // What waits for the person, read again when something may have changed it.
+  useEffect(() => {
+    void bridge
+      .invoke(conversationsInbox, undefined)
+      .then(setInbox)
+      .catch(() => undefined);
+  }, [statuses, asked, turnsEnded, inboxOpen]);
+  const inboxCount = inbox
+    ? inbox.approvals.length +
+      inbox.subagentRequests.length +
+      inbox.questions.length +
+      inbox.ciFailures.length +
+      inbox.costs.filter((cost) => !costLater.has(cost.conversationId)).length
+    : 0;
+  // The conversation shown is read: when it is shown, when a reply ends while the window is in front, and when the
+  // window comes back in front (task 8.4: « Fini, pas encore lu » is what finished while the person looked away).
+  useEffect(() => {
+    if (!conversationId || inboxOpen) return;
+    const seen = (): void => {
+      if (document.hasFocus()) void bridge.invoke(conversationsSeen, { id: conversationId }).catch(() => undefined);
+    };
+    seen();
+    window.addEventListener('focus', seen);
+    return () => window.removeEventListener('focus', seen);
+  }, [conversationId, turnsEnded, inboxOpen]);
   statusesNow.current = statuses;
   useWaitingMarks(statuses);
   // Archiving (task 6.8): a conversation whose branch has changes not committed asks first.
@@ -621,7 +670,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const runningModel = engine.model?.path ?? engine.resume?.path;
   const [modelChoices, setModelChoices] = useState<ModelChoiceView[]>([]);
   useEffect(() => {
-    if (!runningModel) return;
+    // A server that already runs serves its own model: no picker, so no models read from the disk, and nothing
+    // told to aparté's config — whose every change draws the conversation lists again (apartejs/aparte#251).
+    if (!runningModel || engine.mode === 'remote') return;
     let live = true;
     void bridge
       .invoke(engineModels, undefined)
@@ -634,7 +685,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     return () => {
       live = false;
     };
-  }, [runningModel, messages, locale]);
+  }, [runningModel, engine.mode, messages, locale]);
 
   // The engine unloaded (task 7.4; board « Coûts annoncés », 5): the conversation stays, a card says what
   // loading costs. A message sent meanwhile is held — apartejs/aparte#245: aparté's send cannot be
@@ -792,12 +843,22 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             memory: statuses[id]?.memory ?? null,
             ...(statuses[id]?.branch ? { branchFiles: statuses[id]!.branch!.files } : {}),
             ...(statuses[id]?.pr ? { pr: statuses[id]!.pr! } : {}),
+            // Unread: never the conversation the person is looking at.
+            ...(statuses[id]?.unread && id !== conversationId ? { unread: true } : {}),
           })}
           grouping={grouping}
           onCollapse={toggleSidebar}
           onNewConversation={newConversation}
           onSearch={() => setSearching(true)}
           onNewProject={() => setCreatingProject(true)}
+          inbox={{
+            count: inboxCount,
+            open: inboxOpen,
+            onOpen: () => {
+              setSettingsPage(null);
+              setInboxOpen(true);
+            },
+          }}
           onSettings={() => setSettingsPage('general')}
         />
       )}
@@ -893,7 +954,29 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           goTo(null);
         }}
       />
+      {inboxOpen ? (
+        <InboxPage
+          messages={messages}
+          locale={locale}
+          inbox={inbox}
+          requests={approvals.list()}
+          later={costLater}
+          onAnswer={(id, answer) => approvals.answer(id, answer)}
+          onOpen={(id) => goTo(id)}
+          onReadAgain={async (id) => {
+            await bridge.invoke(conversationsReadAgain, { id }).catch(() => undefined);
+            setAsked((count) => count + 1);
+          }}
+          onLater={(id) => setCostLater((was) => new Set([...was, id]))}
+          onFix={(id, number) => {
+            goTo(id);
+            sendWhenFree(messages.inbox.fixMessage(number), () => composerOf(id));
+          }}
+          onShowPr={(id) => void bridge.invoke(conversationsShowPr, { id }).catch(() => undefined)}
+        />
+      ) : null}
       <ConversationHeader
+        hidden={inboxOpen}
         messages={messages}
         conversationId={openConversation ? openConversation.id : null}
         title={openConversation?.title ?? ''}
@@ -949,7 +1032,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
-      <div className="bonaparte-conversation">
+      <div className="bonaparte-conversation" hidden={inboxOpen}>
       <ChatDeck
         deck={deck}
         messages={messages}
@@ -1040,6 +1123,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       </div>
       <PanelDock
         messages={messages}
+        hidden={inboxOpen}
         shown={shownPanes(panes, narrow)}
         narrow={narrow}
         content={{
