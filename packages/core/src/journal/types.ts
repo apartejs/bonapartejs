@@ -38,6 +38,17 @@ export interface PendingCall {
   agentId?: string;
 }
 
+/**
+ * A `run_subagent` call whose sub-agent waits for the person (task 8.1): not among the calls the page answers —
+ * its sub-agent's are — but kept with the pause, so that the sub-agent's result answers it once it goes on.
+ */
+export interface SubagentHold {
+  toolCallId: string;
+  agentId: string;
+  name: string;
+  input: unknown;
+}
+
 export type Outcome =
   | { kind: 'decision'; approved: boolean; reason?: string; instruction?: string }
   | { kind: 'result'; content: string; structuredContent?: unknown }
@@ -82,7 +93,7 @@ export type JournalBody =
   /** `truncated`: the context ran out in the middle of it — the answer is incomplete. */
   | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true }
   | { kind: 'tool-results'; results: ToolResult[] }
-  | { kind: 'pending'; calls: PendingCall[]; ticket: string }
+  | { kind: 'pending'; calls: PendingCall[]; ticket: string; subagents?: SubagentHold[] }
   | { kind: 'outcomes'; outcomes: Record<string, Outcome> }
   | { kind: 'delta'; delta: Delta }
   /**

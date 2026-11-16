@@ -18,6 +18,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { LlamaCppHttpError } from '../backend/llamacpp/http-client.js';
 import {
@@ -28,13 +30,13 @@ import {
   type Announcement,
   type RereadAnnouncement,
 } from '../costs/announce.js';
-import { createSlotScheduler, type SlotOwner, type SlotScheduler } from '../engine/slot-scheduler.js';
+import { createSlotScheduler, type SlotHandle, type SlotOwner, type SlotScheduler } from '../engine/slot-scheduler.js';
 import type { MeasureStore } from '../engine/measures.js';
 import { familyLayer } from '../families/index.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
 import { copyJournal, frozenPrompt, isRefrozen, openJournal } from '../journal/journal.js';
-import type { Journal, JournalEntry, NewJournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
+import type { Journal, JournalEntry, NewJournalEntry, Outcome, PendingCall, SubagentHold, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
 import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
@@ -125,13 +127,29 @@ export interface ModelCall {
 export type CallsAnswer =
   | { results: ToolResult[] }
   /** A pause: the calls that wait, the ticket that resumes them, the results of those that ran before. */
-  | { suspend: { pending: PendingCall[]; ticket: string; results?: ToolResult[] } }
+  | { suspend: { pending: PendingCall[]; ticket: string; results?: ToolResult[]; subagents?: SubagentHold[] } }
   | { stop: 'limit' };
 
 export interface TurnTools {
   /** The tools the model may call: their grammar goes with each completion. */
   defs: readonly ToolDef[];
-  onCalls(calls: readonly ModelCall[]): Promise<CallsAnswer>;
+  /** `slot`: the slot the conversation's turn holds — lent to its sub-agents (task 8.1); none for a sub-agent's own calls. */
+  onCalls(calls: readonly ModelCall[], slot?: CallsSlot): Promise<CallsAnswer>;
+}
+
+/** What a round's calls may do with the slot their turn holds: lend it to a sub-agent, which the turn takes back after. */
+export interface CallsSlot {
+  lend: SlotHandle['lend'];
+}
+
+/** A sub-agent's turn (task 8.1): its first, after its note and its mission, or its pause answered. */
+export interface SubagentTurnInput {
+  /** Its first turn: its note (who it is, what it may use) and its mission, after its conversation's first system turn. */
+  start?: { note: string; mission: string };
+  /** Its pause was answered: it goes on. */
+  resume?: true;
+  tools: TurnTools;
+  thinking?: boolean;
 }
 
 export interface TurnInput {
@@ -179,7 +197,7 @@ export interface TurnResult {
   /** The context ran out in the middle of the answer: it is incomplete. */
   truncated?: true;
   /** The turn waits for a person, or for the window: its calls, and the ticket that resumes it. */
-  suspended?: { pending: PendingCall[]; ticket: string; results?: ToolResult[] };
+  suspended?: { pending: PendingCall[]; ticket: string; results?: ToolResult[]; subagents?: SubagentHold[] };
   /** The tool rounds reached their limit. */
   limited?: true;
 }
@@ -333,7 +351,11 @@ function renderedAfter(entries: readonly JournalEntry[], savedAt: string): strin
 }
 
 const ownerKey = (owner: SlotOwner): string =>
-  owner.kind === 'conversation' ? `${owner.conversationId}_${owner.branchId}` : '';
+  owner.kind === 'conversation'
+    ? `${owner.conversationId}_${owner.branchId}`
+    : owner.kind === 'subagent'
+      ? `${owner.conversationId}_${owner.agentId}`
+      : '';
 
 export class ConversationEngine {
   private readonly exclusive = new KeyedQueue();
@@ -761,7 +783,11 @@ export class ConversationEngine {
    */
   recordAnswers(
     id: string,
-    answers: { outcomes: Record<string, Outcome>; results: readonly ToolResult[]; pending?: { calls: PendingCall[]; ticket: string } },
+    answers: {
+      outcomes: Record<string, Outcome>;
+      results: readonly ToolResult[];
+      pending?: { calls: PendingCall[]; ticket: string; subagents?: SubagentHold[] };
+    },
   ): Promise<void> {
     return this.exclusive.run(id, async () => {
       const meta = await this.deps.store.get(id);
@@ -773,7 +799,10 @@ export class ConversationEngine {
       if (answers.results.length > 0) {
         await journal.append({ kind: 'tool-results', results: [...answers.results], rendered: engine.family.renderToolResults(answers.results) });
       }
-      if (answers.pending) await journal.append({ kind: 'pending', calls: answers.pending.calls, ticket: answers.pending.ticket, rendered: '' });
+      if (answers.pending) {
+        const { calls, ticket, subagents } = answers.pending;
+        await journal.append({ kind: 'pending', calls, ticket, ...(subagents?.length ? { subagents } : {}), rendered: '' });
+      }
     });
   }
 
@@ -815,8 +844,162 @@ export class ConversationEngine {
         this.lastRun.delete(ownerKey(owner));
         await this.deps.kv.forget(ownerKey(owner));
       }
+      // Its sub-agents' states too: one that waited for the person kept its own (task 8.1).
+      for (const agentId of await this.subagentsOf(id)) {
+        const owner: SlotOwner = { kind: 'subagent', conversationId: id, agentId, name: '' };
+        this.scheduler.evict(owner);
+        this.lastRun.delete(ownerKey(owner));
+        await this.deps.kv.forget(ownerKey(owner));
+      }
       await this.deps.store.remove(id);
     });
+  }
+
+  /** The sub-agents a conversation ran: their threads, kept apart. */
+  private async subagentsOf(id: string): Promise<string[]> {
+    try {
+      return (await readdir(join(this.deps.store.dir, id, 'agents'), { withFileTypes: true }))
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+    } catch {
+      return [];
+    }
+  }
+
+  /** A sub-agent's thread (task 8.1): a journal of its own, beside its conversation's branches, never among them. */
+  subagentJournal(conversationId: string, agentId: string): Promise<Journal> {
+    return openJournal(join(this.deps.store.dir, conversationId, 'agents'), agentId);
+  }
+
+  /** The call a sub-agent waits on the person for, if it does. */
+  async subagentPaused(conversationId: string, agentId: string): Promise<Extract<JournalEntry, { kind: 'pending' }> | null> {
+    const last = (await this.subagentJournal(conversationId, agentId)).entries().at(-1);
+    return last?.kind === 'pending' ? last : null;
+  }
+
+  /** The answers to a sub-agent's pause, in its thread: what it reads when it goes on, and a new pause if one waits again. */
+  recordSubagentAnswers(
+    conversationId: string,
+    agentId: string,
+    answers: { outcomes: Record<string, Outcome>; results: readonly ToolResult[]; pending?: { calls: PendingCall[]; ticket: string } },
+  ): Promise<void> {
+    return this.exclusive.run(`${conversationId}/${agentId}`, async () => {
+      const engine = await this.deps.engine();
+      if (!engine) throw new NoEngineError();
+      const journal = await this.subagentJournal(conversationId, agentId);
+      await journal.append({ kind: 'outcomes', outcomes: answers.outcomes, rendered: '' });
+      if (answers.results.length > 0) {
+        await journal.append({ kind: 'tool-results', results: [...answers.results], rendered: engine.family.renderToolResults(answers.results) });
+      }
+      if (answers.pending) await journal.append({ kind: 'pending', calls: answers.pending.calls, ticket: answers.pending.ticket, rendered: '' });
+    });
+  }
+
+  /**
+   * A sub-agent's turn (task 8.1): its rounds on the slot its conversation lends it (`lend`, the conversation's
+   * turn under way), else on a slot it is given like any owner (its pause answered). Its prompt starts with its
+   * conversation's first system turn — the seed serves it — then its note and its mission; what it leaves in the
+   * slot once it is done is worth nothing, and its saved state, if it kept one to wait for the person, goes.
+   * `answer`: the text of its last answer — what it returns to the conversation.
+   */
+  async subagentTurn(
+    conversationId: string,
+    agent: { agentId: string; name: string },
+    input: SubagentTurnInput,
+    sink: (event: TurnEvent) => void,
+    options: { lend?: CallsSlot['lend']; signal?: AbortSignal } = {},
+  ): Promise<TurnResult & { answer: string }> {
+    const meta = await this.deps.store.get(conversationId);
+    if (!meta) throw new Error(`There is no conversation ${conversationId}.`);
+    const engine = await this.deps.engine();
+    if (!engine) throw new NoEngineError();
+    this.follow(engine);
+    const { family, client } = engine;
+    const { signal } = options;
+    const journal = await this.subagentJournal(conversationId, agent.agentId);
+    if (input.start && journal.entries().length === 0) {
+      const parent = (await openJournal(this.deps.store.dir, conversationId, meta.branchId)).entries();
+      await journal.append({ kind: 'system', rendered: stableOf(parent) });
+      await journal.append({ kind: 'system', rendered: family.renderSystemNote(input.start.note) });
+      await journal.append({ kind: 'user', text: input.start.mission, rendered: family.renderUser(input.start.mission) });
+    }
+    const entries = journal.entries();
+    const frozen = frozenPrompt(entries);
+    const opening = family.beginAssistant({ thinking: input.thinking ?? true, ...(input.resume ? { continuing: true } : {}) });
+    const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
+    const used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(opening);
+    if (used + REPLY_ROOM > engineWindow) throw new ContextFullError(this.contextFull(engine, used, engineWindow));
+
+    const owner: SlotOwner = { kind: 'subagent', conversationId, agentId: agent.agentId, name: agent.name };
+    const key = ownerKey(owner);
+    const saved = engine.live ? await this.deps.kv.manifest(key) : null;
+    const turning: Turning = {
+      engine,
+      stable: stableOf(entries),
+      // Its pause answered: without its state, what it did before is read again.
+      history: input.resume === true,
+      sink,
+      rereading: false,
+      behind: saved !== null && savedBefore(entries, saved.savedAt),
+    };
+    this.turning.set(key, turning);
+    this.lastRun.set(key, { engine, tokens: used });
+    const work = (slot: { id: number }): Promise<TurnResult> =>
+      this.rounds({
+        journal,
+        engine,
+        owner,
+        turning,
+        prompt: frozen + opening,
+        opening,
+        thinking: input.thinking ?? true,
+        tools: input.tools,
+        sink,
+        ...(signal ? { signal } : {}),
+        answerOf: {},
+        used,
+        slot,
+        tooLong: async () => {
+          throw new ContextFullError(this.contextFull(engine, used, engineWindow));
+        },
+      });
+    let result: TurnResult;
+    try {
+      if (options.lend) {
+        result = await options.lend(owner, async (lent) => {
+          const done = await work(lent);
+          if (!done.suspended) lent.discard();
+          return done;
+        });
+      } else {
+        const waits = this.scheduler.busy.length > 0;
+        if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'start' });
+        result = await this.scheduler.run(
+          owner,
+          async (slot) => {
+            if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
+            return work(slot);
+          },
+          signal ? { signal } : {},
+        );
+        // Done: what it leaves in the slot is worth nothing — never saved over anything.
+        if (!result.suspended) this.scheduler.evict(owner);
+      }
+    } catch (error) {
+      if (signal?.aborted && error instanceof DOMException && error.name === 'AbortError') {
+        // Stopped while it waited for the slot.
+        await journal.append({ kind: 'assistant', raw: '', stopped: 'user', rendered: opening + family.endAssistant('') });
+        result = { usage: { inputTokens: 0, outputTokens: 0 }, stopped: 'user' };
+      } else throw error;
+    } finally {
+      this.turning.delete(key);
+    }
+    if (!result.suspended) {
+      this.lastRun.delete(key);
+      await this.deps.kv.forget(key).catch(() => undefined);
+    }
+    const last = journal.entries().findLast((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
+    return { ...result, answer: last ? textOf(family, last.raw) : '' };
   }
 
   private ownerOf(meta: ConversationMeta): SlotOwner {
@@ -1125,109 +1308,28 @@ export class ConversationEngine {
         owner,
         async (slot) => {
           if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
-          const grammar = input.tools ? family.toolGrammar(input.tools.defs) : null;
-          let prompt = frozen + userRendered + opening;
-          let roundOpening = opening;
-          let usage: Usage = { inputTokens: 0, outputTokens: 0 };
-          const finishReread = (): void => {
-            if (!turning.rereading) return;
-            turning.rereading = false;
-            sink({ type: 'step', name: 'reread', phase: 'end' });
-          };
-          // One completion a round; a round that ends on calls is answered, and the next round reads the results.
-          for (let round = 0; ; round += 1) {
-            const demux = family.createDemux();
-            let raw = '';
-            let truncated = false;
-            let finished = false;
-            const calls: ModelCall[] = [];
-            const take = (piece: DemuxEvent): void => {
-              if (piece.type === 'tool-call') calls.push({ id: `call-${randomUUID()}`, name: piece.name, input: piece.input });
-              sink(piece);
-            };
-            try {
-              for await (const event of client.complete({
-                prompt,
-                idSlot: slot.id,
-                cachePrompt: true,
-                returnProgress: true,
-                sampling: { stop: [...family.stop] },
-                ...(grammar ?? {}),
-                ...(signal ? { signal } : {}),
-              })) {
-                if (event.type === 'token') {
-                  finishReread();
-                  raw += event.text;
-                  for (const piece of demux.push(event.text)) take(piece);
-                } else if (event.type === 'progress') {
-                  sink({ type: 'progress', done: event.progress.processed, total: event.progress.total });
-                } else {
-                  finished = true;
-                  const { stats } = event;
-                  usage = {
-                    inputTokens: stats.progress?.total ?? stats.promptUncachedTokens,
-                    outputTokens: stats.predictedTokens,
-                    cacheReadTokens: stats.progress?.cache ?? 0,
-                    ...(stats.contextTokens ? { contextTokens: stats.contextTokens } : {}),
-                  };
-                  this.measure(engine, stats.promptUncachedTokens, stats.promptMs);
-                  this.lastRun.set(key, { engine, tokens: stats.contextTokens || used });
-                  truncated = stats.truncated === true;
-                }
-              }
-              for (const piece of demux.flush()) take(piece);
-              finishReread();
-              // The stream ended without its final event: the person stopped it (it may end quietly then),
-              // or the engine went away.
-              if (!finished) {
-                throw signal?.aborted
-                  ? new DOMException('The answer was stopped.', 'AbortError')
-                  : new Error('The engine ended its answer before finishing it.');
-              }
-            } catch (error) {
-              finishReread();
-              if (signal?.aborted) {
-                await journal.append({ kind: 'assistant', raw, stopped: 'user', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
-                return { usage, stopped: 'user' as const };
-              }
-              if (refusedAsTooLong(error)) {
-                // The server read nothing of it: the slot holds what it held. The person's message is taken
-                // back when it is what did not fit; after tool rounds, what they gave stays.
-                slot.unchanged();
-                if (user && round === 0) await journal.append({ kind: 'withdrawn', entryId: user.id });
-                throw new ContextFullError(this.contextFull(engine, round === 0 ? used : estimateTokens(prompt), window));
-              }
-              await journal.append({ kind: 'assistant', raw, stopped: 'engine', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
-              // What the slot held is gone with the engine: nothing of it is saved.
-              this.scheduler.evict(owner);
-              throw new EngineFailedError(error);
-            }
-            await journal.append({
-              kind: 'assistant',
-              raw,
-              usage,
-              ...answerOf,
-              ...(truncated ? { truncated: true as const } : {}),
-              rendered: roundOpening + raw + family.endAssistant(raw),
-            });
-            if (!input.tools || calls.length === 0 || truncated) {
-              return truncated ? { usage, truncated: true as const } : { usage };
-            }
-
-            const answer = await input.tools.onCalls(calls);
-            if ('stop' in answer) return { usage, limited: true as const };
-            if ('suspend' in answer) {
-              // What ran before the pause is kept; the calls that wait enter the prompt once answered (4.5).
-              const ran = answer.suspend.results ?? [];
-              if (ran.length > 0) await journal.append({ kind: 'tool-results', results: ran, rendered: family.renderToolResults(ran) });
-              await journal.append({ kind: 'pending', calls: answer.suspend.pending, ticket: answer.suspend.ticket, rendered: '' });
-              return { usage, suspended: answer.suspend };
-            }
-            // The results, disarmed by the family as it renders them, then the model's answer goes on.
-            await journal.append({ kind: 'tool-results', results: answer.results, rendered: family.renderToolResults(answer.results) });
-            roundOpening = family.beginAssistant({ thinking: input.thinking ?? true, continuing: true });
-            prompt = frozenPrompt(journal.entries()) + roundOpening;
-          }
+          return this.rounds({
+            journal,
+            engine,
+            owner,
+            turning,
+            prompt: frozen + userRendered + opening,
+            opening,
+            thinking: input.thinking ?? true,
+            ...(input.tools ? { tools: input.tools } : {}),
+            sink,
+            ...(signal ? { signal } : {}),
+            answerOf,
+            used,
+            slot,
+            tooLong: async (round, prompt) => {
+              // The server read nothing of it: the slot holds what it held. The person's message is taken
+              // back when it is what did not fit; after tool rounds, what they gave stays.
+              slot.unchanged();
+              if (user && round === 0) await journal.append({ kind: 'withdrawn', entryId: user.id });
+              throw new ContextFullError(this.contextFull(engine, round === 0 ? used : estimateTokens(prompt), window));
+            },
+          });
         },
         signal ? { signal } : {},
       );
@@ -1240,6 +1342,141 @@ export class ConversationEngine {
       throw error;
     } finally {
       this.turning.delete(key);
+    }
+  }
+
+  /**
+   * The rounds of a turn in the slot it holds: one completion a round; a round that ends on calls is answered,
+   * and the next reads the results. The conversation's own turn may lend its slot to its sub-agents while its
+   * calls run (task 8.1): it comes home before its next round.
+   */
+  private async rounds(run: {
+    journal: Journal;
+    engine: EngineView;
+    owner: SlotOwner;
+    turning: Turning;
+    /** The first prompt: the frozen text, the message, the answer's opening. */
+    prompt: string;
+    opening: string;
+    thinking: boolean;
+    tools?: TurnTools;
+    sink: (event: TurnEvent) => void;
+    signal?: AbortSignal;
+    /** The window's message each answer fills. */
+    answerOf: { messageId?: string };
+    /** What the turn reckoned it holds: what a save weighs until the engine has counted it. */
+    used: number;
+    /** The slot: the conversation's own (it may lend it), or the one a sub-agent was lent or given. */
+    slot: { id: number } & Partial<Pick<SlotHandle, 'lend' | 'home'>>;
+    /** The server refused a prompt as longer than its context, in this round. */
+    tooLong(round: number, prompt: string): Promise<never>;
+  }): Promise<TurnResult> {
+    const { journal, engine, owner, turning, tools, sink, signal, answerOf, slot } = run;
+    const { family, client } = engine;
+    const key = ownerKey(owner);
+    const grammar = tools ? family.toolGrammar(tools.defs) : null;
+    let prompt = run.prompt;
+    let roundOpening = run.opening;
+    let usage: Usage = { inputTokens: 0, outputTokens: 0 };
+    const finishReread = (): void => {
+      if (!turning.rereading) return;
+      turning.rereading = false;
+      sink({ type: 'step', name: 'reread', phase: 'end' });
+    };
+    for (let round = 0; ; round += 1) {
+      const demux = family.createDemux();
+      let raw = '';
+      let truncated = false;
+      let finished = false;
+      const calls: ModelCall[] = [];
+      const take = (piece: DemuxEvent): void => {
+        if (piece.type === 'tool-call') calls.push({ id: `call-${randomUUID()}`, name: piece.name, input: piece.input });
+        sink(piece);
+      };
+      try {
+        for await (const event of client.complete({
+          prompt,
+          idSlot: slot.id,
+          cachePrompt: true,
+          returnProgress: true,
+          sampling: { stop: [...family.stop] },
+          ...(grammar ?? {}),
+          ...(signal ? { signal } : {}),
+        })) {
+          if (event.type === 'token') {
+            finishReread();
+            raw += event.text;
+            for (const piece of demux.push(event.text)) take(piece);
+          } else if (event.type === 'progress') {
+            sink({ type: 'progress', done: event.progress.processed, total: event.progress.total });
+          } else {
+            finished = true;
+            const { stats } = event;
+            usage = {
+              inputTokens: stats.progress?.total ?? stats.promptUncachedTokens,
+              outputTokens: stats.predictedTokens,
+              cacheReadTokens: stats.progress?.cache ?? 0,
+              ...(stats.contextTokens ? { contextTokens: stats.contextTokens } : {}),
+            };
+            this.measure(engine, stats.promptUncachedTokens, stats.promptMs);
+            this.lastRun.set(key, { engine, tokens: stats.contextTokens || run.used });
+            truncated = stats.truncated === true;
+          }
+        }
+        for (const piece of demux.flush()) take(piece);
+        finishReread();
+        // The stream ended without its final event: the person stopped it (it may end quietly then),
+        // or the engine went away.
+        if (!finished) {
+          throw signal?.aborted
+            ? new DOMException('The answer was stopped.', 'AbortError')
+            : new Error('The engine ended its answer before finishing it.');
+        }
+      } catch (error) {
+        finishReread();
+        if (signal?.aborted) {
+          await journal.append({ kind: 'assistant', raw, stopped: 'user', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
+          return { usage, stopped: 'user' as const };
+        }
+        if (refusedAsTooLong(error)) return run.tooLong(round, prompt);
+        await journal.append({ kind: 'assistant', raw, stopped: 'engine', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
+        // What the slot held is gone with the engine: nothing of it is saved.
+        this.scheduler.evict(owner);
+        throw new EngineFailedError(error);
+      }
+      await journal.append({
+        kind: 'assistant',
+        raw,
+        usage,
+        ...answerOf,
+        ...(truncated ? { truncated: true as const } : {}),
+        rendered: roundOpening + raw + family.endAssistant(raw),
+      });
+      if (!tools || calls.length === 0 || truncated) {
+        return truncated ? { usage, truncated: true as const } : { usage };
+      }
+
+      const answer = await tools.onCalls(calls, slot.lend ? { lend: slot.lend } : undefined);
+      if ('stop' in answer) return { usage, limited: true as const };
+      if ('suspend' in answer) {
+        // What ran before the pause is kept; the calls that wait enter the prompt once answered (4.5).
+        const ran = answer.suspend.results ?? [];
+        if (ran.length > 0) await journal.append({ kind: 'tool-results', results: ran, rendered: family.renderToolResults(ran) });
+        await journal.append({
+          kind: 'pending',
+          calls: answer.suspend.pending,
+          ticket: answer.suspend.ticket,
+          ...(answer.suspend.subagents?.length ? { subagents: answer.suspend.subagents } : {}),
+          rendered: '',
+        });
+        return { usage, suspended: answer.suspend };
+      }
+      // The results, disarmed by the family as it renders them, then the model's answer goes on.
+      await journal.append({ kind: 'tool-results', results: answer.results, rendered: family.renderToolResults(answer.results) });
+      // Lent to its sub-agents while the calls ran: the conversation comes home before it reads on.
+      await slot.home?.();
+      roundOpening = family.beginAssistant({ thinking: run.thinking, continuing: true });
+      prompt = frozenPrompt(journal.entries()) + roundOpening;
     }
   }
 
@@ -1329,8 +1566,11 @@ export class ConversationEngine {
     if (owner.kind === 'conversation' && (last.engine.slidingWindow ?? 0) > 0) await this.settle(owner, slotId, last.engine.client);
     await this.deps.kv.saveState(last.engine.client, slotId, ownerKey(owner), live, {
       expectedBytes: last.tokens * (last.engine.kvBytesPerToken ?? 0),
-      keep: incoming?.kind === 'conversation' ? [ownerKey(incoming)] : [],
+      keep: incoming?.kind === 'conversation' || incoming?.kind === 'subagent' ? [ownerKey(incoming)] : [],
     });
+    // Saved in the middle of its turn (lent to a sub-agent): its state is as new as its conversation now.
+    const turning = this.turning.get(ownerKey(owner));
+    if (turning) turning.behind = false;
   }
 }
 
@@ -1382,6 +1622,16 @@ function lastToldReplyLanguage(entries: readonly JournalEntry[]): string | undef
  * The system turn the branch's prompt starts from (a seed is keyed by it): its last rebase's or change of
  * model's, else its first.
  */
+/** What an answer says, its calls and its reasoning left out: a sub-agent's result. */
+function textOf(family: FamilyLayer, raw: string): string {
+  const demux = family.createDemux();
+  const pieces = [...demux.push(raw), ...demux.flush()];
+  return pieces
+    .map((piece) => (piece.type === 'text' ? piece.delta : ''))
+    .join('')
+    .trim();
+}
+
 function stableOf(entries: readonly JournalEntry[]): string {
   const refrozen = entries.findLast(isRefrozen);
   return refrozen?.stable ?? entries.find((entry) => entry.kind === 'system')?.rendered ?? '';

@@ -39,7 +39,7 @@ describe('answerPause — after Stop', () => {
         mode: 'repetition',
         registry,
         permissions: new PermissionEngine({ roots: () => [], dataDir: join(tmpdir(), 'bp-none') }),
-        roots: [],
+        place: { roots: [] },
         nCtx: 8_192,
         signal: stopped.signal,
       },

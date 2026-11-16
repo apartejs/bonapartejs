@@ -8,6 +8,7 @@ import { editFile } from './edit-file.js';
 import { listFiles } from './list-files.js';
 import { readFileTool } from './read-file.js';
 import { runCommand } from './run-command.js';
+import { runSubagentTool } from './run-subagent.js';
 import { search } from './search.js';
 import { updatePlan } from './update-plan.js';
 import { createWebFetch, type WebFetchOptions } from './web-fetch.js';
@@ -21,5 +22,5 @@ export interface BuiltinToolsDeps {
 }
 
 export function builtinTools(deps: BuiltinToolsDeps = {}): BuiltinTool[] {
-  return [readFileTool, listFiles, search, editFile, writeFileTool, runCommand, createWebFetch(deps.webFetch), updatePlan];
+  return [readFileTool, listFiles, search, editFile, writeFileTool, runCommand, createWebFetch(deps.webFetch), updatePlan, runSubagentTool];
 }

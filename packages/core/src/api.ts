@@ -71,6 +71,7 @@ import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
+import { resumeSubagent, runQueuedSubagent, subagentId } from './agent/subagents.js';
 import {
   createTickets,
   installationSecret,
@@ -1558,20 +1559,29 @@ export function createCore(deps: CoreDeps): Core {
 
     async resumeTurn(conversationId, check, options, emit, onTurnEvent) {
       const place = await rootsOf(conversationId);
-      const { results, waiting } = await answerPause(
+      const scope = {
+        conversationId,
+        mode: (await modeOf(conversationId)).mode,
+        ...(place.projectId ? { projectId: place.projectId } : {}),
+        registry: tools.view(plugins.visibleTo(place.projectId)),
+        permissions,
+        place: { roots: place.roots, ...(place.barred ? { barred: place.barred } : {}) },
+        nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
+        signal: options.signal,
+        ...keepOriginals(conversationId, options.messageId),
+        beforeChange: () => ensureBranch(conversationId),
+      };
+      // The sub-agents the pause holds go on, and those queued behind it run, on slots of their own (task 8.1).
+      const parent = { ...scope, engine: conversations, emit };
+      const { results, waiting, holds } = await answerPause(
         {
-          conversationId,
-          mode: (await modeOf(conversationId)).mode,
-          ...(place.projectId ? { projectId: place.projectId } : {}),
-          registry: tools.view(plugins.visibleTo(place.projectId)),
-          permissions,
-          roots: place.roots,
-          ...(place.barred ? { barred: place.barred } : {}),
-          nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
-          signal: options.signal,
+          ...scope,
           windowTools: new Set(options.clientTools.map((tool) => tool.name)),
-          ...keepOriginals(conversationId, options.messageId),
-          beforeChange: () => ensureBranch(conversationId),
+          subagents: {
+            resume: (hold, outcomes) => resumeSubagent(parent, hold, outcomes),
+            run: (call) => runQueuedSubagent(parent, call),
+            idOf: (toolCallId) => subagentId(conversationId, toolCallId),
+          },
         },
         check.pause,
         check.outcomes,
@@ -1586,11 +1596,11 @@ export function createCore(deps: CoreDeps): Core {
         await conversations.recordAnswers(conversationId, {
           outcomes: check.outcomes,
           results,
-          pending: { calls: waiting, ticket },
+          pending: { calls: waiting, ticket, ...(holds.length > 0 ? { subagents: holds } : {}) },
         });
         return {
           usage: { inputTokens: 0, outputTokens: 0 },
-          suspended: { pending: waiting, ticket },
+          suspended: { pending: waiting, ticket, ...(holds.length > 0 ? { subagents: holds } : {}) },
         };
       }
       await conversations.recordAnswers(conversationId, {

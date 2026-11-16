@@ -21,6 +21,7 @@ import { openJournal } from '../journal/journal.js';
 import { agentBodySchema, type AgentBody } from './body.js';
 import { compareWithJournal } from './divergence.js';
 import { encodeEvent, type WireLine } from './run-events.js';
+import { turnEventToWire } from './wire.js';
 
 /**
  * Where the window posts a turn: `bonaparte://app/agent/c/<conversation>`.
@@ -147,27 +148,6 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
   };
 }
 
-/** What the engine says while it works, in aparté's words. */
-function toWire(event: TurnEvent, rereading: { on: boolean }): WireLine | null {
-  switch (event.type) {
-    case 'text':
-      return { type: 'text-delta', delta: event.delta };
-    case 'thinking':
-      return { type: 'thinking-delta', delta: event.delta };
-    case 'step':
-      if (event.name === 'reread') rereading.on = event.phase === 'start';
-      return { type: event.phase === 'start' ? 'step-start' : 'step-end', name: event.name };
-    case 'progress':
-      // The progress of a prompt read again: the bar of the `reread` activity.
-      return rereading.on
-        ? { type: 'activity', id: 'reread', activityType: 'reread', content: { done: event.done, total: event.total } }
-        : null;
-    default:
-      // A tool call: the loop says it, as it decides it (tool-start).
-      return null;
-  }
-}
-
 /** What leads a turn: a new one, or a pause resumed. */
 type TurnRunner = (emit: (event: StreamRunEvent) => void, onTurnEvent: (event: TurnEvent) => void, signal: AbortSignal) => Promise<TurnResult>;
 
@@ -201,7 +181,7 @@ function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Respo
         const result: TurnResult = await runTurn(
           (event) => write(event),
           (event) => {
-            const line = toWire(event, rereading);
+            const line = turnEventToWire(event, rereading);
             if (line) write(line);
           },
           stop.signal,

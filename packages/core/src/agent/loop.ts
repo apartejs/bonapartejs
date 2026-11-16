@@ -11,24 +11,26 @@
  * - to ask about: `tool-awaiting-approval`, and the turn pauses — the calls
  *   after it in the same step wait, `queued`; the calls before it keep their
  *   results;
- * - a tool of the window (`ask_user`): the turn pauses for the window.
+ * - a tool of the window (`ask_user`): the turn pauses for the window;
+ * - `run_subagent`: a sub-agent runs on the slot the turn lends it (task 8.1).
  *
  * Past `maxToolRounds` (25 by default) the turn stops: `turn-limit-exceeded`.
+ * The calls themselves are answered by `answerCalls` (`calls.ts`).
  */
 
 import type { PlayMode } from '@aparte/bonaparte-shared';
-import { toolRefusal, type StreamRunEvent } from '@aparte/engine';
-import type { CallsAnswer, ModelCall, TurnEvent, TurnInput, TurnResult } from '../conversation/engine.js';
+import type { StreamRunEvent } from '@aparte/engine';
+import type { CallsAnswer, CallsSlot, ModelCall, TurnEvent, TurnInput, TurnResult } from '../conversation/engine.js';
 import type { PendingCall } from '../journal/types.js';
 import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolSet } from '../tools/registry.js';
-import type { ToolContext, ToolDef, ToolResult } from '../tools/types.js';
-import { NOT_RUN_STOPPED } from './resume.js';
+import type { ToolContext, ToolDef } from '../tools/types.js';
+import { answerCalls, type CallScope, type ChangePlace } from './calls.js';
+import { subagentRunner, type SubagentEngine } from './subagents.js';
+
+export type { ChangePlace } from './calls.js';
 
 export const DEFAULT_MAX_TOOL_ROUNDS = 25;
-
-/** Where a conversation works from its first change on, or why it cannot move there. */
-export type ChangePlace = { roots: readonly string[]; barred: readonly string[] } | { error: string };
 
 export interface AgentTurnContext {
   conversationId: string;
@@ -38,7 +40,8 @@ export interface AgentTurnContext {
   projectId?: string;
   registry: ToolSet;
   permissions: PermissionEngine;
-  conversations: { turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> };
+  /** The conversation engine: its turns, and its sub-agents' when it runs them (task 8.1). */
+  conversations: { turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> } & Partial<SubagentEngine>;
   /** The perimeter the tools run in. */
   roots: readonly string[];
   /** The engine's context: what a tool's output is cut to. */
@@ -75,98 +78,54 @@ export async function runAgentTurn(
   const maxRounds = ctx.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   const windowTools = new Map((ctx.windowTools ?? []).map((tool) => [tool.name, tool]));
   const defs = [...ctx.registry.list(), ...windowTools.values()];
+  const scope: CallScope = {
+    conversationId: ctx.conversationId,
+    mode: ctx.mode,
+    ...(ctx.projectId !== undefined ? { projectId: ctx.projectId } : {}),
+    registry: ctx.registry,
+    permissions: ctx.permissions,
+    // Moved when the conversation goes to its own branch — for its sub-agents too.
+    place: { roots: ctx.roots, ...(ctx.barred ? { barred: ctx.barred } : {}) },
+    nCtx: ctx.nCtx,
+    signal: ctx.signal,
+    windowTools,
+    ...(ctx.beforeWrite ? { beforeWrite: ctx.beforeWrite } : {}),
+    ...(ctx.afterWrite ? { afterWrite: ctx.afterWrite } : {}),
+    ...(ctx.onOutput ? { onOutput: ctx.onOutput } : {}),
+    ...(ctx.beforeChange ? { beforeChange: ctx.beforeChange } : {}),
+  };
+  const { subagentTurn, subagentPaused, recordSubagentAnswers } = ctx.conversations;
+  if (subagentTurn && subagentPaused && recordSubagentAnswers) {
+    const { windowTools: _window, ...inherited } = scope;
+    scope.subagents = subagentRunner({
+      ...inherited,
+      engine: {
+        subagentTurn: subagentTurn.bind(ctx.conversations),
+        subagentPaused: subagentPaused.bind(ctx.conversations),
+        recordSubagentAnswers: recordSubagentAnswers.bind(ctx.conversations),
+      },
+      emit,
+      ...(ctx.maxToolRounds !== undefined ? { maxToolRounds: ctx.maxToolRounds } : {}),
+    });
+  }
   let rounds = 0;
 
-  const onCalls = async (calls: readonly ModelCall[]): Promise<CallsAnswer> => {
+  const onCalls = async (calls: readonly ModelCall[], slot?: CallsSlot): Promise<CallsAnswer> => {
     rounds += 1;
     if (rounds > maxRounds) {
       emit({ type: 'turn-limit-exceeded', scope: 'global', limit: maxRounds });
       return { stop: 'limit' };
     }
-    const results: ToolResult[] = [];
-    const pending: PendingCall[] = [];
-    for (const call of calls) {
-      if (pending.length > 0) {
-        // A call before it waits for someone: this one waits behind it.
-        emit({ type: 'tool-start', toolCallId: call.id, name: call.name, input: call.input, queued: true });
-        pending.push({ toolCallId: call.id, name: call.name, input: call.input, reason: 'queued' });
-        continue;
-      }
-      emit({ type: 'tool-start', toolCallId: call.id, name: call.name, input: call.input });
-      if (ctx.signal.aborted) {
-        // The person stopped the turn: what the model wrote before is answered, never run.
-        emit({ type: 'tool-aborted', toolCallId: call.id, cause: 'stopped' });
-        results.push({ toolCallId: call.id, name: call.name, content: NOT_RUN_STOPPED, failed: true });
-        continue;
-      }
-      if (windowTools.has(call.name)) {
-        pending.push({ toolCallId: call.id, name: call.name, input: call.input, reason: 'external' });
-        continue;
-      }
-      const tool = ctx.registry.get(call.name);
-      if (tool) {
-        const judge = () =>
-          ctx.permissions.evaluate({
-            tool: tool.def,
-            input: call.input,
-            mode: ctx.mode,
-            ...(ctx.projectId !== undefined ? { projectId: ctx.projectId } : {}),
-            roots: ctx.roots,
-            ...(ctx.barred ? { barred: ctx.barred } : {}),
-          });
-        let verdict = judge();
-        // A change the mode lets through or asks: its branch first, so what is judged, shown and done is there.
-        if (verdict.verdict !== 'deny' && (tool.def.effect === 'write' || tool.def.effect === 'execute') && ctx.beforeChange) {
-          const place = await ctx.beforeChange();
-          if (place && 'error' in place) {
-            emit({ type: 'tool-failed', toolCallId: call.id, error: place.error });
-            results.push({ toolCallId: call.id, name: call.name, content: place.error, failed: true });
-            continue;
-          }
-          if (place) {
-            ctx.roots = place.roots;
-            ctx.barred = place.barred;
-            verdict = judge();
-          }
-        }
-        if (verdict.verdict === 'deny') {
-          const refusal = toolRefusal({ reason: verdict.reason, by: 'policy' });
-          emit({ type: 'tool-rejected', toolCallId: call.id, ...refusal });
-          results.push({ toolCallId: call.id, name: call.name, content: refusal.reason, failed: true });
-          continue;
-        }
-        if (verdict.verdict === 'ask') {
-          emit({ type: 'tool-awaiting-approval', toolCallId: call.id, name: call.name, input: call.input });
-          pending.push({ toolCallId: call.id, name: call.name, input: call.input, reason: 'approval' });
-          continue;
-        }
-      }
-      const result = await ctx.registry.run(
-        { id: call.id, name: call.name, input: call.input },
-        {
-          conversationId: ctx.conversationId,
-          roots: ctx.roots,
-          nCtx: ctx.nCtx,
-          signal: ctx.signal,
-          ...(ctx.beforeWrite ? { beforeWrite: ctx.beforeWrite } : {}),
-          ...(ctx.afterWrite ? { afterWrite: ctx.afterWrite } : {}),
-          ...(ctx.onOutput ? { onOutput: ctx.onOutput } : {}),
-        },
-      );
-      emit(
-        result.failed
-          ? { type: 'tool-failed', toolCallId: call.id, error: result.content }
-          : {
-              type: 'tool-resolved',
-              toolCallId: call.id,
-              result: result.content,
-              ...(result.structuredContent !== undefined ? { structuredResult: result.structuredContent } : {}),
-            },
-      );
-      results.push(result);
-    }
-    if (pending.length > 0) return { suspend: { pending, ticket: ctx.ticket(pending), results } };
-    return { results };
+    const answer = await answerCalls(scope, calls, emit, slot);
+    if (!('pending' in answer)) return { results: answer.results };
+    return {
+      suspend: {
+        pending: answer.pending,
+        ticket: ctx.ticket(answer.pending),
+        results: answer.results,
+        ...(answer.subagents.length > 0 ? { subagents: answer.subagents } : {}),
+      },
+    };
   };
 
   return ctx.conversations.turn(ctx.conversationId, { ...ctx.input, tools: { defs, onCalls } }, onTurnEvent, ctx.signal);

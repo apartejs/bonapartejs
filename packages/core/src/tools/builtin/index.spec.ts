@@ -21,6 +21,7 @@ describe('builtinTools', () => {
       run_command: 'execute',
       web_fetch: 'network',
       update_plan: 'ui',
+      run_subagent: 'ui',
     });
   });
 
@@ -35,6 +36,6 @@ describe('builtinTools', () => {
   it('all go in one registry', () => {
     const registry = new ToolRegistry();
     for (const tool of builtinTools()) registry.register(tool.def, tool.handler);
-    expect(registry.list()).toHaveLength(8);
+    expect(registry.list()).toHaveLength(9);
   });
 });
