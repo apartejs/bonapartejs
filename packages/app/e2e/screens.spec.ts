@@ -778,7 +778,9 @@ for (const locale of ['fr', 'en'] as const) {
       const name = locale === 'fr' ? 'Mesureur' : 'Timer';
       const responder = (prompt: string): string => {
         const answered = prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user');
-        if (prompt.includes('You are a sub-agent')) return answered ? '…' : subCall('run_command', { program: 'pnpm', args: 'test --reporter=verbose' });
+        // The command's arguments are an array, as the tool takes them.
+        const command = `<|tool_call>call:run_command{program:${SUB_Q}pnpm${SUB_Q},args:[${SUB_Q}test${SUB_Q},${SUB_Q}--reporter=verbose${SUB_Q}]}<tool_call|>`;
+        if (prompt.includes('You are a sub-agent')) return answered ? '…' : command;
         return answered ? '…' : subCall('run_subagent', { name, mission: words.ask, tools: 'all' });
       };
       const { page } = await launch({ locale, engine: { responder } });
