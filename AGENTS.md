@@ -96,8 +96,25 @@ re-read (« Compacter d'abord »), a change of model (aparté's model
 selector, « Passer à … ? » with « Changer » and « Brancher sur ce
 modèle »), the context nearly full, the engine unloaded (« Charger et
 envoyer », a send held meanwhile) and a launch setting that restarts the
-engine (« À la fin de la réponse » or « Maintenant »). A section below that
-names something not built yet says so.
+engine (« À la fin de la réponse » or « Maintenant »). Phase 8 is done:
+sub-agents, « À traiter » and the notifications. The model hands an
+independent lead to a sub-agent (`run_subagent`): a thread of its own, the
+tools it is given (read, or all but itself and the window's), never more
+than its conversation's mode; the turn lends it its slot — the
+conversation's memory saved, then restored — and its pause is answered like
+the conversation's, across a restart. « En parallèle » runs two on two
+slots, the second slot's cost said before the engine restarts. Its line in
+the thread, the « Sous-agents » pane, the engine card « Occupé : sous-agent
+… », an approval that names who asks. Ctrl J opens « À traiter »: what waits
+across the conversations — an approval answered from there, a question
+opened on its conversation, a CI that fails, a turn the engine cut read
+again with its cost said — and the replies not read yet (a blue dot on
+their row). When the window is not in front: a banner by the person's
+setting for each event (a reply done, an approval, a question, a failure),
+never an approval given from it; the icon of the notification area in four
+colours, its menu (what waits, the engine, « Libérer le modèle », « Ne pas
+déranger pendant 1 h », « Quitter ») and the taskbar's badge. A section
+below that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -294,6 +311,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - `BONAPARTE_LLAMA_BIN` names the llama.cpp binary to launch (a choice of
   the person: bonaparte then offers no build over it). Without it, the build
   bonaparte installed (`<data>/llama.cpp/`) comes first, then the PATH.
+- `node scripts/make-icons.mjs` (from `packages/app`) draws the icons of the
+  notification area and of the taskbar's badge again, after a change of a
+  `--bonaparte-tray-*` token; `src/main/icons/draw.spec.ts` fails until it
+  has run.
 - `.github/workflows/ci.yml` runs all of the above, `pnpm dev` excepted, on
   Ubuntu and on Windows. A test run never asks GitHub: llama.cpp's releases
   are a local server of the test (`testing/fake-llama-releases.ts`).
@@ -363,7 +384,19 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`display: 'label' | 'both'`) and stand before the built-in buttons
   (`position: 'start'`), names what a history opens with after a
   checkpoint (`_meta.historySummary`), and spaces the diff's line numbers:
-  apartejs/aparte#240, #241 and #243 are fixed. bonaparte runs on 1.11.0.
+  apartejs/aparte#240, #241 and #243 are fixed. **aparté 1.12.0**
+  (2026-11-16) fixes #244 to #251, and bonaparte runs on it: the model
+  picker is `createModelCatalogue`, a pick says `picked`; a send held while
+  the engine is unloaded is `aparte-before-send` cancelled; a compaction
+  that keeps no turn covers its own message (`contextSummary.includesSelf`)
+  and tells the gauge (`aparte-compact-done`); a message written while a
+  reply runs waits above the field (`setQueueWhileStreaming`); Stop says
+  « Arrêter les sous-agents » while they work (the composer's `stopLabel`);
+  « À traiter » answers a question with choices (`observeElicitations`).
+  Not adopted: the sub-agents' line on the turn's fold (`setTurnSummary`,
+  #247), which folds the tool lines of every reply — a choice for Paul.
+  Open: apartejs/aparte#253 (`<aparte-diff>` redraws for any comments
+  array: `DiffView` keeps one).
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -441,8 +474,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   sits where the core's rebase begins; after it aparté sends the summary as
   the first user message and names it (`_meta.historySummary`), which the
   divergence takes off as it is (apartejs/aparte#243). With no turn kept,
-  the checkpoint sits on the last answer, and the gauge counts that answer
-  until the next turn (apartejs/aparte#246). A fork among the kept turns
+  the checkpoint sits on the last answer and covers it (`includesSelf`,
+  aparté 1.12); the window then dispatches `aparte-compact-done` so that
+  the gauge measures again — aparté's own compaction says it, the core's
+  does not. A fork among the kept turns
   keeps the compaction (a rebase frozen again, the kept turns cut and copied
   after it); a fork before a compaction or a change of model never carries
   the parent's memory.
@@ -458,9 +493,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `settings/LaunchSettings.tsx`): the engine unloaded keeps the conversations
   (« Préparons le moteur » only when no model is known; `EngineState.resume`
   names the one to bring back), its card first above the composer; a send
-  meanwhile is held by a capture listener on `window` (apartejs/aparte#245).
-  The model is chosen in aparté's `<aparte-model-selector>`, fed by one
-  descriptive provider (apartejs/aparte#244). The engine says « ready » only
+  meanwhile is held by cancelling `aparte-before-send` (aparté 1.12). The
+  model is chosen in aparté's `<aparte-model-selector>`, fed by aparté's
+  `createModelCatalogue`; only a pick of the person (`picked`) opens the
+  dialog. The engine says « ready » only
   when the core serves a turn, and pushes its changes (`AppEvent` `engine`).
   The launch settings (context, K/V cache) are kept only on a choice, once
   their cost is said; « Moteur et mémoire » shows what runs.
@@ -479,8 +515,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   when its elements arrive).
 - **The panes** (`renderer/src/panels/`): a column of ours beside the
   conversation (`PanelDock`, as the board draws it), its icons in the header
-  (`PanelToggles`, three — the browser's comes with its pane); under
-  1 100 px the pane opened goes over the conversation, alone. Fichiers reads
+  (`PanelToggles`, four: Fichiers, Changements, Sous-agents, the terminal —
+  the browser's comes with its pane); under 1 100 px the pane opened goes
+  over the conversation, alone. A page over the conversation (« À traiter »)
+  hides them, mounted (a terminal keeps its view). Fichiers reads
   the core's `files.list`/`files.read` (`core/src/files/browse.ts`, always
   through `resolveInPerimeter`). Changements: the core's preview of a call
   that waits (« Proposé ») and the checkpoint store's changes of the whole
@@ -488,6 +526,46 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   by aparté's `<aparte-diff>` through `createAparteElement(diffElement)`
   (`diff/DiffView.tsx`, the one place the app draws a change); comments are
   kept by the app (`diff/comments-store.ts`) and leave in one message.
+- **Sub-agents** (`core/src/agent/subagents.ts`, `agent/calls.ts`,
+  `tools/builtin/run-subagent.ts`; the scheduler's `lend`/`home`): a
+  `run_subagent` call is run by the loop, not the registry. Its id is
+  name-based (`agent-<uuid>` from the conversation and the call), its
+  journal `<conv>/agents/<agentId>/main.jsonl`, its prompt the parent's
+  stable system turn, a note and the mission; on the wire `agent-start` …
+  events with its `agentId` … `agent-end`, and only its result enters the
+  parent's journal. A pause of one keeps it in the parent's pending entry
+  (`subagents`): the resume hands the answers to it, a refusal stops only
+  it. Consecutive `run_subagent` calls of a step run together when the
+  engine has a second slot (`subagentsOnBuiltin: 'parallel'`, `-np 2`). The
+  window (`aparte/subagents.ts`, `panels/SubagentsPanel.tsx`): aparté's
+  `setupSubagents` lines, our tracker of the run's events for the pane's
+  counts; Stop says « Arrêter les sous-agents » while one works (the
+  composer's `stopLabel`).
+- **« À traiter »** (`core/src/conversation/inbox.ts`,
+  `renderer/src/screens/Inbox.tsx`, Ctrl J): `readInbox` gathers, across
+  the conversations not archived, the approvals and sub-agents' requests,
+  the questions, the CI that fails, the turns the engine cut (their re-read
+  announced, `readAgain` reads them on « Relire et continuer »), and the
+  replies finished after `seenAt` (set when the window shows the
+  conversation while it has the focus). An approval is answered through
+  the approvals store, so the card resolves the same promise as the
+  conversation's. A question that is one choice among options is answered
+  from the page, through the chat that shows it (`observeElicitations`,
+  `aparte/questions.ts`); any other question opens its conversation. The
+  page takes the conversation's place and the keyboard focus.
+- **Notifications and the notification area** (`main/attention.ts`,
+  `main/notifications.ts`, `main/tray.ts`; the core's `onTurnEnd`): each
+  turn that ends (done, approval, question, failed — never one the person
+  stopped) becomes a banner by `decide` (the person's setting, the window's
+  focus, « Ne pas déranger »), else the badge alone. The icon's colour and
+  the taskbar's badge (`setOverlayIcon`) say what waits as long as it is
+  true, read from the inbox. A banner and the icon's menu open a
+  conversation (`AppEvent` `open`), never answer it. The icons are drawn
+  from four `--bonaparte-tray-*` tokens by `scripts/make-icons.mjs` into
+  `resources/icons/` (versioned; `icons/draw.spec.ts` checks them). A test
+  run shows none of it: `__bonaparteTray`, `__bonaparteNotifications`,
+  `__bonaparteAttention`, and `__bonaparteFocused` to say the window is in
+  front (`e2e/fixtures/window.ts`).
 - **The terminal** (`plugins/terminal`, `main/terminals/`): the app finds
   the shells (`shells.ts`) and runs node-pty in one Electron utility process
   (`pty-process.ts`, built apart by electron-vite's `?modulePath` — a second
@@ -732,9 +810,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   read with its message — else a restore that served everything was said
   as a re-reading.
 - **aparté's `setModelConfig` merges**: a model chosen cannot be cleared by
-  leaving it out. And `aparte-send` cannot be cancelled: a capture listener
-  on `window` runs before the client (bubble) and the controller (capture
-  on the chat) — `stopImmediatePropagation`, the text put back after.
+  leaving it out. And a send is held by cancelling `aparte-before-send`
+  (aparté 1.12), never `aparte-send`, which cannot be cancelled.
 - **The context is the engine's count, not an estimate.** Three characters a
   token overcounts prose: the banner said 92 % beside a gauge at 69 %, a
   message the engine had room for was refused, and « Compacter » found no
@@ -744,6 +821,37 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`countedContext`), with an estimate only for what was frozen since. The
   fake server counts four characters a token: a test that fills the context
   fills it as the engine counts.
+- **A turn lends its slot to its sub-agents.** With one slot, a sub-agent
+  that waited for the slot its own turn holds would wait forever: the turn
+  lends it (the parent's state saved if it changed, the borrower's
+  restored), and takes it home before its next completion. And a turn never
+  waits for a slot while it holds one: two conversations doing that at once
+  (« En parallèle ») waited for each other for ever — a step's sub-agents
+  take only the slots free now, the others run on the lent slot.
+- **What a job leaves worth nothing, it says before it ends**
+  (`slot.discard()`, `lent.discard()`): the next owner in line takes the
+  slot the moment the job ends, and would save it — a finished sub-agent's
+  state, a gigabyte on disk pushing another conversation's memory out.
+- **The notification area never stops the app.** Every drawing reads the
+  inbox, every journal: a drawing that fails is logged, one journal that
+  cannot be read hides only its conversation, and quitting (the memory
+  saved) is wired before the first drawing, which nothing waits for.
+- **Any change of aparté's config redrew every conversation list at
+  once** before aparté 1.12, an open row menu or rename with it
+  (apartejs/aparte#251, fixed): a
+  provider registered, `setModelConfig`, a tool display. Tell aparté only
+  what changed (`showCatalogue` keeps quiet when its list is the same), and
+  nothing at all with a remote engine (no picker).
+- **A card that takes the focus does it in a layout effect**, before it is
+  painted: with `useEffect`, an Enter typed as the approval card appeared
+  reached the composer — where, while a turn waits, it stops the reply.
+- **`NO_COLOR` in the shell, with Nx's `FORCE_COLOR`, makes Node warn into
+  the output of the fake binaries**, and the core's tests that read it
+  fail: run the tests without `NO_COLOR`. A test that proves two things run
+  at the same time paces the fake engine slowly enough for a loaded machine.
+- **The window of a test run has the focus** (`document.hasFocus()`), but
+  the main process's `isFocused()` says no: a test of the notifications
+  says what the person faces through `__bonaparteFocused`.
 
 ## Real-model smoke results
 
