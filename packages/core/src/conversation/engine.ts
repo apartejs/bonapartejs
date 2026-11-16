@@ -550,8 +550,11 @@ export class ConversationEngine {
     if (!engine?.live) return [];
     const rows: MemoryRow[] = [];
     for (const meta of await this.deps.store.list()) {
-      const entries = (await openJournal(this.deps.store.dir, meta.id, meta.branchId)).entries();
-      if (!entries.some((entry) => entry.kind === 'user')) continue;
+      // A journal that cannot be read leaves out only its own row (review of phase 8).
+      const entries = await openJournal(this.deps.store.dir, meta.id, meta.branchId)
+        .then((journal) => journal.entries())
+        .catch(() => null);
+      if (!entries?.some((entry) => entry.kind === 'user')) continue;
       const owner = this.ownerOf(meta);
       const manifest = await this.deps.kv.manifest(ownerKey(owner));
       const base = { id: meta.id, title: meta.title, projectId: meta.projectId ?? null, otherModel: false, rereadSeconds: null };
@@ -907,6 +910,17 @@ export class ConversationEngine {
   /** How many slots the engine runs: more than one, and a step's sub-agents work together (task 8.3). */
   get slotCount(): number {
     return this.scheduler.size;
+  }
+
+  /**
+   * A sub-agent that will never be resumed (its pause left for a new message, or a Stop while it was answered):
+   * its state, in a slot or on disk, is worth nothing (review of phase 8).
+   */
+  async letGoSubagent(conversationId: string, agentId: string): Promise<void> {
+    const left: SlotOwner = { kind: 'subagent', conversationId, agentId, name: '' };
+    this.scheduler.evict(left);
+    this.lastRun.delete(ownerKey(left));
+    await this.deps.kv.forget(ownerKey(left)).catch(() => undefined);
   }
 
   /** The slots a new owner would take now without waiting: those free, less those others already wait for. */
@@ -1325,11 +1339,7 @@ export class ConversationEngine {
     // A model turn left open by calls nobody answered (a limit, a pause given up): closed before any note. The
     // sub-agents that waited in that pause are let go: never resumed, their state is worth nothing.
     if (!input.resume) {
-      for (const agentId of await closeOpenTurn(journal, family)) {
-        const left: SlotOwner = { kind: 'subagent', conversationId: id, agentId, name: '' };
-        this.scheduler.evict(left);
-        await this.deps.kv.forget(ownerKey(left)).catch(() => undefined);
-      }
+      for (const agentId of await closeOpenTurn(journal, family)) await this.letGoSubagent(id, agentId);
     }
     if (!input.resume) {
       // A going back the model has not heard of is told now; once a turn begins it cannot be undone.
@@ -1798,9 +1808,10 @@ async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<str
   let left: string[] = [];
   if (last?.kind === 'pending') {
     const holds = last.subagents ?? [];
-    left = holds.map((hold) => hold.agentId);
+    // One that ended behind another (in parallel) gives its result; one that still waited is let go.
+    left = holds.filter((hold) => !hold.result).map((hold) => hold.agentId);
     open = [
-      ...holds.map((hold) => ({ toolCallId: hold.toolCallId, name: hold.name, content: SUBAGENT_LEFT })),
+      ...holds.map((hold) => ({ toolCallId: hold.toolCallId, name: hold.name, content: hold.result?.content ?? SUBAGENT_LEFT })),
       ...last.calls.filter((call) => !call.agentId).map((call) => ({ toolCallId: call.toolCallId, name: call.name })),
     ];
   } else if (last?.kind === 'tool-results') {

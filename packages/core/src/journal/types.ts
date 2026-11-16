@@ -47,6 +47,12 @@ export interface SubagentHold {
   agentId: string;
   name: string;
   input: unknown;
+  /**
+   * Its sub-agent ended while one called before it waits for the person (in parallel): its result waits with the
+   * pause, and enters the prompt after the earlier one's — the families match results to calls by position
+   * (review of phase 8).
+   */
+  result?: { kind: 'done' | 'stopped' | 'failed'; content: string };
 }
 
 export type Outcome =

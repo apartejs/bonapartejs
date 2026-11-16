@@ -95,14 +95,26 @@ export async function answerPause(
   pause: Pause,
   outcomes: Record<string, Outcome>,
   emit: (event: StreamRunEvent) => void,
-): Promise<{ results: ToolResult[]; waiting: PendingCall[]; holds: SubagentHold[] }> {
+): Promise<{ results: ToolResult[]; waiting: PendingCall[]; holds: SubagentHold[]; letGo: string[] }> {
   const results: ToolResult[] = [];
   const waiting: PendingCall[] = [];
-  // The `run_subagent` calls whose sub-agent still waits: kept with the next pause.
+  // The `run_subagent` calls whose sub-agent still waits — or ended behind one that waits: kept with the next pause.
   const holds: SubagentHold[] = [];
-  const handed = new Set<string>();
+  // The sub-agents a Stop ends before they were resumed: their pause and their state are let go.
+  const letGo: string[] = [];
   let refused = false;
-  const holdOf = (agentId: string): SubagentHold | undefined => pause.subagents?.find((hold) => hold.agentId === agentId);
+  /** A sub-agent's end said to the window: its `run_subagent` call resolved, stopped or failed. */
+  const say = (hold: SubagentHold, kind: 'done' | 'stopped' | 'failed', content: string): void => {
+    if (kind === 'done') emit({ type: 'tool-resolved', toolCallId: hold.toolCallId, result: content });
+    else if (kind === 'stopped') emit({ type: 'tool-aborted', toolCallId: hold.toolCallId, cause: 'stopped' });
+    else emit({ type: 'tool-failed', toolCallId: hold.toolCallId, error: content });
+  };
+  const resultOf = (hold: SubagentHold, kind: 'done' | 'stopped' | 'failed', content: string): ToolResult => ({
+    toolCallId: hold.toolCallId,
+    name: hold.name,
+    content,
+    ...(kind === 'done' ? {} : { failed: true }),
+  });
   /** A sub-agent's end: the result of its `run_subagent` call, or its calls waiting again. */
   const settle = (hold: SubagentHold, end: SubagentEnd): void => {
     if (end.kind === 'paused') {
@@ -111,11 +123,53 @@ export async function answerPause(
       return;
     }
     const content = capToolOutput(end.result, ctx.nCtx);
-    if (end.kind === 'done') emit({ type: 'tool-resolved', toolCallId: hold.toolCallId, result: content });
-    else if (end.kind === 'stopped') emit({ type: 'tool-aborted', toolCallId: hold.toolCallId, cause: 'stopped' });
-    else emit({ type: 'tool-failed', toolCallId: hold.toolCallId, error: content });
-    results.push({ toolCallId: hold.toolCallId, name: hold.name, content, ...(end.kind === 'done' ? {} : { failed: true }) });
+    say(hold, end.kind, content);
+    results.push(resultOf(hold, end.kind, content));
   };
+
+  // The sub-agents that waited (task 8.1), first and in the order the model called them: each is handed back its
+  // own answers, all at once (a refusal stops only it). One that ends while one called before it waits again
+  // keeps its result with the pause: results enter the prompt in the order of the calls, which is how the
+  // families match them (review of phase 8). A Stop answers their `run_subagent` calls — never their own calls,
+  // which the conversation never made.
+  let behind = false;
+  if (ctx.subagents) {
+    for (const hold of pause.subagents ?? []) {
+      let end: SubagentEnd;
+      if (hold.result) {
+        // Ended before (said then), kept behind one that waited.
+        if (behind) {
+          holds.push(hold);
+          continue;
+        }
+        results.push(resultOf(hold, hold.result.kind, hold.result.content));
+        continue;
+      }
+      if (ctx.signal.aborted) {
+        letGo.push(hold.agentId);
+        end = { kind: 'stopped', result: NOT_RUN_STOPPED };
+      } else {
+        const theirs = Object.fromEntries(
+          pause.calls.filter((one) => one.agentId === hold.agentId && outcomes[one.toolCallId]).map((one) => [one.toolCallId, outcomes[one.toolCallId]!]),
+        );
+        end = await ctx.subagents.resume(hold, theirs);
+      }
+      if (end.kind === 'paused') {
+        behind = true;
+        settle(hold, end);
+        continue;
+      }
+      if (behind) {
+        const content = capToolOutput(end.result, ctx.nCtx);
+        say(hold, end.kind, content);
+        const { result: _old, ...plain } = hold;
+        holds.push({ ...plain, result: { kind: end.kind, content } });
+        continue;
+      }
+      settle(hold, end);
+    }
+  }
+  const held = new Set((pause.subagents ?? []).map((hold) => hold.agentId));
   // `granted`: the person allowed this very call — a write outside the project goes where the card showed.
   const run = async (call: PendingCall, granted = false): Promise<void> => {
     const effect = ctx.registry.get(call.name)?.def.effect;
@@ -161,35 +215,21 @@ export async function answerPause(
     results.push({ toolCallId: call.toolCallId, name: call.name, content: refusal.reason, failed: true });
   };
 
+  // The conversation's own calls, in order (for a sub-agent's own pause: all of its calls).
   for (const call of pause.calls) {
+    if (call.agentId && ctx.subagents) {
+      // Answered above, by its sub-agent; one whose sub-agent is not in the pause is said gone.
+      if (!held.has(call.agentId)) emit({ type: 'tool-failed', toolCallId: call.toolCallId, error: 'Its sub-agent is gone.' });
+      continue;
+    }
     if (ctx.signal.aborted) {
       // Stopped while the pause was answered: nothing more runs.
       emit({ type: 'tool-aborted', toolCallId: call.toolCallId, cause: 'stopped' });
       results.push({ toolCallId: call.toolCallId, name: call.name, content: NOT_RUN_STOPPED, failed: true });
       continue;
     }
-    if (call.agentId && ctx.subagents) {
-      // A sub-agent's calls go back to it, all of them at once; its refusal stops only it. Before anything
-      // queues them: sub-agents that waited together (in parallel) are each handed their answers, even when one
-      // before asks again — and one handed back keeps its new pause, never its old calls (review of phase 8).
-      if (handed.has(call.agentId)) continue;
-      handed.add(call.agentId);
-      const hold = holdOf(call.agentId);
-      if (!hold) {
-        emit({ type: 'tool-failed', toolCallId: call.toolCallId, error: 'Its sub-agent is gone.' });
-        continue;
-      }
-      const theirs = Object.fromEntries(
-        pause.calls.filter((one) => one.agentId === call.agentId && outcomes[one.toolCallId]).map((one) => [one.toolCallId, outcomes[one.toolCallId]!]),
-      );
-      settle(hold, await ctx.subagents.resume(hold, theirs));
-      continue;
-    }
-    if (waiting.length > 0) {
+    if (waiting.length > 0 || behind) {
       waiting.push({ ...call, reason: 'queued' });
-      // A sub-agent's call queued behind (its own pause, answered by it): its call aside stays with the pause.
-      const hold = call.agentId ? holdOf(call.agentId) : undefined;
-      if (hold && !holds.includes(hold)) holds.push(hold);
       continue;
     }
     if (refused) {
@@ -263,5 +303,5 @@ export async function answerPause(
       await run(call);
     }
   }
-  return { results, waiting, holds };
+  return { results, waiting, holds, letGo };
 }

@@ -160,9 +160,23 @@ export async function answerCalls(
         })();
         const onOwn = group.filter((one) => own.has(one.id)).map(async (member) => [member.id, await runner.run(member, undefined, false)] as const);
         const ends = new Map([...(await onLent), ...(await Promise.all(onOwn))]);
+        // In the order the model called them: one that ended behind one that waits keeps its result with the
+        // pause — results enter the prompt in the order of the calls, which is how the families match them
+        // (review of phase 8).
+        let behind = false;
         for (const member of group) {
           ran.add(member.id);
-          settle(member, ends.get(member.id)!);
+          const end = ends.get(member.id)!;
+          if (end.kind === 'paused') behind = true;
+          if (end.kind === 'paused' || !behind) {
+            settle(member, end);
+            continue;
+          }
+          const content = capToolOutput(end.result, scope.nCtx);
+          if (end.kind === 'done') say({ type: 'tool-resolved', toolCallId: member.id, result: content });
+          else if (end.kind === 'stopped') say({ type: 'tool-aborted', toolCallId: member.id, cause: 'stopped' });
+          else say({ type: 'tool-failed', toolCallId: member.id, error: content });
+          holds.push({ toolCallId: member.id, agentId: runner.idOf(member), name: member.name, input: member.input, result: { kind: end.kind, content } });
         }
         continue;
       }

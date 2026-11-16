@@ -145,6 +145,8 @@ describe('readInbox', () => {
     await writeFile(file, lines.join('\n'));
     const inbox = await readInbox({ store, conversations });
     expect(inbox.approvals.map((item) => item.conversationId)).toEqual([waiting.id]);
+    // « Moteur et mémoire » lists the others too.
+    expect((await conversations.memory()).map((row) => row.id)).toEqual([waiting.id]);
   });
 
   it('a pull request whose CI fails, as GitHub says it', async () => {

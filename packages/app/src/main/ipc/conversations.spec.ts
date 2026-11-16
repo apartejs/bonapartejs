@@ -34,7 +34,10 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     conversationStore: store,
     conversations: {
       open: open as never,
-      status: async (id: string) => (id === 'c-1' ? { memory: 'saved' as const, waiting: true, unread: false } : null),
+      status: async (id: string) => {
+        if (id === 'broken') throw new Error('The journal of broken cannot be read at line 3');
+        return id === 'c-1' ? { memory: 'saved' as const, waiting: true, unread: false } : null;
+      },
       markSeen: async (id: string) => void marked.push(`seen ${id}`),
     },
     readAgain: async () => undefined,
@@ -123,6 +126,14 @@ describe('the conversation channels', () => {
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBeNull();
     await call('conversations.saveDraft', { id: 'c-1', text: 'Une idée' });
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBe('Une idée');
+  });
+
+  it('one conversation whose journal cannot be read leaves only its own row without marks (review of phase 8)', async () => {
+    const { call } = await setup();
+    await call('conversations.save', { document: DOC });
+    await expect(call('conversations.status', { ids: ['broken', 'c-1'] })).resolves.toEqual({
+      'c-1': { projectId: null, memory: 'saved', waiting: true, unread: false },
+    });
   });
 
   it('a conversation seen is marked, then the main process is told — the notification area forgets its reply ready', async () => {

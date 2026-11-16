@@ -158,7 +158,8 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsStatus, async ({ ids }) => {
     const found = await Promise.all(
       ids.map(async (id) => {
-        const status = await core.conversations.status(id);
+        // One conversation whose journal cannot be read leaves only its own row without marks (review of phase 8).
+        const status = await core.conversations.status(id).catch(() => null);
         if (!status) return null;
         const meta = await store.get(id);
         // On its own branch: what it counts against its base (git, read when the window asks).

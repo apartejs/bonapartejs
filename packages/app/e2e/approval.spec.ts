@@ -66,6 +66,59 @@ test('« Refuser… » with a word: nothing written, and the model reads it', as
   expect(prompts.at(-1)).toContain('Garde la note telle quelle.');
 });
 
+test('a person writing elsewhere keeps the keyboard: the card does not take it, their Enter approves nothing (review of phase 8)', async ({ launch }) => {
+  const { page, home } = await launch({ engine: { responder: model(), paceMs: 60 } });
+  await writeFile(join(home, 'notes.txt'), 'old line\n');
+  const ui = chat(page);
+  await ui.send('Change la note');
+  // While the model writes its call, the person starts the next message.
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 10_000 });
+  await ui.composerBox.click();
+  await page.keyboard.type('Et ensuite');
+  await expect(card(page)).toBeVisible({ timeout: 15_000 });
+  await expect(card(page).getByRole('button', { name: 'Autoriser', exact: true })).not.toBeFocused();
+  await expect(ui.composerBox).toContainText('Et ensuite');
+  await page.waitForTimeout(300);
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+});
+
+test('a person typing in their terminal as the card appears keeps it: their Enter runs their line, approves nothing (review of phase 8)', async ({ launch }) => {
+  const { page, home } = await launch({ engine: { responder: model(), paceMs: 60 } });
+  await writeFile(join(home, 'notes.txt'), 'old line\n');
+  await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Terminal', exact: true }).click();
+  const tabs = page.getByRole('tablist', { name: 'Terminaux' });
+  const first = tabs.getByRole('tab').first();
+  await expect(first).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
+  const output = page.getByRole('log', { name: `Sortie du terminal ${(await first.textContent())!.trim()}` });
+  const ui = chat(page);
+  await ui.send('Change la note');
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 10_000 });
+  await output.click();
+  await page.keyboard.type('echo encore');
+  await expect(card(page)).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press('Enter');
+  await expect(output).toContainText('encore', { timeout: 20_000 });
+  await page.waitForTimeout(300);
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+  await expect(card(page)).toBeVisible();
+});
+
+test('a person searching (Ctrl K) as the card appears keeps the search field: Enter opens what they searched, approves nothing (review of phase 8)', async ({ launch }) => {
+  const { page, home } = await launch({ engine: { responder: model(), paceMs: 60 } });
+  await writeFile(join(home, 'notes.txt'), 'old line\n');
+  const ui = chat(page);
+  await ui.send('Change la note');
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 10_000 });
+  await page.keyboard.press('Control+k');
+  const search = page.getByRole('combobox', { name: 'Rechercher' }).or(page.getByRole('searchbox')).or(page.getByRole('textbox', { name: /Rechercher/ })).first();
+  await expect(search).toBeFocused();
+  await page.keyboard.type('note');
+  await expect(card(page)).toBeAttached({ timeout: 15_000 });
+  await page.waitForTimeout(200);
+  await expect(search).toBeFocused();
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+});
+
 test('the keyboard: Enter allows, Escape refuses', async ({ launch }) => {
   const { page, home } = await launch({ engine: { responder: model() } });
   await writeFile(join(home, 'notes.txt'), 'old line\n');

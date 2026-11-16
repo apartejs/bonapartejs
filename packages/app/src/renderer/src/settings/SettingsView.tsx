@@ -32,6 +32,8 @@ export interface PageProps {
   locale: Locale;
   values: Values;
   change(key: string, value: unknown): void;
+  /** A value the core kept by another way (a launch setting, kept with its restart): the pages show it. */
+  known(key: string, value: unknown): void;
 }
 
 const GROUPS: { group: 'application' | 'engine' | 'agent'; pages: SettingsPageName[] }[] = [
@@ -83,7 +85,8 @@ export function SettingsView({
       .catch(() => undefined);
   };
 
-  const props: PageProps | null = values ? { messages, locale, values, change } : null;
+  const known = (key: string, value: unknown): void => setValues((was) => ({ ...was, [key]: value }));
+  const props: PageProps | null = values ? { messages, locale, values, change, known } : null;
   return (
     <div className="settings">
       <nav className="settings__nav" aria-label={words.nav}>

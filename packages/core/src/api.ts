@@ -1697,7 +1697,7 @@ export function createCore(deps: CoreDeps): Core {
       };
       // The sub-agents the pause holds go on, and those queued behind it run, on slots of their own (task 8.1).
       const parent = { ...scope, engine: conversations, emit };
-      const { results, waiting, holds } = await answerPause(
+      const { results, waiting, holds, letGo } = await answerPause(
         {
           ...scope,
           windowTools: new Set(options.clientTools.map((tool) => tool.name)),
@@ -1711,6 +1711,8 @@ export function createCore(deps: CoreDeps): Core {
         check.outcomes,
         emit,
       );
+      // Stopped before they were resumed: never resumed now, their states are worth nothing.
+      for (const agentId of letGo) await conversations.letGoSubagent(conversationId, agentId);
       if (waiting.length > 0) {
         // A call queued behind must be asked about in its turn: the turn pauses again.
         const ticket = (await tickets()).signTicket({

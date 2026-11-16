@@ -17,16 +17,15 @@ export const LOCALE_CHANGED = 'bonaparte-locale';
 
 type Notify = 'banner' | 'badge' | 'off';
 
-export function GeneralPage({ messages, locale, values, change }: PageProps) {
+export function GeneralPage({ messages, locale, values, change, known }: PageProps) {
   const words = messages.settings.general;
   const [exported, setExported] = useState<string | null>(null);
-  // The sub-agents in parallel restart the engine (task 8.3): said first, kept only on a choice. The core keeps
-  // it (not this page's values): what was kept here is shown until the page is read again (review of phase 8).
-  const [keptHere, setKeptHere] = useState<'sequential' | 'parallel' | null>(null);
+  // The sub-agents in parallel restart the engine (task 8.3): said first, kept only on a choice — by the core,
+  // with its restart; the settings' values are told, so every page shows it (review of phase 8).
   const restart = useRestartAsk((kept) => {
-    if ('subagents' in kept) setKeptHere(kept.subagents);
+    if ('subagents' in kept) known('subagentsOnBuiltin', kept.subagents);
   });
-  const subagentsKept = keptHere ?? (values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential');
+  const subagentsKept = values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential';
   const asked = restart.asking && 'subagents' in restart.asking.change ? restart.asking.change.subagents : null;
   const language = values['language'] === 'fr' || values['language'] === 'en' ? values['language'] : locale;
   const notify = (key: string, label: string) => (

@@ -50,6 +50,22 @@ export interface ApprovalCardProps {
   children?: ReactNode;
 }
 
+/**
+ * May the card take the keyboard? When nothing has it, when the card itself has it, or from the composer the
+ * person just sent from — empty, its field or its button. Never from someone writing elsewhere.
+ */
+function mayTakeFocus(button: HTMLElement | null): boolean {
+  const active = document.activeElement;
+  if (!active || active === document.body) return true;
+  const card = button?.closest('.approval-card');
+  if (card?.contains(active)) return true;
+  const composer = active.closest('aparte-composer');
+  if (!composer) return false;
+  const field = composer.querySelector('[contenteditable="true"], textarea');
+  const text = field instanceof HTMLTextAreaElement ? field.value : (field?.textContent ?? '');
+  return text.trim() === '';
+}
+
 export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlume, focus = true, children }: ApprovalCardProps) {
   const text = messages.approval;
   const kind = kindOf(request.name);
@@ -80,9 +96,11 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
   }, [preview]);
 
   // The card takes the focus, on « Autoriser »: Enter allows, Escape refuses. Before it is painted: an Enter typed
-  // as it appears must not reach the composer, where it would stop the reply.
+  // as it appears must not reach the composer, where it would stop the reply. Only from someone who is not
+  // writing elsewhere — a terminal, a comment, a draft: their Enter would approve a call they never saw (review
+  // of phase 8).
   useLayoutEffect(() => {
-    if (focus) allow.current?.focus();
+    if (focus && mayTakeFocus(allow.current)) allow.current?.focus();
   }, [request, focus]);
 
   const refuse = (): void => onAnswer({ approved: false, ...(instruction.trim() ? { instruction: instruction.trim() } : {}) });

@@ -305,7 +305,65 @@ describe('the pause of a sub-agent, answered', () => {
       ['B', ['c2']],
     ]);
     expect(waiting.map((call) => [call.toolCallId, call.reason])).toEqual([['c3', 'approval']]);
-    expect(holds).toEqual([holdA]);
-    expect(results.map((result) => [result.toolCallId, result.content])).toEqual([['XB', 'Fait.']]);
+    // B is done, but A — called before it — waits again: B's result waits with the pause, never ahead of A's
+    // (the families match results to calls by position).
+    expect(results).toEqual([]);
+    expect(holds).toEqual([holdA, { ...holdB, result: { kind: 'done', content: 'Fait.' } }]);
+
+    // A done in its turn: both results, in the order the model called them.
+    const next = { ...pause, calls: [{ toolCallId: 'c3', name: 'edit_file', input: {}, reason: 'approval', agentId: 'A' }], subagents: holds } as unknown as Parameters<typeof answerPause>[1];
+    const doneContext = {
+      ...context,
+      subagents: { ...(context as { subagents: object }).subagents, resume: async () => ({ kind: 'done', result: 'Fini.' }) },
+    } as unknown as Parameters<typeof answerPause>[0];
+    const after = await answerPause(doneContext, next, { c3: approved }, () => undefined);
+    expect(after.results.map((result) => [result.toolCallId, result.content])).toEqual([
+      ['XA', 'Fini.'],
+      ['XB', 'Fait.'],
+    ]);
+    expect(after.holds).toEqual([]);
+  });
+
+  it('Stop while a pause of sub-agents is answered: their run_subagent calls are answered as stopped — never their own calls — and they are let go (review of phase 8)', async () => {
+    const holdA = { toolCallId: 'XA', agentId: 'A', name: 'run_subagent', input: { name: 'Un', mission: 'm' } };
+    const holdB = { toolCallId: 'XB', agentId: 'B', name: 'run_subagent', input: { name: 'Deux', mission: 'm' } };
+    const pause = {
+      kind: 'pending',
+      id: 'p',
+      at: '',
+      rendered: '',
+      ticket: 't',
+      calls: [
+        { toolCallId: 'c1', name: 'edit_file', input: {}, reason: 'approval', agentId: 'A' },
+        { toolCallId: 'c2', name: 'edit_file', input: {}, reason: 'approval', agentId: 'B' },
+      ],
+      subagents: [holdA, holdB],
+    } as unknown as Parameters<typeof answerPause>[1];
+    const stop = new AbortController();
+    stop.abort();
+    const context = {
+      conversationId: 'c',
+      mode: 'repetition',
+      registry: { get: () => undefined, list: () => [], run: async () => ({}) },
+      permissions: { evaluate: () => ({ verdict: 'ask' }) },
+      place: { roots: [] },
+      nCtx: 8192,
+      signal: stop.signal,
+      subagents: {
+        resume: async () => {
+          throw new Error('a stopped turn resumes nothing');
+        },
+        run: async () => ({ kind: 'done', result: '' }),
+        idOf: (id: string) => id,
+      },
+    } as unknown as Parameters<typeof answerPause>[0];
+    const approved = { kind: 'decision', approved: true } as const;
+    const { results, waiting, holds, letGo } = await answerPause(context, pause, { c1: approved, c2: approved }, () => undefined);
+    expect(results.map((result) => [result.toolCallId, result.name, result.failed])).toEqual([
+      ['XA', 'run_subagent', true],
+      ['XB', 'run_subagent', true],
+    ]);
+    expect([waiting, holds]).toEqual([[], []]);
+    expect(letGo).toEqual(['A', 'B']);
   });
 });

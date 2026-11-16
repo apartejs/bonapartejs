@@ -358,6 +358,31 @@ describe('a sub-agent on the built-in engine', () => {
     expect((await readdir(join(dir, 'kv-slots'))).filter((file) => file.includes('_agent-'))).toEqual([]);
   });
 
+  it('in parallel, one that ends while one called before it waits: its result waits with the pause — results enter the prompt in the order of the calls (review of phase 8)', async () => {
+    const missions = [
+      { name: 'Un', mission: 'Change a.ts.', tools: 'all' },
+      { name: 'Deux', mission: 'Read a.ts.', tools: 'read' },
+    ];
+    const responder = (prompt: string): string => {
+      if (isSubagent(prompt)) {
+        const who = subagentName(prompt);
+        if (answered(prompt)) return `Result of ${who}.`;
+        return who === 'Un' ? call('edit_file', { path: 'a.ts', old_string: 'a = 1', new_string: 'a = 2' }) : call('read_file', { path: 'a.ts' });
+      }
+      return answered(prompt) ? 'Synthèse.' : missions.map((mission) => call('run_subagent', mission)).join('');
+    };
+    const { run, store, meta } = await rig(responder, 'repetition', { slots: 2, paceMs: 10 });
+    const { result } = await run('Deux pistes.');
+    expect(result.suspended?.pending.map((pending) => pending.name)).toEqual(['edit_file']);
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    expect(entries.some((entry) => entry.kind === 'tool-results' && entry.results.some((one) => one.name === 'run_subagent'))).toBe(false);
+    const pause = entries.findLast((entry) => entry.kind === 'pending');
+    expect(pause?.kind === 'pending' && pause.subagents?.map((hold) => [(hold.input as { name: string }).name, hold.result?.kind ?? null])).toEqual([
+      ['Un', null],
+      ['Deux', 'done'],
+    ]);
+  });
+
   it('Stop stops the sub-agents too', async () => {
     const stop = new AbortController();
     const { run } = await rig((prompt) => {
