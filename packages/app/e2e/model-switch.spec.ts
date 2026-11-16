@@ -62,6 +62,21 @@ test('picking another model says its cost first; « Annuler » changes nothing',
   expect(await loaded(page)).toBe('gemma-4-e2e');
 });
 
+test('a model picked through « /model » says its cost first, as one picked in the list (check of aparté 1.12)', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS } });
+  await started(page);
+  await chat(page).editor.click();
+  await page.keyboard.type('/');
+  const list = page.getByRole('listbox');
+  await list.getByRole('option', { name: /^\/model/ }).click();
+  await page.getByRole('listbox').getByRole('option', { name: /qwen-e2e/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Passer à qwen-e2e ?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Annuler' }).click();
+  await expect(picker(page)).toContainText('gemma-4-e2e');
+  expect(await loaded(page)).toBe('gemma-4-e2e');
+});
+
 test('« Changer » loads it, and the conversation goes on in its family', async ({ launch }) => {
   const { page, engineRequests } = await launch({ managed: { models: MODELS } });
   await started(page);

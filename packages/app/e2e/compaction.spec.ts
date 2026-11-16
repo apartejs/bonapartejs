@@ -88,6 +88,39 @@ test('« / compact » asks it; « Restaurer » goes on from before it', async ({
   expect(prompts.at(-1)).toContain('Message numéro 1.');
 });
 
+test('a message sent while the summary is written stays after it: the next turn still reads it (check of aparté 1.12)', async ({ launch }) => {
+  // The answers in one piece, the summary word by word: only the summary takes its time.
+  const ONE_PIECE = 'Une_longue_réponse_sur_le_travail_fait._'.repeat(110);
+  const responder = (prompt: string): string => {
+    if (prompt.includes('Summarize this conversation so far')) return `RÉSUMÉ DU TRAVAIL. ${'mot '.repeat(60)}`;
+    const asked = prompt.slice(prompt.lastIndexOf('<|turn>user'));
+    if (asked.includes('Pendant')) return 'Réponse_pendant.';
+    if (asked.includes('Et ensuite')) return 'Suite.';
+    return ONE_PIECE;
+  };
+  const prompts: string[] = [];
+  const { page } = await launch({ engine: { responder, nCtx: 32_768, paceMs: 50, onCompletion: (body) => prompts.push(String(body['prompt'])) } });
+  const ui = chat(page);
+  for (let turn = 1; turn <= 3; turn += 1) {
+    await ui.send(`Message numéro ${turn}.`);
+    await expect(ui.userMessages).toHaveCount(turn);
+    await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+  }
+  await command(page, /^\/compact/);
+  // The summary is being written: the person writes meanwhile.
+  await expect.poll(() => prompts.some((prompt) => prompt.includes('Summarize this conversation so far')), { timeout: 15_000 }).toBe(true);
+  await ui.send('Pendant la compaction.');
+  const live = page.locator('.bonaparte-live-chat:not([hidden])');
+  await expect(live.getByText(/messages résumés pour le modèle/)).toBeVisible({ timeout: 20_000 });
+  await expect(ui.replyText).toHaveText('Réponse_pendant.', { timeout: 20_000 });
+
+  await ui.send('Et ensuite ?');
+  await expect(ui.replyText).toHaveText('Suite.', { timeout: 15_000 });
+  await expect(ui.errors).toHaveCount(0);
+  expect(prompts.at(-1)).toContain('RÉSUMÉ DU TRAVAIL.');
+  expect(prompts.at(-1)).toContain('Pendant la compaction.');
+});
+
 test('a conversation too short to be worth it: said, nothing changed', async ({ launch }) => {
   const { page } = await longConversation(launch, 1, 32_768);
   await command(page, /^\/compact/);

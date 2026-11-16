@@ -37,6 +37,12 @@ interface ShownMessage {
   role: string;
 }
 
+/** The messages a chat shows now, copied: the chat's own array moves on. */
+function shownOf(handle: AparteChatImperativeApi | undefined): ShownMessage[] {
+  if (!handle) return [];
+  return (handle.getMessages() as unknown as ShownMessage[]).map((message) => ({ id: message.id, role: message.role }));
+}
+
 export function useCompaction(deps: CompactionDeps) {
   const { conversationId, turnsEnded } = deps;
   const [context, setContext] = useState<ContextFullView | null>(null);
@@ -73,6 +79,10 @@ export function useCompaction(deps: CompactionDeps) {
     if (running.current) return;
     running.current = true;
     setState({ kind: 'running' });
+    // The thread as the core compacts it: a message the person sends while the summary is written is journaled
+    // after the rebase, so it stays after aparté's checkpoint — read from this, never from the thread at the end
+    // (check of aparté 1.12).
+    const before = shownOf(chatOf(id)?.handle);
     try {
       const outcome = await bridge.invoke(conversationsCompact, { id });
       if (!outcome.ok) {
@@ -84,16 +94,15 @@ export function useCompaction(deps: CompactionDeps) {
       const chat = chatOf(id);
       if (chat) {
         const { handle } = chat;
-        const shown = handle.getMessages() as unknown as ShownMessage[];
-        const users = shown.flatMap((message, index) => (message.role === 'user' ? [index] : []));
-        const at = outcome.keptTurns > 0 ? users[users.length - outcome.keptTurns] : shown.length - 1;
-        const anchor = at === undefined ? undefined : shown[at];
-        if (anchor && at !== undefined) {
+        const users = before.flatMap((message, index) => (message.role === 'user' ? [index] : []));
+        const at = outcome.keptTurns > 0 ? users[users.length - outcome.keptTurns] : before.length - 1;
+        const anchor = at === undefined ? undefined : before[at];
+        if (anchor && at !== undefined && shownOf(handle).some((message) => message.id === anchor.id)) {
           handle.updateMessage(anchor.id, {
             contextSummary:
               outcome.keptTurns > 0
                 ? { summary: outcome.summary, count: at, createdAt: Date.now() }
-                : { summary: outcome.summary, count: shown.length, createdAt: Date.now(), includesSelf: true },
+                : { summary: outcome.summary, count: before.length, createdAt: Date.now(), includesSelf: true },
           });
         }
         // aparté's gauge measures the request that would be sent now when it hears that its chat was compacted —

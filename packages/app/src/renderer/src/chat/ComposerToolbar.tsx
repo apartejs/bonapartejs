@@ -95,9 +95,12 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
           placeholder={messages.modelSwitch.picker}
           aria-label={messages.modelSwitch.picker}
           onModelChange={(detail) => {
-            // Only the person's pick in the list (`picked`, aparté 1.12, apartejs/aparte#244): a revert, the config
-            // following the engine, or the model that runs chosen again asks nothing.
-            if (!detail.picked || !detail.modelId || detail.modelId === runningNow.current) return;
+            // Only the person's pick: in the list (`picked`, aparté 1.12, apartejs/aparte#244), or through « /model »,
+            // whose rows aparté sets with `picked: false` (apartejs/aparte#255) — told apart from the config
+            // following the engine by aiming at a model the config does not hold. A revert, or the model that runs
+            // chosen again, asks nothing.
+            if (!detail.modelId || detail.modelId === runningNow.current) return;
+            if (!detail.picked && detail.modelId === aparteGlobalConfig.getModelConfig().defaultModel) return;
             const listed = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER)?.getModels() ?? [];
             const name = listed.find((model) => model.id === detail.modelId)?.name ?? detail.modelId;
             onPickModel(detail.modelId, name, () => {
