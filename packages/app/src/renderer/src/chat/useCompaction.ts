@@ -79,7 +79,8 @@ export function useCompaction(deps: CompactionDeps) {
         setState({ kind: 'refused', reason: outcome.reason });
         return;
       }
-      // aparté's checkpoint, where the core's rebase begins: the first message kept, else the last answer.
+      // aparté's checkpoint, where the core's rebase begins: the first message kept, else the last answer —
+      // which aparté then counts, though the model no longer reads it (apartejs/aparte#246).
       const handle = chatOf(id);
       if (handle) {
         const shown = handle.getMessages() as unknown as ShownMessage[];

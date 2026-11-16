@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { ENGINE_PROVIDER } from '../aparte/model-catalogue';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
+import { Icon } from '../shell/icons';
 import { ModeSwitch } from './ModeSwitch';
 
 const ModelSelector = createAparteElement(modelSelectorElement);
@@ -80,23 +81,31 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
     <>
       <ModeSwitch mode={mode} messages={messages} onChange={onMode} />
       <AparteUi name="aparte-triggers" props={elementProps} />
-      <ModelSelector
-        ref={selector}
-        className="composer-model-picker"
-        details=""
-        placeholder={messages.modelSwitch.picker}
-        aria-label={messages.modelSwitch.picker}
-        onModelChange={(detail) => {
-          // The model that runs shown again (a revert, the config following the engine) is no pick.
-          if (!detail.modelId || detail.modelId === runningNow.current) return;
-          const listed = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER)?.getModels() ?? [];
-          const name = listed.find((model) => model.id === detail.modelId)?.name ?? detail.modelId;
-          onPickModel(detail.modelId, name, () => {
-            const back = runningNow.current;
-            if (back) (selector.current as AparteModelSelector | null)?.setSelection(ENGINE_PROVIDER, back);
-          });
-        }}
-      />
+      {engine.mode === 'remote' ? (
+        // A server that already runs serves its own model: nothing to choose, its name said.
+        <span className="composer-model">
+          <Icon name="engine" />
+          {engine.model?.name}
+        </span>
+      ) : (
+        <ModelSelector
+          ref={selector}
+          className="composer-model-picker"
+          details=""
+          placeholder={messages.modelSwitch.picker}
+          aria-label={messages.modelSwitch.picker}
+          onModelChange={(detail) => {
+            // The model that runs shown again (a revert, the config following the engine) is no pick.
+            if (!detail.modelId || detail.modelId === runningNow.current) return;
+            const listed = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER)?.getModels() ?? [];
+            const name = listed.find((model) => model.id === detail.modelId)?.name ?? detail.modelId;
+            onPickModel(detail.modelId, name, () => {
+              const back = runningNow.current;
+              if (back) (selector.current as AparteModelSelector | null)?.setSelection(ENGINE_PROVIDER, back);
+            });
+          }}
+        />
+      )}
       {engine.model ? <AparteContext window={String(engine.model.nCtx)} variant="ring" /> : null}
     </>
   );

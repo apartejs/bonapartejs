@@ -1700,6 +1700,25 @@ body {
   color: var(--aparte-error-ink);
 }
 
+/* A server that already runs: its model's name, where the selector would be. */
+.composer-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  margin-inline-start: auto;
+  padding: 0 10px;
+  border-radius: 15px;
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+}
+
+.composer-model .bonaparte-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* The model, aparté's selector in the composer's toolbar, pushed to its end with the gauge. */
 .composer-model-picker {
   margin-inline-start: auto;
@@ -1733,6 +1752,10 @@ body {
 
 /* The engine unloaded (board « Coûts annoncés », 5): a neutral card above the composer, its actions in a row. */
 .engine-unloaded {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--aparte-message-max-width, 800px);
+  margin: 0 auto var(--aparte-space-4);
   align-items: flex-start;
   background: var(--aparte-bg);
   border: 1px solid var(--aparte-border);
