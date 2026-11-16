@@ -28,7 +28,9 @@
  *   npx vitest run src/smoke
  *
  * Variables: BONAPARTE_SMOKE_MODEL (required) · BONAPARTE_SMOKE_LLAMA (the
- * llama.cpp binary, else found on the PATH) · BONAPARTE_SMOKE_CTX (8192).
+ * llama.cpp binary, else found on the PATH) · BONAPARTE_SMOKE_CTX (8192) ·
+ * BONAPARTE_SMOKE_MODEL2 (a model of another family: the change of model,
+ * task 7.4; skipped without it).
  */
 
 import { createAgentStreamRunner } from '@aparte/core';
@@ -48,6 +50,7 @@ import type { ToolDef } from '../tools/types.js';
 const MODEL = process.env['BONAPARTE_SMOKE_MODEL'];
 const LLAMA = process.env['BONAPARTE_SMOKE_LLAMA'];
 const N_CTX = Number(process.env['BONAPARTE_SMOKE_CTX'] ?? 8192);
+const MODEL2 = process.env['BONAPARTE_SMOKE_MODEL2'];
 const PORT = 8127;
 /** A big model takes its time on a first load. */
 const TIMEOUT = 900_000;
@@ -121,7 +124,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
       dataDir,
       home,
       port: PORT,
-      modelRoots: [{ dir: dirname(MODEL!), source: 'manual' }],
+      modelRoots: [{ dir: dirname(MODEL!), source: 'manual' }, ...(MODEL2 ? [{ dir: dirname(MODEL2), source: 'manual' as const }] : [])],
       replyLanguage: () => replyLanguage,
       env: { ...process.env, ...(LLAMA ? { BONAPARTE_LLAMA_BIN: LLAMA } : {}) },
       // Only what matters: the rest of llama.cpp's log would drown the verdict.
@@ -469,5 +472,86 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
       expect(turned.steps.filter((step) => step.startsWith('reread'))).toEqual([]);
       expect(turned.text.toUpperCase()).toContain('QUINCE');
     }
+  }, TIMEOUT);
+
+  // ── Phase 7: the memory after a long answer, going back, compaction, a change of model ──
+
+  it('after a long answer, a conversation saved and restored reads only the checkpoint tail, not its last answer', async () => {
+    const first = await turnIn('smoke-long', 'Write a paragraph of about 150 words about the sea. Plain prose.');
+    // Another conversation takes the slot: the long one is saved as it leaves — its last answer read to its end first.
+    await turnIn('smoke-memory-b', 'Reply with exactly the word KAPPA.');
+    const saved = (await manifests()).find((manifest) => manifest.name.startsWith('smoke-long'))! as {
+      promptTokenCount: number;
+      slotFileBytes?: number;
+    };
+    const second = await turnIn('smoke-long', 'Reply with the word DONE.');
+    const uncached = second.usage.inputTokens - (second.usage.cacheReadTokens ?? 0);
+    console.log(
+      `[smoke] long answer (${first.usage.outputTokens} tokens): saved ${saved.promptTokenCount} tokens, ` +
+        `${((saved.slotFileBytes ?? 0) / 1024 ** 2).toFixed(1)} MiB, restored in ${second.restoreMs?.toFixed(0)} ms; ` +
+        `${second.usage.cacheReadTokens} of ${second.usage.inputTokens} served by the cache (${uncached} read)`,
+    );
+    expect(second.steps).toContain('restore:end');
+    expect(second.steps.filter((step) => step.startsWith('reread'))).toEqual([]);
+    expect(second.usage.cacheReadTokens ?? 0).toBeGreaterThanOrEqual(saved.promptTokenCount - 1 - CHECKPOINT_TAIL);
+  }, TIMEOUT);
+
+  it('going back before the last message: served by the cache, as the estimate said', async () => {
+    const id = 'smoke-rewind';
+    await turnIn(id, 'Remember this code word: BASIL. Reply with OK and nothing else.');
+    await turnIn(id, 'Write two sentences about bread.');
+    const last = 'Write two sentences about tea.';
+    await turnIn(id, last);
+    const target = { userIndex: 2, text: last };
+    const estimate = await core.conversations.rewindMemory(id, target);
+    await core.rewind(id, target, 'conversation');
+    const after = await turnIn(id, 'What is the code word I gave you? Reply with the word only.');
+    const uncached = after.usage.inputTokens - (after.usage.cacheReadTokens ?? 0);
+    console.log(
+      `[smoke] rewind: estimated ${estimate === 'kept' ? 'kept' : `${estimate?.tokens} tokens to read again`}; ` +
+        `${after.usage.cacheReadTokens} of ${after.usage.inputTokens} served by the cache (${uncached} read); « ${after.text.trim().slice(0, 30)} »`,
+    );
+    expect(after.text.toUpperCase()).toContain('BASIL');
+    expect(after.steps.filter((step) => step.startsWith('reread'))).toEqual([]);
+    // Kept: the new message and the checkpoint tail at most; else what was announced, and the message.
+    const announced = estimate === 'kept' || estimate === null ? 0 : estimate.tokens;
+    expect(uncached).toBeLessThanOrEqual(announced + 64);
+  }, TIMEOUT);
+
+  it('a compaction keeps a secret the model read in a file: asked after it, the model still knows it', async () => {
+    // The conversation where the model read notes.txt (PERIWINKLE): long enough, with a few turns more, to compact.
+    const id = 'smoke-agent-read';
+    for (const topic of ['the sea', 'mountains', 'forests', 'deserts', 'rivers']) {
+      await turnIn(id, `Write about 350 words about ${topic}. Plain prose, no lists.`);
+    }
+    const result = await core.compact(id);
+    console.log(
+      `[smoke] compaction: ${result.ok ? `${result.tokensBefore} → ${result.tokensAfter} tokens (estimated), ${result.compactedTurns} turns folded, summary « ${result.summary.slice(0, 120)}… »` : `refused (${result.reason})`}`,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const after = await turnIn(id, 'What was the code word in notes.txt? Reply with the word only.');
+    console.log(`[smoke] after the compaction: « ${after.text.trim().slice(0, 40)} », ${after.usage.inputTokens} tokens read`);
+    expect(after.text.toUpperCase()).toContain('PERIWINKLE');
+  }, TIMEOUT);
+
+  it.skipIf(!MODEL2)('a change of model: said first, then the conversation rendered again in the new family and answered there', async () => {
+    const id = 'smoke-switch';
+    await turnIn(id, 'Remember this code word: SAFFRON. Reply with OK and nothing else.');
+    const cost = await core.modelSwitch(MODEL2!, id);
+    const started = Date.now();
+    await core.switchModel(MODEL2!, { conversationId: id });
+    const loadSeconds = (Date.now() - started) / 1000;
+    engine = (await core.engine())!;
+    const after = await turnIn(id, 'What is the code word I gave you? Reply with the word only.');
+    const uncached = after.usage.inputTokens - (after.usage.cacheReadTokens ?? 0);
+    console.log(
+      `[smoke] change of model to ${engine.family.id}: announced reload ~${cost.announcement.reloadSeconds.toFixed(1)} s, re-read ${cost.announcement.rereadTokens} tokens; ` +
+        `loaded in ${loadSeconds.toFixed(1)} s; next turn read ${uncached} of ${after.usage.inputTokens}; « ${after.text.trim().slice(0, 30)} »`,
+    );
+    expect(engine.family.id).not.toBe('gemma');
+    expect(after.text.toUpperCase()).toContain('SAFFRON');
+    // What was announced is what was read, give or take the new message and its opening.
+    expect(Math.abs(uncached - cost.announcement.rereadTokens)).toBeLessThan(Math.max(64, cost.announcement.rereadTokens * 0.5));
   }, TIMEOUT);
 });
