@@ -2909,6 +2909,14 @@ body {
   background: var(--aparte-primary);
 }
 
+/* A conversation that waits for the person (task 5.6, the board's amber): aparté's status dot of the row, in the
+   colour of what waits — the approval card's, « À traiter »'s count's — never the accent's ink, which a reply not
+   read yet wears. Its name says it too (« Attend ta réponse »). */
+.aparte-conv-item[data-status='waiting'] .aparte-conv-item__status {
+  border-color: var(--aparte-warning);
+  background: var(--aparte-warning);
+}
+
 .inbox-row__what {
   flex: 1;
   min-width: 0;

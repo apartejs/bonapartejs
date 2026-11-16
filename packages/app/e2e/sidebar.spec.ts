@@ -93,6 +93,10 @@ test('a conversation that waits for the person says so in the list, after a rest
   await chat(first.page).send('Change la note');
   await expect(first.page.getByRole('region', { name: 'Demande d’accord' })).toBeVisible({ timeout: 15_000 });
   await expect(conversationList(first.page).row('Change la note').getByRole('button', { name: /Attend ta réponse/ })).toBeVisible();
+  // The board's amber, the colour of what waits (the approval card, « À traiter »'s count) — never the accent's ink,
+  // which a reply not read yet wears too (phase 8).
+  const shown = await conversationList(first.page).statusColour('Change la note', '--aparte-warning');
+  expect(shown.dot).toBe(shown.token);
   await first.close();
 
   // Not reopened: the list alone says it, from what the core kept.
