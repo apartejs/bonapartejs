@@ -80,10 +80,15 @@ test('archiving with changes not committed asks first; « Commiter d’abord » 
   }
 });
 
-test('a pull request merged archives its conversation by itself', async ({ launch }) => {
+test('a pull request merged archives its conversation by itself — once the person has left it', async ({ launch }) => {
   const repo = await tempRepo({ 'notes.txt': 'first\n' });
   try {
     const { page } = await onItsBranch(launch, repo, { pr: { ...PR, state: 'MERGED' } });
+    // The reply the person is reading does not vanish under their eyes.
+    await page.waitForTimeout(1_500);
+    await expect(chat(page).replyText).toHaveText('Fait.');
+    await expect(nav(page).getByRole('button', { name: /^Change la note/ })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
     await expect(nav(page).getByRole('button', { name: /^Change la note/ })).toHaveCount(0, { timeout: 15_000 });
   } finally {
     await repo.remove();

@@ -510,18 +510,20 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       .catch(() => archiveNow(id));
   };
   // A pull request merged archives its conversation by itself — once it is at rest: never under a
-  // reply, a question or an approval (it is asked again at the next reading).
+  // reply, a question or an approval, and never while the person has it in front of them (the reply
+  // they read would vanish); it goes when they leave it (asked again at the next reading).
   const mergedArchived = useRef(new Set<string>());
   useEffect(() => {
     for (const [id, status] of Object.entries(statuses)) {
       if (status.pr?.state !== 'merged' || mergedArchived.current.has(id)) continue;
+      if (id === conversationId && !inboxOpen) continue;
       const live = deck.chats.find((chat) => chat.conversationId === id);
       if (live && worksOrWaits(live)) continue;
       mergedArchived.current.add(id);
       archiveNow(id);
     }
-    // Read again when a reply ends: a conversation that was working may rest now.
-  }, [statuses, turnsEnded]);
+    // Read again when a reply ends, or when the person leaves the conversation: it may rest now.
+  }, [statuses, turnsEnded, conversationId, inboxOpen]);
   // « Ouvrir une PR »: said first — it goes online —, done on the person's word.
   const [openingPr, setOpeningPr] = useState<{ id: string; branch: string; base: string; failed: boolean } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
