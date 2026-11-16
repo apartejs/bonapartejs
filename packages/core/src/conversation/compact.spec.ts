@@ -65,7 +65,9 @@ async function rig(options: { summary?: string; truncate?: boolean; mode?: PlayM
 
 describe('compaction is a rebase', { timeout: 30_000 }, () => {
   it('asks the summary to keep, word for word, the facts read in files and from tools (task 7.5: a real model lost a code word)', () => {
-    expect(SUMMARY_QUESTION).toMatch(/word for word, every fact read in a file, from a tool or from the user/);
+    expect(SUMMARY_QUESTION).toMatch(/"Facts:" — quote exactly, never paraphrase, each specific fact read in a file, from a tool or from the user/);
+    // Short enough to fit its cap: asked to keep every fact, a real model wrote past 1 536 tokens.
+    expect(SUMMARY_QUESTION).toMatch(/at most 500 words/i);
   });
 
   it('summarises, then the prompt starts again from the system prompt and the summary — the early turns gone', async () => {
@@ -186,3 +188,52 @@ describe('compaction is a rebase', { timeout: 30_000 }, () => {
     expect(prompts.at(-1)).not.toContain('[conversation summary]');
   });
 });
+
+describe('a compaction is never undone in silence, nor its cost hidden (review of phase 7)', { timeout: 30_000 }, () => {
+  const WORDS = ['Premier', 'Deuxième', 'Troisième', 'Quatrième', 'Cinquième', 'Sixième', 'Septième', 'Huitième'];
+
+  it('« Restaurer » after a turn that followed it: the branch carries no memory of the compacted prompt — its re-reading is said', async () => {
+    const { id, engine, say } = await rig();
+    for (const word of WORDS.slice(0, 4)) await say(`${word} message.`);
+    await engine.compact(id, () => undefined);
+    await say('Et ensuite ?');
+    await engine.uncompact(id);
+    expect(await engine.open(id)).toMatchObject({ kind: 'reread' });
+  });
+
+  it('going back before a message it folded: said as a re-reading of what is kept, never as memory kept', async () => {
+    const { id, engine, say } = await rig();
+    for (const word of WORDS.slice(0, 4)) await say(`${word} message.`);
+    await engine.compact(id, () => undefined);
+    await say('Et ensuite ?');
+    expect(await engine.rewindMemory(id, { userIndex: 2, text: 'Troisième message.' })).toMatchObject({ kind: 'reread' });
+  });
+
+  it('asking again an answer it kept: the compaction stays — the summary, the turns kept, the new answer', async () => {
+    const { id, engine, say, entries, prompts } = await rig();
+    for (const word of WORDS) await say(`${word} message.`);
+    expect((await engine.compact(id, () => undefined)).keptTurns).toBe(2);
+    const last = (await entries()).findLast((entry) => entry.kind === 'user')!;
+    await engine.turn(id, { forkAfter: last.id }, () => undefined);
+    const sent = prompts.at(-1)!;
+    expect(sent).toContain('RÉSUMÉ : le format des heures est corrigé.');
+    expect(sent).toContain('Septième message.');
+    expect(sent).toContain('Huitième message.');
+    expect(sent).not.toContain('Premier message.');
+  });
+
+  it('changing a message it kept: the compaction stays, the message changed after the summary', async () => {
+    const { id, engine, say, entries, prompts } = await rig();
+    for (const word of WORDS) await say(`${word} message.`);
+    await engine.compact(id, () => undefined);
+    const now = await entries();
+    const seventh = now.findIndex((entry) => entry.kind === 'user' && entry.text === 'Septième message.');
+    await engine.turn(id, { forkAfter: now[seventh - 1]!.id, text: 'Septième, corrigé.' }, () => undefined);
+    const sent = prompts.at(-1)!;
+    expect(sent).toContain('RÉSUMÉ : le format des heures est corrigé.');
+    expect(sent).toContain('Septième, corrigé.');
+    expect(sent).not.toContain('Huitième message.');
+    expect(sent).not.toContain('Premier message.');
+  });
+});
+

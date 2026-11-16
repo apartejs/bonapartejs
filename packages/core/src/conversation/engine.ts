@@ -34,7 +34,7 @@ import { familyLayer } from '../families/index.js';
 import type { DemuxEvent, FamilyLayer } from '../families/types.js';
 import { KeyedQueue } from '../fs/json-file.js';
 import { copyJournal, frozenPrompt, isRefrozen, openJournal } from '../journal/journal.js';
-import type { Journal, JournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
+import type { Journal, JournalEntry, NewJournalEntry, Outcome, PendingCall, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
 import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
@@ -234,6 +234,30 @@ function lookUp(entries: readonly JournalEntry[], target: RewindTarget): RewindL
     earlier: users.slice(0, target.userIndex).flatMap((user) => (user.messageId ? [user.messageId] : [])),
     previousId: entries[index - 1]!.id,
   };
+}
+
+/**
+ * A fork that starts among the turns the branch's last compaction kept (review of phase 7): the branch keeps the
+ * compaction — its text without the kept turns (the head), and the kept turns up to the fork point, copied
+ * after it. Null when the fork point is elsewhere: before what the compaction folded, or after it.
+ */
+function keptCut(
+  entries: readonly JournalEntry[],
+  afterEntryId: string,
+): { rebase: Extract<JournalEntry, { kind: 'rebase' }>; head: string; copies: readonly JournalEntry[] } | null {
+  const at = entries.findIndex((entry) => entry.id === afterEntryId);
+  const rebaseAt = entries.findLastIndex((entry) => entry.kind === 'rebase');
+  if (at < 0 || rebaseAt < 0 || at >= rebaseAt || entries.slice(rebaseAt + 1).some(isRefrozen)) return null;
+  const rebase = entries[rebaseAt] as Extract<JournalEntry, { kind: 'rebase' }>;
+  const keptAt = rebase.keptFrom ? entries.findIndex((entry) => entry.id === rebase.keptFrom) : -1;
+  if (keptAt < 0 || at < keptAt - 1) return null;
+  const keptText = entries
+    .slice(keptAt, rebaseAt)
+    .map((entry) => entry.rendered ?? '')
+    .join('');
+  const rendered = rebase.rendered ?? '';
+  if (!rendered.endsWith(keptText)) return null;
+  return { rebase, head: rendered.slice(0, rendered.length - keptText.length), copies: entries.slice(keptAt, at + 1) };
 }
 
 /** A going back the model has not heard of yet: told at the start of its next turn, as a note. */
@@ -481,7 +505,9 @@ export class ConversationEngine {
       let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
       const look = lookUp(journal.entries(), target);
       const fromBranchId = meta.branchId;
-      if (what !== 'code') ({ meta, journal } = await this.fork(meta, journal, look.previousId));
+      if (what !== 'code') {
+        ({ meta, journal } = (await this.keepCompaction(meta, journal, look.previousId)) ?? (await this.fork(meta, journal, look.previousId)));
+      }
       await journal.append({ kind: 'rewind', toEntryId: look.message.id, what, fromBranchId, ...(note ? { note } : {}), rendered: '' });
       return { fromBranchId, branchId: meta.branchId };
     });
@@ -516,6 +542,14 @@ export class ConversationEngine {
     if (onAnotherModel(branchModel(kept), engine)) {
       const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
       return reread(estimateTokens((await this.refreezeFor(meta, kept, engine, instructions)).rendered), 'other-model');
+    }
+    // Back across a compaction (review of phase 7): before what it folded, the whole prefix kept is read again;
+    // among the turns it kept, the branch keeps it — read from llama.cpp's checkpoint on a sliding window.
+    if (look.after.some(isRefrozen)) {
+      const cut = keptCut(entries, look.previousId);
+      if (!cut) return reread(prefixTokens, 'rewind');
+      if (engine.slidingWindow) return reread(estimateTokens(cut.head + cut.copies.map((entry) => entry.rendered ?? '').join('')), 'rewind');
+      return 'kept';
     }
     const owner = this.ownerOf(meta);
     if (!this.scheduler.isResident(owner)) {
@@ -781,11 +815,39 @@ export class ConversationEngine {
     const parent = this.ownerOf(meta);
     // What sits in the slot is saved first — never at the cost of the state the branch starts from.
     await this.scheduler.flush(parent);
+    // A state frozen after a compaction or a change of model holds another prompt than a branch that starts
+    // before it: never given to it — its reading is then said, never paid in silence (review of phase 7).
+    const entries = journal.entries();
+    const at = entries.findIndex((entry) => entry.id === afterEntryId);
+    const crosses = entries.slice(at + 1).some(isRefrozen);
     const branch = await journal.fork(afterEntryId);
     const child: SlotOwner = { kind: 'conversation', conversationId: meta.id, branchId: branch.branchId };
     // A change of model starts from nothing: the state of the branch left is the old model's.
-    if (options.memory !== false) await this.deps.kv.copyState(ownerKey(parent), ownerKey(child));
+    if (options.memory !== false && !crosses) await this.deps.kv.copyState(ownerKey(parent), ownerKey(child));
     return { meta: await this.deps.store.update(meta.id, { branchId: branch.branchId }), journal: branch };
+  }
+
+  /**
+   * A fork among the turns the last compaction kept (an answer asked again, a message changed, a going back):
+   * the branch keeps the compaction — after its rebase, the rebase frozen again with its kept turns cut at the
+   * fork point, those up to it copied after it. Null when the fork point is elsewhere (a plain fork then).
+   */
+  private async keepCompaction(
+    meta: ConversationMeta,
+    journal: Journal,
+    afterEntryId: string,
+  ): Promise<{ meta: ConversationMeta; journal: Journal } | null> {
+    const cut = keptCut(journal.entries(), afterEntryId);
+    if (!cut) return null;
+    // After the rebase: the state given to the branch holds its head and the kept turns, a prefix of what follows.
+    const moved = await this.fork(meta, journal, cut.rebase.id);
+    const { id: _id, at: _at, keptFrom: _keptFrom, rendered: _rendered, ...rebase } = cut.rebase;
+    await moved.journal.append({ ...rebase, rendered: cut.head });
+    for (const entry of cut.copies) {
+      const { id: _copyId, at: _copyAt, ...copy } = entry;
+      await moved.journal.append(copy as NewJournalEntry);
+    }
+    return moved;
   }
 
   /**
@@ -907,7 +969,9 @@ export class ConversationEngine {
     this.follow(engine);
     const { family, client } = engine;
     let journal = await openJournal(this.deps.store.dir, id, meta.branchId);
-    if (input.forkAfter) ({ meta, journal } = await this.fork(meta, journal, input.forkAfter));
+    if (input.forkAfter) {
+      ({ meta, journal } = (await this.keepCompaction(meta, journal, input.forkAfter)) ?? (await this.fork(meta, journal, input.forkAfter)));
+    }
     // Each answer names the window's message it fills: the sibling the person picks is found by it.
     const answerOf = input.messageId ? { messageId: input.messageId } : {};
 
