@@ -867,6 +867,13 @@ export class ConversationEngine {
     await moved.journal.append({ ...rebase, rendered: cut.head });
     for (const entry of cut.copies) {
       const { id: _copyId, at: _copyAt, ...copy } = entry;
+      // What the engine held when a kept answer was written — the whole conversation then — is not what this
+      // branch holds: a copy keeps no count (countedContext falls back to the estimate until the next answer).
+      if (copy.kind === 'assistant' && copy.usage?.contextTokens !== undefined) {
+        const { contextTokens: _held, ...usage } = copy.usage;
+        await moved.journal.append({ ...copy, usage } as NewJournalEntry);
+        continue;
+      }
       await moved.journal.append(copy as NewJournalEntry);
     }
     return moved;

@@ -232,6 +232,20 @@ describe('a compaction is never undone in silence, nor its cost hidden (review o
     expect(await engine.rewindMemory(id, { userIndex: 2, text: 'Troisième message.' })).toMatchObject({ kind: 'reread' });
   });
 
+  it('going back among the turns it kept counts the new branch, not the copied answers’ count from before it (review of the gate)', async () => {
+    // The kept answers are copied after a new rebase: what the engine held when each was written, the whole
+    // conversation still in it, is not what the branch holds — the banner said full, a message was refused.
+    const { id, engine, store, say, entries } = await rig();
+    for (const word of WORDS) await say(`${word} message.`);
+    expect((await engine.compact(id, () => undefined)).keptTurns).toBe(2);
+    await engine.rewindTo(id, { userIndex: 7, text: 'Huitième message.' }, 'conversation');
+    const held = fakeTokenize(frozenPrompt(await entries())).length;
+    await store.update(id, { contextCap: held + 1024 + 1500 });
+    expect(await engine.contextOf(id)).toBeNull();
+    const result = await engine.turn(id, { text: 'Encore ?' }, () => undefined);
+    expect(result.stopped).toBeUndefined();
+  });
+
   it('asking again an answer it kept: the compaction stays — the summary, the turns kept, the new answer', async () => {
     const { id, engine, say, entries, prompts } = await rig();
     for (const word of WORDS) await say(`${word} message.`);

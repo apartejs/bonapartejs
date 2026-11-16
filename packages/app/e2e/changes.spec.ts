@@ -78,5 +78,6 @@ test('an unchanged line’s two numbers, the old file’s and the new one’s, a
     if (!next?.matches('.aparte-diff-line__num[data-side="new"]')) return -1;
     return Number.parseFloat(getComputedStyle(old).paddingInlineEnd) + Number.parseFloat(getComputedStyle(next).paddingInlineStart);
   });
-  expect(space).toBeGreaterThanOrEqual(8);
+  // aparté 1.10.1 gave each 4 px — 8 between them, still read as one; 1.11 gives each 10.
+  expect(space).toBeGreaterThan(8);
 });
