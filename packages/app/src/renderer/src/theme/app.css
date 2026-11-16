@@ -844,12 +844,6 @@ body {
   overflow: auto;
 }
 
-/* aparté's diff: an unchanged line's two numbers, side by side, read as one (« 3 3 » seen « 33 »):
-   a hairline sets the old file's apart (apartejs/aparte#240 — goes when the element does it). */
-.aparte-diff-line__num[data-side='old'] {
-  border-inline-end: var(--aparte-border-width) solid var(--aparte-border);
-}
-
 /* The terminal (task 6.6): dark in either theme, its tabs in its bar, an emulator per tab. */
 .bonaparte-pane--terminal .bonaparte-pane__header {
   border-block-end-color: var(--bonaparte-terminal-bar);

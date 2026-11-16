@@ -118,15 +118,26 @@ describe('compareWithJournal', () => {
     const preamble = 'The earlier part of this conversation was compacted. This is a summary of what came before; continue from it.';
     const kept = JOURNAL[4]!;
     const compacted = [...JOURNAL, entry({ kind: 'rebase', summary: 'Ils se sont salués.', keptFrom: kept.id })];
-    const joined = user(`${preamble}
-
-Ils se sont salués.
-
-Et ensuite ?`);
-    expect(compareWithJournal([joined, assistant('On continue.'), user('Merci')], compacted)).toEqual({ kind: 'append', text: 'Merci' });
+    const joined = user(`${preamble}\n\nIls se sont salués.\n\nEt ensuite ?`);
+    const said = `${preamble}\n\nIls se sont salués.`;
+    expect(compareWithJournal([joined, assistant('On continue.'), user('Merci')], compacted, said)).toEqual({ kind: 'append', text: 'Merci' });
     const none = [...JOURNAL, entry({ kind: 'rebase', summary: 'Tout.' })];
-    expect(compareWithJournal([user(`${preamble}
+    const all = `${preamble}\n\nTout.`;
+    expect(compareWithJournal([user(all), assistant('On continue.'), user('Merci')], none, all)).toEqual({ kind: 'append', text: 'Merci' });
+  });
 
-Tout.`), assistant('On continue.'), user('Merci')], none)).toEqual({ kind: 'append', text: 'Merci' });
+  it('aparté names what the history opens with (`_meta.historySummary`): taken off as it is, whatever its text', () => {
+    // aparté 1.11 (apartejs/aparte#243): the summary is told, not recognised — the page's may differ from the rebase's.
+    const opening = 'The earlier part of this conversation was compacted.\n\nUn résumé que la page a gardé.';
+    const kept = JOURNAL[4]!;
+    const compacted = [...JOURNAL, entry({ kind: 'rebase', summary: 'Ils se sont salués.', keptFrom: kept.id })];
+    const joined = user(`${opening}\n\nEt ensuite ?`);
+    expect(compareWithJournal([joined, assistant('On continue.'), user('Merci')], compacted, opening)).toEqual({ kind: 'append', text: 'Merci' });
+    const none = [...JOURNAL, entry({ kind: 'rebase', summary: 'Tout.' })];
+    expect(compareWithJournal([user(opening), assistant('On continue.'), user('Merci')], none, opening)).toEqual({ kind: 'append', text: 'Merci' });
+    // Without it, a message of the person's that holds the summary's words is theirs.
+    expect(compareWithJournal([user('Ils se sont salués.\n\nEt ensuite ?'), assistant('On continue.'), user('Merci')], compacted)).toEqual({
+      kind: 'mismatch',
+    });
   });
 });

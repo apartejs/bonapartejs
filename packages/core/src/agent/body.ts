@@ -21,6 +21,8 @@ export const agentBodySchema = z.object({
   request: z.looseObject({
     messages: z.array(messageSchema),
     modelId: z.string().optional(),
+    // What the history opens with in place of the turns before its checkpoint (aparté 1.11).
+    _meta: z.looseObject({ historySummary: z.string().optional() }).optional(),
   }),
   clientTools: z.array(z.looseObject({ name: z.string() })).default([]),
   resume: z

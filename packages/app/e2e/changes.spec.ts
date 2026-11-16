@@ -71,7 +71,12 @@ test('an unchanged line’s two numbers, the old file’s and the new one’s, a
   await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Changements', exact: true }).click();
   const notes = diffView(page.getByRole('region', { name: 'Changements', exact: true }).getByRole('region', { name: 'notes.txt', exact: true }));
   await expect(notes.lineNumber('new', 2)).toBeVisible();
-  // « 2 » and « 2 » side by side, with nothing between them, read as « 22 »: a rule sets them apart.
-  const rule = await notes.lineNumber('old', 2).evaluate((element) => getComputedStyle(element).borderInlineEndWidth);
-  expect(Number.parseFloat(rule)).toBeGreaterThan(0);
+  // « 2 » and « 2 » side by side, with nothing between them, read as « 22 »: aparté 1.11 spaces each number
+  // on both sides (apartejs/aparte#240). The space between them, whatever their digits, is the two paddings.
+  const space = await notes.lineNumber('old', 2).evaluate((old) => {
+    const next = old.nextElementSibling;
+    if (!next?.matches('.aparte-diff-line__num[data-side="new"]')) return -1;
+    return Number.parseFloat(getComputedStyle(old).paddingInlineEnd) + Number.parseFloat(getComputedStyle(next).paddingInlineStart);
+  });
+  expect(space).toBeGreaterThanOrEqual(8);
 });

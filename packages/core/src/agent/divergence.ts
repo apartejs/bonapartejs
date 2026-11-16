@@ -20,29 +20,32 @@ export type Divergence =
   | { kind: 'edit'; afterEntryId: string; text: string }
   | { kind: 'mismatch' };
 
-export function compareWithJournal(messages: readonly AgentMessage[], entries: readonly JournalEntry[]): Divergence {
+/**
+ * `opening`: what the history opens with in place of the turns before its checkpoint, as aparté names it
+ * (`_meta.historySummary`, aparté 1.11, apartejs/aparte#243).
+ */
+export function compareWithJournal(messages: readonly AgentMessage[], entries: readonly JournalEntry[], opening?: string): Divergence {
   // After a compaction the page sends from its checkpoint (aparté's `contextSummary`): the turns the rebase
   // kept, then what came after it — compared with those; a page without the checkpoint sends everything.
   const rebase = entries.findLastIndex((entry) => entry.kind === 'rebase');
   if (rebase >= 0) {
-    const { keptFrom, summary } = entries[rebase] as Extract<JournalEntry, { kind: 'rebase' }>;
+    const { keptFrom } = entries[rebase] as Extract<JournalEntry, { kind: 'rebase' }>;
     const kept = keptFrom ? entries.findIndex((entry) => entry.id === keptFrom) : -1;
-    const shortened = compare(messages, entries, kept >= 0 ? kept : rebase + 1, summary);
+    const shortened = compare(messages, entries, kept >= 0 ? kept : rebase + 1, opening);
     if (shortened.kind !== 'mismatch') return shortened;
   }
   return compare(messages, entries, 0);
 }
 
 /**
- * The page's messages of the person against the journal's from `from` on. `summary`: what aparté sends
- * first after its checkpoint, as a message of the person's under a preamble — alone, or joined to the first
- * message kept; it is no message of theirs, and is taken off (apartejs/aparte#243: unmarked in the wire).
+ * The page's messages of the person against the journal's from `from` on. `opening`: what aparté sends
+ * first after its checkpoint, as a message of the person's — the summary alone, or joined to the first
+ * message kept after a blank line; it is no message of theirs, and is taken off.
  */
-function compare(messages: readonly AgentMessage[], entries: readonly JournalEntry[], from: number, summary?: string): Divergence {
+function compare(messages: readonly AgentMessage[], entries: readonly JournalEntry[], from: number, opening?: string): Divergence {
   const sent = messages.filter((message) => message.role === 'user').map((message) => messageText(message.content));
-  const at = summary ? (sent[0]?.indexOf(summary) ?? -1) : -1;
-  if (summary && at >= 0) {
-    const rest = sent[0]!.slice(at + summary.length).replace(/^\n\n/, '');
+  if (opening && sent[0]?.startsWith(opening)) {
+    const rest = sent[0].slice(opening.length).replace(/^\n\n/, '');
     if (rest === '') sent.shift();
     else sent[0] = rest;
   }

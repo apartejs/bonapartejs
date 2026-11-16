@@ -129,7 +129,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
         await core.conversationStore.update(conversationId, { worksIn: 'branch', ...(branch ? { branch } : {}), ...(base ? { base } : {}) });
       }
     }
-    const divergence = compareWithJournal(body.data.request.messages, entries);
+    const divergence = compareWithJournal(body.data.request.messages, entries, body.data.request._meta?.historySummary);
     if (divergence.kind === 'mismatch') {
       return jsonError(409, 'This history is not the one of this conversation: open it again.');
     }

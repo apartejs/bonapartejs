@@ -3,8 +3,9 @@
  * person's messages: aparté's « Modifier » and « Copier », and ours — « Revenir
  * avant » and « Brancher »; on the answers: « Copier » and « Réessayer ». Ours
  * are aparté's registered actions: a click sends `aparte-action`, which the
- * app answers. A registered action shows its icon alone, its words as its
- * name and on hover (apartejs/aparte#241).
+ * app answers. Ours show their icon and their words, as the board draws
+ * them: « Revenir avant » before aparté's buttons, « Brancher » after them
+ * (`display`, `position`: aparté 1.11, apartejs/aparte#241).
  */
 
 import { aparteGlobalConfig } from '@aparte/core';
@@ -23,12 +24,21 @@ const BRANCH_GLYPH =
 /** The buttons, said in the interface's language; what it returns takes ours away. */
 export function setupMessageActions(words: Messages['rewind']): () => void {
   aparteGlobalConfig.setBubbleActions({ user: ['edit', 'copy'], assistant: ['copy', 'retry'] });
-  aparteGlobalConfig.registerAction({ id: REWIND_ACTION, icon: UNDO_GLYPH, label: words.action, order: 1, zones: ['bubble'], bubble: { roles: ['user'] } });
+  aparteGlobalConfig.registerAction({
+    id: REWIND_ACTION,
+    icon: UNDO_GLYPH,
+    label: words.action,
+    display: 'both',
+    position: 'start',
+    zones: ['bubble'],
+    bubble: { roles: ['user'] },
+  });
   aparteGlobalConfig.registerAction({
     id: BRANCHES_ACTION,
     icon: BRANCH_GLYPH,
     label: words.branchesAction,
-    order: 2,
+    display: 'both',
+    position: 'end',
     zones: ['bubble'],
     bubble: { roles: ['user'] },
   });

@@ -143,3 +143,13 @@ test('a message changed starts a branch; the continuation it replaced is found a
   await expect(chat(page).userMessages.first()).toContainText('Dis bonjour');
   await expect(chat(page).replyText).toHaveText('Première réponse.');
 });
+
+test('a message of the person’s says « Revenir avant » and « Brancher » in words, as the board draws them', async ({ launch }) => {
+  const { page } = await twoTurns(launch);
+  const message = chat(page).userMessages.nth(1);
+  await message.hover();
+  // Their words, not an icon alone (aparté 1.11, `display`); « Revenir avant » before aparté's own buttons.
+  await expect(message.getByRole('button', { name: 'Revenir avant' })).toHaveText('Revenir avant');
+  await expect(message.getByRole('button', { name: 'Brancher' })).toHaveText('Brancher');
+  await expect(message.getByRole('button').first()).toHaveAccessibleName('Revenir avant');
+});
