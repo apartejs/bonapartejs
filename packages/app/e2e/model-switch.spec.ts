@@ -67,9 +67,14 @@ test('« Changer » loads it, and the conversation goes on in its family', async
   await started(page);
 
   await pick(page, 'qwen-e2e');
-  await page.getByRole('dialog', { name: 'Passer à qwen-e2e ?' }).getByRole('button', { name: 'Changer' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Passer à qwen-e2e ?' });
+  await dialog.getByRole('button', { name: 'Changer' }).click();
+  // Done, the dialog closes — and stays closed: the picker following the engine is no new pick.
+  await expect(dialog).toBeHidden({ timeout: 20_000 });
   await expect.poll(() => loaded(page), { timeout: 20_000 }).toBe('qwen-e2e');
   await expect(picker(page)).toContainText('qwen-e2e');
+  await page.waitForTimeout(500);
+  await expect(dialog).toBeHidden();
 
   const ui = chat(page);
   await ui.send('Et en Qwen ?');

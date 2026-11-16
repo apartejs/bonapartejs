@@ -40,8 +40,11 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
   const where = useRef(scope);
   where.current = scope;
   const selector = useRef<HTMLElement>(null);
-  // The model that runs — else the one a load would bring back, which the picker shows chosen.
+  // The model that runs — else the one a load would bring back, which the picker shows chosen. Read when the
+  // picker speaks, never from an older render: during a load it echoes the config as it follows the engine.
   const running = engine.model?.path ?? engine.resume?.path;
+  const runningNow = useRef(running);
+  runningNow.current = running;
   useEffect(() => {
     if (!opener) return;
     opener.current = () => selector.current?.querySelector<HTMLElement>('[role="combobox"], [role="button"]')?.click();
@@ -85,11 +88,12 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
         aria-label={messages.modelSwitch.picker}
         onModelChange={(detail) => {
           // The model that runs shown again (a revert, the config following the engine) is no pick.
-          if (!detail.modelId || detail.modelId === running) return;
+          if (!detail.modelId || detail.modelId === runningNow.current) return;
           const listed = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER)?.getModels() ?? [];
           const name = listed.find((model) => model.id === detail.modelId)?.name ?? detail.modelId;
           onPickModel(detail.modelId, name, () => {
-            if (running) (selector.current as AparteModelSelector | null)?.setSelection(ENGINE_PROVIDER, running);
+            const back = runningNow.current;
+            if (back) (selector.current as AparteModelSelector | null)?.setSelection(ENGINE_PROVIDER, back);
           });
         }}
       />

@@ -52,7 +52,12 @@ export function useModelSwitch(deps: ModelSwitchDeps) {
     return false;
   };
 
+  const changing = useRef(false);
+
   const ask = (path: string, name: string, revert: () => void): void => {
+    // While a change runs, what the picker says is the config following the engine, not a pick: the dialog
+    // asked anew would stay open over the page once the change is done.
+    if (changing.current) return;
     const conversationId = latest.current.conversationId;
     pending.current = { path, conversationId, revert };
     setRefused(null);
@@ -83,11 +88,15 @@ export function useModelSwitch(deps: ModelSwitchDeps) {
     if (!was) return;
     setBusy(true);
     setRefused(null);
+    changing.current = true;
     // Only « Changer » moves this conversation: with « Brancher sur ce modèle » the copy does.
     if (as === 'here') latest.current.onSwitching(was.conversationId);
     const result = await bridge
       .invoke(engineSwitch, { path: was.path, ...(was.conversationId ? { conversationId: was.conversationId } : {}), as })
-      .catch(() => null);
+      .catch(() => null)
+      .finally(() => {
+        changing.current = false;
+      });
     if (pending.current !== was) return;
     setBusy(false);
     if (!result || !result.ok) {

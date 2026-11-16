@@ -7,7 +7,7 @@
 
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { tempRepo } from '@aparte/bonaparte-core/testing';
+import { FAKE_QWEN_TEMPLATE, tempRepo } from '@aparte/bonaparte-core/testing';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 import { diffView } from './fixtures/diff.js';
@@ -554,6 +554,146 @@ for (const locale of ['fr', 'en'] as const) {
       } finally {
         await repo.remove();
       }
+    });
+  }
+}
+
+// ── Phase 7: going back, the branches, compaction, the costs said ──
+
+const PHASE7 = {
+  fr: {
+    first: 'Renomme formatHours en formatWeek.',
+    second: 'Ajoute aussi un export CSV.',
+    back: 'Revenir avant',
+    confirm: 'Revenir',
+    branch: 'Brancher',
+    picker: 'Modèle',
+    cancel: 'Annuler',
+    settings: 'Réglages',
+    engine: 'Moteur et mémoire',
+    cache: 'Cache K/V',
+    unload: 'Décharger',
+    conversations: 'Conversations',
+    start: 'Démarrer',
+    full: 'Message numéro 1.',
+    compact: /^Compacter/,
+  },
+  en: {
+    first: 'Rename formatHours to formatWeek.',
+    second: 'Also add a CSV export.',
+    back: 'Go back before',
+    confirm: 'Go back',
+    branch: 'Branch',
+    picker: 'Model',
+    cancel: 'Cancel',
+    settings: 'Settings',
+    engine: 'Engine and memory',
+    cache: 'K/V cache',
+    unload: 'Unload',
+    conversations: 'Conversations',
+    start: 'Start',
+    full: 'Message number 1.',
+    compact: /^Compact/,
+  },
+} as const;
+
+/** A reply that brings the conversation to 92 % of its window: the context nearly full. */
+function filling(nCtx: number) {
+  return (prompt: string): string => {
+    if (prompt.includes('Summarize this conversation so far')) return 'Facts:\nThe hours are decimal.\nWork:\nThe format of the hours was fixed.';
+    const room = Math.floor(0.92 * nCtx - (prompt.length / 3 + 8));
+    return 'Une longue réponse sur le travail fait. '.repeat(Math.max(1, Math.floor((room * 3) / 40)));
+  };
+}
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the context nearly full, and compacted, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = PHASE7[locale];
+      const { page } = await launch({ locale, engine: { responder: filling(8192), nCtx: 8192 } });
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      await ui.send(words.full);
+      await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+      await expect(page.locator('.context-banner')).toBeVisible({ timeout: 10_000 });
+      await page.screenshot({ path: join(into, `context-full-${locale}-${scheme}.png`) });
+      await page.locator('.context-banner').getByRole('button', { name: words.compact }).click();
+      await expect(page.locator('.context-banner')).toBeHidden({ timeout: 15_000 });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(into, `compacted-${locale}-${scheme}.png`) });
+    });
+
+    test(`going back, the branches and the costs said, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = PHASE7[locale];
+      const { page } = await launch({
+        locale,
+        managed: {
+          models: {
+            'gemma-4-26B-A4B-it-Q4_K_M': { paddingBytes: 3 * 1024 * 1024 },
+            'Qwen3-1.7B-Q4_K_M': { architecture: 'qwen3', chatTemplate: FAKE_QWEN_TEMPLATE, paddingBytes: 1024 * 1024 },
+          },
+        },
+      });
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      await page.getByRole('button', { name: words.start }).click();
+      await expect(ui.editor).toBeVisible({ timeout: 20_000 });
+      for (const text of [words.first, words.second]) {
+        const before = await ui.replies.count();
+        await ui.send(text);
+        await expect(ui.replies).toHaveCount(before + 1, { timeout: 15_000 });
+        await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+      }
+
+      // « Revenir avant », its dialog, then its banner.
+      const second = ui.userMessages.nth(1);
+      await second.hover();
+      await second.getByRole('button', { name: words.back }).click();
+      await expect(page.locator('.rewind-dialog')).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `rewind-dialog-${locale}-${scheme}.png`) });
+      await page.locator('.rewind-dialog').getByRole('button', { name: words.confirm, exact: true }).click();
+      await expect(page.locator('.rewind-banner')).toBeVisible();
+      await page.screenshot({ path: join(into, `rewind-banner-${locale}-${scheme}.png`) });
+
+      // « Brancher »: the branches of the conversation.
+      await page.getByRole('button', { name: words.branch, exact: true }).click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `branches-${locale}-${scheme}.png`) });
+      await page.keyboard.press('Escape');
+
+      // Changing model: the composer's picker, then « Passer à … ? ».
+      await page.getByRole('combobox', { name: words.picker }).click();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `model-picker-${locale}-${scheme}.png`) });
+      await page.getByRole('option', { name: /Qwen3-1\.7B/ }).click();
+      await expect(page.locator('.model-switch-dialog dl')).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `model-switch-${locale}-${scheme}.png`) });
+      await page.locator('.model-switch-dialog').getByRole('button', { name: words.cancel }).click();
+
+      // A setting that restarts the engine.
+      await page.getByRole('button', { name: words.settings, exact: true }).click();
+      const nav = page.getByRole('navigation', { name: words.settings });
+      await nav.getByRole('link', { name: words.engine }).click();
+      await page.getByRole('radiogroup', { name: words.cache }).locator('label', { hasText: 'q8_0' }).click();
+      await expect(page.locator('.launch-restart')).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `launch-restart-${locale}-${scheme}.png`) });
+      await page.locator('.launch-restart').getByRole('button', { name: words.cancel }).click();
+
+      // The engine unloaded: the card above the composer.
+      await page.getByRole('button', { name: words.unload }).click();
+      await page.waitForTimeout(1500);
+      await nav.getByRole('link', { name: words.conversations }).click();
+      await expect(page.locator('.engine-unloaded')).toBeVisible({ timeout: 15_000 });
+      await page.screenshot({ path: join(into, `engine-unloaded-${locale}-${scheme}.png`) });
     });
   }
 }
