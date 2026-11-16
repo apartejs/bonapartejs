@@ -53,7 +53,7 @@ const callOf = (call: PendingCall): InboxCall => ({ id: call.toolCallId, name: c
 const textOf = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /** The first words of an answer, its calls and its reasoning left out: what the row of an unread reply says. */
-function saidIn(raw: string): string {
+export function saidIn(raw: string): string {
   const plain = raw
     .replace(/<\|channel>[\s\S]*?<channel\|>/g, '')
     .replace(/<\|tool_call>[\s\S]*?<tool_call\|>/g, '')

@@ -10,7 +10,7 @@
 import '@aparte/plugin-diff';
 import type { AparteDiff } from '@aparte/plugin-diff';
 import { toolsPreview, type PlayMode, type ToolPreviewView } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createElement, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { ApprovalAnswer, ApprovalRequest } from '../aparte/approvals';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
@@ -79,8 +79,9 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
     if (diff.current && preview?.kind === 'diff') diff.current.diff = { path: preview.path, before: preview.before, after: preview.after };
   }, [preview]);
 
-  // The card takes the focus, on « Autoriser »: Enter allows, Escape refuses.
-  useEffect(() => {
+  // The card takes the focus, on « Autoriser »: Enter allows, Escape refuses. Before it is painted: an Enter typed
+  // as it appears must not reach the composer, where it would stop the reply.
+  useLayoutEffect(() => {
     if (focus) allow.current?.focus();
   }, [request, focus]);
 

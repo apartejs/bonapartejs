@@ -18,7 +18,9 @@ function keysOf(value: unknown, prefix = ''): string[] {
 describe('the words of the main process', () => {
   it('have the same keys in both languages, none empty', () => {
     expect(keysOf(fr)).toEqual(keysOf(en));
-    for (const words of [fr, en]) for (const text of Object.values(words.tray)) expect(text.trim()).not.toBe('');
+    const texts = (value: unknown): string[] =>
+      typeof value === 'string' ? [value] : typeof value === 'object' && value !== null ? Object.values(value).flatMap(texts) : [];
+    for (const words of [fr, en]) for (const text of texts(words)) expect(text.trim()).not.toBe('');
   });
 
   it('follow the language of the interface', () => {

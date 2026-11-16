@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCore, type Core } from '../api.js';
+import { createCore, type Core, type TurnEnd } from '../api.js';
 import {
   FAKE_QWEN_TEMPLATE,
   startFakeLlamaServer,
@@ -423,6 +423,65 @@ describe('the agent handler — the tools', () => {
     const last = lines.at(-1)!;
     expect(last).toMatchObject({ type: 'run-suspended', pending: [{ name: 'edit_file', reason: 'approval' }] });
     expect(typeof last['ticket']).toBe('string');
+  });
+});
+
+describe('the agent handler — the end of a turn, told to whoever listens (task 8.5: the notifications)', () => {
+  const Q = '<|"|>';
+  const call = (text: string) => (prompt: string) =>
+    prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? 'Done.' : text;
+  const ASK_USER = { name: 'ask_user', description: 'Ask the person.', inputSchema: { type: 'object', properties: { question: { type: 'string' } } } };
+
+  async function listened(options: FakeLlamaServerOptions) {
+    const made = await setup(options);
+    const ends: TurnEnd[] = [];
+    made.core.onTurnEnd((end) => ends.push(end));
+    return { ...made, ends };
+  }
+
+  it('a reply that ends: its conversation, its title, and its first words', async () => {
+    const { handler, ends } = await listened({ responder: () => 'Bonjour Paul, le récap est exporté.' });
+    await linesOf(await handler(post(turn(user('Exporte le récap')))));
+    expect(ends).toEqual([{ conversationId: 'c1', title: expect.any(String), how: 'done', said: 'Bonjour Paul, le récap est exporté.' }]);
+  });
+
+  it('a call that waits for the person: the call, as the approval card shows it', async () => {
+    const { handler, ends } = await listened({
+      responder: call(`<|tool_call>call:edit_file{path:${Q}src/format.ts${Q},old_string:${Q}a${Q},new_string:${Q}b${Q}}<tool_call|>`),
+    });
+    await linesOf(await handler(post(turn(user('Corrige les heures')))));
+    expect(ends).toEqual([
+      {
+        conversationId: 'c1',
+        title: expect.any(String),
+        how: 'approval',
+        call: { name: 'edit_file', input: { path: 'src/format.ts', old_string: 'a', new_string: 'b' } },
+      },
+    ]);
+  });
+
+  it('a question of the model: its words', async () => {
+    const { handler, ends } = await listened({ responder: call(`<|tool_call>call:ask_user{question:${Q}Une date vide : je la garde ?${Q}}<tool_call|>`) });
+    await linesOf(await handler(post({ ...turn(user('Valide le formulaire')), clientTools: [ASK_USER] })));
+    expect(ends).toEqual([{ conversationId: 'c1', title: expect.any(String), how: 'question', question: 'Une date vide : je la garde ?' }]);
+  });
+
+  it('an engine that fails in the middle of the answer: a failure', async () => {
+    const { handler, ends } = await listened({ responder: () => 'un deux trois quatre', failAfter: 2 });
+    await linesOf(await handler(post(turn(user('Compte')))));
+    expect(ends).toEqual([{ conversationId: 'c1', title: expect.any(String), how: 'failed' }]);
+  });
+
+  it('a reply the person stopped: nothing to tell them', async () => {
+    const { handler, ends } = await listened({ paceMs: 20, responder: () => 'un deux trois quatre cinq six sept huit '.repeat(20) });
+    const controller = new AbortController();
+    const response = await handler(post(turn(user('Compte')), { signal: controller.signal }));
+    const reader = response.body!.getReader();
+    await reader.read();
+    controller.abort();
+    while (!(await reader.read()).done);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(ends).toEqual([]);
   });
 });
 

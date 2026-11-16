@@ -434,6 +434,16 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   };
   const goToRef = useRef(goTo);
   goToRef.current = goTo;
+  // A notification, or the notification area's menu, opens its conversation (task 8.5): never more than that.
+  useEffect(
+    () =>
+      bridge.on((event) => {
+        if (event.kind !== 'open') return;
+        setSettingsPage(null);
+        goToRef.current(event.conversationId);
+      }),
+    [],
+  );
   const newConversation = (): void => goTo(null);
   // The list drives the deck, not a chat: the page shows the chat of the conversation picked.
   useEffect(() => {

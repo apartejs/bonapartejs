@@ -4,8 +4,21 @@
  * anything about a conversation.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell, Tray, utilityProcess } from 'electron';
-import { existsSync, mkdirSync } from 'node:fs';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Notification,
+  shell,
+  Tray,
+  utilityProcess,
+  type MenuItemConstructorOptions,
+  type NativeImage,
+} from 'electron';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore, withoutSecrets, type Core } from '@aparte/bonaparte-core';
@@ -19,7 +32,8 @@ import { createIpcRegistry } from './ipc/register.js';
 import { stopEngineBeforeQuit } from './quit.js';
 import { devServerUrlFrom, isTrustedOrigin } from './security.js';
 import { applyLaunchAtLogin, claimSingleInstance, hideOnClose, revealWindow, windowProfile } from './startup.js';
-import { trayMenu, type TrayActions } from './tray.js';
+import { createAttention, type Attention, type AttentionView } from './attention.js';
+import { trayMenu, type EngineRow, type TrayActions, type TrayIcon, type Waiting } from './tray.js';
 // The terminals' own process: built apart by electron-vite, its path given here.
 import ptyProcessPath from './terminals/pty-process?modulePath';
 import { createTerminalService } from './terminals/pty-host.js';
@@ -39,21 +53,127 @@ function interfaceLocale(): Locale {
 
 /** Kept here: a tray the garbage collector takes leaves the notification area. */
 let tray: Tray | undefined;
+/** Kept until they are clicked or closed: a notification the garbage collector takes loses its click. */
+const banners = new Set<Notification>();
+
+/** An icon of `resources/icons/` (task 8.5), at every scale it was drawn for. */
+function icon(name: string, sizes: readonly number[]): NativeImage {
+  const path = (size: number): string => join(app.getAppPath(), 'resources', 'icons', `${name}-${size}.png`);
+  const image = nativeImage.createFromPath(path(sizes[0]!));
+  for (const size of sizes.slice(1)) image.addRepresentation({ scaleFactor: size / sizes[0]!, buffer: readFileSync(path(size)) });
+  return image;
+}
 
 /**
- * The icon in the notification area — the app's own executable's icon until the bicorne's exist
- * (8.5, 12.2). A test run puts nothing in the person's notification area: it gets the menu, to drive it.
+ * Being noticed when the window is not in front of the person (task 8.5): the icon in the notification area and
+ * its menu, the banners, the taskbar's badge — `attention.ts` decides, this draws. A test run puts nothing on the
+ * person's screen: it gets the menu, the banners and the state, to drive and read them.
  */
-async function installTray(words: MainWords['tray'], actions: TrayActions, e2e: boolean): Promise<void> {
-  const menu = trayMenu(words, actions);
-  if (e2e) {
-    (globalThis as { __bonaparteTray?: unknown }).__bonaparteTray = menu;
-    return;
+function wireAttention(options: {
+  core: Core;
+  e2e: boolean;
+  window: () => BrowserWindow | undefined;
+  words: () => MainWords;
+  reveal(): void;
+  open(conversationId: string): void;
+}): Attention {
+  const { core, e2e } = options;
+  const record = globalThis as {
+    __bonaparteTray?: MenuItemConstructorOptions[];
+    __bonaparteAttention?: { icon: TrayIcon; badge: AttentionView['badge'] };
+    __bonaparteNotifications?: { title: string; body: string; conversationId: string; click(): void }[];
+    __bonaparteFocused?: boolean;
+  };
+  const icons = e2e
+    ? null
+    : {
+        tray: Object.fromEntries((['rest', 'waiting', 'failure', 'asleep'] as const).map((state) => [state, icon(`tray-${state}`, [16, 24, 32])])) as Record<TrayIcon, NativeImage>,
+        badge: { waiting: icon('badge-waiting', [16, 32]), failure: icon('badge-failure', [16, 32]) },
+      };
+  // The video memory of each model, read once from the core's list (a scan of the model folders).
+  const vram = new Map<string, number | null>();
+  const vramOf = async (path: string): Promise<number | null> => {
+    if (!vram.has(path)) {
+      const listed = await core.models().catch(() => []);
+      for (const model of listed) vram.set(model.path, model.announcement?.vramBytes ?? null);
+      if (!vram.has(path)) vram.set(path, null);
+    }
+    return vram.get(path) ?? null;
+  };
+  // The menu's « Ne pas déranger » reaches the attention it is part of.
+  const self: { attention?: Attention } = {};
+  const actions: TrayActions = {
+    open: options.reveal,
+    openConversation: options.open,
+    release: () => void core.unloadModel().catch((error: unknown) => console.error('[bonaparte] the model was not released:', error)),
+    quiet: () => void self.attention?.toggleQuiet(),
+    quit: () => app.quit(),
+  };
+  if (icons) {
+    tray = new Tray(icons.tray.rest);
+    tray.setToolTip(options.words().tray.tooltip);
+    tray.on('click', options.reveal);
   }
-  tray = new Tray(await app.getFileIcon(process.execPath, { size: 'small' }));
-  tray.setToolTip(words.tooltip);
-  tray.setContextMenu(Menu.buildFromTemplate(menu));
-  tray.on('click', () => actions.open());
+  self.attention = createAttention({
+    words: options.words,
+    setting: async (event) => {
+      const value = await core.settings.get(`notifications.${event}`).catch(() => undefined);
+      return value === 'banner' || value === 'badge' || value === 'off' ? value : 'banner';
+    },
+    focused: () => {
+      if (e2e && typeof record.__bonaparteFocused === 'boolean') return record.__bonaparteFocused;
+      const window = options.window();
+      return Boolean(window && !window.isDestroyed() && window.isVisible() && window.isFocused());
+    },
+    now: () => Date.now(),
+    waiting: async () => {
+      const inbox = await core.inbox();
+      const rows = new Map<string, Waiting>();
+      for (const one of [...inbox.approvals, ...inbox.subagentRequests]) rows.set(one.conversationId, { conversationId: one.conversationId, title: one.title, what: 'approval' });
+      for (const one of inbox.questions) if (!rows.has(one.conversationId)) rows.set(one.conversationId, { conversationId: one.conversationId, title: one.title, what: 'question' });
+      return [...rows.values()];
+    },
+    engine: async (): Promise<EngineRow | null> => {
+      const state = await core.engineState();
+      if (state.model) {
+        const status = state.status === 'ready' ? 'ready' : state.status === 'starting' ? 'starting' : 'stopped';
+        return { name: state.model.name, status, vramBytes: state.mode === 'managed' && status === 'ready' ? await vramOf(state.model.path) : null };
+      }
+      return state.resume ? { name: state.resume.name, status: 'asleep', vramBytes: null } : null;
+    },
+    show: (note) => {
+      const open = (): void => options.open(note.conversationId);
+      if (e2e) {
+        (record.__bonaparteNotifications ??= []).push({ ...note, click: open });
+        return;
+      }
+      if (!Notification.isSupported()) return;
+      const banner = new Notification({ title: note.title, body: note.body });
+      banners.add(banner);
+      const done = (): void => void banners.delete(banner);
+      banner.on('click', () => {
+        done();
+        open();
+      });
+      banner.on('close', done);
+      banner.on('failed', done);
+      banner.show();
+    },
+    render: (view) => {
+      const menu = trayMenu(options.words(), view, actions, process.platform);
+      if (e2e) {
+        record.__bonaparteTray = menu;
+        record.__bonaparteAttention = { icon: view.icon, badge: view.badge };
+        return;
+      }
+      tray?.setImage(icons!.tray[view.icon]);
+      tray?.setContextMenu(Menu.buildFromTemplate(menu));
+      tray?.setToolTip(view.badge?.text ?? options.words().tray.tooltip);
+      const window = options.window();
+      if (window && !window.isDestroyed()) window.setOverlayIcon(view.badge ? icons!.badge[view.badge.kind] : null, view.badge?.text ?? '');
+    },
+  });
+  return self.attention;
 }
 
 /** A setting as the person left it; its default when the file cannot be read (the app starts anyway). */
@@ -82,6 +202,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
 
   await app.whenReady();
 
+  // The icon in the notification area, the banners, the badge (task 8.5): made once the window exists.
+  const noticing: { attention?: Attention } = {};
   // What the main process pushes to the window: a terminal's output, an agent's command.
   const push = (event: AppEvent): void => {
     if (window && !window.isDestroyed()) window.webContents.send(APP_EVENT, event);
@@ -104,7 +226,11 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     terminals,
     pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
     commandOutput: (conversationId, output) => push({ kind: 'command', conversationId, output }),
-    engineChanged: () => push({ kind: 'engine' }),
+    engineChanged: () => {
+      push({ kind: 'engine' });
+      // The notification area says the engine's state too.
+      void noticing.attention?.refresh();
+    },
     ...engineDeps,
   });
   // The built-in plugins, built with the app.
@@ -181,11 +307,34 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
       setLoginItem: (settings) => app.setLoginItemSettings(settings),
     });
   loginItem(await setting(core, 'launchAtLogin', false));
+  // Windows shows the banners of an app that has a name of its own.
+  if (process.platform === 'win32' && !options.e2e) app.setAppUserModelId(app.isPackaged ? 'dev.aparte.bonaparte' : process.execPath);
+  // A banner, or the menu of the icon, opens its conversation in the window — nothing more.
+  const openConversation = (conversationId: string): void => {
+    reveal();
+    push({ kind: 'open', conversationId });
+  };
+  const noticed = wireAttention({
+    core,
+    e2e: options.e2e,
+    window: () => window,
+    words: () => mainWords(interfaceLocale()),
+    reveal,
+    open: openConversation,
+  });
+  noticing.attention = noticed;
+  core.onTurnEnd((end) => void noticed.turnEnded(end).catch((error: unknown) => console.error('[bonaparte] a notification failed:', error)));
+  // Back in front of the window: a failure was seen, and what waits is read again.
+  window.on('focus', () => {
+    void noticed.focused();
+    void noticed.refresh();
+  });
   core.settings.onChange((key, value) => {
     if (key === 'closeToTray') closeToTray = value === true;
     if (key === 'launchAtLogin') loginItem(value === true);
+    if (key === 'language' || key.startsWith('notifications.')) void noticed.refresh();
   });
-  await installTray(mainWords(interfaceLocale()).tray, { open: reveal, quit: () => app.quit() }, options.e2e);
+  await noticed.refresh();
 
   app.on('window-all-closed', () => app.quit());
   stopEngineBeforeQuit(app, core);

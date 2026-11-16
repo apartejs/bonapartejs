@@ -50,6 +50,15 @@
   --bonaparte-terminal-bar: #33332F;
   --bonaparte-terminal-ink: #E6E6E1;
   --bonaparte-terminal-muted: #B4B4AD;
+
+  /*
+   * The icon of the notification area and the taskbar's badge (board « Notifications et zone de notification »):
+   * one colour per state, on a light or a dark taskbar alike. Drawn into PNGs by `scripts/make-icons.mjs`.
+   */
+  --bonaparte-tray-rest: #087EA4;
+  --bonaparte-tray-waiting: #C77700;
+  --bonaparte-tray-failure: #A1281F;
+  --bonaparte-tray-asleep: #8A8A83;
 }
 
 [data-aparte-theme='dark'] {

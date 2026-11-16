@@ -273,7 +273,8 @@ describe('a sub-agent on the built-in engine', () => {
 
   it('in parallel (two slots, task 8.3), two sub-agents of a step work at the same time: nobody waits for the slot', async () => {
     const missions = ['Un', 'Deux'].map((name) => ({ name, mission: `Lead ${name}.`, tools: 'read' }));
-    const { run, order } = await rig(model(missions), 'plume', { slots: 2, paceMs: 15 });
+    // A pace slow enough that, on a loaded machine too, the first is still writing when the second begins.
+    const { run, order } = await rig(model(missions), 'plume', { slots: 2, paceMs: 60 });
     const { events } = await run('Deux pistes.');
     const worked = order.filter((line) => line.startsWith('complete ') && !line.includes('conversation') && !line.endsWith('(read)'));
     // The second starts before the first is done: its first completion comes before the first's last.

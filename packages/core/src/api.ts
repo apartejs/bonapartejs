@@ -72,7 +72,7 @@ import { DiskScan, diskRoots } from './models/disk-scan.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
-import { readInbox, type Inbox } from './conversation/inbox.js';
+import { readInbox, saidIn, type Inbox } from './conversation/inbox.js';
 import { resumeSubagent, runQueuedSubagent, subagentId } from './agent/subagents.js';
 import {
   createTickets,
@@ -80,7 +80,9 @@ import {
   type Tickets,
 } from './agent/tickets.js';
 import {
+  ContextFullError,
   ConversationEngine,
+  NoEngineError,
   type EngineView,
   type TurnEvent,
   type TurnInput,
@@ -172,6 +174,17 @@ export interface EngineState {
   /** A sub-agent works in the engine now (task 8.2): the card says « Occupé : sous-agent … ». */
   working?: { subagent: string };
 }
+
+/**
+ * A turn ended (task 8.5, the notifications): it answered, it waits for the person — an approval, a question —
+ * or the engine failed under it. A turn the person stopped, or refused before it ran, ends untold.
+ */
+export type TurnEnd = { conversationId: string; title: string } & (
+  | { how: 'done'; said: string }
+  | { how: 'approval'; call: { name: string; input: unknown }; agent?: string }
+  | { how: 'question'; question: string }
+  | { how: 'failed' }
+);
 
 /** « Moteur et mémoire » (Settings): the engine, and the memory every conversation keeps on disk. */
 export interface MemoryOverview {
@@ -267,6 +280,8 @@ export interface Core {
   applyEngineSettings(changes: LaunchChange, options: { restart: boolean }): Promise<void>;
   /** A turn in progress: the model is not unloaded while one is held. */
   hold(): () => void;
+  /** Each turn that ends — answered, waiting for the person, or failed (task 8.5); returns how to stop listening. */
+  onTurnEnd(listener: (end: TurnEnd) => void): () => void;
   stop(): Promise<void>;
   /** The llama.cpp a load runs, and — when asked — whether a newer build is published (GitHub). */
   llamaCpp(options?: { checkLatest?: boolean }): Promise<LlamaCppState>;
@@ -1202,7 +1217,7 @@ export function createCore(deps: CoreDeps): Core {
     const { roots, projectId, barred } = await rootsOf(conversationId);
     // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
     try {
-      return await runAgentTurn(
+      const result = await runAgentTurn(
         {
           conversationId,
           input,
@@ -1227,9 +1242,62 @@ export function createCore(deps: CoreDeps): Core {
         emit,
         onTurnEvent,
       );
+      await tellTurnEnd(conversationId, result);
+      return result;
+    } catch (error) {
+      // A failure under the turn is told; a stop, or a turn refused before it ran, is the person's own doing.
+      if (!options.signal.aborted && !(error instanceof ContextFullError) && !(error instanceof NoEngineError)) {
+        await tellTurnEnd(conversationId, 'failed');
+      }
+      throw error;
     } finally {
       await index.refresh(conversationId).catch(() => undefined);
     }
+  }
+
+  // Each turn that ends, told to whoever listens: the main process's notifications (task 8.5).
+  const turnEnds = new Set<(end: TurnEnd) => void>();
+  async function tellTurnEnd(conversationId: string, outcome: TurnResult | 'failed'): Promise<void> {
+    if (turnEnds.size === 0 || (outcome !== 'failed' && outcome.stopped)) return;
+    const end = await turnEndOf(conversationId, outcome).catch((error: unknown) => {
+      log(`[bonaparte] the end of a turn could not be read: ${String(error)}`);
+      return null;
+    });
+    if (!end) return;
+    for (const listener of turnEnds) {
+      try {
+        listener(end);
+      } catch (error) {
+        log(`[bonaparte] a listener of the turns failed: ${String(error)}`);
+      }
+    }
+  }
+  async function turnEndOf(conversationId: string, outcome: TurnResult | 'failed'): Promise<TurnEnd | null> {
+    const meta = await conversationStore.get(conversationId);
+    const place = { conversationId, title: meta?.title ?? '' };
+    if (outcome === 'failed') return { ...place, how: 'failed' };
+    if (outcome.suspended) {
+      const asked = outcome.suspended.pending.filter((call) => call.reason !== 'queued');
+      const approval = asked.find((call) => call.reason === 'approval');
+      if (approval) {
+        const hold = approval.agentId ? outcome.suspended.subagents?.find((one) => one.agentId === approval.agentId) : undefined;
+        const named = (hold?.input as Record<string, unknown> | undefined)?.['name'];
+        return {
+          ...place,
+          how: 'approval',
+          call: { name: approval.name, input: approval.input },
+          ...(typeof named === 'string' && named ? { agent: named } : {}),
+        };
+      }
+      const question = asked.find((call) => call.reason === 'external');
+      if (!question) return null;
+      const words = (question.input as Record<string, unknown> | undefined)?.['question'];
+      return { ...place, how: 'question', question: typeof words === 'string' ? words : '' };
+    }
+    if (!meta) return null;
+    const entries = (await openJournal(conversationStore.dir, conversationId, meta.branchId)).entries();
+    const answer = entries.findLast((entry) => entry.kind === 'assistant');
+    return { ...place, how: 'done', said: answer?.kind === 'assistant' ? saidIn(answer.raw) : '' };
   }
 
   // A restart asked under a reply: done when the last hold is released (task 7.4).
@@ -1309,6 +1377,11 @@ export function createCore(deps: CoreDeps): Core {
         release();
         void restartWhenIdle();
       };
+    },
+
+    onTurnEnd(listener) {
+      turnEnds.add(listener);
+      return () => void turnEnds.delete(listener);
     },
 
     async engineSettings() {
@@ -1636,10 +1709,12 @@ export function createCore(deps: CoreDeps): Core {
           results,
           pending: { calls: waiting, ticket, ...(holds.length > 0 ? { subagents: holds } : {}) },
         });
-        return {
+        const paused: TurnResult = {
           usage: { inputTokens: 0, outputTokens: 0 },
           suspended: { pending: waiting, ticket, ...(holds.length > 0 ? { subagents: holds } : {}) },
         };
+        await tellTurnEnd(conversationId, paused);
+        return paused;
       }
       await conversations.recordAnswers(conversationId, {
         outcomes: check.outcomes,
