@@ -8,6 +8,11 @@
  * and what loading it costs. A message sent meanwhile waits in the composer,
  * nothing asked of the engine, until « Charger et envoyer ». At launch, a
  * model known: the conversations, and nothing loaded before the click.
+ *
+ * 6 · A setting that restarts the engine (the context, the K/V cache, in
+ * « Moteur et mémoire ») says first what it costs, and is kept only on a
+ * choice: « Redémarrer maintenant » or « Plus tard »; under a reply, « À la
+ * fin de la réponse » or « Maintenant », which cuts it.
  */
 
 import type { Page } from '@playwright/test';
@@ -92,4 +97,63 @@ test('at launch, a model known: the conversations are there, and nothing is load
   await card(second.page).getByRole('button', { name: 'Charger et envoyer' }).click();
   await expect(card(second.page)).toBeHidden({ timeout: 20_000 });
   await ask(second.page, 'Me revoilà');
+});
+
+async function engineSettings(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Moteur et mémoire' }).click();
+}
+
+const restart = (page: Page) => page.locator('.launch-restart');
+const engineFacts = (page: Page) => page.getByRole('region', { name: 'Moteur', exact: true });
+
+test('a setting that restarts the engine says first what it costs: « Annuler » keeps nothing, « Redémarrer maintenant » relaunches with it', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ask(page, 'Bonjour');
+  await engineSettings(page);
+
+  const cache = page.getByRole('radiogroup', { name: 'Cache K/V' });
+  await cache.locator('label', { hasText: 'q8_0' }).click();
+  await expect(restart(page)).toContainText('« Cache K/V » s’applique au redémarrage du moteur');
+  await expect(restart(page)).toContainText(/Le modèle se recharge : ~/);
+  await expect(restart(page).getByRole('button', { name: 'Plus tard' })).toBeVisible();
+  await restart(page).getByRole('button', { name: 'Annuler' }).click();
+  await expect(restart(page)).toBeHidden();
+  await expect(cache.getByRole('radio', { name: 'f16' })).toBeChecked();
+
+  await page.getByRole('radiogroup', { name: 'Taille du contexte' }).locator('label', { hasText: '16 k' }).click();
+  await restart(page).getByRole('button', { name: 'Redémarrer maintenant' }).click();
+  await expect(engineFacts(page)).toContainText(/16\D?384 jetons/, { timeout: 20_000 });
+});
+
+test('under a reply, a restart waits for its end — or cuts it, « Maintenant »', async ({ launch }) => {
+  test.setTimeout(120_000);
+  // A reply that lasts: 300 words, one every 60 ms.
+  const { page } = await launch({ managed: { models: MODELS }, env: { FAKE_LLAMA_PACE_MS: '60', FAKE_LLAMA_ANSWER: 'mot '.repeat(300).trim() } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+
+  await ui.send('Compte');
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 15_000 });
+  await engineSettings(page);
+  await page.getByRole('radiogroup', { name: 'Cache K/V' }).locator('label', { hasText: 'q8_0' }).click();
+  await expect(restart(page)).toContainText('Une réponse est en cours : redémarrer maintenant la coupe.');
+  await restart(page).getByRole('button', { name: 'À la fin de la réponse' }).click();
+  await expect(page.getByText('Le moteur redémarrera à la fin de la réponse.')).toBeVisible();
+  // The reply ends whole, and only then does the engine restart with the setting.
+  await expect(engineFacts(page)).toContainText('K/V q8_0', { timeout: 60_000 });
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Conversations' }).click();
+  await expect(ui.streamingReplies).toHaveCount(0);
+  await expect(ui.replyText).toContainText('mot mot mot');
+
+  // « Maintenant »: the reply that runs is stopped, and the engine restarts at once.
+  await ui.send('Encore');
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 15_000 });
+  await engineSettings(page);
+  await page.getByRole('radiogroup', { name: 'Taille du contexte' }).locator('label', { hasText: '16 k' }).click();
+  await restart(page).getByRole('button', { name: 'Maintenant' }).click();
+  await expect(engineFacts(page)).toContainText(/16\D?384 jetons/, { timeout: 12_000 });
 });

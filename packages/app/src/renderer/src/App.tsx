@@ -60,6 +60,7 @@ import { useModelSwitch } from './chat/useModelSwitch';
 import { catalogueOf, showCatalogue } from './aparte/model-catalogue';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
+import { STOP_REPLIES } from './settings/LaunchSettings';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
 import { useRewind } from './chat/useRewind';
 import { setupMessageActions } from './aparte/message-actions';
@@ -667,6 +668,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     const composer = handles.get(deck.shown)?.getComposer();
     if (composer && composer.value.trim() !== '') composer.submit();
   };
+  // « Maintenant » for a setting that restarts the engine (task 7.4): the replies that run are stopped.
+  useEffect(() => {
+    const stop = (): void => {
+      for (const handle of handles.values()) if (handle.isStreaming()) handle.getComposer()?.cancel();
+    };
+    window.addEventListener(STOP_REPLIES, stop);
+    return () => window.removeEventListener(STOP_REPLIES, stop);
+  }, [handles]);
   // « Un autre modèle… »: the composer's picker, opened.
   const pickerOpener = useRef<(() => void) | null>(null);
   const resumeCost = modelChoices.find((choice) => choice.path === toLoad?.path)?.announcement ?? null;

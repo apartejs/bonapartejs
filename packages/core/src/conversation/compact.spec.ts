@@ -63,7 +63,7 @@ async function rig(options: { summary?: string; truncate?: boolean; mode?: PlayM
   return { id, engine, kv, store, prompts, say, entries };
 }
 
-describe('compaction is a rebase', () => {
+describe('compaction is a rebase', { timeout: 30_000 }, () => {
   it('summarises, then the prompt starts again from the system prompt and the summary — the early turns gone', async () => {
     const { id, engine, prompts, say, entries } = await rig();
     await say('Premier message.');

@@ -35,7 +35,10 @@ const LLAMA = {
   installing: null,
 };
 
-function setup(loadModel: Core['loadModel'], llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel'>> = {}) {
+function setup(
+  loadModel: Core['loadModel'],
+  llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'>> = {},
+) {
   const listeners = new Map<string, Listener>();
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
@@ -171,3 +174,23 @@ describe('changing model through the bridge (task 7.4)', () => {
   });
 });
 
+describe('the settings that restart the engine, through the bridge (task 7.4)', () => {
+  it('reads them, says what a change costs, and keeps one — with a restart or for the next load', async () => {
+    const applied: unknown[] = [];
+    const { call } = setup(async () => READY, {
+      engineSettings: async () => ({ nCtx: 8192, cacheType: 'f16', gpuLayers: 'all' }),
+      restartCost: async (changes) => ({ kind: 'restart', setting: Object.keys(changes)[0]!, reloadSeconds: 5, estimated: false, memoriesLost: 2, replyRunning: false, loaded: true }),
+      applyEngineSettings: async (changes, options) => void applied.push([changes, options]),
+    });
+    await expect(call('engine.settings', undefined)).resolves.toEqual({ nCtx: 8192, cacheType: 'f16', gpuLayers: 'all' });
+    await expect(call('engine.restartCost', { cacheType: 'q8_0' })).resolves.toMatchObject({ setting: 'cacheType', memoriesLost: 2 });
+    await call('engine.applySettings', { changes: { nCtx: 16_384 }, restart: true });
+    expect(applied).toEqual([[{ nCtx: 16_384 }, { restart: true }]]);
+  });
+
+  it('refuses a change that changes nothing, or a context out of bounds, before it reaches the core', async () => {
+    const { call } = setup(async () => READY, { applyEngineSettings: async () => undefined });
+    await expect(call('engine.applySettings', { changes: {}, restart: true })).rejects.toThrow();
+    await expect(call('engine.applySettings', { changes: { nCtx: 100 }, restart: true })).rejects.toThrow();
+  });
+});

@@ -1706,6 +1706,31 @@ body {
   min-width: 0;
 }
 
+/* What llama.cpp is launched with (« Moteur et mémoire »), and a setting that restarts it (board « Coûts annoncés », 6). */
+.launch-settings {
+  display: grid;
+  gap: var(--aparte-space-3);
+  margin-top: var(--aparte-space-5);
+}
+
+.launch-restart {
+  background: var(--aparte-bg);
+  border: 1px solid var(--aparte-border);
+}
+
+.launch-restart__detail {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.launch-restart__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--aparte-space-3);
+}
+
 /* The engine unloaded (board « Coûts annoncés », 5): a neutral card above the composer, its actions in a row. */
 .engine-unloaded {
   align-items: flex-start;

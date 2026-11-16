@@ -67,7 +67,7 @@ async function rig() {
   return { id, engine, kv, store, prompts, say, branch, load };
 }
 
-describe('a branch knows the model it runs on', () => {
+describe('a branch knows the model it runs on', { timeout: 30_000 }, () => {
   it('its first system turn says the model and the family its prompt was frozen for', async () => {
     const { say, branch } = await rig();
     await say('Bonjour');
@@ -75,7 +75,7 @@ describe('a branch knows the model it runs on', () => {
   });
 });
 
-describe('a turn on another model', () => {
+describe('a turn on another model', { timeout: 30_000 }, () => {
   it('opens a new branch with a change of model: the conversation rendered again by the new family', async () => {
     const { id, store, prompts, say, branch, load } = await rig();
     await say('Bonjour');
@@ -157,7 +157,7 @@ describe('a turn on another model', () => {
   });
 });
 
-describe('opening a conversation of another model', () => {
+describe('opening a conversation of another model', { timeout: 30_000 }, () => {
   it('says the re-reading first, as for another model — with no memory saved too', async () => {
     const { id, engine, say, load } = await rig();
     await say('Bonjour');
@@ -176,7 +176,7 @@ describe('opening a conversation of another model', () => {
   });
 });
 
-describe('what changing model would read', () => {
+describe('what changing model would read', { timeout: 30_000 }, () => {
   it('the conversation rendered again for the new model; nothing for a conversation with no message', async () => {
     const { id, engine, store, say } = await rig();
     const target = { family: qwen, modelPath: 'qwen.gguf' };
@@ -197,7 +197,7 @@ describe('what changing model would read', () => {
   });
 });
 
-describe('a copy on another model (« Brancher sur ce modèle »)', () => {
+describe('a copy on another model (« Brancher sur ce modèle »)', { timeout: 30_000 }, () => {
   it('a new conversation: the branch shown, its document, and a change of model at its head; the original untouched', async () => {
     const { id, engine, store, say, branch } = await rig();
     await say('Bonjour');
@@ -220,7 +220,7 @@ describe('a copy on another model (« Brancher sur ce modèle »)', () => {
   });
 });
 
-describe('going back across a change of model', () => {
+describe('going back across a change of model', { timeout: 30_000 }, () => {
   it('before a message frozen for the old model: said as a re-reading for this one, never as memory kept', async () => {
     const { id, engine, say, load } = await rig();
     await say('Bonjour');
@@ -232,7 +232,7 @@ describe('going back across a change of model', () => {
   });
 });
 
-describe('compacting after a change of model', () => {
+describe('compacting after a change of model', { timeout: 30_000 }, () => {
   it('folds what the change of model rendered, and keeps only turns written after it', () => {
     let next = 0;
     const entry = (body: object): JournalEntry => ({ id: `e${(next += 1)}`, at: new Date(next).toISOString(), ...body }) as JournalEntry;

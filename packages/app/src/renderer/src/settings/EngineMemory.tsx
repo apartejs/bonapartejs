@@ -19,6 +19,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { bridge } from '../bridge';
 import { formatBytes, formatDuration, formatTokens, type NumberStyle } from '../format';
 import { memoriesToFree } from './budget';
+import { LaunchSettings } from './LaunchSettings';
 import type { PageProps } from './SettingsView';
 
 const GIB = 1024 ** 3;
@@ -26,7 +27,7 @@ const GIB = 1024 ** 3;
 /** Said on the window when the settings close: the window reads the engine's state again (unloaded, restarted). */
 export const ENGINE_CHANGED = 'bonaparte-engine';
 
-export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps & { onPage(page: 'models'): void }) {
+export function EngineMemoryPage({ messages, locale, values, change, onPage }: PageProps & { onPage(page: 'models'): void }) {
   const words = messages.settings.engine;
   const style: NumberStyle = { locale, units: messages.units };
   const [overview, setOverview] = useState<MemoryOverviewView | null>(null);
@@ -138,6 +139,13 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
             {words.changeModel}
           </button>
         </div>
+        <LaunchSettings
+          messages={messages}
+          locale={locale}
+          idleMinutes={typeof values['idleUnloadMinutes'] === 'number' ? values['idleUnloadMinutes'] : 15}
+          change={change}
+          onKept={() => setTimeout(read, 100)}
+        />
       </section>
 
       <section className="setting-section" aria-label={words.memories}>

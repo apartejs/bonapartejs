@@ -110,6 +110,16 @@ export function canRestore(manifest: Pinned, live: LiveConfig): RestoreVerdict {
   return { ok: true };
 }
 
+/**
+ * The memories saved that launch settings would refuse (task 7.4: a setting that restarts the engine says it
+ * first): another K/V cache type refuses them all; a smaller context, those whose tokens no longer fit.
+ */
+export function memoriesRefusedBy(memories: readonly Pinned[], next: { nCtx: number; cacheType: string }): number {
+  return memories.filter(
+    (memory) => memory.cacheTypeK !== next.cacheType || memory.cacheTypeV !== next.cacheType || memory.promptTokenCount > next.nCtx,
+  ).length;
+}
+
 /** A state id becomes a file name: letters, digits, `-` and `_` only. */
 const STATE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,255}$/;
 const SEED_KEY = /^[0-9a-f]{32}$/;
@@ -181,6 +191,13 @@ export class KvStore {
   /** What the states and the seeds take on disk. */
   usage(): Promise<KvUsage> {
     return kvUsage(this.dir);
+  }
+
+  /** The manifests of every conversation's state saved (not the seeds). */
+  async savedStates(): Promise<KvManifest[]> {
+    const { entries } = await this.usage();
+    const read = await Promise.all(entries.filter((entry) => entry.kind === 'state').map((entry) => this.manifest(entry.id)));
+    return read.filter((manifest): manifest is KvManifest => manifest !== null);
   }
 
   /** A saved state's manifest — what opening it will cost; null without one. */

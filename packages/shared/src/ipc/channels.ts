@@ -36,7 +36,18 @@ import {
   conversationsUncompact,
   conversationsContext,
 } from './conversations.js';
-import { engineLlama, engineLlamaInstall, engineLoad, engineModels, engineState, engineSwitch, engineSwitchCost } from './engine.js';
+import {
+  engineApplySettings,
+  engineLlama,
+  engineLlamaInstall,
+  engineLoad,
+  engineModels,
+  engineRestartCost,
+  engineSettingsGet,
+  engineState,
+  engineSwitch,
+  engineSwitchCost,
+} from './engine.js';
 import { changesList, changesRevert } from './changes.js';
 import { filesChanged, filesList, filesRead } from './files.js';
 import { pluginsAck, pluginsInvoke } from './plugins.js';
@@ -75,6 +86,9 @@ export const CHANNELS = [
   engineLoad,
   engineSwitchCost,
   engineSwitch,
+  engineSettingsGet,
+  engineRestartCost,
+  engineApplySettings,
   engineLlama,
   engineLlamaInstall,
   conversationsLoadAll,

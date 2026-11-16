@@ -18,9 +18,11 @@ import type { BackendStatus } from './backend/types.js';
 import {
   announceLoad,
   announceModelSwitch,
+  announceRestart,
   type Announcement,
   type EngineLoadAnnouncement,
   type ModelSwitchAnnouncement,
+  type RestartAnnouncement,
 } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
 import {
@@ -108,7 +110,7 @@ import { PluginHost } from './plugins/host.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { CommandOutputEvent, ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
-import { KvStore } from './kv/kv-store.js';
+import { KvStore, memoriesRefusedBy } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
 
 /** Whose perimeter a pane browses: a conversation's, else a project's, else the home folder. */
@@ -206,6 +208,13 @@ export interface ModelChoice {
   lastLoadedAt: string | null;
 }
 
+/** The settings llama.cpp is launched with (task 7.4): the context of each conversation, the K/V cache type. */
+export interface EngineLaunchSettings {
+  nCtx: number;
+  cacheType: 'f16' | 'q8_0' | 'q4_0';
+  gpuLayers: number | 'all';
+}
+
 /** Changing model, said before (task 7.4): to what, from what (null when none runs), and what it costs. */
 export interface ModelSwitchView {
   to: { path: string; name: string };
@@ -237,6 +246,15 @@ export interface Core {
    * in it, the original keeps its model. Refused while a reply runs.
    */
   switchModel(path: string, options?: { conversationId?: string; as?: 'here' | 'copy' }): Promise<{ state: EngineState; conversationId?: string }>;
+  /** The settings llama.cpp is launched with, as kept. */
+  engineSettings(): Promise<EngineLaunchSettings>;
+  /** What changing them costs, said before anything is kept (task 7.4; board « Coûts annoncés », 6). */
+  restartCost(changes: Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType'>>): Promise<RestartAnnouncement>;
+  /**
+   * Keeps them. `restart`: the engine relaunches with them — at once, or when the reply that runs ends (the
+   * memory saved first); without, or with no model loaded: at the next load.
+   */
+  applyEngineSettings(changes: Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType'>>, options: { restart: boolean }): Promise<void>;
   /** A turn in progress: the model is not unloaded while one is held. */
   hold(): () => void;
   stop(): Promise<void>;
@@ -558,16 +576,20 @@ export function createCore(deps: CoreDeps): Core {
   async function configuredManaged(): Promise<EngineConfig> {
     const binPath = await llamaBinary();
     const current = supervisor.engine;
-    // A build installed since: taken at the next load, never under a model that runs.
-    if (
+    const launch = await launchSettings();
+    // Settings kept since (task 7.4) or a build installed since: taken at the next load, never under a model
+    // that runs.
+    const same =
       current?.mode === 'managed' &&
-      (current.binPath === binPath || supervisor.loaded)
-    )
-      return current;
+      current.binPath === binPath &&
+      current.nCtx === launch.nCtx &&
+      (current.cacheType ?? 'f16') === launch.cacheType &&
+      (current.gpuLayers ?? 'all') === launch.gpuLayers;
+    if (current?.mode === 'managed' && (same || supervisor.loaded)) return current;
     await supervisor.configure({
       mode: 'managed',
       binPath,
-      ...(await launchSettings()),
+      ...launch,
     });
     return supervisor.engine!;
   }
@@ -1172,7 +1194,15 @@ export function createCore(deps: CoreDeps): Core {
     }
   }
 
-  return {
+  // A restart asked under a reply: done when the last hold is released (task 7.4).
+  let restartPending = false;
+  async function restartWhenIdle(): Promise<void> {
+    if (!restartPending || supervisor.held || !loaded) return;
+    restartPending = false;
+    await core.restartEngine().catch((error: unknown) => log(`[bonaparte] the engine did not restart: ${String(error)}`));
+  }
+
+  const core: Core = {
     engine: currentEngine,
     engineState,
     models,
@@ -1234,7 +1264,43 @@ export function createCore(deps: CoreDeps): Core {
       return { state, ...(options.conversationId ? { conversationId: options.conversationId } : {}) };
     },
 
-    hold: () => supervisor.hold(),
+    hold: () => {
+      const release = supervisor.hold();
+      return () => {
+        release();
+        void restartWhenIdle();
+      };
+    },
+
+    async engineSettings() {
+      return (await launchSettings()) as EngineLaunchSettings;
+    },
+
+    async restartCost(changes) {
+      const current = (await launchSettings()) as EngineLaunchSettings;
+      const next = { ...current, ...changes };
+      // The memories these settings would refuse that the current ones serve: those it makes to read again.
+      const states = await kv.savedStates();
+      const served = states.filter((state) => memoriesRefusedBy([state], current) === 0);
+      const running = (await currentEngine()) && loaded ? (await models()).find((model) => samePath(model.path, loaded!.path)) : undefined;
+      return announceRestart({
+        setting: Object.keys(changes)[0] ?? 'nCtx',
+        loadSeconds: running?.announcement?.seconds ?? 0,
+        loadEstimated: running?.announcement?.secondsEstimated ?? true,
+        memoriesLost: memoriesRefusedBy(served, next),
+        replyRunning: supervisor.held,
+        loaded: running !== undefined,
+      });
+    },
+
+    async applyEngineSettings(changes, options) {
+      await appSettings.setEngine(changes);
+      // Read again at the next load: the file changed.
+      config = undefined;
+      if (!options.restart || !loaded) return;
+      restartPending = true;
+      await restartWhenIdle();
+    },
     // The conversation in the slot is saved before the engine stops: its memory survives the restart.
     async stop() {
       await conversations
@@ -1402,8 +1468,9 @@ export function createCore(deps: CoreDeps): Core {
           since: running ? loaded!.at : null,
           model: running ? { name: basename(loaded!.path).replace(/\.gguf$/i, ''), path: loaded!.path } : null,
           busy: supervisor.held,
-          nCtx: launch.nCtx,
-          cacheType: launch.cacheType,
+          // What runs: a setting kept for later is not the engine's until it restarts (task 7.4).
+          nCtx: running ? (supervisor.loaded?.nCtx ?? launch.nCtx) : launch.nCtx,
+          cacheType: running ? (supervisor.live?.cacheTypeK ?? launch.cacheType) : launch.cacheType,
           slots: 1,
         },
         budgetBytes: typeof chosen === 'number' ? chosen : kvBudget,
@@ -1519,6 +1586,7 @@ export function createCore(deps: CoreDeps): Core {
     llamaCpp,
     installLlamaCpp,
   };
+  return core;
 }
 
 /** A load names a file the core did not list: the window may only load what it was shown. */

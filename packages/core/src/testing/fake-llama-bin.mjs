@@ -93,6 +93,8 @@ try {
     ...(prefillBatch !== undefined ? { prefillBatch } : {}),
     ...(prefillPaceMs !== undefined ? { prefillPaceMs } : {}),
     ...(paceMs !== undefined ? { paceMs } : {}),
+    // FAKE_LLAMA_ANSWER: what every answer says instead of « ok » — with FAKE_LLAMA_PACE_MS, a reply that lasts.
+    ...(process.env['FAKE_LLAMA_ANSWER'] ? { responder: () => process.env['FAKE_LLAMA_ANSWER'] } : {}),
     // FAKE_LLAMA_REQUESTS: one line per completion asked, in that file — its prompt's length,
     // the tokens the server counts in it, n_predict, and how the prompt opens (its family's first turn).
     ...(requests

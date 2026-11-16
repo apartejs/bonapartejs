@@ -20,6 +20,9 @@ import {
   engineState,
   engineSwitch,
   engineSwitchCost,
+  engineSettingsGet,
+  engineRestartCost,
+  engineApplySettings,
   type EngineLoadResult,
   type LlamaInstallResult,
 } from '@aparte/bonaparte-shared';
@@ -36,7 +39,10 @@ function loadError(error: unknown): EngineLoadResult {
 
 export function registerEngineChannels(
   ipc: IpcRegistry,
-  core: Pick<Core, 'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel'>,
+  core: Pick<
+    Core,
+    'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
+  >,
 ): void {
   ipc.handle(engineState, () => core.engineState());
   ipc.handle(engineModels, () => core.models());
@@ -57,6 +63,9 @@ export function registerEngineChannels(
       return loadError(error);
     }
   });
+  ipc.handle(engineSettingsGet, () => core.engineSettings());
+  ipc.handle(engineRestartCost, (changes) => core.restartCost(changes));
+  ipc.handle(engineApplySettings, ({ changes, restart }) => core.applyEngineSettings(changes, { restart }));
   ipc.handle(engineLlama, ({ checkLatest }) => core.llamaCpp({ checkLatest: checkLatest === true }));
   ipc.handle(engineLlamaInstall, async (): Promise<LlamaInstallResult> => {
     try {

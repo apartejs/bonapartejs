@@ -11,7 +11,7 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
-import { APP_SETTINGS } from './catalog.js';
+import { APP_SETTINGS, ENGINE_SETTINGS } from './catalog.js';
 import { validateSettingValue } from './validate.js';
 
 type Listener = (key: string, value: unknown) => void;
@@ -48,6 +48,21 @@ export class SettingsStore {
       await writeJsonFile(this.file, { ...content, settings });
     });
     for (const listener of this.listeners) listener(key, value === undefined ? await this.get(key) : value);
+  }
+
+  /**
+   * The settings llama.cpp is launched with (task 7.4: the context, the K/V cache type), under `engine`: each
+   * checked against the catalog, the file's other keys kept — written in turn with the app's settings.
+   */
+  async setEngine(changes: Record<string, unknown>): Promise<void> {
+    for (const [key, value] of Object.entries(changes)) validateSettingValue(ENGINE_SETTINGS, 'global', key, value);
+    await this.writes.run('file', async () => {
+      const content = await this.read();
+      const engine = content['engine'];
+      const kept = engine && typeof engine === 'object' && !Array.isArray(engine) ? (engine as Record<string, unknown>) : {};
+      await mkdir(dirname(this.file), { recursive: true });
+      await writeJsonFile(this.file, { ...content, engine: { ...kept, ...changes } });
+    });
   }
 
   onChange(listener: Listener): () => void {

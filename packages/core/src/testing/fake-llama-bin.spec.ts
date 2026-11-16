@@ -138,7 +138,8 @@ describe('fake-llama-bin', () => {
       expect(steps.length).toBeGreaterThanOrEqual(4);
 
       const lines = (await readFile(requests, 'utf8')).trim().split('\n');
-      expect(lines.map((line) => JSON.parse(line))).toEqual([{ promptChars: 32, promptTokens: 8, nPredict: 3 }]);
+      // How the prompt opens says the family it was rendered by: its first 24 characters.
+      expect(lines.map((line) => JSON.parse(line))).toEqual([{ promptChars: 32, promptTokens: 8, nPredict: 3, opens: 'abcdefghijklmnopqrstuvwx' }]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

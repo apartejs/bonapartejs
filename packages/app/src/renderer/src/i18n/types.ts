@@ -275,6 +275,31 @@ export interface Messages {
       busy: string;
       restartQuestion: string;
       restartCost(seconds: string): string;
+      /** The settings llama.cpp is launched with, and the one that unloads it (task 7.4). */
+      launchContext: string;
+      launchContextHint: string;
+      launchContextValue(thousands: string): string;
+      launchCache: string;
+      launchCacheHint: string;
+      launchCacheTypes: Record<'f16' | 'q8_0' | 'q4_0', string>;
+      launchIdle: string;
+      launchIdleHint: string;
+      launchIdleMinutes(minutes: number): string;
+      launchIdleNever: string;
+      /** A setting that restarts the engine (board « Coûts annoncés », 6). */
+      launchSettingNames: Record<'nCtx' | 'cacheType', string>;
+      launchRestartTitle(setting: string): string;
+      launchRestartReload(duration: string): string;
+      launchNextLoad: string;
+      launchMemories(count: number): string;
+      launchReply: string;
+      launchAfterReply: string;
+      launchNowCut: string;
+      launchNow: string;
+      launchLater: string;
+      launchSave: string;
+      launchCancel: string;
+      launchPending: string;
       restartNow: string;
       cancel: string;
       changeModel: string;

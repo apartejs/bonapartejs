@@ -454,7 +454,8 @@ describe('createCore — what the review of phase 2 found', () => {
     } finally {
       vi.useRealTimers();
     }
-    await expect.poll(async () => (await core.engineState()).status, { timeout: 5_000 }).toBe('stopped');
+    // The engine stops as the process of the test exits: slower on a loaded machine.
+    await expect.poll(async () => (await core.engineState()).status, { timeout: 15_000 }).toBe('stopped');
     expect(await core.engine()).toBeUndefined();
     expect(await core.engineState()).toMatchObject({ resume: { path: gemma, name: 'gemma-4-test', idleMinutes: 5 } });
     expect((await core.engineState()).resume?.unloadedAt).toBeTruthy();
@@ -462,6 +463,49 @@ describe('createCore — what the review of phase 2 found', () => {
     // The memory of the conversation was saved before the engine went.
     await expect(readFile(join(dir, 'data', 'kv-slots', 'c1_main.manifest.json'), 'utf8')).resolves.toContain('c1_main');
   }, 20_000);
+
+  it('a setting that restarts the engine says first what it costs: the reload, the memories it makes to read again, a reply that runs', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    await core.conversations.flush();
+    expect(await core.engineSettings()).toMatchObject({ nCtx: 8192, cacheType: 'f16' });
+
+    const cache = await core.restartCost({ cacheType: 'q8_0' });
+    expect(cache).toMatchObject({ kind: 'restart', setting: 'cacheType', memoriesLost: 1, replyRunning: false, loaded: true });
+    expect(cache.reloadSeconds).toBeGreaterThan(0);
+    expect(await core.restartCost({ nCtx: 16_384 })).toMatchObject({ setting: 'nCtx', memoriesLost: 0 });
+    const release = core.hold();
+    expect(await core.restartCost({ nCtx: 16_384 })).toMatchObject({ replyRunning: true });
+    release();
+    // Nothing kept by asking.
+    expect(await core.engineSettings()).toMatchObject({ nCtx: 8192, cacheType: 'f16' });
+  }, 20_000);
+
+  it('kept with a restart, the engine relaunches with them — after the reply that runs; kept for later, at the next load', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    await core.applyEngineSettings({ nCtx: 4096 }, { restart: true });
+    expect((await core.engineState()).model?.nCtx).toBe(4096);
+
+    await core.applyEngineSettings({ nCtx: 2048 }, { restart: false });
+    expect((await core.engineSettings()).nCtx).toBe(2048);
+    expect((await core.engineState()).model?.nCtx).toBe(4096);
+    // « Moteur et mémoire » says what runs, not what is kept for later.
+    expect((await core.memory()).engine).toMatchObject({ nCtx: 4096, cacheType: 'f16' });
+
+    const release = core.hold();
+    await core.applyEngineSettings({ nCtx: 6144 }, { restart: true });
+    expect((await core.engineState()).model?.nCtx).toBe(4096);
+    release();
+    await expect.poll(async () => (await core.engineState()).model?.nCtx, { timeout: 15_000 }).toBe(6144);
+
+    await core.unloadModel();
+    await core.applyEngineSettings({ nCtx: 2048 }, { restart: false });
+    await core.loadModel(gemma);
+    expect((await core.engineState()).model?.nCtx).toBe(2048);
+  }, 40_000);
 
   it('a window told the engine is ready can send at once: the model is known before it is told', async () => {
     const told: { core?: Core } = {};

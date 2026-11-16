@@ -17,7 +17,7 @@ export type Announcement =
   | ModelSwitchAnnouncement
   | { kind: 'context-full'; used: number; window: number; compactSeconds: number }
   | EngineLoadAnnouncement
-  | { kind: 'restart'; setting: string }
+  | RestartAnnouncement
   | { kind: 'download'; what: 'model' | 'llama.cpp'; bytes: number; seconds?: number }
   | { kind: 'parallel-slots'; slots: number; vramBytesEach: number };
 
@@ -107,6 +107,39 @@ export function announceModelSwitch(facts: {
     vramBytes: facts.load.vramBytes,
     vramBytesNow: facts.vramBytesNow,
     estimated: facts.load.secondsEstimated || (facts.rereadTokens > 0 && facts.prefillTokensPerSecond === undefined),
+  };
+}
+
+/**
+ * A setting that restarts the engine (task 7.4; board « Coûts annoncés », 6): the reload (none when nothing is
+ * loaded — it applies at the next load), the memories saved it makes to read again, a reply that runs.
+ */
+export interface RestartAnnouncement {
+  kind: 'restart';
+  setting: string;
+  reloadSeconds: number;
+  estimated: boolean;
+  memoriesLost: number;
+  replyRunning: boolean;
+  loaded: boolean;
+}
+
+export function announceRestart(facts: {
+  setting: string;
+  loadSeconds: number;
+  loadEstimated: boolean;
+  memoriesLost: number;
+  replyRunning: boolean;
+  loaded: boolean;
+}): RestartAnnouncement {
+  return {
+    kind: 'restart',
+    setting: facts.setting,
+    reloadSeconds: facts.loaded ? facts.loadSeconds : 0,
+    estimated: facts.loaded && facts.loadEstimated,
+    memoriesLost: facts.memoriesLost,
+    replyRunning: facts.replyRunning,
+    loaded: facts.loaded,
   };
 }
 

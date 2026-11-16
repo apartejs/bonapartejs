@@ -157,3 +157,42 @@ export const engineSwitch = defineChannel(
   z.object({ path: z.string().min(1).max(4096), conversationId: conversationIdSchema.optional(), as: z.enum(['here', 'copy']).optional() }),
   engineSwitchResultSchema,
 );
+
+/** The settings llama.cpp is launched with (task 7.4): the context of each conversation, the K/V cache type. */
+export const engineLaunchSettingsSchema = z.object({
+  nCtx: z.number(),
+  cacheType: z.enum(['f16', 'q8_0', 'q4_0']),
+  gpuLayers: z.union([z.literal('all'), z.number()]),
+});
+
+export type EngineLaunchSettingsView = z.infer<typeof engineLaunchSettingsSchema>;
+
+/** A change of them, as the window asks it: checked again by the core against its catalogue. */
+const launchChangeSchema = z
+  .object({ nCtx: z.number().int().min(512).max(1_048_576).optional(), cacheType: z.enum(['f16', 'q8_0', 'q4_0']).optional() })
+  .refine((change) => change.nCtx !== undefined || change.cacheType !== undefined);
+
+/** What a setting that restarts the engine costs (board « Coûts annoncés », 6). */
+export const restartAnnouncementSchema = z.object({
+  kind: z.literal('restart'),
+  setting: z.string(),
+  reloadSeconds: z.number(),
+  estimated: z.boolean(),
+  memoriesLost: z.number(),
+  replyRunning: z.boolean(),
+  loaded: z.boolean(),
+});
+
+export type RestartAnnouncementView = z.infer<typeof restartAnnouncementSchema>;
+
+export const engineSettingsGet = defineChannel('engine.settings', z.void(), engineLaunchSettingsSchema);
+
+/** What changing them costs: nothing is kept by asking. */
+export const engineRestartCost = defineChannel('engine.restartCost', launchChangeSchema, restartAnnouncementSchema);
+
+/** Keeps them; `restart`: the engine relaunches with them, at once or when the reply that runs ends. */
+export const engineApplySettings = defineChannel(
+  'engine.applySettings',
+  z.object({ changes: launchChangeSchema, restart: z.boolean() }),
+  z.void(),
+);
