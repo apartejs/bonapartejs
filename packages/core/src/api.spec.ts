@@ -507,6 +507,50 @@ describe('createCore — what the review of phase 2 found', () => {
     expect((await core.engineState()).model?.nCtx).toBe(2048);
   }, 40_000);
 
+  it('an engine being unloaded serves no new turn: it would be cut under it (review of phase 7)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    const unloading = core.unloadModel();
+    expect(await core.engine()).toBeUndefined();
+    expect((await core.engineState()).status).not.toBe('ready');
+    await unloading;
+  }, 20_000);
+
+  it('« Jamais » chosen while a delay runs: the model is not unloaded (review of phase 7)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    const release = core.hold();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      // The quiet starts: fifteen minutes armed. Then the person chooses « Jamais ».
+      release();
+      await core.settings.set('idleUnloadMinutes', 0);
+      vi.advanceTimersByTime(60 * 60_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect((await core.engineState()).status).toBe('ready');
+  }, 20_000);
+
+  it('settings kept for later are taken by the next load of another model, as its announcement said (review of phase 7)', async () => {
+    const { core, gemma, qwen } = await setup();
+    await core.loadModel(gemma);
+    await core.applyEngineSettings({ nCtx: 4096 }, { restart: false });
+    await core.loadModel(qwen);
+    expect((await core.engineState()).model?.nCtx).toBe(4096);
+  }, 30_000);
+
+  it('a compaction holds the engine: neither unloaded nor restarted under its summary (review of phase 7)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    const compacting = core.compact('c1');
+    await expect(core.unloadModel()).rejects.toThrow(/reply is running/);
+    await compacting;
+  }, 20_000);
+
   it('a window told the engine is ready can send at once: the model is known before it is told', async () => {
     const told: { core?: Core } = {};
     const asked: Promise<unknown>[] = [];

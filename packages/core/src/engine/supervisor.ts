@@ -348,6 +348,11 @@ export class EngineSupervisor {
     this.emit(status);
   }
 
+  /** The delay changed (its setting): a while without work already counted is counted again with it. */
+  rearmIdle(): void {
+    if (this.idleTimer) this.armIdleTimer();
+  }
+
   private armIdleTimer(): void {
     this.clearIdleTimer();
     const setting = this.options.idleUnloadMinutes;

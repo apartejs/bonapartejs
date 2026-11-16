@@ -482,8 +482,13 @@ export function createCore(deps: CoreDeps): Core {
   };
   void appSettings.get('idleUnloadMinutes').then(readIdle, () => undefined);
   appSettings.onChange((key, value) => {
-    if (key === 'idleUnloadMinutes') readIdle(value);
+    if (key !== 'idleUnloadMinutes') return;
+    readIdle(value);
+    // « Jamais » chosen while a delay runs stops it (review of phase 7).
+    supervisor.rearmIdle();
   });
+  // An unload under way: no new turn is served — it would be cut under it (review of phase 7).
+  let unloading = false;
   // The model unloaded last, said so that « Charger et envoyer » brings it back.
   let unloaded: { path: string; at: string; idleMinutes?: number } | undefined;
   const supervisor = new EngineSupervisor({
@@ -573,7 +578,7 @@ export function createCore(deps: CoreDeps): Core {
    * the binary runs it (`--version`), and asking about the engine must cost
    * nothing.
    */
-  async function configuredManaged(): Promise<EngineConfig> {
+  async function configuredManaged(forPath?: string): Promise<EngineConfig> {
     const binPath = await llamaBinary();
     const current = supervisor.engine;
     const launch = await launchSettings();
@@ -585,7 +590,13 @@ export function createCore(deps: CoreDeps): Core {
       current.nCtx === launch.nCtx &&
       (current.cacheType ?? 'f16') === launch.cacheType &&
       (current.gpuLayers ?? 'all') === launch.gpuLayers;
-    if (current?.mode === 'managed' && (same || supervisor.loaded)) return current;
+    // Kept as it is while the model that runs stays; another model takes the settings kept since, as its
+    // announcement said (review of phase 7) — the memory of the one that runs saved first, as a load does.
+    const stays = supervisor.loaded !== null && (forPath === undefined || samePath(supervisor.loaded.modelPath, forPath));
+    if (current?.mode === 'managed' && (same || stays)) return current;
+    if (supervisor.loaded) {
+      await conversations.flush().catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
+    }
     await supervisor.configure({
       mode: 'managed',
       binPath,
@@ -785,7 +796,8 @@ export function createCore(deps: CoreDeps): Core {
     // The server says « ready » as soon as it answers; the core serves a turn only once it knows the model it
     // loaded: until then, still starting — a window told « ready » may send at once (task 7.4).
     const raw = supervisor.status();
-    const serving = engine.mode === 'remote' || (model !== null && loaded !== undefined && samePath(loaded.path, model.modelPath));
+    const serving =
+      engine.mode === 'remote' || (!unloading && model !== null && loaded !== undefined && samePath(loaded.path, model.modelPath));
     return {
       mode: engine.mode,
       status: raw === 'ready' && !serving ? 'starting' : raw,
@@ -1203,7 +1215,8 @@ export function createCore(deps: CoreDeps): Core {
   }
 
   const core: Core = {
-    engine: currentEngine,
+    // The engine a new turn may run on: none while an unload is under way (its memory being saved first).
+    engine: async () => (unloading ? undefined : currentEngine()),
     engineState,
     models,
 
@@ -1219,7 +1232,7 @@ export function createCore(deps: CoreDeps): Core {
       const info = await readGgufInfo(listed.path);
       // Refused before anything is launched.
       const layer = layerForModel(info);
-      await configuredManaged();
+      await configuredManaged(listed.path);
       if (!orphanChecked) {
         orphanChecked = true;
         await supervisor.killOrphan();
@@ -1355,11 +1368,15 @@ export function createCore(deps: CoreDeps): Core {
 
     branches,
     async compact(conversationId) {
+      // The summary is a reply of the engine: it is neither unloaded nor restarted under it (review of phase 7).
+      const release = core.hold();
       try {
         return { ok: true, ...(await conversations.compact(conversationId, () => undefined)) };
       } catch (error) {
         if (error instanceof CompactionError) return { ok: false, reason: error.code };
         throw error;
+      } finally {
+        release();
       }
     },
     uncompact: (conversationId) => conversations.uncompact(conversationId),
@@ -1485,13 +1502,18 @@ export function createCore(deps: CoreDeps): Core {
     async unloadModel() {
       // A reply in progress keeps the engine: cutting it would lose its answer and its memory.
       if (supervisor.held) throw new Error('A reply is running: the engine is not unloaded under it.');
-      await conversations
-        .flush()
-        .catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
-      const was = loaded;
-      await supervisor.stop();
-      loaded = undefined;
-      if (was) unloaded = { path: was.path, at: new Date().toISOString() };
+      unloading = true;
+      try {
+        await conversations
+          .flush()
+          .catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
+        const was = loaded;
+        await supervisor.stop();
+        loaded = undefined;
+        if (was) unloaded = { path: was.path, at: new Date().toISOString() };
+      } finally {
+        unloading = false;
+      }
     },
 
     async restartEngine() {
