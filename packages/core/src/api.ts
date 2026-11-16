@@ -935,7 +935,8 @@ export function createCore(deps: CoreDeps): Core {
               fileBytes: model.sizeBytes,
               ...(loadSeconds !== undefined ? { loadSeconds } : {}),
             },
-            settings,
+            // In parallel, the second slot's KV cache too (review of phase 8).
+            { ...settings, slots: slotsFor(settings) },
             { totalBytes },
           ),
         };

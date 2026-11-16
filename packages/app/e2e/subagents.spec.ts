@@ -125,4 +125,13 @@ test('« En parallèle » says first what it costs — one slot more, a restart 
   await card.getByRole('button', { name: 'Annuler' }).click();
   await expect(card).toHaveCount(0);
   await expect(choice.getByRole('radio', { name: 'L’un après l’autre' })).toBeChecked();
+
+  // Kept (no model loaded: for the next load), the choice stays; going back asks again (review of phase 8).
+  await choice.locator('label', { hasText: 'En parallèle' }).click();
+  await card.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(card).toHaveCount(0);
+  await expect(choice.getByRole('radio', { name: 'En parallèle' })).toBeChecked();
+  await choice.locator('label', { hasText: 'L’un après l’autre' }).click();
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('« Sous-agents du moteur intégré » s’applique au redémarrage du moteur');
 });

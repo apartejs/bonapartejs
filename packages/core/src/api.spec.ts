@@ -200,6 +200,14 @@ describe('createCore — the managed engine', () => {
     expect(await core.engineState()).toMatchObject({ status: 'stopped' });
   });
 
+  it('with « En parallèle » kept, what a load costs counts the second slot (review of phase 8)', async () => {
+    const { core } = await setup();
+    const vram = async () => (await core.models()).find((model) => model.path.endsWith('gemma-4-test.gguf'))!.announcement!.vramBytes;
+    const one = await vram();
+    await core.applyEngineSettings({ subagents: 'parallel' }, { restart: false });
+    expect(await vram()).toBeGreaterThan(one);
+  });
+
   it('« Relire et continuer » holds the engine while it reads: neither unloaded nor restarted under it (review of phase 8)', async () => {
     const { core, gemma } = await setup();
     await core.loadModel(gemma);

@@ -261,4 +261,51 @@ describe('the pause of a sub-agent, answered', () => {
     expect(waiting.map((call) => [call.toolCallId, call.reason])).toEqual([['c2', 'approval']]);
     expect(holds).toEqual([hold]);
   });
+
+  it('two sub-agents that waited together (in parallel): each gets its answers, even when the first asks again (review of phase 8)', async () => {
+    const holdA = { toolCallId: 'XA', agentId: 'A', name: 'run_subagent', input: { name: 'Un', mission: 'm' } };
+    const holdB = { toolCallId: 'XB', agentId: 'B', name: 'run_subagent', input: { name: 'Deux', mission: 'm' } };
+    const pause = {
+      kind: 'pending',
+      id: 'p',
+      at: '',
+      rendered: '',
+      ticket: 't',
+      calls: [
+        { toolCallId: 'c1', name: 'edit_file', input: {}, reason: 'approval', agentId: 'A' },
+        { toolCallId: 'c2', name: 'edit_file', input: {}, reason: 'approval', agentId: 'B' },
+      ],
+      subagents: [holdA, holdB],
+    } as unknown as Parameters<typeof answerPause>[1];
+    const handed: [string, string[]][] = [];
+    const context = {
+      conversationId: 'c',
+      mode: 'repetition',
+      registry: { get: () => undefined, list: () => [], run: async () => ({}) },
+      permissions: { evaluate: () => ({ verdict: 'ask' }) },
+      place: { roots: [] },
+      nCtx: 8192,
+      signal: new AbortController().signal,
+      subagents: {
+        resume: async (hold: { agentId: string }, outcomes: Record<string, unknown>) => {
+          handed.push([hold.agentId, Object.keys(outcomes)]);
+          // A asks again; B is done.
+          return hold.agentId === 'A'
+            ? { kind: 'paused', pending: [{ toolCallId: 'c3', name: 'edit_file', input: {}, reason: 'approval', agentId: 'A' }] }
+            : { kind: 'done', result: 'Fait.' };
+        },
+        run: async () => ({ kind: 'done', result: '' }),
+        idOf: (id: string) => id,
+      },
+    } as unknown as Parameters<typeof answerPause>[0];
+    const approved = { kind: 'decision', approved: true } as const;
+    const { waiting, holds, results } = await answerPause(context, pause, { c1: approved, c2: approved }, () => undefined);
+    expect(handed).toEqual([
+      ['A', ['c1']],
+      ['B', ['c2']],
+    ]);
+    expect(waiting.map((call) => [call.toolCallId, call.reason])).toEqual([['c3', 'approval']]);
+    expect(holds).toEqual([holdA]);
+    expect(results.map((result) => [result.toolCallId, result.content])).toEqual([['XB', 'Fait.']]);
+  });
 });

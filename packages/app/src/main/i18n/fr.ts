@@ -49,5 +49,6 @@ export const fr: MainWords = {
     approval: 'bonaparte attend ton accord',
     question: 'bonaparte attend ta réponse',
     failed: 'bonaparte est en panne',
+    done: (count) => (count > 1 ? `bonaparte a fini ${count} réponses` : 'bonaparte a fini une réponse'),
   },
 };

@@ -21,8 +21,8 @@ export const TRAY_TOKENS = {
   asleep: '--bonaparte-tray-asleep',
 } as const;
 
-/** The badge says what waits, or a failure. */
-const BADGES = { waiting: TRAY_TOKENS.waiting, failure: TRAY_TOKENS.failure } as const;
+/** The badge says what waits, a failure, or a reply ready (in the colour at rest). */
+const BADGES = { waiting: TRAY_TOKENS.waiting, failure: TRAY_TOKENS.failure, done: TRAY_TOKENS.rest } as const;
 /** The ring around the badge's dot. */
 const RING = '--bonaparte-tray-ring';
 

@@ -135,6 +135,8 @@ export interface Messages {
     untitled: string;
     /** An approval whose chat is not there to answer it: answered in its conversation. */
     answerThere: string;
+    /** An approval while the engine is not loaded: it is given in its conversation, which loads the model first. */
+    engineDown: string;
     answer: string;
     pr(number: number): string;
     ciTitle(number: number): string;

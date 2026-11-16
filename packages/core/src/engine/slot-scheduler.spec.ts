@@ -298,6 +298,17 @@ describe('a turn lends its slot to its sub-agents (task 8.1)', () => {
     expect(calls.indexOf('run b')).toBeGreaterThan(calls.indexOf('run a again'));
   });
 
+  it('an owner that says what it leaves is worth nothing is never saved — not even by the next one in line (review of phase 8)', async () => {
+    const { scheduler, calls } = rig();
+    const done = scheduler.run(sub('s1'), async (slot) => {
+      calls.push('run s1');
+      slot.discard();
+    });
+    const next = scheduler.run(B, async () => void calls.push('run b'));
+    await Promise.all([done, next]);
+    expect(calls).toEqual(['restore s1@0', 'run s1', 'restore b@0', 'run b']);
+  });
+
   it('a conversation that never lent its slot is already home', async () => {
     const { scheduler, calls } = rig();
     await scheduler.run(A, async (slot) => {

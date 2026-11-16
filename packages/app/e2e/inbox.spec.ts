@@ -57,6 +57,31 @@ test('Ctrl J opens « À traiter », the sidebar counts it; an approval answered
   await expect(page.getByRole('button', { name: 'À traiter', exact: true })).toBeVisible();
 });
 
+test('an approval that waits while the engine is unloaded: the page says so and opens its conversation — no « Autoriser » to lose (review of phase 8)', async ({ launch }) => {
+  const { page, home } = await launch({ managed: { models: { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } } }, env: { FAKE_LLAMA_ANSWER: EDIT } });
+  await writeFile(join(home, 'notes.txt'), 'old line\n');
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ui.send('Change la note');
+  await expect(page.getByRole('region', { name: 'Demande d’accord' })).toBeVisible({ timeout: 15_000 });
+  // The engine let go meanwhile (« Décharger », or fifteen minutes without work).
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  const settings = page.getByRole('navigation', { name: 'Réglages' });
+  await settings.getByRole('link', { name: 'Moteur et mémoire' }).click();
+  await page.getByRole('button', { name: 'Décharger' }).click();
+  await expect(page.getByRole('region', { name: 'Moteur', exact: true })).toContainText('Déchargé', { timeout: 15_000 });
+  await settings.getByRole('link', { name: 'Conversations' }).click();
+
+  await page.keyboard.press('Control+j');
+  const card = page$(page).getByRole('article', { name: /^Demande d’accord · Change la note/ });
+  await expect(card).toContainText('Le moteur est déchargé');
+  await expect(card.getByRole('button', { name: 'Autoriser', exact: true })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Ouvrir la conversation' }).click();
+  await expect(page.locator('.engine-unloaded')).toBeVisible();
+  expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+});
+
 test('a question waits on the page; « Répondre » opens its conversation, where it waits in the composer', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: model } });
   const ui = chat(page);

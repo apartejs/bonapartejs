@@ -56,5 +56,7 @@ export interface MainWords {
     approval: string;
     question: string;
     failed: string;
+    /** Replies ready, not read yet. */
+    done(count: number): string;
   };
 }

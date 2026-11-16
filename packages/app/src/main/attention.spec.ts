@@ -17,22 +17,31 @@ function setup(over: { settings?: Partial<Record<NotifyEvent, NotifySetting>>; f
     now: Date.parse('2026-11-16T21:47:00Z'),
     focused: over.focused ?? false,
     waiting: [] as Waiting[],
+    unread: 0,
+    failing: false,
     engine: over.engine === undefined ? ({ name: 'gemma', status: 'ready', vramBytes: null } as EngineRow) : over.engine,
   };
   const settings: Record<NotifyEvent, NotifySetting> = { replyDone: 'banner', approval: 'banner', question: 'badge', failure: 'banner', ...over.settings };
   const shown: { title: string; body: string; conversationId: string }[] = [];
   const views: AttentionView[] = [];
+  const logged: string[] = [];
+  const scheduled: { at: number; run: () => void }[] = [];
   const attention = createAttention({
     words: () => mainWords('fr'),
     setting: async (event) => settings[event],
     focused: () => state.focused,
     now: () => state.now,
-    waiting: async () => state.waiting,
+    waiting: async () => {
+      if (state.failing) throw new Error('The journal of c9 cannot be read at line 3');
+      return { rows: state.waiting, unread: state.unread };
+    },
     engine: async () => state.engine,
     show: (note) => shown.push(note),
     render: (view) => views.push(view),
+    log: (message) => logged.push(message),
+    later: (ms, run) => scheduled.push({ at: state.now + ms, run }),
   });
-  return { attention, state, shown, views, last: () => views.at(-1)! };
+  return { attention, state, shown, views, logged, scheduled, last: () => views.at(-1)! };
 }
 
 const done: TurnEnd = { conversationId: 'c1', title: 'Exporter le récap en CSV', how: 'done', said: '3 fichiers changés.' };
@@ -60,6 +69,11 @@ describe('being noticed', () => {
     expect(shown.map((note) => note.title)).toEqual(['Attend ton accord · Corriger les heures']);
     expect(last()).toMatchObject({ icon: 'waiting', badge: { kind: 'waiting', text: 'bonaparte attend ton accord' } });
     expect(last().waiting).toEqual(state.waiting);
+    // A reply not read waits too, but an approval says more.
+    state.unread = 1;
+    await attention.refresh();
+    expect(last()).toMatchObject({ badge: { kind: 'waiting' } });
+    state.unread = 0;
     state.waiting = [];
     await attention.refresh();
     expect(last()).toMatchObject({ icon: 'rest', badge: null });
@@ -103,6 +117,48 @@ describe('being noticed', () => {
     expect(last()).toMatchObject({ icon: 'failure', badge: { kind: 'failure', text: 'bonaparte est en panne' } });
     await attention.focused();
     expect(last()).toMatchObject({ icon: 'rest', badge: null });
+  });
+
+  it('a reply done under « Pastille »: no banner, the badge says a reply is ready — until it is read; « Rien »: nothing', async () => {
+    const { attention, state, shown, last } = setup({ settings: { replyDone: 'badge' } });
+    state.unread = 1;
+    await attention.turnEnded(done);
+    expect(shown).toEqual([]);
+    expect(last()).toMatchObject({ icon: 'rest', badge: { kind: 'done', text: 'bonaparte a fini une réponse' } });
+    state.unread = 0;
+    await attention.refresh();
+    expect(last()).toMatchObject({ badge: null });
+    const off = setup({ settings: { replyDone: 'off' } });
+    off.state.unread = 2;
+    await off.attention.turnEnded(done);
+    expect(off.last()).toMatchObject({ badge: null });
+  });
+
+  it('« Ne pas déranger » ends by itself: when the hour is over, the menu says so', async () => {
+    const { attention, state, scheduled, last } = setup();
+    await attention.toggleQuiet();
+    expect(last().quietUntil).toBe(state.now + HOUR);
+    expect(scheduled.map((one) => one.at)).toEqual([state.now + HOUR]);
+    state.now += HOUR;
+    scheduled[0]!.run();
+    await attention.refresh();
+    expect(last().quietUntil).toBeNull();
+  });
+
+  it('a read that fails never stops the app: it is logged, the last drawing stays, and the next one is drawn', async () => {
+    const { attention, state, logged, views } = setup();
+    await attention.refresh();
+    const before = views.length;
+    state.failing = true;
+    await expect(attention.refresh()).resolves.toBeUndefined();
+    await expect(attention.turnEnded(done)).resolves.toBeUndefined();
+    await expect(attention.focused()).resolves.toBeUndefined();
+    await expect(attention.toggleQuiet()).resolves.toBeUndefined();
+    expect(views).toHaveLength(before);
+    expect(logged.some((line) => line.includes('cannot be read'))).toBe(true);
+    state.failing = false;
+    await attention.refresh();
+    expect(views.length).toBeGreaterThan(before);
   });
 
   it('the model asleep: the icon grey; no model known: no engine in the menu', async () => {

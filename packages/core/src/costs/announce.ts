@@ -170,6 +170,8 @@ export interface LoadSettings {
   nCtx: number;
   cacheType: KvCacheTypeName;
   gpuLayers: number | 'all';
+  /** The slots the engine runs (task 8.3; one by default): each holds a KV cache of its own. */
+  slots?: number;
 }
 
 export interface GpuMemory {
@@ -183,12 +185,16 @@ export interface GpuMemory {
 const ESTIMATED_LOAD_BYTES_PER_SECOND = 1024 ** 3;
 const MINIMUM_ESTIMATED_SECONDS = 2;
 
-/** Video memory = the file + the context's KV cache + a margin, for the share of layers on the card. */
+/**
+ * Video memory = the file + the KV cache of every slot + a margin, for the share of layers on the card. In
+ * parallel (task 8.3) the engine runs two slots, each with the whole context: both are said (review of phase 8).
+ */
 function vramFor(model: LoadModel, settings: LoadSettings) {
   const load = estimateLoad(model.info, model.fileBytes, settings.nCtx, settings.cacheType);
   const layers = model.info.blockCount;
   const share = settings.gpuLayers === 'all' || layers <= 0 ? 1 : Math.min(1, settings.gpuLayers / layers);
-  return { load, vramBytes: (load.weightsBytes + load.kvBytes) * share + load.overheadBytes };
+  const slots = Math.max(1, settings.slots ?? 1);
+  return { load, vramBytes: (load.weightsBytes + load.kvBytes * slots) * share + load.overheadBytes };
 }
 
 export function announceLoad(model: LoadModel, settings: LoadSettings, gpu: GpuMemory): EngineLoadAnnouncement {

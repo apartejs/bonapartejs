@@ -27,7 +27,7 @@ export interface Asking {
 }
 
 /** What a page that asks keeps: the change asked about and its cost, and a restart asked for the end of a reply. */
-export function useRestartAsk(onKept: () => void) {
+export function useRestartAsk(onKept: (kept: LaunchChange) => void) {
   const [asking, setAsking] = useState<Asking | null>(null);
   const [pending, setPending] = useState(false);
   // The engine changed: the restart asked for the end of the reply is under way.
@@ -58,7 +58,7 @@ export function useRestartAsk(onKept: () => void) {
     await bridge.invoke(engineApplySettings, { changes: asking.change, restart }).catch(() => undefined);
     setAsking(null);
     setPending(restart && replyRunning && !cutting);
-    onKept();
+    onKept(asking.change);
   };
   return { asking, pending, ask, keep, cancel: () => setAsking(null) };
 }

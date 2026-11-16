@@ -141,6 +141,7 @@ export const en: Messages = {
     open: 'Open the conversation',
     untitled: 'New conversation',
     answerThere: 'It is decided in its conversation.',
+    engineDown: 'The engine is unloaded: open the conversation to load it, then decide.',
     answer: 'Answer',
     pr: (number) => `PR ${number}`,
     ciTitle: (number) => `The CI of PR ${number} fails`,

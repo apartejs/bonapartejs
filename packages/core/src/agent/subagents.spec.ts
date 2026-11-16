@@ -323,6 +323,41 @@ describe('a sub-agent on the built-in engine', () => {
     expect(order.filter((line) => line === 'save sub-agent')).toEqual([]);
   });
 
+  it('a sub-agent on a slot of its own (one resumed) that ends while another owner waits for it: its state is never saved (review of phase 8)', async () => {
+    const { engine, store, meta, order } = await rig((prompt) => (isSubagent(prompt) ? `Done ${'and done '.repeat(30)}` : 'Hello.'), 'plume', { paceMs: 10 });
+    const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'plume' });
+    const solo = engine.subagentTurn(
+      meta.id,
+      { agentId: 'agent-1111', name: 'Solo' },
+      { start: { note: 'You are a sub-agent named Solo.', mission: 'Say done.' }, tools: { defs: [], onCalls: async () => ({ results: [] }) } },
+      () => undefined,
+    );
+    // Another conversation's turn arrives while the sub-agent holds the only slot: it waits for it.
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const turn = engine.turn(other.id, { text: 'Hi.' }, () => undefined);
+    await Promise.all([solo, turn]);
+    expect(order).toContain('complete Solo');
+    expect(order.filter((line) => line === 'save sub-agent')).toEqual([]);
+  });
+
+  it('a pause of a sub-agent the person leaves for a new message: the conversation reads its run_subagent call answered — never a call it did not make — and the sub-agent is let go (review of phase 8)', async () => {
+    const lead = { name: 'Mesureur', mission: 'Change a.ts.', tools: 'all' };
+    const responder = (prompt: string): string => {
+      if (isSubagent(prompt)) return call('edit_file', { path: 'a.ts', old_string: 'a = 1', new_string: 'a = 2' });
+      return answered(prompt) ? 'Compris.' : call('run_subagent', lead);
+    };
+    const { run, store, meta, dir } = await rig(responder, 'repetition');
+    const first = await run('Change a.ts par un sous-agent.');
+    expect(first.result.suspended?.pending).toEqual([expect.objectContaining({ name: 'edit_file', reason: 'approval' })]);
+    // The person does not answer: a new message.
+    await run('Laisse tomber, autre chose.');
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    const closed = entries.find((entry) => entry.kind === 'tool-results' && entry.results.some((result) => result.content.startsWith('Not run') || result.content.startsWith('Stopped')));
+    expect(closed?.kind === 'tool-results' && closed.results.map((result) => result.name)).toEqual(['run_subagent']);
+    const { readdir } = await import('node:fs/promises');
+    expect((await readdir(join(dir, 'kv-slots'))).filter((file) => file.includes('_agent-'))).toEqual([]);
+  });
+
   it('Stop stops the sub-agents too', async () => {
     const stop = new AbortController();
     const { run } = await rig((prompt) => {

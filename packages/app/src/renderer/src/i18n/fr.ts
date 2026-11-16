@@ -141,6 +141,7 @@ export const fr: Messages = {
     open: 'Ouvrir la conversation',
     untitled: 'Nouvelle conversation',
     answerThere: 'Elle se décide dans sa conversation.',
+    engineDown: 'Le moteur est déchargé : ouvre la conversation pour le recharger, puis décide.',
     answer: 'Répondre',
     pr: (number) => `PR ${number}`,
     ciTitle: (number) => `La CI de la PR ${number} échoue`,

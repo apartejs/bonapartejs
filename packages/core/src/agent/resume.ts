@@ -168,18 +168,10 @@ export async function answerPause(
       results.push({ toolCallId: call.toolCallId, name: call.name, content: NOT_RUN_STOPPED, failed: true });
       continue;
     }
-    // A sub-agent's calls were all handed back to it: what it waits on now is its own new pause, already kept
-    // (review of phase 8: its next call was queued a second time).
-    if (call.agentId && handed.has(call.agentId)) continue;
-    if (waiting.length > 0) {
-      waiting.push({ ...call, reason: 'queued' });
-      // A sub-agent's call queued behind: its call aside stays with the pause.
-      const hold = call.agentId ? holdOf(call.agentId) : undefined;
-      if (hold && !holds.includes(hold)) holds.push(hold);
-      continue;
-    }
     if (call.agentId && ctx.subagents) {
-      // A sub-agent's calls go back to it, all of them at once; its refusal stops only it.
+      // A sub-agent's calls go back to it, all of them at once; its refusal stops only it. Before anything
+      // queues them: sub-agents that waited together (in parallel) are each handed their answers, even when one
+      // before asks again — and one handed back keeps its new pause, never its old calls (review of phase 8).
       if (handed.has(call.agentId)) continue;
       handed.add(call.agentId);
       const hold = holdOf(call.agentId);
@@ -191,6 +183,13 @@ export async function answerPause(
         pause.calls.filter((one) => one.agentId === call.agentId && outcomes[one.toolCallId]).map((one) => [one.toolCallId, outcomes[one.toolCallId]!]),
       );
       settle(hold, await ctx.subagents.resume(hold, theirs));
+      continue;
+    }
+    if (waiting.length > 0) {
+      waiting.push({ ...call, reason: 'queued' });
+      // A sub-agent's call queued behind (its own pause, answered by it): its call aside stays with the pause.
+      const hold = call.agentId ? holdOf(call.agentId) : undefined;
+      if (hold && !holds.includes(hold)) holds.push(hold);
       continue;
     }
     if (refused) {

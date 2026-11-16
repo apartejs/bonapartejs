@@ -1076,12 +1076,20 @@ export class ConversationEngine {
           owner,
           async (slot) => {
             if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
-            return work(slot);
+            let done: TurnResult;
+            try {
+              done = await work(slot);
+            } catch (error) {
+              slot.discard();
+              throw error;
+            }
+            // Done: what it leaves in the slot is worth nothing — said before the job ends, since the next
+            // owner takes the slot the moment it does, and would save it (review of phase 8).
+            if (!done.suspended) slot.discard();
+            return done;
           },
           signal ? { signal } : {},
         );
-        // Done: what it leaves in the slot is worth nothing — never saved over anything.
-        if (!result.suspended) this.scheduler.evict(owner);
       }
     } catch (error) {
       if (signal?.aborted && error instanceof DOMException && error.name === 'AbortError') {
@@ -1314,8 +1322,15 @@ export class ConversationEngine {
     // What the branch froze before this turn: a state saved after it is not behind for the notes this turn
     // appends next — they are read with the message, as it is.
     const known = journal.entries().length;
-    // A model turn left open by calls nobody answered (a limit, a pause given up): closed before any note.
-    if (!input.resume) await closeOpenTurn(journal, family);
+    // A model turn left open by calls nobody answered (a limit, a pause given up): closed before any note. The
+    // sub-agents that waited in that pause are let go: never resumed, their state is worth nothing.
+    if (!input.resume) {
+      for (const agentId of await closeOpenTurn(journal, family)) {
+        const left: SlotOwner = { kind: 'subagent', conversationId: id, agentId, name: '' };
+        this.scheduler.evict(left);
+        await this.deps.kv.forget(ownerKey(left)).catch(() => undefined);
+      }
+    }
     if (!input.resume) {
       // A going back the model has not heard of is told now; once a turn begins it cannot be undone.
       await tellRewind(journal, family);
@@ -1764,19 +1779,30 @@ function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
 
 /** What the model reads of a call its turn left unanswered: the conversation moved on without it. */
 export const NOT_RUN_UNANSWERED = 'Not run: the turn ended before this call was answered.';
+/** What the model reads of a sub-agent left waiting for the person, who moved on. */
+export const SUBAGENT_LEFT = 'Stopped: the sub-agent waited for an answer the person never gave; it returns nothing.';
 
 /**
  * A model turn that ended on calls nobody answered — the round limit reached, a pause the person
  * left — is closed before the next message: each call answered as not run, then the turn closed,
  * so the prompt keeps the template's shape (a Gemma turn that ended on a call is still open).
+ * A pause of sub-agents answers the conversation's own calls — its `run_subagent` ones included —,
+ * never the sub-agents' calls, which the model never made (review of phase 8). Returns the
+ * sub-agents let go.
  */
-async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<void> {
+async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<string[]> {
   // The last thing said: a change of model, a going back or a rebase after it leave its turn open as it was
   // (review of phase 7: a call that waited stayed unanswered after a change of model).
   const last = journal.entries().findLast((entry) => SPOKEN.has(entry.kind));
-  let open: { toolCallId: string; name: string }[];
+  let open: { toolCallId: string; name: string; content?: string }[];
+  let left: string[] = [];
   if (last?.kind === 'pending') {
-    open = last.calls.map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
+    const holds = last.subagents ?? [];
+    left = holds.map((hold) => hold.agentId);
+    open = [
+      ...holds.map((hold) => ({ toolCallId: hold.toolCallId, name: hold.name, content: SUBAGENT_LEFT })),
+      ...last.calls.filter((call) => !call.agentId).map((call) => ({ toolCallId: call.toolCallId, name: call.name })),
+    ];
   } else if (last?.kind === 'tool-results') {
     // The results are there, the continuation never came (it did not fit, the engine failed): only the close.
     open = [];
@@ -1786,9 +1812,9 @@ async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<voi
       .filter((piece): piece is Extract<DemuxEvent, { type: 'tool-call' }> => piece.type === 'tool-call')
       .map((piece) => ({ toolCallId: `call-${randomUUID()}`, name: piece.name }));
   } else {
-    return;
+    return [];
   }
-  const results: ToolResult[] = open.map((call) => ({ ...call, content: NOT_RUN_UNANSWERED, failed: true }));
+  const results: ToolResult[] = open.map((call) => ({ toolCallId: call.toolCallId, name: call.name, content: call.content ?? NOT_RUN_UNANSWERED, failed: true }));
   if (results.length > 0) await journal.append({ kind: 'tool-results', results, rendered: family.renderToolResults(results) });
   await journal.append({
     kind: 'assistant',
@@ -1796,6 +1822,7 @@ async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<voi
     stopped: 'user',
     rendered: family.beginAssistant({ thinking: false, continuing: true }) + family.endAssistant(''),
   });
+  return left;
 }
 
 /** What a turn says: what can leave a model's turn open. */

@@ -68,6 +68,12 @@ describe('announceLoad', () => {
     expect(half.vramBytes).toBeCloseTo((21.3 * GiB + 0.625 * GiB) / 2 + 0.5 * GiB, -1);
     expect(half.verdict).toBe('tight');
   });
+
+  it('with sub-agents in parallel, counts the KV cache of every slot: one more at 32 768 tokens is 0.625 GiB more (review of phase 8)', () => {
+    const one = announceLoad(model, settings, { totalBytes: 24 * GiB });
+    const two = announceLoad(model, { ...settings, slots: 2 }, { totalBytes: 24 * GiB });
+    expect(two.vramBytes - one.vramBytes).toBeCloseTo(0.625 * GiB, -1);
+  });
 });
 
 describe('suggestOffload', () => {

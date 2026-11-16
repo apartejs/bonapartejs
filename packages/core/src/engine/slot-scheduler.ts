@@ -25,6 +25,11 @@ export interface SlotHandle {
   /** This job left the slot as it found it: the owner need not be saved again for it. */
   unchanged(): void;
   /**
+   * What this job's owner leaves in the slot is worth nothing (a sub-agent done, or failed): never saved — not
+   * even by the next owner, which takes the slot the moment this job ends (review of phase 8).
+   */
+  discard(): void;
+  /**
    * Lends the slot to another owner (a sub-agent) while this job holds it: the owner in the slot is saved
    * if it changed, the borrower restored, its job run. What the borrower leaves is saved when someone else
    * sits there — unless it says it is worth nothing (`discard`).
@@ -172,6 +177,7 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
             emit();
             void (async () => {
               let changed = true;
+              let worthless = false;
               try {
                 await take(slot, owner);
                 const mine = (): boolean => slot.resident !== null && keyOf(slot.resident) === keyOf(owner);
@@ -179,6 +185,9 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
                   id: slot.id,
                   unchanged: () => {
                     changed = false;
+                  },
+                  discard: () => {
+                    worthless = true;
                   },
                   lend: async (borrower, lentJob) => {
                     // The owner, changed by this job: saved before anyone else sits there.
@@ -212,7 +221,12 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
               } catch (error) {
                 reject(error);
               } finally {
-                if (owner.kind !== 'side' && changed && slot.resident && keyOf(slot.resident) === keyOf(owner)) {
+                const resident = slot.resident !== null && keyOf(slot.resident) === keyOf(owner);
+                if (resident && worthless) {
+                  // Before anyone takes the slot: nothing of this owner is left to save.
+                  slot.resident = null;
+                  slot.dirty = false;
+                } else if (owner.kind !== 'side' && changed && resident) {
                   slot.dirty = true;
                 }
                 slot.running = null;

@@ -26,6 +26,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
   dirs.push(dir);
   const store = new ConversationStore(dir);
   const removed: string[] = [];
+  const marked: string[] = [];
   const listeners = new Map<string, Listener>();
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
@@ -34,7 +35,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     conversations: {
       open: open as never,
       status: async (id: string) => (id === 'c-1' ? { memory: 'saved' as const, waiting: true, unread: false } : null),
-      markSeen: async () => undefined,
+      markSeen: async (id: string) => void marked.push(`seen ${id}`),
     },
     readAgain: async () => undefined,
     conversationDocument: (id: string) => store.loadDocument(id),
@@ -59,9 +60,9 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
       removed.push(id);
       await store.remove(id);
     },
-  });
+  }, { seen: () => void marked.push('told') });
   const call = (name: string, input: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);
-  return { call, store, removed };
+  return { call, store, removed, marked };
 }
 
 const DOC = { id: 'c-1', title: '', createdAt: 1, updatedAt: 1, messages: [{ id: 'm1', role: 'user', content: 'Bonjour' }] };
@@ -122,6 +123,12 @@ describe('the conversation channels', () => {
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBeNull();
     await call('conversations.saveDraft', { id: 'c-1', text: 'Une idée' });
     await expect(call('conversations.loadDraft', { id: 'c-1' })).resolves.toBe('Une idée');
+  });
+
+  it('a conversation seen is marked, then the main process is told — the notification area forgets its reply ready', async () => {
+    const { call, marked } = await setup();
+    await call('conversations.seen', { id: 'c-1' });
+    expect(marked).toEqual(['seen c-1', 'told']);
   });
 
   it("say what the sidebar shows of each conversation asked: its memory, whether it waits, whether it was read — nothing for one that is gone", async () => {

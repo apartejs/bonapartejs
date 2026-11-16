@@ -100,7 +100,8 @@ export function unreadAnswer(
 export async function readInbox(deps: InboxDeps): Promise<Inbox> {
   const inbox: Inbox = { approvals: [], subagentRequests: [], questions: [], ciFailures: [], costs: [], unread: [] };
   const metas = (await deps.store.list()).filter((meta) => !meta.archivedAt);
-  await Promise.all(metas.map((meta) => gather(deps, meta, inbox)));
+  // A conversation whose journal cannot be read hides only itself: the rest still waits (review of phase 8).
+  await Promise.all(metas.map((meta) => gather(deps, meta, inbox).catch(() => undefined)));
   // The newest first, in each kind.
   for (const list of Object.values(inbox) as InboxItem[][]) list.sort((a, b) => b.at.localeCompare(a.at));
   return inbox;

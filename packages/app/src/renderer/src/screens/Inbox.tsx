@@ -25,6 +25,8 @@ export interface InboxPageProps {
   requests: readonly ApprovalRequest[];
   /** A cost the person said « Plus tard » to, until something changes. */
   later: ReadonlySet<string>;
+  /** The built-in engine is not loaded: an approval is answered in its conversation, which loads it first. */
+  engineDown?: boolean;
   onAnswer(id: string, answer: ApprovalAnswer): void;
   onOpen(conversationId: string): void;
   onReadAgain(conversationId: string): Promise<void>;
@@ -123,13 +125,14 @@ export function InboxPage(props: InboxPageProps) {
               locale={locale}
               open={link(item.conversationId, item.title)}
             >
-              {request ? (
+              {/* The engine let go: an answer would resume the turn into nothing, and be lost (review of phase 8). */}
+              {request && !props.engineDown ? (
                 <ApprovalCard request={request} messages={messages} focus={false} onAnswer={(answer) => props.onAnswer(request.id, answer)}>
                   {openButton(item.conversationId)}
                 </ApprovalCard>
               ) : (
                 <div className="inbox-card__actions">
-                  <p className="inbox-card__note">{words.answerThere}</p>
+                  <p className="inbox-card__note">{props.engineDown ? words.engineDown : words.answerThere}</p>
                   {openButton(item.conversationId)}
                 </div>
               )}

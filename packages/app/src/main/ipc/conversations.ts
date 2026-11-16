@@ -69,7 +69,13 @@ interface ConversationCore {
   contextOf: Core['contextOf'];
 }
 
-export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore): void {
+/** What the main process does when the window says something it follows. */
+export interface ConversationHooks {
+  /** A conversation was seen: a reply ready there is no longer one to show in the notification area. */
+  seen?(): void;
+}
+
+export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore, hooks: ConversationHooks = {}): void {
   const store = core.conversationStore;
 
   ipc.handle(conversationsLoadAll, async () => {
@@ -143,7 +149,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   });
 
   ipc.handle(conversationsInbox, () => core.inbox());
-  ipc.handle(conversationsSeen, ({ id }) => core.conversations.markSeen(id));
+  ipc.handle(conversationsSeen, async ({ id }) => {
+    await core.conversations.markSeen(id);
+    hooks.seen?.();
+  });
   // The core holds the engine while it reads.
   ipc.handle(conversationsReadAgain, ({ id }) => core.readAgain(id));
   ipc.handle(conversationsStatus, async ({ ids }) => {

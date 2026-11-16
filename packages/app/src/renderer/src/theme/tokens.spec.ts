@@ -172,5 +172,6 @@ describe('the tokens a rule reads', () => {
       }
     }
     expect([...unknown]).toEqual([]);
-  });
+    // It reads every file aparté ships: seconds on a loaded machine (the whole suite runs beside it).
+  }, 30_000);
 });

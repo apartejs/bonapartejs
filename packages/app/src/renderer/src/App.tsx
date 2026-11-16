@@ -973,6 +973,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           inbox={inbox}
           requests={approvals.list()}
           later={costLater}
+          engineDown={engineDown}
           onAnswer={(id, answer) => approvals.answer(id, answer)}
           onOpen={(id) => goTo(id)}
           onReadAgain={async (id) => {

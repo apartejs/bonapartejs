@@ -7,7 +7,7 @@
  * for nothing.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -131,6 +131,20 @@ describe('readInbox', () => {
     await store.mark(read.id, { seenAt: new Date(Date.now() + 1_000).toISOString() });
     const inbox = await readInbox({ store, conversations });
     expect(inbox.unread).toEqual([expect.objectContaining({ conversationId: finished.id, said: 'La synthèse est prête.' })]);
+  });
+
+  it('one conversation whose journal cannot be read hides only itself: the others still wait (review of phase 8)', async () => {
+    const { store, conversations, conversation } = await rig();
+    const broken = await conversation('Abîmée', [{ kind: 'assistant', raw: 'Fait.', rendered: '' }]);
+    const waiting = await conversation('Change la note', [
+      { kind: 'pending', calls: [call('c1', 'edit_file', { path: 'notes.txt' })], ticket: 't', rendered: '' },
+    ]);
+    const file = join(store.dir, broken.id, 'main.jsonl');
+    const lines = (await readFile(file, 'utf8')).split('\n');
+    lines.splice(1, 0, '{ this line is not JSON');
+    await writeFile(file, lines.join('\n'));
+    const inbox = await readInbox({ store, conversations });
+    expect(inbox.approvals.map((item) => item.conversationId)).toEqual([waiting.id]);
   });
 
   it('a pull request whose CI fails, as GitHub says it', async () => {

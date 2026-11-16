@@ -56,11 +56,13 @@ let tray: Tray | undefined;
 /** Kept until they are clicked or closed: a notification the garbage collector takes loses its click. */
 const banners = new Set<Notification>();
 
-/** An icon of `resources/icons/` (task 8.5), at every scale it was drawn for. */
+/** An icon of `resources/icons/` (task 8.5), at every scale it was drawn for; a file missing is left out, never fatal. */
 function icon(name: string, sizes: readonly number[]): NativeImage {
   const path = (size: number): string => join(app.getAppPath(), 'resources', 'icons', `${name}-${size}.png`);
   const image = nativeImage.createFromPath(path(sizes[0]!));
-  for (const size of sizes.slice(1)) image.addRepresentation({ scaleFactor: size / sizes[0]!, buffer: readFileSync(path(size)) });
+  for (const size of sizes.slice(1)) {
+    if (existsSync(path(size))) image.addRepresentation({ scaleFactor: size / sizes[0]!, buffer: readFileSync(path(size)) });
+  }
   return image;
 }
 
@@ -88,7 +90,7 @@ function wireAttention(options: {
     ? null
     : {
         tray: Object.fromEntries((['rest', 'waiting', 'failure', 'asleep'] as const).map((state) => [state, icon(`tray-${state}`, [16, 24, 32])])) as Record<TrayIcon, NativeImage>,
-        badge: { waiting: icon('badge-waiting', [16, 32]), failure: icon('badge-failure', [16, 32]) },
+        badge: { waiting: icon('badge-waiting', [16, 32]), failure: icon('badge-failure', [16, 32]), done: icon('badge-done', [16, 32]) },
       };
   // The video memory of each model, read once from the core's list (a scan of the model folders).
   const vram = new Map<string, number | null>();
@@ -131,8 +133,9 @@ function wireAttention(options: {
       const rows = new Map<string, Waiting>();
       for (const one of [...inbox.approvals, ...inbox.subagentRequests]) rows.set(one.conversationId, { conversationId: one.conversationId, title: one.title, what: 'approval' });
       for (const one of inbox.questions) if (!rows.has(one.conversationId)) rows.set(one.conversationId, { conversationId: one.conversationId, title: one.title, what: 'question' });
-      return [...rows.values()];
+      return { rows: [...rows.values()], unread: inbox.unread.length };
     },
+    log: (message) => console.error(message),
     engine: async (): Promise<EngineRow | null> => {
       const state = await core.engineState();
       if (state.model) {
@@ -273,6 +276,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
       const failed = await shell.openPath(dataDir);
       if (failed) throw new Error(failed);
     },
+    // A conversation seen: a reply ready there leaves the taskbar's badge.
+    seen: () => void noticing.attention?.refresh(),
     // A pull request's page, which the core read.
     openLink: async (url) => {
       if (options.e2e) {
@@ -307,6 +312,9 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
       setLoginItem: (settings) => app.setLoginItemSettings(settings),
     });
   loginItem(await setting(core, 'launchAtLogin', false));
+  // Quitting saves the memory and stops the engine: said before anything else can go wrong (review of phase 8).
+  app.on('window-all-closed', () => app.quit());
+  stopEngineBeforeQuit(app, core);
   // Windows shows the banners of an app that has a name of its own.
   if (process.platform === 'win32' && !options.e2e) app.setAppUserModelId(app.isPackaged ? 'dev.aparte.bonaparte' : process.execPath);
   // A banner, or the menu of the icon, opens its conversation in the window — nothing more.
@@ -323,7 +331,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     open: openConversation,
   });
   noticing.attention = noticed;
-  core.onTurnEnd((end) => void noticed.turnEnded(end).catch((error: unknown) => console.error('[bonaparte] a notification failed:', error)));
+  // None of these ever rejects (attention.ts logs what fails): the app goes on, whatever a drawing does.
+  core.onTurnEnd((end) => void noticed.turnEnded(end));
   // Back in front of the window: a failure was seen, and what waits is read again.
   window.on('focus', () => {
     void noticed.focused();
@@ -334,8 +343,6 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     if (key === 'launchAtLogin') loginItem(value === true);
     if (key === 'language' || key.startsWith('notifications.')) void noticed.refresh();
   });
-  await noticed.refresh();
-
-  app.on('window-all-closed', () => app.quit());
-  stopEngineBeforeQuit(app, core);
+  // The first drawing reads every conversation: the window does not wait for it.
+  void noticed.refresh();
 }

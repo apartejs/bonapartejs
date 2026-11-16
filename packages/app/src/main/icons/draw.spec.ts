@@ -65,10 +65,11 @@ describe('the icons', () => {
         expect(png.pixel(size - 1, size - 1)[3]).toBe(0);
       }
     }
-    // The badge: a dot, in the colour of what it says.
+    // The badge: a dot, in the colour of what it says — a reply ready in the colour at rest.
     const badge = decode(set.get('badge-waiting-16.png')!);
     expect(badge.pixel(8, 8).slice(0, 3)).toEqual(rgb(tokens.get(TRAY_TOKENS.waiting)!));
     expect(badge.pixel(0, 0)[3]).toBe(0);
+    expect(decode(set.get('badge-done-16.png')!).pixel(8, 8).slice(0, 3)).toEqual(rgb(tokens.get(TRAY_TOKENS.rest)!));
   });
 
   it('every colour comes from a token, the ring of the badge included: without one, nothing is drawn', async () => {
@@ -89,7 +90,7 @@ describe('the icons', () => {
 
   it('the icons in the repository are those the tokens give — run `node scripts/make-icons.mjs` after a change', async () => {
     const set = iconSet(readTokens(await readFile(TOKENS, 'utf8')));
-    expect(set.size).toBe(16);
+    expect(set.size).toBe(18);
     for (const [name, png] of set) {
       // Pixel for pixel: another zlib may compress the same pixels into other bytes.
       const kept = decode(await readFile(join(ICONS, name)));

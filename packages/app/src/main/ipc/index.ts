@@ -29,12 +29,14 @@ export interface AppFacts {
   openFolder(path: string): Promise<void>;
   /** Opens a page the core read (a pull request's, on GitHub) in the system's browser. */
   openLink(url: string): Promise<void>;
+  /** A conversation was seen in the window (the notification area draws again). */
+  seen?(): void;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
   ipc.handle(appInfo, () => ({ version: facts.version(), locale: facts.locale() }));
   registerEngineChannels(ipc, core);
-  registerConversationChannels(ipc, core);
+  registerConversationChannels(ipc, core, facts.seen ? { seen: facts.seen } : {});
   ipc.handle(conversationsOpenFolder, async ({ id }) => {
     const branch = await core.branchOf(id);
     if (branch) await facts.openFolder(branch.worktree);

@@ -20,9 +20,13 @@ type Notify = 'banner' | 'badge' | 'off';
 export function GeneralPage({ messages, locale, values, change }: PageProps) {
   const words = messages.settings.general;
   const [exported, setExported] = useState<string | null>(null);
-  // The sub-agents in parallel restart the engine (task 8.3): said first, kept only on a choice.
-  const restart = useRestartAsk(() => undefined);
-  const subagentsKept = values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential';
+  // The sub-agents in parallel restart the engine (task 8.3): said first, kept only on a choice. The core keeps
+  // it (not this page's values): what was kept here is shown until the page is read again (review of phase 8).
+  const [keptHere, setKeptHere] = useState<'sequential' | 'parallel' | null>(null);
+  const restart = useRestartAsk((kept) => {
+    if ('subagents' in kept) setKeptHere(kept.subagents);
+  });
+  const subagentsKept = keptHere ?? (values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential');
   const asked = restart.asking && 'subagents' in restart.asking.change ? restart.asking.change.subagents : null;
   const language = values['language'] === 'fr' || values['language'] === 'en' ? values['language'] : locale;
   const notify = (key: string, label: string) => (
