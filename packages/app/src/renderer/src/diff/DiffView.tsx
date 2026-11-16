@@ -9,7 +9,7 @@
 import '@aparte/plugin-diff';
 import { diffElement, type AparteDiffComment, type AparteDiffCommentEventDetail } from '@aparte/plugin-diff';
 import { createAparteElement } from '@aparte/react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 const Diff = createAparteElement(diffElement);
 
@@ -26,13 +26,21 @@ export interface DiffViewProps {
 export function DiffView({ path, before, after, commentable, comments, onComment }: DiffViewProps) {
   // The same change keeps the same object: the view keeps its folds and what is picked.
   const diff = useMemo(() => ({ path, before, after }), [path, before, after]);
+  // The same comments keep the same array, and the handler one function: aparté draws the whole view again for
+  // any array it is given — a fold opened, a comment being written, lost at every render of the app (review of
+  // phase 8: the « À traiter » reads made those frequent; apartejs/aparte#253).
+  const said = comments ? JSON.stringify(comments) : null;
+  const kept = useMemo(() => comments, [said]);
+  const handler = useRef(onComment);
+  handler.current = onComment;
+  const onDiffComment = useCallback((detail: AparteDiffCommentEventDetail, event: CustomEvent<AparteDiffCommentEventDetail>) => handler.current?.(detail, event), []);
   return (
     <Diff
       className="diff-view"
       diff={diff}
       {...(commentable ? { commentable: true } : {})}
-      {...(comments ? { comments } : {})}
-      {...(onComment ? { onDiffComment: onComment } : {})}
+      {...(kept ? { comments: kept } : {})}
+      {...(onComment ? { onDiffComment } : {})}
     />
   );
 }
