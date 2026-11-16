@@ -20,7 +20,7 @@ import { writeFileTool } from './write-file.js';
 
 let dirs: string[] = [];
 afterEach(async () => {
-  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true })));
+  await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })));
   dirs = [];
 });
 
