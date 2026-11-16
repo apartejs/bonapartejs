@@ -472,6 +472,17 @@ export const fr: Messages = {
       failed: 'Le modèle n’a pas pu être chargé.',
     },
   },
+  engineUnloaded: {
+    title: (name) => `${name} est déchargé`,
+    cost: (duration, vram) => `Le charger prend ~${duration} et ${vram} de mémoire vidéo.`,
+    idle: (time, minutes) => `Déchargé à ${time} après ${minutes} min sans activité.`,
+    unloadedAt: (time) => `Déchargé à ${time}.`,
+    held: 'Ton message est gardé : il part dès que le modèle est chargé.',
+    load: 'Charger et envoyer',
+    other: 'Un autre modèle…',
+    loading: 'Chargement du modèle…',
+    failed: 'Le modèle n’a pas pu être chargé.',
+  },
   pr: {
     markOpen: (number, ci) =>
       `pull request ${number} ouverte${ci === 'success' ? ', CI réussie' : ci === 'failure' ? ', CI en échec' : ci === 'pending' ? ', CI en cours' : ''}`,

@@ -22,6 +22,10 @@ export const engineStateSchema = z.object({
       nCtx: z.number(),
     })
     .optional(),
+  /** Nothing runs: the model a load would bring back (« Charger et envoyer », task 7.4); absent at the first launch. */
+  resume: z
+    .object({ path: z.string(), name: z.string(), unloadedAt: z.string().optional(), idleMinutes: z.number().optional() })
+    .optional(),
 });
 
 export type EngineStateView = z.infer<typeof engineStateSchema>;

@@ -47,6 +47,10 @@ export function EngineMemoryPage({ messages, locale, change, onPage }: PageProps
       .invoke(engineLlama, {})
       .then((llama) => setBuild(llama.current?.build ?? null))
       .catch(() => undefined);
+    // The engine changed while the page is open (a restart that ends, an unload for want of work): read again.
+    return bridge.on((event) => {
+      if (event.kind === 'engine') read();
+    });
   }, []);
 
   useEffect(() => {

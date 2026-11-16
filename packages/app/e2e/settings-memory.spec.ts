@@ -65,7 +65,7 @@ test('the engine, the memory of each conversation, « Libérer », « Redémarre
   await page.getByRole('button', { name: 'Décharger' }).click();
   await expect(engine).toContainText('Déchargé', { timeout: 15_000 });
 
-  // Back to the conversations: no model runs, so the window offers to start one again.
+  // Back to the conversations: no model runs — they stay, and a card offers to load it again (task 7.4).
   await settings.getByRole('link', { name: 'Conversations' }).click();
-  await expect(page.getByRole('button', { name: 'Démarrer' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('.engine-unloaded').getByRole('button', { name: 'Charger et envoyer' })).toBeVisible({ timeout: 15_000 });
 });

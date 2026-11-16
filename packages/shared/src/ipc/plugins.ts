@@ -34,4 +34,6 @@ export type CommandOutputView =
 
 export type AppEvent =
   | { kind: 'plugin'; pluginId: string; instanceId: string; event: string; payload: unknown }
-  | { kind: 'command'; conversationId: string; output: CommandOutputView };
+  | { kind: 'command'; conversationId: string; output: CommandOutputView }
+  /** The engine changed (started, ready, stopped, unloaded for want of work): the window reads it again. */
+  | { kind: 'engine' };

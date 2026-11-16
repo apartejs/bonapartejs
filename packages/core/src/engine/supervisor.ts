@@ -88,8 +88,10 @@ export interface EngineSupervisorOptions {
   platform?: NodeJS.Platform;
   healthIntervalMs?: number;
   healthTimeoutMs?: number;
-  /** Minutes without work after which the model is unloaded (default 15; 0: never). */
-  idleUnloadMinutes?: number;
+  /** Minutes without work after which the model is unloaded (default 15; 0: never) — read each time it is armed. */
+  idleUnloadMinutes?: number | (() => number);
+  /** The model was unloaded for want of work, after that many minutes: told once it is down. */
+  onIdleUnload?: (minutes: number) => void;
 }
 
 const DEFAULT_PORT = 8763;
@@ -348,7 +350,8 @@ export class EngineSupervisor {
 
   private armIdleTimer(): void {
     this.clearIdleTimer();
-    const minutes = this.options.idleUnloadMinutes ?? DEFAULT_IDLE_MINUTES;
+    const setting = this.options.idleUnloadMinutes;
+    const minutes = (typeof setting === 'function' ? setting() : setting) ?? DEFAULT_IDLE_MINUTES;
     if (minutes <= 0 || this.holds > 0 || !this.managed) return;
     this.idleTimer = setTimeout(() => void this.unloadIdle(minutes), minutes * 60_000);
     this.idleTimer.unref?.();
@@ -367,6 +370,7 @@ export class EngineSupervisor {
     );
     await this.options.beforeUnload?.().catch(() => undefined);
     await this.teardown();
+    this.options.onIdleUnload?.(minutes);
   }
 
   private async teardown(): Promise<void> {

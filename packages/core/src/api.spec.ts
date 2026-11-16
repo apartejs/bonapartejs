@@ -435,22 +435,95 @@ describe('createCore — what the review of phase 2 found', () => {
     releases = [];
   });
 
-  it('a loaded model stays loaded however long nothing happens: its unloading comes with the announced reload (7.4)', async () => {
-    const { core, gemma } = await setup();
+  it('after the minutes of its setting without work, the model is unloaded — the memory kept, the window told, the model to load again said (7.4)', async () => {
+    let told = 0;
+    const { core, dir, gemma } = await setup({ engineChanged: () => (told += 1) });
     await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    await core.settings.set('idleUnloadMinutes', 5);
     // The quiet starts when the last turn ends.
+    const release = core.hold();
+    told = 0;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      release();
+      vi.advanceTimersByTime(4 * 60_000);
+      expect((await core.engineState()).status).toBe('ready');
+      vi.advanceTimersByTime(60_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await expect.poll(async () => (await core.engineState()).status, { timeout: 5_000 }).toBe('stopped');
+    expect(await core.engine()).toBeUndefined();
+    expect(await core.engineState()).toMatchObject({ resume: { path: gemma, name: 'gemma-4-test', idleMinutes: 5 } });
+    expect((await core.engineState()).resume?.unloadedAt).toBeTruthy();
+    expect(told).toBeGreaterThan(0);
+    // The memory of the conversation was saved before the engine went.
+    await expect(readFile(join(dir, 'data', 'kv-slots', 'c1_main.manifest.json'), 'utf8')).resolves.toContain('c1_main');
+  }, 20_000);
+
+  it('a window told the engine is ready can send at once: the model is known before it is told', async () => {
+    const told: { core?: Core } = {};
+    const asked: Promise<unknown>[] = [];
+    const states: Promise<{ status: string }>[] = [];
+    const { core, gemma } = await setup({
+      engineChanged: () => {
+        // What the window does when told: read the state, and a message may follow at once.
+        if (!told.core) return;
+        states.push(told.core.engineState());
+        asked.push(told.core.engine());
+      },
+    });
+    told.core = core;
+    await core.loadModel(gemma);
+    const seen = await Promise.all(states);
+    const engines = await Promise.all(asked);
+    const whenReady = seen.map((state, index) => (state.status === 'ready' ? engines[index] : 'not ready')).filter((one) => one !== 'not ready');
+    expect(whenReady.length).toBeGreaterThan(0);
+    expect(whenReady.every((engine) => engine !== undefined)).toBe(true);
+  }, 20_000);
+
+  it('« 0 » never unloads; unloaded by the person, the model to load again is said, without a delay', async () => {
+    const { core, gemma } = await setup();
+    await core.settings.set('idleUnloadMinutes', 0);
+    await core.loadModel(gemma);
     const release = core.hold();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       release();
-      vi.advanceTimersByTime(60 * 60_000);
+      vi.advanceTimersByTime(24 * 60 * 60_000);
     } finally {
       vi.useRealTimers();
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect((await core.engineState()).status).toBe('ready');
-    expect(await core.engine()).toBeDefined();
-  });
+    await core.unloadModel();
+    const state = await core.engineState();
+    expect(state).toMatchObject({ status: 'stopped', resume: { path: gemma, name: 'gemma-4-test' } });
+    expect(state.resume?.idleMinutes).toBeUndefined();
+  }, 20_000);
+
+  it('at launch nothing is loaded: the model a load would bring back is the default one, else the one loaded last', async () => {
+    const { core, dir, gemma, qwen } = await setup();
+    expect((await core.engineState()).resume).toBeUndefined();
+    await core.loadModel(qwen);
+    await core.stop();
+    const again = createCore({
+      dataDir: join(dir, 'data'),
+      env: {},
+      llamaCommand: [process.execPath, BIN],
+      port: await freePort(),
+      modelRoots: [{ dir: join(dir, 'models'), source: 'custom' }],
+      gpuMemory: async () => 24 * GiB,
+      llamaReleases: null,
+      logger: () => undefined,
+    });
+    cores.push(again);
+    expect(await again.engineState()).toMatchObject({ status: 'stopped', resume: { path: qwen, name: 'qwen-test' } });
+    await again.settings.set('defaultModel', gemma);
+    expect((await again.engineState()).resume?.path).toBe(gemma);
+  }, 20_000);
 
   it('refuses to replace llama.cpp under a model that loads or runs', async () => {
     const github = await startFakeLlamaReleases();

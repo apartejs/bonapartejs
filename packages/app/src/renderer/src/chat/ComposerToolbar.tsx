@@ -15,7 +15,7 @@ import { AparteContext, AparteUi, createAparteElement } from '@aparte/react';
 import { modelSelectorElement, type AparteModelSelector } from '@aparte/plugin-model-selector';
 import '@aparte/plugin-triggers';
 import type { AparteTrigger } from '@aparte/plugin-triggers';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import { ENGINE_PROVIDER } from '../aparte/model-catalogue';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
@@ -32,13 +32,23 @@ export interface ComposerToolbarProps {
   scope(): { conversationId?: string; projectId?: string };
   /** Another model picked: `revert` shows the one that runs again (« Annuler »). */
   onPickModel(path: string, name: string, revert: () => void): void;
+  /** Set to what opens the picker (« Un autre modèle… », the engine unloaded). */
+  opener?: MutableRefObject<(() => void) | null>;
 }
 
-export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickModel }: ComposerToolbarProps) {
+export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickModel, opener }: ComposerToolbarProps) {
   const where = useRef(scope);
   where.current = scope;
   const selector = useRef<HTMLElement>(null);
-  const running = engine.model?.path;
+  // The model that runs — else the one a load would bring back, which the picker shows chosen.
+  const running = engine.model?.path ?? engine.resume?.path;
+  useEffect(() => {
+    if (!opener) return;
+    opener.current = () => selector.current?.querySelector<HTMLElement>('[role="combobox"], [role="button"]')?.click();
+    return () => {
+      opener.current = null;
+    };
+  }, [opener]);
   const triggers = useMemo<AparteTrigger[]>(
     () => [
       { char: '/', at: 'message', commands: { exclude: ['approval'] } },

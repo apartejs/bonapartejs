@@ -471,6 +471,17 @@ export const en: Messages = {
       failed: 'The model could not be loaded.',
     },
   },
+  engineUnloaded: {
+    title: (name) => `${name} is unloaded`,
+    cost: (duration, vram) => `Loading it takes ~${duration} and ${vram} of video memory.`,
+    idle: (time, minutes) => `Unloaded at ${time} after ${minutes} min without activity.`,
+    unloadedAt: (time) => `Unloaded at ${time}.`,
+    held: 'Your message is kept: it goes as soon as the model is loaded.',
+    load: 'Load and send',
+    other: 'Another model…',
+    loading: 'Loading the model…',
+    failed: 'The model could not be loaded.',
+  },
   pr: {
     markOpen: (number, ci) =>
       `pull request ${number} open${ci === 'success' ? ', CI passed' : ci === 'failure' ? ', CI failed' : ci === 'pending' ? ', CI running' : ''}`,

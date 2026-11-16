@@ -3,8 +3,10 @@ import { setupCommands } from '@aparte/plugin-triggers/commands';
 import { useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
 import {
   conversationsMemory,
+  engineLoad,
   engineModels,
   engineState,
+  type ModelChoiceView,
   modesGet,
   modesSet,
   projectsList,
@@ -57,6 +59,7 @@ import { useCompaction } from './chat/useCompaction';
 import { useModelSwitch } from './chat/useModelSwitch';
 import { catalogueOf, showCatalogue } from './aparte/model-catalogue';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
+import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
 import { useRewind } from './chat/useRewind';
 import { setupMessageActions } from './aparte/message-actions';
@@ -593,15 +596,19 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     changed: () => setAsked((count) => count + 1),
   });
 
-  // The composer's picker lists the core's models, the one that runs shown chosen (task 7.4).
-  const runningModel = engine.model?.path;
+  // The composer's picker lists the core's models, the one that runs — else the one a load would bring
+  // back — shown chosen (task 7.4).
+  const runningModel = engine.model?.path ?? engine.resume?.path;
+  const [modelChoices, setModelChoices] = useState<ModelChoiceView[]>([]);
   useEffect(() => {
     if (!runningModel) return;
     let live = true;
     void bridge
       .invoke(engineModels, undefined)
       .then((found) => {
-        if (live) showCatalogue(catalogueOf(found, messages, { locale, units: messages.units }), messages.modelSwitch.provider, runningModel);
+        if (!live) return;
+        setModelChoices(found);
+        showCatalogue(catalogueOf(found, messages, { locale, units: messages.units }), messages.modelSwitch.provider, runningModel);
       })
       .catch(() => undefined);
     return () => {
@@ -609,13 +616,77 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     };
   }, [runningModel, messages, locale]);
 
+  // The engine unloaded (task 7.4; board « Coûts annoncés », 5): the conversation stays, a card says what
+  // loading costs. A message sent meanwhile is held — apartejs/aparte#245: aparté's send cannot be
+  // cancelled, so it is stopped here, in the window's capture phase, before aparté's client and controller
+  // hear it, and its text put back in the composer.
+  const engineDown = engine.mode === 'managed' && engine.status !== 'ready';
+  // The model a load brings back: the one unloaded (or known), else the one loading now.
+  const toLoad = engine.resume ?? (engine.model ? { path: engine.model.path, name: engine.model.name } : undefined);
+  const downRef = useRef(engineDown);
+  downRef.current = engineDown;
+  const [held, setHeld] = useState(false);
+  const [loadingModel, setLoadingModel] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  useEffect(() => {
+    if (!engineDown) {
+      setHeld(false);
+      setLoadFailed(false);
+    }
+  }, [engineDown]);
+  useEffect(() => {
+    const hold = (event: Event): void => {
+      if (!downRef.current) return;
+      event.stopImmediatePropagation();
+      const text = (event as CustomEvent<{ content?: string }>).detail?.content ?? '';
+      const composer = event.composedPath().find((node): node is HTMLElement & { setValue(value: string): void } =>
+        node instanceof HTMLElement && node.tagName === 'APARTE-COMPOSER',
+      );
+      // The composer empties itself once the event is dispatched: the text goes back after.
+      queueMicrotask(() => composer?.setValue(text));
+      setHeld(true);
+    };
+    window.addEventListener('aparte-send', hold, { capture: true });
+    return () => window.removeEventListener('aparte-send', hold, { capture: true });
+  }, []);
+  const loadAndSend = async (): Promise<void> => {
+    const path = toLoad?.path;
+    if (!path) return;
+    setLoadingModel(true);
+    setLoadFailed(false);
+    const result = await bridge.invoke(engineLoad, { path }).catch(() => null);
+    setLoadingModel(false);
+    if (!result?.ok) {
+      setLoadFailed(true);
+      return;
+    }
+    // Loaded: what waits in the shown composer goes now, before the window has read the engine again.
+    downRef.current = false;
+    setHeld(false);
+    window.dispatchEvent(new CustomEvent(ENGINE_CHANGED));
+    const composer = handles.get(deck.shown)?.getComposer();
+    if (composer && composer.value.trim() !== '') composer.submit();
+  };
+  // « Un autre modèle… »: the composer's picker, opened.
+  const pickerOpener = useRef<(() => void) | null>(null);
+  const resumeCost = modelChoices.find((choice) => choice.path === toLoad?.path)?.announcement ?? null;
+
   // Changing model (task 7.4): its cost said in a dialog first; a copy made is listed again, then shown.
+  // The dialog said the re-reading: the next announcement of that conversation, or of its copy, is not shown.
+  const saidBySwitch = useRef(new Set<string>());
   const modelSwitch = useModelSwitch({
     handles,
     conversationId,
     showCopy: async (id) => {
+      saidBySwitch.current.add(id);
       await conversationManager.manager?.init();
       goToRef.current(id);
+    },
+    onSwitching: (id) => {
+      if (id) saidBySwitch.current.add(id);
+    },
+    onSwitchFailed: (id) => {
+      if (id) saidBySwitch.current.delete(id);
     },
     onSwitched: (id) => {
       if (id === shownIdRef.current) setMemory(null);
@@ -635,18 +706,24 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     },
   });
 
-  // What opening the conversation will cost, said before anything is paid.
+  // What opening the conversation will cost, said before anything is paid — again once the engine serves:
+  // unloaded, it could say nothing (task 7.4). Not over a reply that began meanwhile: its cost is paid.
+  const serving = engine.status === 'ready';
   useEffect(() => {
     setMemory(null);
-    if (!conversationId) return;
+    if (!conversationId || !serving) return;
     let current = true;
     void bridge.invoke(conversationsMemory, { id: conversationId }).then((view) => {
-      if (current) setMemory(view.announcement);
+      if (!current) return;
+      // Said already by the dialog of a change of model.
+      if (saidBySwitch.current.delete(conversationId)) return;
+      for (const handle of handles.values()) if (handle.getConversationId() === conversationId && handle.isStreaming()) return;
+      setMemory(view.announcement);
     });
     return () => {
       current = false;
     };
-  }, [conversationId]);
+  }, [conversationId, serving]);
 
   // Once a turn starts, the cost said is being paid: the banner has said its piece.
   useEffect(() => {
@@ -875,6 +952,18 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             />
           ) : rewinding.rewound && rewinding.rewound.conversationId === conversationId ? (
             <RewindBanner rewound={rewinding.rewound} messages={messages} locale={locale} busy={rewinding.busy} onUndo={rewinding.undo} />
+          ) : engineDown && toLoad ? (
+            <EngineUnloadedCard
+              messages={messages}
+              style={style}
+              resume={engine.resume ?? toLoad}
+              cost={resumeCost ? { seconds: resumeCost.seconds, vramBytes: resumeCost.vramBytes } : null}
+              held={held}
+              loading={loadingModel}
+              failed={loadFailed}
+              onLoad={() => void loadAndSend()}
+              onOther={() => pickerOpener.current?.()}
+            />
           ) : memory ? (
             <MemoryBanner
               announcement={memory}
@@ -914,6 +1003,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
               conversationId ? { conversationId } : project.current ? { projectId: project.current.id } : {}
             }
             onPickModel={modelSwitch.ask}
+            opener={pickerOpener}
           />
         }
       />
@@ -1008,13 +1098,22 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
       });
     };
     window.addEventListener(ENGINE_CHANGED, follow);
+    // The engine changed on its own (unloaded for want of work, gone): the core says it.
+    const off = bridge.on((event) => {
+      if (event.kind === 'engine') follow();
+    });
     return () => {
       clearTimeout(timer);
       window.removeEventListener(ENGINE_CHANGED, follow);
+      off();
     };
   }, []);
 
-  const needsModel = engine?.mode === 'managed' && engine.status !== 'ready';
+  // « Préparons le moteur » until a model is known; then the conversations stay, and a card offers to load
+  // it again (task 7.4). Once shown, they stay: a load or a restart under way never takes them down.
+  const shown = useRef(false);
+  const needsModel = !shown.current && engine?.mode === 'managed' && engine.status !== 'ready' && engine.resume === undefined;
+  if (engine !== null && !needsModel) shown.current = true;
 
   return (
     <main className="bonaparte-window">

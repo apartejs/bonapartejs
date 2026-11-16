@@ -37,6 +37,15 @@ export class MeasureStore {
     return this.load().get(modelPath);
   }
 
+  /** The model loaded last on this machine; undefined for none. */
+  lastLoaded(): string | undefined {
+    let last: { path: string; at: string } | undefined;
+    for (const [path, figures] of this.load()) {
+      if (figures.lastLoadedAt && (!last || figures.lastLoadedAt > last.at)) last = { path, at: figures.lastLoadedAt };
+    }
+    return last?.path;
+  }
+
   record(modelPath: string, figures: ModelMeasures): void {
     const kept: ModelMeasures = {};
     if (isMeasure(figures.loadSeconds, true)) kept.loadSeconds = figures.loadSeconds;

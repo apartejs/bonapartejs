@@ -22,7 +22,11 @@ export interface ModelSwitchDeps {
   conversationId: string | null;
   /** The copy made: listed again from the store, then shown. */
   showCopy(conversationId: string): Promise<void>;
-  /** The change made for this conversation: its re-reading was said, the banner has said its piece. */
+  /** A change begins for this conversation: the dialog said its re-reading — no banner says it again. */
+  onSwitching(conversationId: string | null): void;
+  /** The change did not happen: what opening the conversation costs will be said as before. */
+  onSwitchFailed(conversationId: string | null): void;
+  /** The change made for this conversation. */
   onSwitched(conversationId: string | null): void;
 }
 
@@ -79,12 +83,14 @@ export function useModelSwitch(deps: ModelSwitchDeps) {
     if (!was) return;
     setBusy(true);
     setRefused(null);
+    latest.current.onSwitching(was.conversationId);
     const result = await bridge
       .invoke(engineSwitch, { path: was.path, ...(was.conversationId ? { conversationId: was.conversationId } : {}), as })
       .catch(() => null);
     if (pending.current !== was) return;
     setBusy(false);
     if (!result || !result.ok) {
+      latest.current.onSwitchFailed(was.conversationId);
       setRefused(result ? result.error.code : 'failed');
       return;
     }

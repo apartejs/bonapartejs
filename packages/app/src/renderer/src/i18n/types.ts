@@ -466,6 +466,18 @@ export interface Messages {
     loading: string;
     refused: Record<'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
   };
+  /** The engine unloaded (task 7.4; board « Coûts annoncés », 5): the card above the composer. */
+  engineUnloaded: {
+    title(name: string): string;
+    cost(duration: string, vram: string): string;
+    idle(time: string, minutes: number): string;
+    unloadedAt(time: string): string;
+    held: string;
+    load: string;
+    other: string;
+    loading: string;
+    failed: string;
+  };
   pr: {
     /** The mark of a row, said whole: « pull request 42 ouverte, CI réussie ». */
     markOpen(number: number, ci: 'success' | 'failure' | 'pending' | null): string;

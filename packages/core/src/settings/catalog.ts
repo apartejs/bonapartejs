@@ -48,8 +48,6 @@ export const ENGINE_SETTINGS: SettingField[] = [
   },
   // K and V share one type: an asymmetric pair drops llama.cpp onto a slow path.
   { key: 'cacheType', type: 'select', scopes: ['global'], default: 'f16', options: ['f16', 'q8_0', 'q4_0'], requiresRestart: true },
-  // Minutes without work before the model is unloaded; 0: never.
-  { key: 'idleUnloadMinutes', type: 'number', scopes: ['global'], default: 15, min: 0, step: 1, integer: true },
   // Tool round trips allowed in one turn (v0 stopped at 10).
   { key: 'maxToolRounds', type: 'number', scopes: ['global'], default: 25, min: 1, max: 200, step: 1, integer: true },
 ];
@@ -85,6 +83,8 @@ export const APP_SETTINGS: SettingField[] = [
   { key: 'codeFont', type: 'string', scopes: GLOBAL, default: 'JetBrains Mono' },
   // None: the person chooses (task 5.7).
   { key: 'defaultModel', type: 'string', scopes: GLOBAL, default: '' },
+  // Minutes without work before the model is unloaded; 0: never. No launch argument: it applies at once (7.4).
+  { key: 'idleUnloadMinutes', type: 'number', scopes: GLOBAL, default: 15, min: 0, step: 1, integer: true },
   { key: 'modelFolders', type: 'list', scopes: GLOBAL, default: [] },
   // Derived from the free space (task 3.4) until the person sets one.
   { key: 'kvBudgetBytes', type: 'number', scopes: GLOBAL, default: null, min: 0, step: 1, integer: true, advanced: true },

@@ -1706,6 +1706,39 @@ body {
   min-width: 0;
 }
 
+/* The engine unloaded (board « Coûts annoncés », 5): a neutral card above the composer, its actions in a row. */
+.engine-unloaded {
+  align-items: flex-start;
+  background: var(--aparte-bg);
+  border: 1px solid var(--aparte-border);
+}
+
+.engine-unloaded > .bonaparte-icon svg {
+  width: 16px;
+  height: 16px;
+  color: var(--aparte-text-muted);
+}
+
+.engine-unloaded__detail,
+.engine-unloaded__held {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--aparte-text-muted);
+}
+
+.engine-unloaded__failed {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--aparte-error-ink);
+}
+
+.engine-unloaded__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: var(--aparte-space-3);
+}
+
 /* « Passer à … ? »: what changing model costs, a label and its figure on each line (board « Coûts annoncés », 3). */
 .model-switch-dialog {
   width: min(520px, calc(100vw - 32px));

@@ -10,7 +10,7 @@
  * joined instead, and spoken to in the family its template says.
  */
 
-import { statfs } from 'node:fs/promises';
+import { access, statfs } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
@@ -135,6 +135,8 @@ export interface CoreDeps {
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
+  /** The engine changed on its own or by a load (it started, stopped, was unloaded for want of work): the window reads it again. */
+  engineChanged?: () => void;
   /** GitHub's CLI, for a branch's pull request: `gh` by default; a fake one in tests; null for none (a test run never asks GitHub). */
   gh?: readonly string[] | null;
   /** Terminals for the plugins: the app finds the shells and runs them in a process of its own. None without it. */
@@ -156,6 +158,12 @@ export interface EngineState {
   status: BackendStatus;
   /** The model the engine serves, once it serves one. */
   model?: { path: string; name: string; family: FamilyId | null; nCtx: number };
+  /**
+   * Nothing runs (managed engine): the model a load would bring back (task 7.4, « Charger et envoyer ») — the
+   * one unloaded (when, and after how many minutes without work when it was for want of work), else the default
+   * one, else the one loaded last. Absent when none is known: the first launch.
+   */
+  resume?: { path: string; name: string; unloadedAt?: string; idleMinutes?: number };
 }
 
 /** « Moteur et mémoire » (Settings): the engine, and the memory every conversation keeps on disk. */
@@ -449,14 +457,28 @@ export function createCore(deps: CoreDeps): Core {
   const diskScan = new DiskScan(deps.diskRoots ?? (() => diskRoots()), async (folders) => void (await addModelFolders(folders)));
   // Where the core says what went wrong without failing: the supervisor's own default.
   const log = deps.logger ?? ((line: string) => console.log(line));
+  // Minutes without work before the model is unloaded: the setting, followed as it changes (task 7.4).
+  let idleMinutes = settingDefault('idleUnloadMinutes') as number;
+  const readIdle = (value: unknown): void => {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) idleMinutes = value;
+  };
+  void appSettings.get('idleUnloadMinutes').then(readIdle, () => undefined);
+  appSettings.onChange((key, value) => {
+    if (key === 'idleUnloadMinutes') readIdle(value);
+  });
+  // The model unloaded last, said so that « Charger et envoyer » brings it back.
+  let unloaded: { path: string; at: string; idleMinutes?: number } | undefined;
   const supervisor = new EngineSupervisor({
     slotsDir: kvDir,
     pidFile: join(engineDir, 'managed-server.pid'),
     measures,
-    // Unloading after a while without work waits for the reload it implies to be
-    // announced (« Charger et envoyer », plan task 7.4): until then a model unloaded
-    // behind the person's back would leave every next message without an engine.
-    idleUnloadMinutes: 0,
+    // Unloading after a while without work: the window says it, and « Charger et envoyer » announces the reload.
+    idleUnloadMinutes: () => idleMinutes,
+    onIdleUnload: (minutes) => {
+      if (loaded) unloaded = { path: loaded.path, at: new Date().toISOString(), idleMinutes: minutes };
+      loaded = undefined;
+      deps.engineChanged?.();
+    },
     ...(deps.port !== undefined ? { port: deps.port } : {}),
     ...(deps.llamaCommand ? { llamaCommand: deps.llamaCommand } : {}),
     ...(deps.spawn ? { spawn: deps.spawn } : {}),
@@ -464,6 +486,8 @@ export function createCore(deps: CoreDeps): Core {
     // Another model replaces this one: the memory the engine holds is saved first, while it still serves.
     beforeUnload: () => conversations.flush(),
   });
+  // The window reads the engine again whenever it changes: started, ready, stopped, gone.
+  supervisor.onStatusChange(() => deps.engineChanged?.());
 
   let config: GlobalConfig | undefined;
   let gpu: Promise<number | null> | undefined;
@@ -736,9 +760,13 @@ export function createCore(deps: CoreDeps): Core {
   async function engineState(): Promise<EngineState> {
     const engine = { mode: await mode() };
     const model = supervisor.loaded;
+    // The server says « ready » as soon as it answers; the core serves a turn only once it knows the model it
+    // loaded: until then, still starting — a window told « ready » may send at once (task 7.4).
+    const raw = supervisor.status();
+    const serving = engine.mode === 'remote' || (model !== null && loaded !== undefined && samePath(loaded.path, model.modelPath));
     return {
       mode: engine.mode,
-      status: supervisor.status(),
+      status: raw === 'ready' && !serving ? 'starting' : raw,
       ...(model
         ? {
             model: {
@@ -752,7 +780,28 @@ export function createCore(deps: CoreDeps): Core {
             },
           }
         : {}),
+      ...(engine.mode === 'managed' && !model ? await resumeOf() : {}),
     };
+  }
+
+  /** The model a load would bring back, when nothing runs: the one unloaded, else the default one, else the last loaded. */
+  async function resumeOf(): Promise<Pick<EngineState, 'resume'>> {
+    const there = async (path: string): Promise<boolean> => access(path).then(() => true, () => false);
+    if (unloaded && (await there(unloaded.path))) {
+      return {
+        resume: {
+          path: unloaded.path,
+          name: nameOf(unloaded.path),
+          unloadedAt: unloaded.at,
+          ...(unloaded.idleMinutes !== undefined ? { idleMinutes: unloaded.idleMinutes } : {}),
+        },
+      };
+    }
+    const preferred = await appSettings.get('defaultModel').catch(() => '');
+    for (const path of [typeof preferred === 'string' ? preferred : '', measures.lastLoaded() ?? '']) {
+      if (path && (await there(path))) return { resume: { path, name: nameOf(path) } };
+    }
+    return {};
   }
 
   /** Where models are looked for: the known folders, and the ones the person added (Settings, Models). */
@@ -1147,6 +1196,8 @@ export function createCore(deps: CoreDeps): Core {
       }
       await supervisor.ensureLoaded(listed.path);
       loaded = { path: listed.path, info, layer, at: new Date().toISOString() };
+      // The engine said « ready » while it started; it serves only now: the window is told again (7.4).
+      deps.engineChanged?.();
       return engineState();
     },
 
@@ -1370,8 +1421,10 @@ export function createCore(deps: CoreDeps): Core {
       await conversations
         .flush()
         .catch((error: unknown) => log(`[bonaparte] a memory was not saved: ${String(error)}`));
+      const was = loaded;
       await supervisor.stop();
       loaded = undefined;
+      if (was) unloaded = { path: was.path, at: new Date().toISOString() };
     },
 
     async restartEngine() {

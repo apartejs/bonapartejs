@@ -165,7 +165,9 @@ test('a conversation closed with the app comes back as it was, and resumes from 
   const second = await launch({ managed: { models: MODELS }, dataDir: first.dataDir });
   // The document the page saved reads back the same, before anything is done with it.
   expect(await documents(second.page)).toEqual(saved);
-  await startEngine(second.page);
+  // A model known (task 7.4): the conversations are there, and the card loads it again.
+  await second.page.locator('.engine-unloaded').getByRole('button', { name: 'Charger et envoyer' }).click();
+  await expect(second.page.locator('.engine-unloaded')).toBeHidden({ timeout: 20_000 });
   await openConversation(second.page, FIRST);
   await expect(chat(second.page).userMessages).toHaveCount(1);
   await expect(chat(second.page).userMessages.first()).toContainText(LONG);

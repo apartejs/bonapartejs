@@ -104,6 +104,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     terminals,
     pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
     commandOutput: (conversationId, output) => push({ kind: 'command', conversationId, output }),
+    engineChanged: () => push({ kind: 'engine' }),
     ...engineDeps,
   });
   // The built-in plugins, built with the app.
