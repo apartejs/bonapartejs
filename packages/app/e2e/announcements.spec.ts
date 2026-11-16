@@ -15,6 +15,8 @@
  * fin de la réponse » or « Maintenant », which cuts it.
  */
 
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
@@ -67,6 +69,30 @@ test('unloaded, the conversation stays: the card says what loading costs, and a 
   await expect(ui.replies).toHaveCount(2, { timeout: 15_000 });
   await expect(card(page)).toBeHidden();
   await expect(ui.errors).toHaveCount(0);
+});
+
+test('« Charger et envoyer » under an approval that waits: the turn is kept, the text written waits for the answer (check of aparté 1.12)', async ({ launch }) => {
+  const Q = '<|"|>';
+  const EDIT = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}old line${Q},new_string:${Q}new line${Q}}<tool_call|>`;
+  const { page, home } = await launch({ managed: { models: MODELS }, env: { FAKE_LLAMA_ANSWER: EDIT } });
+  await writeFile(join(home, 'notes.txt'), 'old line\n');
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ui.send('Change la note');
+  const approval = page.getByRole('region', { name: 'Demande d’accord' });
+  await expect(approval).toBeVisible({ timeout: 15_000 });
+  await unload(page);
+  await expect(card(page)).toBeVisible();
+
+  await ui.editor.click();
+  await page.keyboard.type('Et le titre aussi');
+  await card(page).getByRole('button', { name: 'Charger et envoyer' }).click();
+  // Loaded: the approval is back, the turn it belongs to still there; what was written still waits.
+  await expect(approval).toBeVisible({ timeout: 20_000 });
+  await expect(ui.composerBox).toContainText('Et le titre aussi');
+  await approval.getByRole('button', { name: 'Autoriser', exact: true }).click();
+  await expect.poll(() => readFile(join(home, 'notes.txt'), 'utf8'), { timeout: 15_000 }).toBe('new line\n');
 });
 
 test('at launch, a model known: the conversations are there, and nothing is loaded before the click', async ({ launch }) => {

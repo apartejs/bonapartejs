@@ -19,14 +19,33 @@ export function shownComposer(): Composer | null {
   return document.querySelector<Composer>('.bonaparte-live-chat:not([hidden]) [data-aparte-chat] aparte-composer');
 }
 
+/** A send in the person's name is under way: what the page's hold reads (the engine unloaded). */
+let speaking = false;
+
+/** Whether the send under way is one made in the person's name (`sendAsPerson`), not one they typed. */
+export function speakingForThePerson(): boolean {
+  return speaking;
+}
+
+/** The engine is ready again: a message in the person's name that the page held goes now. */
+export const ENGINE_READY = 'bonaparte-engine-ready';
+
 /** Sends a message as the person, keeping what they were writing; false when the composer is busy (a reply, a question). */
 export function sendAsPerson(text: string, field: Composer | null = shownComposer()): boolean {
   if (!field || field.streaming || field.panelActive) return false;
   const draft = field.value;
   field.setValue(text);
-  field.submit();
-  if (draft.trim()) field.setValue(draft);
-  return true;
+  speaking = true;
+  try {
+    field.submit();
+  } finally {
+    speaking = false;
+  }
+  // Sent, aparté empties the field. Held by the page (the engine unloaded), it leaves it as it was: the person's
+  // draft comes back, never the message in its place, and the message waits (check of aparté 1.12).
+  const sent = field.value !== text;
+  if (!sent || draft.trim() !== '') field.setValue(draft);
+  return sent;
 }
 
 /** Puts a text in the composer, the cursor after it: the person sends it, or changes it first. */
@@ -45,9 +64,9 @@ export function focusComposer(field: Composer | null = shownComposer()): void {
 /**
  * What frees the composer for a message: the end of a reply, or of the question that held it — and
  * a conversation loaded, the one the message waits for perhaps. aparté dispatches them on the chat,
- * bubbling.
+ * bubbling. And the engine ready again, after the page held the message (the window says it).
  */
-const FREED = ['aparte-message-done', 'aparte-message-aborted', 'aparte-message-error', 'aparte-conversation-loaded'] as const;
+const FREED = ['aparte-message-done', 'aparte-message-aborted', 'aparte-message-error', 'aparte-conversation-loaded', ENGINE_READY] as const;
 
 /**
  * Sends as the person, into the composer `target` names, as soon as it is free: now, or when the

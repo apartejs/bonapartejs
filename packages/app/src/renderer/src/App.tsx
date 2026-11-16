@@ -33,7 +33,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
-import { focusComposer, prefill, sendWhenFree, type Composer } from './aparte/composer';
+import { ENGINE_READY, focusComposer, prefill, sendWhenFree, speakingForThePerson, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
@@ -735,13 +735,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     if (!engineDown) {
       setHeld(false);
       setLoadFailed(false);
+      // What was sent in the person's name meanwhile goes now (`sendWhenFree`).
+      window.dispatchEvent(new Event(ENGINE_READY));
     }
   }, [engineDown]);
   useEffect(() => {
     const hold = (event: Event): void => {
       if (!downRef.current) return;
       event.preventDefault();
-      setHeld(true);
+      // A message sent in the person's name waits for the engine by itself, the person's draft left in the
+      // composer: the card has nothing of theirs to keep (check of aparté 1.12).
+      if (!speakingForThePerson()) setHeld(true);
     };
     window.addEventListener('aparte-before-send', hold, { capture: true });
     return () => window.removeEventListener('aparte-before-send', hold, { capture: true });
@@ -761,8 +765,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     downRef.current = false;
     setHeld(false);
     window.dispatchEvent(new CustomEvent(ENGINE_CHANGED));
+    // Not under a turn that waits for the person (an approval paused while the engine was let go): aparté's submit
+    // would stop that turn; what is written stays, for when the person has answered (check of aparté 1.12).
     const composer = handles.get(deck.shown)?.getComposer();
-    if (composer && composer.value.trim() !== '') composer.submit();
+    if (composer && !composer.streaming && composer.value.trim() !== '') composer.submit();
   };
   // « Maintenant » for a setting that restarts the engine (task 7.4): the replies that run are stopped.
   useEffect(() => {
