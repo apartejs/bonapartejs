@@ -55,6 +55,21 @@ const callOf = (call: PendingCall): InboxCall => ({ id: call.toolCallId, name: c
 const textOf = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /**
+ * What an `ask_user` call asks, read as aparté's tool reads it: the words of its `questions` when it has some —
+ * the form the tool says to prefer; one question asked that way is one choice like any other — else its
+ * `question` (check of aparté 1.12).
+ */
+function questionOf(input: unknown): string {
+  const fields = (input ?? {}) as Record<string, unknown>;
+  const list = fields['questions'];
+  if (!Array.isArray(list) || list.length === 0) return textOf(fields['question']);
+  return list
+    .map((entry) => textOf((entry as Record<string, unknown> | null)?.['question']))
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/**
  * The first words of an answer, its calls and its reasoning left out: what the row of an unread reply and a
  * notification say. Read by its family's own demux when the conversation's family is known (Qwen thinks between
  * `<think>` tags, Gemma in a channel); else the tags of both are taken out.
@@ -120,7 +135,7 @@ async function gather(deps: InboxDeps, meta: ConversationMeta, inbox: Inbox): Pr
         const agent = textOf((hold?.input as Record<string, unknown> | undefined)?.['name']) || textOf(hold?.name);
         inbox.subagentRequests.push({ ...item(last.at), call: callOf(call), agent });
       } else if (call.reason === 'external') {
-        inbox.questions.push({ ...item(last.at), call: callOf(call), question: textOf((call.input as Record<string, unknown> | undefined)?.['question']) });
+        inbox.questions.push({ ...item(last.at), call: callOf(call), question: questionOf(call.input) });
       } else {
         inbox.approvals.push({ ...item(last.at), call: callOf(call) });
       }

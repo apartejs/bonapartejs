@@ -151,8 +151,6 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const [inboxOpen, setInboxOpen] = useState(false);
   // The questions the chats put on screen (a hidden one too): « À traiter » answers one with choices.
   const questions = useMemo(() => createQuestionsLive(), []);
-  const [, heardQuestions] = useState(0);
-  useEffect(() => questions.subscribe(() => heardQuestions((count) => count + 1)), [questions]);
   const [inbox, setInbox] = useState<InboxView | null>(null);
   const [costLater, setCostLater] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -330,6 +328,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const approvalResolver = useMemo(() => createApprovalResolver(approvals), [approvals]);
   const [asked, setAsked] = useState(0);
   useEffect(() => approvals.subscribe(() => setAsked((count) => count + 1)), [approvals]);
+  // A question put on screen or settled: « À traiter » is read again, so that its card follows the question that
+  // waits now — a next one asked by the same reply included (check of aparté 1.12).
+  useEffect(() => questions.subscribe(() => setAsked((count) => count + 1)), [questions]);
   const request = approvals.list(conversationId ?? null)[0];
   // The changes that wait for the person in the conversation open: a mark on Changements, which
   // opens by itself unless the person said never.

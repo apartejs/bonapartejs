@@ -100,6 +100,61 @@ test('a question with choices is answered from the page: its choices are buttons
   await expect(ui.replyText).toHaveText('Refusée, donc.', { timeout: 15_000 });
 });
 
+test('a question with choices that waits while the engine is unloaded: the page says so — no choice to lose (check of aparté 1.12)', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } } }, env: { FAKE_LLAMA_ANSWER: CHOOSE } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ui.send('Un choix de date');
+  await expect(ui.question).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  const settings = page.getByRole('navigation', { name: 'Réglages' });
+  await settings.getByRole('link', { name: 'Moteur et mémoire' }).click();
+  await page.getByRole('button', { name: 'Décharger' }).click();
+  await expect(page.getByRole('region', { name: 'Moteur', exact: true })).toContainText('Déchargé', { timeout: 15_000 });
+  await settings.getByRole('link', { name: 'Conversations' }).click();
+
+  await page.keyboard.press('Control+j');
+  const card = page$(page).getByRole('article', { name: /^Question/ });
+  await expect(card).toContainText('Une date vide : que fais-je ?');
+  await expect(card).toContainText('Le moteur est déchargé');
+  await expect(card.getByRole('button', { name: 'La refuser', exact: true })).toHaveCount(0);
+});
+
+test('a question that follows the one answered from the page takes its place, with its own choices (check of aparté 1.12)', async ({ launch }) => {
+  const FOLLOW = `<|tool_call>call:ask_user{question:${Q}Et une date future ?${Q},options:[{title:${Q}La garder${Q}},{title:${Q}La corriger${Q}}]}<tool_call|>`;
+  const responder = (prompt: string): string => {
+    const user = prompt.lastIndexOf('<|turn>user');
+    const results = prompt.slice(user).split('<|tool_response>').length - 1;
+    return results === 0 ? CHOOSE : results === 1 ? FOLLOW : 'Fait.';
+  };
+  const { page } = await launch({ engine: { responder } });
+  const ui = chat(page);
+  await ui.send('Un choix de date');
+  await expect(ui.question).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.keyboard.press('Control+j');
+  const card = page$(page).getByRole('article', { name: /^Question/ });
+  await card.getByRole('button', { name: 'La refuser', exact: true }).click();
+  // The next question, its words and its choices together — never the next choices under the question answered.
+  await expect(card).toContainText('Et une date future ?', { timeout: 15_000 });
+  await expect(card).not.toContainText('que fais-je');
+  await expect(card.getByRole('button', { name: 'La corriger', exact: true })).toBeVisible();
+});
+
+test('a question asked in the form of several questions says its words on the page, with its choices (check of aparté 1.12)', async ({ launch }) => {
+  const FORM = `<|tool_call>call:ask_user{questions:[{question:${Q}Une date vide : que fais-je ?${Q},header:${Q}Date${Q},options:[{title:${Q}La garder vide${Q}},{title:${Q}La refuser${Q}}]}]}<tool_call|>`;
+  const { page } = await launch({ engine: { responder: (prompt) => (prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? 'Fait.' : FORM) } });
+  const ui = chat(page);
+  await ui.send('Un choix de date');
+  await expect(ui.question).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.keyboard.press('Control+j');
+  const card = page$(page).getByRole('article', { name: /^Question/ });
+  await expect(card.locator('.inbox-card__title')).toHaveText('Une date vide : que fais-je ?');
+  await expect(card.getByRole('button', { name: 'La refuser', exact: true })).toBeVisible();
+});
+
 test('a question waits on the page; « Répondre » opens its conversation, where it waits in the composer', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: model } });
   const ui = chat(page);

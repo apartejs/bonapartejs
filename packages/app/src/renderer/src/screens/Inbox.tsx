@@ -12,7 +12,7 @@
 
 import type { InboxView } from '@aparte/bonaparte-shared';
 import type { AparteElicitationPending } from '@aparte/core';
-import { choicesOf } from '../aparte/questions';
+import { choicesOf, wordsOf } from '../aparte/questions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ApprovalAnswer, ApprovalRequest } from '../aparte/approvals';
 import { ApprovalCard } from '../chat/ApprovalCard';
@@ -145,12 +145,17 @@ export function InboxPage(props: InboxPageProps) {
         })}
         {inbox.questions.map((item) => {
           // A question with choices is answered here (aparté 1.12, apartejs/aparte#250); any other opens its
-          // conversation, where it waits in the composer.
-          const pending = props.questionOf?.(item.conversationId);
+          // conversation, where it waits in the composer. The choices are those of the question its conversation
+          // shows now, and only when its words are the card's: never a next question's choices under the one
+          // answered. Not while the engine is unloaded: the answer would resume the turn into nothing, and be lost
+          // (check of aparté 1.12).
+          const live = props.questionOf?.(item.conversationId);
+          const pending = live && wordsOf(live) === item.question && !props.engineDown ? live : undefined;
           const choices = pending ? choicesOf(pending) : null;
           return (
             <Card key={item.call.id} kind="question" label={words.kinds.question} title={item.title} at={item.at} locale={locale} open={link(item.conversationId, item.title)}>
               <p className="inbox-card__title">{item.question}</p>
+              {props.engineDown ? <p className="inbox-card__note">{words.engineDown}</p> : null}
               <div className="inbox-card__actions">
                 {pending && choices
                   ? choices.map((choice) => (

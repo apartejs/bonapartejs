@@ -20,14 +20,23 @@ export interface QuestionChoice {
   value: unknown;
 }
 
-/** The choices of a question that is one choice among options; null for anything else (free text, several). */
+/**
+ * The choices of a question that is one choice among options; null for anything else — free text, several
+ * questions, several choices at once (one click would answer it with one value).
+ */
 export function choicesOf(pending: AparteElicitationPending): QuestionChoice[] | null {
-  const schema = pending.request.schema as { type?: string; options?: readonly Record<string, unknown>[] } | undefined;
-  if (schema?.type !== 'enum' || !Array.isArray(schema.options) || schema.options.length === 0) return null;
+  const schema = pending.request.schema as { type?: string; multiple?: boolean; options?: readonly Record<string, unknown>[] } | undefined;
+  if (schema?.type !== 'enum' || schema.multiple === true || !Array.isArray(schema.options) || schema.options.length === 0) return null;
   return schema.options.map((option) => {
     const label = option['label'] ?? option['title'] ?? option['value'];
     return { label: typeof label === 'string' ? label : String(label), value: option['value'] };
   });
+}
+
+/** The words a question shows above its choices. */
+export function wordsOf(pending: AparteElicitationPending): string {
+  const message = pending.request.message;
+  return typeof message === 'function' ? message() : message;
 }
 
 export function createQuestionsLive(config: AparteConfig = aparteGlobalConfig): QuestionsLive {

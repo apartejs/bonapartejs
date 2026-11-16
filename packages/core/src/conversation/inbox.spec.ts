@@ -112,6 +112,31 @@ describe('readInbox', () => {
     ]);
   });
 
+  it('a question asked as a list of questions says its words: the first, or each one (check of aparté 1.12)', async () => {
+    const { store, conversations, conversation } = await rig();
+    const one = await conversation('Une question', [
+      { kind: 'assistant', raw: 'call', rendered: '' },
+      {
+        kind: 'pending',
+        calls: [call('q1', 'ask_user', { questions: [{ question: 'Une date vide : que fais-je ?', header: 'Date', options: [{ title: 'La garder vide' }] }] }, 'external')],
+        ticket: 't',
+        rendered: '',
+      },
+    ]);
+    const two = await conversation('Deux questions', [
+      { kind: 'assistant', raw: 'call', rendered: '' },
+      {
+        kind: 'pending',
+        calls: [call('q2', 'ask_user', { questions: [{ question: 'Quel format ?' }, { question: 'Quel fuseau ?' }] }, 'external')],
+        ticket: 't',
+        rendered: '',
+      },
+    ]);
+    const inbox = await readInbox({ store, conversations });
+    expect(inbox.questions.find((item) => item.conversationId === one.id)?.question).toBe('Une date vide : que fais-je ?');
+    expect(inbox.questions.find((item) => item.conversationId === two.id)?.question).toBe('Quel format ? · Quel fuseau ?');
+  });
+
   it('a turn the engine cut is a cost to accept: what reading the conversation again costs', async () => {
     const { store, conversations, conversation } = await rig();
     const cut = await conversation('Tests du formateur', [{ kind: 'assistant', raw: 'Je relis', stopped: 'engine', rendered: '<|turn>model\nJe relis' }]);

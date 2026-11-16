@@ -18,6 +18,10 @@ describe('the choices of a question', () => {
     ]);
   });
 
+  it('several choices at once: none — one click would answer it with one value (check of aparté 1.12)', () => {
+    expect(choicesOf(pending({ type: 'enum', multiple: true, options: [{ value: 'a' }, { value: 'b' }] }))).toBeNull();
+  });
+
   it('free text, several questions, no options: none — the conversation answers it', () => {
     expect(choicesOf(pending({ type: 'string' }))).toBeNull();
     expect(choicesOf(pending({ type: 'object', properties: { q1: { type: 'string' } } }))).toBeNull();
