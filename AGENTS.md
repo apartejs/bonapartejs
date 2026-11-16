@@ -852,6 +852,24 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **The window of a test run has the focus** (`document.hasFocus()`), but
   the main process's `isFocused()` says no: a test of the notifications
   says what the person faces through `__bonaparteFocused`.
+- **aparté's composer submit stops a turn that is still open**: a turn paused
+  on an approval or a question keeps the composer `streaming`, and
+  `submit()` then cancels it. Nothing is submitted for the person under such
+  a turn (« Charger et envoyer »).
+- **A send the page holds leaves the field as it was; one that goes empties
+  it**, in the same call: that is how `sendAsPerson` knows a message in the
+  person's name was held (the engine unloaded). It waits for
+  `bonaparte-engine-ready`, the person's draft back in the field.
+- **A compaction's checkpoint is placed on the thread as it stood when the
+  compaction began**: a message sent while the summary is written is
+  journaled after the rebase, and must stay after the checkpoint.
+- **An answer from « À traiter » can only go where the engine is**: with the
+  engine unloaded, a resume is a 409 and the answer is lost — the page offers
+  neither « Autoriser » nor a question's choices then. A question's choices
+  are shown only when the question its chat shows now has the card's words.
+- **aparté's `/model` rows say `picked: false`** (apartejs/aparte#255): a
+  change counts as the person's when it says `picked`, or when it aims at a
+  model the config does not hold.
 
 ## Real-model smoke results
 
