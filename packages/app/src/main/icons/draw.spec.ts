@@ -71,6 +71,17 @@ describe('the icons', () => {
     expect(badge.pixel(0, 0)[3]).toBe(0);
   });
 
+  it('every colour comes from a token, the ring of the badge included: without one, nothing is drawn', async () => {
+    const tokens = readTokens(await readFile(TOKENS, 'utf8'));
+    for (const token of [...Object.values(TRAY_TOKENS), '--bonaparte-tray-ring']) {
+      const without = new Map(tokens);
+      without.delete(token);
+      expect(() => iconSet(without), token).toThrow(token);
+    }
+    const ring = decode(iconSet(tokens).get('badge-failure-32.png')!).pixel(16, 2);
+    expect(ring.slice(0, 3)).toEqual(rgb(tokens.get('--bonaparte-tray-ring')!));
+  });
+
   it('a PNG is written the same every time: the files are compared byte for byte', () => {
     const pixels = new Uint8Array(4 * 4 * 4).fill(200);
     expect(encodePng(4, 4, pixels).equals(encodePng(4, 4, pixels))).toBe(true);

@@ -161,6 +161,30 @@ describe('« Fini, pas encore lu » in the sidebar, and « Relire et continuer �
     expect((await readInbox({ store, conversations })).unread).toEqual([]);
   });
 
+  it('what an unread reply says leaves its reasoning out, in its own family — Qwen thinks between <think> tags', async () => {
+    const { store, conversations } = await rig();
+    const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'qwen.gguf', mode: 'repetition' });
+    await store.update(meta.id, { title: 'Pourquoi la CI est lente ?' });
+    const journal = await openJournal(store.dir, meta.id);
+    await journal.append({ kind: 'system', modelId: 'qwen.gguf', family: 'qwen', rendered: '<|im_start|>system\nYou are bonaparte.<|im_end|>\n' });
+    await journal.append({ kind: 'user', text: 'Pourquoi ?', rendered: '<|im_start|>user\nPourquoi ?<|im_end|>\n' });
+    await store.mark(meta.id, { seenAt: new Date(Date.now() - 60_000).toISOString() });
+    await journal.append({ kind: 'assistant', raw: '<think>\nJe compte les runs un par un.\n</think>\n\nLa synthèse est prête.', rendered: '' });
+    expect((await readInbox({ store, conversations })).unread).toEqual([expect.objectContaining({ conversationId: meta.id, said: 'La synthèse est prête.' })]);
+  });
+
+  it('a turn cut on a model the engine no longer runs: no cost to accept, and « Relire et continuer » reads nothing — its next message changes model, said then', async () => {
+    const { store, conversations } = await rig();
+    const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'qwen.gguf', mode: 'repetition' });
+    const journal = await openJournal(store.dir, meta.id);
+    await journal.append({ kind: 'system', modelId: 'qwen.gguf', family: 'qwen', rendered: '<|im_start|>system\nYou are bonaparte.<|im_end|>\n' });
+    await journal.append({ kind: 'user', text: 'Compte', rendered: '<|im_start|>user\nCompte<|im_end|>\n' });
+    await journal.append({ kind: 'assistant', raw: 'un deux', stopped: 'engine', rendered: '<|im_start|>assistant\nun deux' });
+    expect((await readInbox({ store, conversations })).costs).toEqual([]);
+    await conversations.readAgain(meta.id);
+    expect(await conversations.status(meta.id)).not.toMatchObject({ memory: 'engine' });
+  });
+
   it('« Relire et continuer » reads the conversation again now: its cost is no longer to accept, its memory is in the engine', async () => {
     const { store, conversations, conversation } = await rig();
     const cut = await conversation('Tests du formateur', [{ kind: 'assistant', raw: 'Je relis', stopped: 'engine', rendered: '<|turn>model\nJe relis' }]);

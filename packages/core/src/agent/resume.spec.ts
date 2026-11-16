@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core } from '../api.js';
 import { startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
 import { AGENT_ENDPOINT, createAgentHandler } from './handler.js';
+import { answerPause } from './resume.js';
 
 let servers: FakeLlamaServer[] = [];
 let dirs: string[] = [];
@@ -223,5 +224,41 @@ describe('resuming a paused turn', () => {
     const resumed = await lines(await post(again.handler, { resume: { ticket, outcomes: { [pending[0]!.toolCallId]: { kind: 'decision', approved: true } } } }));
     expect(resumed.at(-1)?.type).toBe('run-done');
     expect(again.touched).toHaveLength(1);
+  });
+});
+
+describe('the pause of a sub-agent, answered', () => {
+  it('a sub-agent that asks again: its next call waits once — never twice in the pause (review of phase 8)', async () => {
+    // Its pause: c1 to approve, c2 queued behind it; c1 approved, the sub-agent asks about c2 in turn.
+    const hold = { toolCallId: 'X', agentId: 'A', name: 'run_subagent', input: { name: 'Mesureur', mission: 'm' } };
+    const pause = {
+      kind: 'pending',
+      id: 'p',
+      at: '',
+      rendered: '',
+      ticket: 't',
+      calls: [
+        { toolCallId: 'c1', name: 'write_file', input: {}, reason: 'approval', agentId: 'A' },
+        { toolCallId: 'c2', name: 'write_file', input: {}, reason: 'queued', agentId: 'A' },
+      ],
+      subagents: [hold],
+    } as unknown as Parameters<typeof answerPause>[1];
+    const context = {
+      conversationId: 'c',
+      mode: 'repetition',
+      registry: { get: () => undefined, list: () => [], run: async () => ({}) },
+      permissions: { evaluate: () => ({ verdict: 'ask' }) },
+      place: { roots: [] },
+      nCtx: 8192,
+      signal: new AbortController().signal,
+      subagents: {
+        resume: async () => ({ kind: 'paused', pending: [{ toolCallId: 'c2', name: 'write_file', input: {}, reason: 'approval', agentId: 'A' }] }),
+        run: async () => ({ kind: 'done', result: '' }),
+        idOf: (id: string) => id,
+      },
+    } as unknown as Parameters<typeof answerPause>[0];
+    const { waiting, holds } = await answerPause(context, pause, { c1: { kind: 'decision', approved: true } }, () => undefined);
+    expect(waiting.map((call) => [call.toolCallId, call.reason])).toEqual([['c2', 'approval']]);
+    expect(holds).toEqual([hold]);
   });
 });

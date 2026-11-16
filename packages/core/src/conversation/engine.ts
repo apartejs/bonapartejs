@@ -507,6 +507,9 @@ export class ConversationEngine {
     if (!engine) throw new NoEngineError();
     this.follow(engine);
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
+    // Frozen for another model: read on this one, it would serve nothing and be saved over that model's memory.
+    // Its next message changes model, and says what that costs (review of phase 8).
+    if (onAnotherModel(branchModel(entries), engine)) return;
     const prompt = frozenPrompt(entries);
     if (!prompt) return;
     const owner = this.ownerOf(meta);
@@ -906,6 +909,11 @@ export class ConversationEngine {
     return this.scheduler.size;
   }
 
+  /** The slots a new owner would take now without waiting: those free, less those others already wait for. */
+  get freeSlots(): number {
+    return Math.max(0, this.scheduler.idle - this.scheduler.waiting.length);
+  }
+
   /** Would a new owner wait for a slot now — none free, or others before it? */
   private get crowded(): boolean {
     return this.scheduler.idle === 0 || this.scheduler.waiting.length > 0;
@@ -1049,7 +1057,15 @@ export class ConversationEngine {
     try {
       if (options.lend) {
         result = await options.lend(owner, async (lent) => {
-          const done = await work(lent);
+          let done: TurnResult;
+          try {
+            done = await work(lent);
+          } catch (error) {
+            // Failed (the server refused its prompt, the engine fell): what it leaves in the slot is worth nothing —
+            // never saved, where it would cost the disk budget another conversation's memory (review of phase 8).
+            lent.discard();
+            throw error;
+          }
           if (!done.suspended) lent.discard();
           return done;
         });
@@ -1072,7 +1088,13 @@ export class ConversationEngine {
         // Stopped while it waited for the slot.
         await journal.append({ kind: 'assistant', raw: '', stopped: 'user', rendered: opening + family.endAssistant('') });
         result = { usage: { inputTokens: 0, outputTokens: 0 }, stopped: 'user' };
-      } else throw error;
+      } else {
+        // Failed on a slot of its own: neither kept there nor on disk.
+        if (!options.lend) this.scheduler.evict(owner);
+        this.lastRun.delete(key);
+        await this.deps.kv.forget(key).catch(() => undefined);
+        throw error;
+      }
     } finally {
       this.turning.delete(key);
     }

@@ -15,7 +15,9 @@
  * nothing.
  */
 
+import { familyLayer, type FamilyId } from '../families/index.js';
 import { openJournal } from '../journal/journal.js';
+import { branchModel } from './switch.js';
 import type { JournalEntry, PendingCall } from '../journal/types.js';
 import type { ConversationEngine } from './engine.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -52,11 +54,29 @@ export interface InboxDeps {
 const callOf = (call: PendingCall): InboxCall => ({ id: call.toolCallId, name: call.name, input: call.input });
 const textOf = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-/** The first words of an answer, its calls and its reasoning left out: what the row of an unread reply says. */
-export function saidIn(raw: string): string {
-  const plain = raw
+/**
+ * The first words of an answer, its calls and its reasoning left out: what the row of an unread reply and a
+ * notification say. Read by its family's own demux when the conversation's family is known (Qwen thinks between
+ * `<think>` tags, Gemma in a channel); else the tags of both are taken out.
+ */
+export function saidIn(raw: string, family?: FamilyId): string {
+  let plain: string | null = null;
+  if (family) {
+    try {
+      const demux = familyLayer(family).createDemux();
+      plain = [...demux.push(raw), ...demux.flush()]
+        .map((piece) => (piece.type === 'text' ? piece.delta : ''))
+        .join('')
+        .trim();
+    } catch {
+      plain = null;
+    }
+  }
+  plain ??= raw
     .replace(/<\|channel>[\s\S]*?<channel\|>/g, '')
+    .replace(/<think>[\s\S]*?(<\/think>|$)/g, '')
     .replace(/<\|tool_call>[\s\S]*?<tool_call\|>/g, '')
+    .replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '')
     .replace(/<[^>]*>/g, '')
     .trim();
   return plain.length > 120 ? `${plain.slice(0, 119)}…` : plain;
@@ -107,14 +127,17 @@ async function gather(deps: InboxDeps, meta: ConversationMeta, inbox: Inbox): Pr
   }
 
   const answer = entries.findLast((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
-  // A turn the engine cut: going on reads the conversation again — said with what it costs.
+  // A turn the engine cut: going on reads the conversation again — said with what it costs. Not one frozen for
+  // another model: going on changes model, which its next message asks and says (task 7.4; review of phase 8).
   if (answer && answer === last && answer.stopped === 'engine' && (await deps.conversations.status(meta.id))?.memory !== 'engine') {
     const announcement = await deps.conversations.open(meta.id).catch(() => null);
-    if (announcement?.kind === 'reread') inbox.costs.push({ ...item(answer.at), tokens: announcement.tokens, seconds: announcement.seconds });
+    if (announcement?.kind === 'reread' && announcement.reason !== 'other-model') {
+      inbox.costs.push({ ...item(answer.at), tokens: announcement.tokens, seconds: announcement.seconds });
+    }
   }
   // A reply finished since the window last showed the conversation.
   const unread = unreadAnswer(entries, meta);
-  if (unread) inbox.unread.push({ ...item(unread.at), said: saidIn(unread.raw) });
+  if (unread) inbox.unread.push({ ...item(unread.at), said: saidIn(unread.raw, branchModel(entries).family) });
 
   if (meta.worktree && deps.prOf) {
     const pr = await deps.prOf(meta.id).catch(() => null);

@@ -24,7 +24,7 @@ export const DEFAULT_SUBAGENT_ROUNDS = 25;
 
 /** What the engine gives a sub-agent: its turns, its pause, the answers to it. */
 export type SubagentEngine = Pick<ConversationEngine, 'subagentTurn' | 'subagentPaused' | 'recordSubagentAnswers'> &
-  Partial<Pick<ConversationEngine, 'slotCount'>>;
+  Partial<Pick<ConversationEngine, 'slotCount' | 'freeSlots'>>;
 
 /** What a conversation's sub-agents inherit of its turn: its mode, its tools, its place, its signal — never more. */
 export interface SubagentParent extends Omit<CallScope, 'agentId' | 'subagents' | 'windowTools'> {
@@ -134,7 +134,7 @@ export function subagentRunner(parent: SubagentParent): SubagentRunner {
   const idOf = (call: ModelCall): string => subagentId(parent.conversationId, call.id);
   return {
     idOf,
-    parallel: () => (parent.engine.slotCount ?? 1) > 1,
+    free: () => ((parent.engine.slotCount ?? 1) > 1 ? (parent.engine.freeSlots ?? 0) : 0),
     announce(call, waits) {
       const spec = readSubagentSpec(call.input);
       if ('error' in spec) return;

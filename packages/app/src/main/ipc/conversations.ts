@@ -50,7 +50,8 @@ interface ConversationCore {
     'ensure' | 'get' | 'list' | 'loadDocument' | 'saveDocument' | 'mark' | 'rename' | 'loadDraft' | 'saveDraft'
   >;
   conversationDocument: Core['conversationDocument'];
-  conversations: Pick<Core['conversations'], 'open' | 'status' | 'markSeen' | 'readAgain'>;
+  conversations: Pick<Core['conversations'], 'open' | 'status' | 'markSeen'>;
+  readAgain: Core['readAgain'];
   removeConversation: Core['removeConversation'];
   branchOf: Core['branchOf'];
   prOf: Core['prOf'];
@@ -143,7 +144,8 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
 
   ipc.handle(conversationsInbox, () => core.inbox());
   ipc.handle(conversationsSeen, ({ id }) => core.conversations.markSeen(id));
-  ipc.handle(conversationsReadAgain, ({ id }) => core.conversations.readAgain(id));
+  // The core holds the engine while it reads.
+  ipc.handle(conversationsReadAgain, ({ id }) => core.readAgain(id));
   ipc.handle(conversationsStatus, async ({ ids }) => {
     const found = await Promise.all(
       ids.map(async (id) => {

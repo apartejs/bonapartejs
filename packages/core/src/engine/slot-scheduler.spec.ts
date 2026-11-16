@@ -277,6 +277,27 @@ describe('a turn lends its slot to its sub-agents (task 8.1)', () => {
     expect(seen.map((owners) => owners.map(name))).toEqual([['a'], ['s1'], ['a']]);
   });
 
+  it('a lend while another owner waits does not let it pass ahead: it gets the slot when the turn ends, not before', async () => {
+    const { scheduler, calls } = rig();
+    const borrowed = gate();
+    const turn = scheduler.run(A, async (slot) => {
+      calls.push('run a');
+      await borrowed.opened;
+      await slot.lend(sub('s1'), async (lent) => {
+        calls.push('run s1');
+        lent.discard();
+      });
+      await slot.home();
+      calls.push('run a again');
+    });
+    // B asks for the slot while A works, before A lends it.
+    const waiting = scheduler.run(B, async () => void calls.push('run b'));
+    expect(scheduler.waiting.map(name)).toEqual(['b']);
+    borrowed.open();
+    await Promise.all([turn, waiting]);
+    expect(calls.indexOf('run b')).toBeGreaterThan(calls.indexOf('run a again'));
+  });
+
   it('a conversation that never lent its slot is already home', async () => {
     const { scheduler, calls } = rig();
     await scheduler.run(A, async (slot) => {

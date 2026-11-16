@@ -59,6 +59,8 @@
   --bonaparte-tray-waiting: #C77700;
   --bonaparte-tray-failure: #A1281F;
   --bonaparte-tray-asleep: #8A8A83;
+  /* The ring around the badge's dot: it keeps the dot apart from the app's icon under it. */
+  --bonaparte-tray-ring: #FFFFFF;
 }
 
 [data-aparte-theme='dark'] {

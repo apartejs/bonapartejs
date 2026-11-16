@@ -107,6 +107,9 @@ export async function runAgentTurn(
         get slotCount() {
           return ctx.conversations.slotCount ?? 1;
         },
+        get freeSlots() {
+          return ctx.conversations.freeSlots ?? 0;
+        },
       },
       emit,
       ...(ctx.maxToolRounds !== undefined ? { maxToolRounds: ctx.maxToolRounds } : {}),

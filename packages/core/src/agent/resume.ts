@@ -168,6 +168,9 @@ export async function answerPause(
       results.push({ toolCallId: call.toolCallId, name: call.name, content: NOT_RUN_STOPPED, failed: true });
       continue;
     }
+    // A sub-agent's calls were all handed back to it: what it waits on now is its own new pause, already kept
+    // (review of phase 8: its next call was queued a second time).
+    if (call.agentId && handed.has(call.agentId)) continue;
     if (waiting.length > 0) {
       waiting.push({ ...call, reason: 'queued' });
       // A sub-agent's call queued behind: its call aside stays with the pause.

@@ -68,7 +68,7 @@ function model(missions: Record<string, string>[], work: (name: string) => strin
 }
 
 /** A conversation engine on a managed engine (its memory kept), the loop over it, and what the slot saw. */
-async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume', options: { slots?: number; paceMs?: number } = {}) {
+async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume', options: { slots?: number; paceMs?: number; nCtx?: number } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-subagents-'));
   dirs.push(dir);
   const root = join(dir, 'project');
@@ -76,15 +76,19 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
   await writeFile(join(root, 'a.ts'), 'export const a = 1;\n');
   const kvDir = join(dir, 'kv-slots');
   const order: string[] = [];
+  /** Which slot each sub-agent's completions ran on. */
+  const placed: [string, unknown][] = [];
   const label = (filename: string) => (filename.startsWith('seed-') ? 'seed' : filename.includes('_agent-') ? 'sub-agent' : 'conversation');
   const server = await startFakeLlamaServer({
     slotDir: kvDir,
     responder,
     ...(options.slots ? { totalSlots: options.slots } : {}),
     ...(options.paceMs ? { paceMs: options.paceMs } : {}),
+    ...(options.nCtx ? { nCtx: options.nCtx } : {}),
     onCompletion: (body) => {
       const prompt = String(body['prompt']);
       order.push(`${isSubagent(prompt) ? `complete ${subagentName(prompt)}` : 'complete conversation'}${body['n_predict'] === 0 ? ' (read)' : ''}`);
+      if (isSubagent(prompt) && body['n_predict'] !== 0) placed.push([subagentName(prompt), body['id_slot']]);
     },
   });
   servers.push(server);
@@ -119,12 +123,12 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
   });
   const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode });
   const permissions = new PermissionEngine({ roots: () => [root], dataDir: join(dir, 'data') });
-  const run = async (text: string, signal = new AbortController().signal) => {
+  const run = async (text: string, signal = new AbortController().signal, conversationId = meta.id) => {
     const events: StreamRunEvent[] = [];
     const said: TurnEvent[] = [];
     const result = await runAgentTurn(
       {
-        conversationId: meta.id,
+        conversationId,
         input: { text },
         mode,
         registry,
@@ -140,7 +144,7 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
     );
     return { result, events, said };
   };
-  return { dir, root, store, engine, meta, run, order };
+  return { dir, root, store, engine, meta, run, order, placed };
 }
 
 const of = (events: StreamRunEvent[], type: StreamRunEvent['type']) => events.filter((event) => event.type === type) as Record<string, any>[];
@@ -273,12 +277,14 @@ describe('a sub-agent on the built-in engine', () => {
 
   it('in parallel (two slots, task 8.3), two sub-agents of a step work at the same time: nobody waits for the slot', async () => {
     const missions = ['Un', 'Deux'].map((name) => ({ name, mission: `Lead ${name}.`, tools: 'read' }));
-    // A pace slow enough that, on a loaded machine too, the first is still writing when the second begins.
-    const { run, order } = await rig(model(missions), 'plume', { slots: 2, paceMs: 60 });
+    const { run, placed } = await rig(model(missions), 'plume', { slots: 2, paceMs: 15 });
     const { events } = await run('Deux pistes.');
-    const worked = order.filter((line) => line.startsWith('complete ') && !line.includes('conversation') && !line.endsWith('(read)'));
-    // The second starts before the first is done: its first completion comes before the first's last.
-    expect(worked.indexOf('complete Deux')).toBeLessThan(worked.lastIndexOf('complete Un'));
+    // Each on a slot of its own — the first on the one the turn lends, the second on the other — and nobody
+    // waited for one: they worked together. (Judged by where, not when: a loaded machine reorders the when.)
+    const slotsOf = (who: string) => [...new Set(placed.filter(([name]) => name === who).map(([, slot]) => slot))];
+    expect(slotsOf('Un')).toHaveLength(1);
+    expect(slotsOf('Deux')).toHaveLength(1);
+    expect(slotsOf('Un')[0]).not.toBe(slotsOf('Deux')[0]);
     expect(events.filter((event) => event.type === 'step-start' && (event as { name?: string }).name === 'slot-wait')).toEqual([]);
     expect(of(events, 'agent-end').map((event) => event['status'])).toEqual(['done', 'done']);
     // Their results, in the order the model wrote the calls.
@@ -286,6 +292,35 @@ describe('a sub-agent on the built-in engine', () => {
       'Result of Un: a is 1.',
       'Result of Deux: a is 1.',
     ]);
+  });
+
+  it('in parallel, two conversations that each hand two leads at once both end: a turn never waits for a slot while it holds one', async () => {
+    const missions = ['Un', 'Deux'].map((name) => ({ name, mission: `Lead ${name}.`, tools: 'read' }));
+    const { run, store } = await rig(model(missions), 'plume', { slots: 2, paceMs: 20 });
+    const other = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'plume' });
+    const both = Promise.all([run('Deux pistes.'), run('Deux pistes.', new AbortController().signal, other.id)]);
+    const outcome = await Promise.race([both.then(() => 'done'), new Promise((resolve) => setTimeout(() => resolve('hung'), 15_000))]);
+    expect(outcome).toBe('done');
+    for (const { events } of await both) {
+      expect(of(events, 'agent-end').map((event) => event['status'])).toEqual(['done', 'done']);
+    }
+  });
+
+  it('a sub-agent the engine refuses (its prompt grew too long) fails — and its state, worth nothing, is never saved (review of phase 8)', async () => {
+    const lead = { name: 'Lecteur', mission: 'Read big.ts and tell what it holds.', tools: 'read' };
+    const responder = (prompt: string): string => {
+      if (isSubagent(prompt)) return answered(prompt) ? 'It holds x.' : call('read_file', { path: 'big.ts' });
+      return answered(prompt) ? 'Synthèse.' : call('run_subagent', lead);
+    };
+    // How long the conversation's prompt is: the server holds that, and a few hundred tokens more.
+    const measure = await rig(() => 'ok');
+    const prompt = (await measure.run('Lis big.ts.')).result.usage.inputTokens;
+    const { run, root, order } = await rig(responder, 'plume', { nCtx: prompt + 600 });
+    await writeFile(join(root, 'big.ts'), `export const x = '${'x'.repeat(6000)}';\n`);
+    const { events } = await run('Lis big.ts.');
+    expect(of(events, 'agent-end').map((event) => event['status'])).toEqual(['failed']);
+    expect(order).toContain('complete Lecteur');
+    expect(order.filter((line) => line === 'save sub-agent')).toEqual([]);
   });
 
   it('Stop stops the sub-agents too', async () => {

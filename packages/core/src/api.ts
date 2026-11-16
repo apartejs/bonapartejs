@@ -73,6 +73,7 @@ import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
 import { readInbox, saidIn, type Inbox } from './conversation/inbox.js';
+import { branchModel } from './conversation/switch.js';
 import { resumeSubagent, runQueuedSubagent, subagentId } from './agent/subagents.js';
 import {
   createTickets,
@@ -326,6 +327,8 @@ export interface Core {
    * Compaction (task 7.3): the conversation summarised and rebased — or why not (nothing changed then).
    */
   compact(conversationId: string): Promise<({ ok: true } & CompactResult) | { ok: false; reason: CompactionRefusal }>;
+  /** « Relire et continuer » (task 8.4): the conversation read again now, its cost said first; the engine held. */
+  readAgain(conversationId: string): Promise<void>;
   /** « Restaurer » a compaction: the conversation goes on from before its last rebase, on a branch. */
   uncompact(conversationId: string): Promise<string>;
   /** The context nearly full (from 90 %), with what compacting would take; null below. */
@@ -1297,7 +1300,7 @@ export function createCore(deps: CoreDeps): Core {
     if (!meta) return null;
     const entries = (await openJournal(conversationStore.dir, conversationId, meta.branchId)).entries();
     const answer = entries.findLast((entry) => entry.kind === 'assistant');
-    return { ...place, how: 'done', said: answer?.kind === 'assistant' ? saidIn(answer.raw) : '' };
+    return { ...place, how: 'done', said: answer?.kind === 'assistant' ? saidIn(answer.raw, branchModel(entries).family) : '' };
   }
 
   // A restart asked under a reply: done when the last hold is released (task 7.4).
@@ -1487,6 +1490,15 @@ export function createCore(deps: CoreDeps): Core {
       } catch (error) {
         if (error instanceof CompactionError) return { ok: false, reason: error.code };
         throw error;
+      } finally {
+        release();
+      }
+    },
+    async readAgain(conversationId) {
+      // A prefill of the engine: neither unloaded nor restarted under it, like a compaction (review of phase 8).
+      const release = core.hold();
+      try {
+        await conversations.readAgain(conversationId);
       } finally {
         release();
       }

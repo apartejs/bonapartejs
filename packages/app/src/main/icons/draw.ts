@@ -23,6 +23,8 @@ export const TRAY_TOKENS = {
 
 /** The badge says what waits, or a failure. */
 const BADGES = { waiting: TRAY_TOKENS.waiting, failure: TRAY_TOKENS.failure } as const;
+/** The ring around the badge's dot. */
+const RING = '--bonaparte-tray-ring';
 
 export type Point = [number, number];
 type Rgb = [number, number, number];
@@ -154,15 +156,15 @@ export function fill(shapes: readonly Point[][], size: number, rgb: Rgb): Uint8A
   });
 }
 
-/** The badge: a dot of `rgb` in a white ring, which keeps it apart from the app's icon under it. */
-export function dot(size: number, rgb: Rgb): Uint8Array {
+/** The badge: a dot of `rgb` in a ring of `ring`, which keeps it apart from the app's icon under it. */
+export function dot(size: number, rgb: Rgb, ring: Rgb): Uint8Array {
   const centre = size / 2;
   const outer = size / 2 - size / 32;
   const inner = outer - size / 8;
   return paint(size, (x, y) => {
     const distance = Math.hypot(x - centre, y - centre);
     if (distance > outer) return null;
-    return distance > inner ? [255, 255, 255] : rgb;
+    return distance > inner ? ring : rgb;
   });
 }
 
@@ -228,8 +230,9 @@ export function iconSet(tokens: ReadonlyMap<string, string>): Map<string, Buffer
   for (const [state, token] of Object.entries(TRAY_TOKENS)) {
     for (const size of [16, 24, 32]) set.set(`tray-${state}-${size}.png`, encodePng(size, size, fill(hat, size, rgbOf(tokens, token))));
   }
+  const ring = rgbOf(tokens, RING);
   for (const [kind, token] of Object.entries(BADGES)) {
-    for (const size of [16, 32]) set.set(`badge-${kind}-${size}.png`, encodePng(size, size, dot(size, rgbOf(tokens, token))));
+    for (const size of [16, 32]) set.set(`badge-${kind}-${size}.png`, encodePng(size, size, dot(size, rgbOf(tokens, token), ring)));
   }
   return set;
 }

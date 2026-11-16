@@ -200,6 +200,18 @@ describe('createCore — the managed engine', () => {
     expect(await core.engineState()).toMatchObject({ status: 'stopped' });
   });
 
+  it('« Relire et continuer » holds the engine while it reads: neither unloaded nor restarted under it (review of phase 8)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    let busy: boolean | null = null;
+    vi.spyOn(core.conversations, 'readAgain').mockImplementation(async () => {
+      busy = (await core.memory()).engine.busy;
+    });
+    await core.readAgain('c1');
+    expect(busy).toBe(true);
+    expect((await core.memory()).engine.busy).toBe(false);
+  });
+
   it('switching models saves first the memory of the conversation the engine holds', async () => {
     const { core, dir, gemma, qwen } = await setup();
     await core.loadModel(gemma);

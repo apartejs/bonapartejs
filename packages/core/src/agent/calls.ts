@@ -48,8 +48,11 @@ export interface SubagentRunner {
   run(call: ModelCall, slot: CallsSlot | undefined, waited: boolean): Promise<SubagentEnd>;
   /** Its `agentId`, for the pause that keeps its call aside. */
   idOf(call: ModelCall): string;
-  /** The engine runs more than one slot (task 8.3): a step's sub-agents work together. */
-  parallel(): boolean;
+  /**
+   * The slots another sub-agent of the step may take now, without waiting (task 8.3): none with one slot, or
+   * when every other slot works or is waited for.
+   */
+  free(): number;
 }
 
 export interface CallScope {
@@ -130,23 +133,36 @@ export async function answerCalls(
         else say({ type: 'tool-failed', toolCallId: member.id, error: content });
         results.push({ toolCallId: member.id, name: member.name, content, ...(end.kind === 'done' ? {} : { failed: true }) });
       };
-      if (runner.parallel() && !announced.has(call.id)) {
-        // In parallel (task 8.3): this sub-agent and those right after it work together — the first on the slot
-        // the turn lends, the others on slots of their own, waiting (and saying so) only when none is free.
+      const free = announced.has(call.id) ? 0 : runner.free();
+      if (free > 0) {
+        // In parallel (task 8.3): this sub-agent and those right after it work together — as many on slots of
+        // their own as are free now, the others one after another on the slot the turn lends (they wait for it,
+        // and say so). A turn never waits for a slot while it holds one: two conversations doing that at once
+        // would wait for each other for ever (review of phase 8).
         const group = [call];
         for (const later of calls.slice(index + 1)) {
           if (later.name !== RUN_SUBAGENT) break;
           group.push(later);
         }
+        const own = new Set(group.slice(1, 1 + free).map((member) => member.id));
         for (const [at, member] of group.entries()) {
           if (at > 0) say({ type: 'tool-start', toolCallId: member.id, name: member.name, input: member.input });
-          announced.set(member.id, false);
-          runner.announce(member, false);
+          const waits = at > 0 && !own.has(member.id);
+          announced.set(member.id, waits);
+          runner.announce(member, waits);
         }
-        const ends = await Promise.all(group.map((member, at) => runner.run(member, at === 0 ? slot : undefined, false)));
-        for (const [at, member] of group.entries()) {
+        const onLent = (async () => {
+          const ends: (readonly [string, SubagentEnd])[] = [];
+          for (const member of group.filter((one) => !own.has(one.id))) {
+            ends.push([member.id, await runner.run(member, slot, announced.get(member.id) === true)] as const);
+          }
+          return ends;
+        })();
+        const onOwn = group.filter((one) => own.has(one.id)).map(async (member) => [member.id, await runner.run(member, undefined, false)] as const);
+        const ends = new Map([...(await onLent), ...(await Promise.all(onOwn))]);
+        for (const member of group) {
           ran.add(member.id);
-          settle(member, ends[at]!);
+          settle(member, ends.get(member.id)!);
         }
         continue;
       }
