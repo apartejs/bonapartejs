@@ -50,14 +50,16 @@ function readAnswer(family: FamilyLayer, raw: string): { text: string; calls: Ea
 /** What a re-render passes by: the events of the journal, and the text a change of model or a rebase froze. */
 const SILENT = new Set<JournalEntry['kind']>(['system', 'rebase', 'engine', 'pending', 'outcomes', 'rewind', 'withdrawn']);
 
-/** The text of the `engine` entry: the head, then the conversation rendered again by the new family. */
-export function rerenderConversation(entries: readonly JournalEntry[], options: Rerender): string {
-  const { to } = options;
-  // The family that wrote each entry: the first system turn's, then each change of model's.
+/**
+ * The family that wrote each entry of a branch: its first system turn's, then each change of model's —
+ * `fallback` for a journal that says none.
+ */
+export function writersOf(entries: readonly JournalEntry[], fallback: FamilyLayer): Map<string, FamilyLayer> {
   const writers = new Map<string, FamilyLayer>();
-  let writer = options.from;
+  const first = entries.find((item) => item.kind === 'system');
+  let writer = fallback;
   for (const item of entries) {
-    if (item.kind === 'system' && item === entries.find((first) => first.kind === 'system')) {
+    if (item === first && item.kind === 'system') {
       const family = item.family ?? familyOfPrompt(item.rendered ?? '');
       if (family) writer = familyLayer(family);
     } else if (item.kind === 'engine') {
@@ -65,6 +67,13 @@ export function rerenderConversation(entries: readonly JournalEntry[], options: 
     }
     writers.set(item.id, writer);
   }
+  return writers;
+}
+
+/** The text of the `engine` entry: the head, then the conversation rendered again by the new family. */
+export function rerenderConversation(entries: readonly JournalEntry[], options: Rerender): string {
+  const { to } = options;
+  const writers = writersOf(entries, options.from);
 
   // From the last compaction: the summary, the turns it kept as they were, what came after.
   const rebaseAt = entries.findLastIndex((item) => item.kind === 'rebase');

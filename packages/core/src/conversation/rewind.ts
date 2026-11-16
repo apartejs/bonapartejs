@@ -20,6 +20,7 @@ import type { FamilyLayer } from '../families/types.js';
 import type { JournalEntry } from '../journal/types.js';
 import { RewindTargetError, type ConversationEngine, type RewindLook, type RewindTarget } from './engine.js';
 import type { ConversationStore } from './store.js';
+import { writersOf } from './switch.js';
 
 export { RewindTargetError, type RewindTarget };
 
@@ -59,12 +60,14 @@ export interface RewindDeps {
 }
 
 /** The commands run after the message: each `run_command` call answered by a result that did not fail. */
-export function commandsRun(after: readonly JournalEntry[], family: FamilyLayer): string[] {
+export function commandsRun(after: readonly JournalEntry[], family: FamilyLayer, branch: readonly JournalEntry[] = after): string[] {
+  // Each call read by the family that wrote it: a change of model may stand between them (review of phase 7).
+  const writers = writersOf(branch, family);
   const calls: string[] = [];
   const ran: boolean[] = [];
   for (const entry of after) {
     if (entry.kind === 'assistant') {
-      const demux = family.createDemux();
+      const demux = (writers.get(entry.id) ?? family).createDemux();
       for (const event of [...demux.push(entry.raw), ...demux.flush()]) {
         if (event.type !== 'tool-call' || event.name !== 'run_command') continue;
         const program = typeof event.input['program'] === 'string' ? event.input['program'] : '';
@@ -116,7 +119,7 @@ export function createRewind(deps: RewindDeps) {
       const look = await deps.engine.lookBefore(id, target);
       return {
         files: await deps.checkpoints.changedSince(id, look.message.at, { except: look.earlier }),
-        commands: commandsRun(look.after, deps.family()),
+        commands: commandsRun(look.after, deps.family(), look.branch),
         memory: await deps.engine.rewindMemory(id, target),
       };
     },
@@ -128,7 +131,7 @@ export function createRewind(deps: RewindDeps) {
     async rewind(id: string, target: RewindTarget, what: RewindWhat, options: { messageId?: string } = {}): Promise<RewindResult> {
       const look: RewindLook = await deps.engine.lookBefore(id, target);
       const memory = what === 'code' ? null : await deps.engine.rewindMemory(id, target);
-      const commands = commandsRun(look.after, deps.family());
+      const commands = commandsRun(look.after, deps.family(), look.branch);
       const asTurn = `rewind-${randomUUID().slice(0, 8)}`;
       const since = look.message.at;
       const files =

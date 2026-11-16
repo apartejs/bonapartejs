@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { familyLayer } from '../families/index.js';
 import type { JournalBody, JournalEntry } from '../journal/types.js';
 import { summaryNote } from './compact.js';
+import { commandsRun } from './rewind.js';
 import { branchModel, rerenderConversation } from './switch.js';
 
 const gemma = familyLayer('gemma');
@@ -142,6 +143,24 @@ describe('a conversation rendered again by another family', () => {
     expect(rendered).toContain(gemma.renderUser('Lis a.ts'));
     // Each answer read back by the family that wrote it.
     expect(rendered.endsWith(gemma.renderUser('Encore') + gemma.renderAnswer({ text: 'Oui.', calls: [] }))).toBe(true);
+  });
+});
+
+describe('the commands run, read by the family that wrote each call (review of phase 7)', () => {
+  it('a going back names the commands of every model of the branch, whichever is loaded', () => {
+    const gemmaCall = `<|tool_call>call:run_command{args:[${Q}test${Q}],program:${Q}pnpm${Q}}<tool_call|>`;
+    const qwenCall = '<tool_call>{"name": "run_command", "arguments": {"program": "git", "args": ["status"]}}</tool_call>';
+    const entries = [
+      entry({ kind: 'system', rendered: gemma.renderSystem('S'), modelId: 'gemma.gguf', family: 'gemma' }),
+      entry({ kind: 'user', text: 'Teste', rendered: '' }),
+      entry({ kind: 'assistant', raw: gemmaCall, rendered: '' }),
+      entry({ kind: 'tool-results', results: [{ toolCallId: 'c1', name: 'run_command', content: 'ok' }], rendered: '' }),
+      entry({ kind: 'engine', engineId: 'builtin', modelId: 'qwen.gguf', family: 'qwen', rendered: 'Q' }),
+      entry({ kind: 'user', text: 'Et git ?', rendered: '' }),
+      entry({ kind: 'assistant', raw: qwenCall, rendered: '' }),
+      entry({ kind: 'tool-results', results: [{ toolCallId: 'c2', name: 'run_command', content: 'clean' }], rendered: '' }),
+    ];
+    expect(commandsRun(entries.slice(1), qwen, entries)).toEqual(['pnpm test', 'git status']);
   });
 });
 

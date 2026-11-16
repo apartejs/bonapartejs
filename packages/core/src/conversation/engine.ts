@@ -199,6 +199,8 @@ export interface RewindLook {
   earlier: string[];
   /** The entry the new branch starts after. */
   previousId: string;
+  /** The whole branch: who wrote each entry (a change of model may stand in it) is read from its start. */
+  branch: readonly JournalEntry[];
 }
 
 /** What a compaction did: the summary, the turns folded and kept, the prompt before and after (tokens). */
@@ -233,6 +235,7 @@ function lookUp(entries: readonly JournalEntry[], target: RewindTarget): RewindL
     after: entries.slice(index),
     earlier: users.slice(0, target.userIndex).flatMap((user) => (user.messageId ? [user.messageId] : [])),
     previousId: entries[index - 1]!.id,
+    branch: entries,
   };
 }
 
@@ -1384,7 +1387,9 @@ export const NOT_RUN_UNANSWERED = 'Not run: the turn ended before this call was 
  * so the prompt keeps the template's shape (a Gemma turn that ended on a call is still open).
  */
 async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<void> {
-  const last = journal.entries().at(-1);
+  // The last thing said: a change of model, a going back or a rebase after it leave its turn open as it was
+  // (review of phase 7: a call that waited stayed unanswered after a change of model).
+  const last = journal.entries().findLast((entry) => SPOKEN.has(entry.kind));
   let open: { toolCallId: string; name: string }[];
   if (last?.kind === 'pending') {
     open = last.calls.map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
@@ -1408,6 +1413,9 @@ async function closeOpenTurn(journal: Journal, family: FamilyLayer): Promise<voi
     rendered: family.beginAssistant({ thinking: false, continuing: true }) + family.endAssistant(''),
   });
 }
+
+/** What a turn says: what can leave a model's turn open. */
+const SPOKEN = new Set<JournalEntry['kind']>(['user', 'assistant', 'tool-results', 'pending']);
 
 /** Did the model present a plan (an update_plan that ran) since its last note of Lecture, in this branch? */
 function planSinceLecture(entries: readonly JournalEntry[]): boolean {

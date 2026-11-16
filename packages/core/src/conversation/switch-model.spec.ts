@@ -18,7 +18,7 @@ import type { JournalEntry } from '../journal/types.js';
 import { KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
 import { planCompaction } from './compact.js';
-import { estimateTokens, ConversationEngine, type EngineView } from './engine.js';
+import { estimateTokens, ConversationEngine, NOT_RUN_UNANSWERED, type EngineView } from './engine.js';
 import { ConversationStore } from './store.js';
 
 const gemma = familyLayer('gemma');
@@ -154,6 +154,23 @@ describe('a turn on another model', { timeout: 30_000 }, () => {
     load('qwen');
     await say('Et en Qwen ?');
     expect((await branch()).find((entry) => entry.kind === 'engine')).toMatchObject({ family: 'qwen' });
+  });
+});
+
+describe('a call that waited, on another model', { timeout: 30_000 }, () => {
+  it('given up for a new message: answered as not run, its turn closed before the message (review of phase 7)', async () => {
+    const { id, store, prompts, say, load } = await rig();
+    await say('Bonjour');
+    const journal = await openJournal(store.dir, id, (await store.get(id))!.branchId);
+    await journal.append({ kind: 'user', text: 'Écris a', rendered: gemma.renderUser('Écris a') });
+    const raw = '<|tool_call>call:write_file{path:<|"|>a<|"|>}<tool_call|>';
+    await journal.append({ kind: 'assistant', raw, rendered: gemma.beginAssistant({ thinking: true }) + raw + gemma.endAssistant(raw) });
+    await journal.append({ kind: 'pending', calls: [{ toolCallId: 'c1', name: 'write_file', input: { path: 'a' }, reason: 'approval' }], ticket: 't', rendered: '' });
+    load('qwen');
+    await say('Laisse tomber.');
+    const sent = prompts.at(-1)!;
+    expect(sent).toContain(NOT_RUN_UNANSWERED);
+    expect(sent.indexOf(NOT_RUN_UNANSWERED)).toBeLessThan(sent.indexOf('Laisse tomber.'));
   });
 });
 
