@@ -242,6 +242,24 @@ describe('a sub-agent on the built-in engine', () => {
     expect(order).not.toContain('save sub-agent');
   });
 
+  it('while it works, the engine says who: its name, and nobody once it is done (the card « Occupé : sous-agent … »)', async () => {
+    const seen: (string | null)[] = [];
+    const box: { engine?: ConversationEngine } = {};
+    const answer = model([LECTEUR]);
+    const made = await rig((prompt) => {
+      seen.push(box.engine!.subagentAtWork);
+      return answer(prompt);
+    });
+    const engine = (box.engine = made.engine);
+    const changes: (string | null)[] = [];
+    made.engine.onSubagentAtWork((name) => changes.push(name));
+    await made.run('Que vaut a ?');
+    // The conversation's own completions, then the sub-agent's two, then the conversation's last.
+    expect(seen.filter((name) => name !== null)).toEqual(['Lecteur', 'Lecteur']);
+    expect(engine.subagentAtWork).toBeNull();
+    expect(changes).toEqual(['Lecteur', null]);
+  });
+
   it('Stop stops the sub-agents too', async () => {
     const stop = new AbortController();
     const { run } = await rig((prompt) => {

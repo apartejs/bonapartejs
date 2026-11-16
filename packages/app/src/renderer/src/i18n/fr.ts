@@ -98,6 +98,8 @@ export const fr: Messages = {
   engineCard: {
     ready: 'Moteur prêt',
     line: (context) => `Prêt · contexte ${context} · 1 slot`,
+    busy: 'Moteur occupé',
+    working: (subagent) => `Occupé : sous-agent ${subagent}`,
   },
   modes: { lecture: 'Lecture', repetition: 'Répétition', plume: 'Plume', impro: 'Impro' },
   approval: {
@@ -122,6 +124,33 @@ export const fr: Messages = {
       notFound: 'Le texte à remplacer n’est pas dans le fichier : la modification échouera.',
       ambiguous: (times) => `Le texte à remplacer y est ${times} fois : la modification échouera.`,
     },
+    askedBy: (name) => `demandé par le sous-agent ${name}`,
+    onlyIt: 'Refuser n’arrête que lui : il rend ce qu’il a.',
+  },
+  subagentsPane: {
+    summary: (count) => {
+      const parts = [
+        count.done > 0 ? `${count.done} ${count.done > 1 ? 'finis' : 'fini'}` : '',
+        count.running > 0 ? `${count.running} en cours` : '',
+        count.waiting > 0 ? `${count.waiting} ${count.waiting > 1 ? 'attendent' : 'attend'} ton accord` : '',
+        count.queued > 0 ? `${count.queued} en file` : '',
+        count.failed > 0 ? `${count.failed} en échec` : '',
+        count.stopped > 0 ? `${count.stopped} ${count.stopped > 1 ? 'arrêtés' : 'arrêté'}` : '',
+      ].filter(Boolean);
+      const total = `${count.total} ${count.total > 1 ? 'sous-agents' : 'sous-agent'}`;
+      return parts.length > 0 ? `${total} · ${parts.join(', ')}` : total;
+    },
+    states: { done: 'Fini', running: 'En cours', waiting: 'Attend ton accord', queued: 'En file', failed: 'En échec', stopped: 'Arrêté' },
+    meta: (calls, seconds) =>
+      [`${calls} ${calls > 1 ? 'outils' : 'outil'}`, seconds === null ? '' : `${seconds} s`].filter(Boolean).join(' · '),
+    given: (tools) =>
+      tools === 'all' ? 'même modèle · peut lancer des commandes' : tools === 'read' ? 'même modèle · lecture seule' : 'même modèle',
+    notYet: '—',
+    mission: 'Sa mission',
+    result: 'Rendu à l’agent principal',
+    note: 'Son travail reste ici : seul son rendu revient dans ta conversation.',
+    none: 'Aucun sous-agent dans cette conversation. Quand l’agent confie une piste à un sous-agent, il apparaît ici.',
+    list: 'Les sous-agents de la conversation',
   },
   tools: {
     labels: {
@@ -583,8 +612,9 @@ export const fr: Messages = {
     changes: 'Changements',
     changesWaiting: (count) => `Changements, ${count} en attente`,
     terminal: 'Terminal',
+    subagents: 'Sous-agents',
     over: (name) => `${name}, par-dessus la conversation`,
-    close: { files: 'Fermer les fichiers', changes: 'Fermer les changements', terminal: 'Fermer le terminal' },
+    close: { files: 'Fermer les fichiers', changes: 'Fermer les changements', subagents: 'Fermer les sous-agents', terminal: 'Fermer le terminal' },
     closeTip: 'Fermer',
   },
   search: {

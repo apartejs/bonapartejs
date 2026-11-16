@@ -26,6 +26,8 @@ export const engineStateSchema = z.object({
   resume: z
     .object({ path: z.string(), name: z.string(), unloadedAt: z.string().optional(), idleMinutes: z.number().optional() })
     .optional(),
+  /** A sub-agent works in the engine now (task 8.2): « Occupé : sous-agent … ». */
+  working: z.object({ subagent: z.string() }).optional(),
 });
 
 export type EngineStateView = z.infer<typeof engineStateSchema>;

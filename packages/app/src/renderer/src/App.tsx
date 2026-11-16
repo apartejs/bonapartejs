@@ -77,6 +77,8 @@ import { Rail } from './shell/Rail';
 import { ENGINE_CHANGED } from './settings/EngineMemory';
 import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
 import { Sidebar } from './shell/Sidebar';
+import { createSubagentTracker, setupSubagentLines } from './aparte/subagents';
+import { SubagentsPanel } from './panels/SubagentsPanel';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -550,6 +552,23 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => registerStepLabels(messages), [messages]);
   useEffect(() => registerToolLines(messages), [messages]);
   useEffect(() => speakAsBonaparte(messages), [messages]);
+  // The sub-agents (task 8.2): aparté's line for each in the reply, and what the pane says of them.
+  const subagents = useMemo(() => createSubagentTracker(), []);
+  useEffect(() => setupSubagentLines(subagents), [subagents]);
+  const [, heardSubagents] = useState(0);
+  useEffect(() => subagents.subscribe(() => heardSubagents((count) => count + 1)), [subagents]);
+  const [subagentOpen, setSubagentOpen] = useState<string | null>(null);
+  useEffect(() => {
+    // A line's « Ouvrir » (aparté's `open: 'event'`): the pane opens on that sub-agent.
+    const onOpen = (event: Event): void => {
+      const detail = (event as CustomEvent<{ agentId?: string }>).detail;
+      if (!detail?.agentId) return;
+      setSubagentOpen(detail.agentId);
+      setPanes((was) => opened(was, 'subagents'));
+    };
+    window.addEventListener('aparte-subagent-open', onOpen);
+    return () => window.removeEventListener('aparte-subagent-open', onOpen);
+  }, []);
 
   // The plan card of Lecture: launching it moves the conversation to Plume or Répétition — the core
   // first, so the go-ahead is decided in the new mode — then gives the model the go-ahead.
@@ -1024,6 +1043,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         shown={shownPanes(panes, narrow)}
         narrow={narrow}
         content={{
+          subagents: {
+            body: (
+              <SubagentsPanel
+                messages={messages}
+                chatId={deck.shown || null}
+                rows={subagents.rowsOf(deck.shown, () => handles.get(deck.shown)?.getMessages() ?? [])}
+                selected={subagentOpen}
+                onSelect={setSubagentOpen}
+              />
+            ),
+          },
           terminal: {
             body: (
               <TerminalPanel

@@ -29,6 +29,11 @@ export interface ChatDriver {
   errors: Locator;
   /** The line of a tool's call in a reply: aparté keeps the tool's name on it, for a test. */
   toolLine(name: string): Locator;
+  /**
+   * A sub-agent's line (aparté's plugin-subagents, task 8.2): the row of its run_subagent call — its name in
+   * `.aparte-tool-name`, its second line (its step, its count) in `.aparte-tool-activity`.
+   */
+  subagentLine(name: string): Locator;
   /** A question in the composer's place: the panel aparté's composer stamps `data-aparte-panel`. */
   question: Locator;
   /** The mode the switch shows: its combobox, whose text is the shown value (aparté's testing guide). */
@@ -56,6 +61,10 @@ export function chat(page: Page): ChatDriver {
     streamingReplies: replies.locator('[aria-busy="true"]'),
     errors: root.locator('[data-error-code]'),
     toolLine: (name) => replies.locator(`[data-tool-name="${name}"]`),
+    subagentLine: (name) =>
+      replies
+        .locator('.aparte-segment-tool-call[data-tool-name="run_subagent"]')
+        .filter({ has: root.page().locator('.aparte-tool-name', { hasText: name }) }),
     question: root.locator('aparte-composer [data-aparte-panel]'),
     modeShown: root.page().locator('aparte-approval-mode aparte-select [role="combobox"]'),
 

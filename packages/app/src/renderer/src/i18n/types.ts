@@ -97,6 +97,9 @@ export interface Messages {
   engineCard: {
     ready: string;
     line(context: string): string;
+    /** A sub-agent works in the engine (task 8.2): the dot's name, and the line. */
+    busy: string;
+    working(subagent: string): string;
   };
   /** The four modes: the product's names, the same in every language. */
   modes: Record<'lecture' | 'repetition' | 'plume' | 'impro', string>;
@@ -118,6 +121,27 @@ export interface Messages {
     instructionPlaceholder: string;
     hint: string;
     fails: { missing: string; notFound: string; ambiguous(times: number): string };
+    /** A sub-agent's call (task 8.2): who asks, and what refusing does. */
+    askedBy(name: string): string;
+    onlyIt: string;
+  };
+  /** The sub-agents pane (board « Une conversation avec des sous-agents au travail », task 8.2). */
+  subagentsPane: {
+    /** « 3 sous-agents · 1 fini, 1 en cours, 1 attend ton accord, 1 en file ». */
+    summary(count: Record<'total' | 'done' | 'running' | 'waiting' | 'queued' | 'failed' | 'stopped', number>): string;
+    states: Record<'done' | 'running' | 'waiting' | 'queued' | 'failed' | 'stopped', string>;
+    /** « 2 outils · 21 s ». */
+    meta(calls: number, seconds: number | null): string;
+    /** The meta of one still waiting for the slot: nothing done yet. */
+    notYet: string;
+    /** What it was given, beside the model: « même modèle · lecture seule ». */
+    given(tools: 'read' | 'all' | null): string;
+    mission: string;
+    result: string;
+    note: string;
+    none: string;
+    /** The list of them: its accessible name. */
+    list: string;
   };
   /** The line of a tool's call in a reply (canvas « Conversation au travail »): « Lu src/a.ts · 12 lignes ». */
   tools: {
@@ -387,9 +411,11 @@ export interface Messages {
     /** The icon of Changements while changes wait for the person. */
     changesWaiting(count: number): string;
     terminal: string;
+    /** The sub-agents of the conversation (task 8.2). */
+    subagents: string;
     /** A pane over the conversation, in a narrow window. */
     over(name: string): string;
-    close: { files: string; changes: string; terminal: string };
+    close: { files: string; changes: string; subagents: string; terminal: string };
     closeTip: string;
   };
   /** A conversation on its own branch (board « Branches et conversations », task 6.7). */

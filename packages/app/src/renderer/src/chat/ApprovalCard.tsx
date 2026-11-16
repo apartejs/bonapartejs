@@ -110,7 +110,10 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
           <code>{targetOf(request, preview)}</code>
           {text.question}
         </p>
+        {/* A sub-agent's call (task 8.2): who asks is named — never more than its conversation may. */}
+        {request.agent?.name ? <span className="aparte-badge approval-card__asker">{text.askedBy(request.agent.name)}</span> : null}
         <p className="approval-card__mode">{text.modeNote[mode]}</p>
+        {request.agent ? <p className="approval-card__only">{text.onlyIt}</p> : null}
       </div>
       {/* aparté's element, which JSX does not list: made as it is, given its texts through its property. */}
       {preview?.kind === 'diff' ? createElement('aparte-diff', { ref: diff, className: 'approval-card__diff' }) : null}

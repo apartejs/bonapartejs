@@ -1,6 +1,6 @@
 /**
  * The panes beside the conversation (board « Conversation au travail »,
- * task 6.2): three icons in the header, named on hover; each opens or closes
+ * task 6.2): four icons in the header, named on hover; each opens or closes
  * its pane; the panes stack, the terminal 300 px high when another is open;
  * Changements opens by itself when a change waits for the person (the
  * default); under 1 100 px a pane goes over the conversation.
@@ -14,11 +14,11 @@ import { chat } from './fixtures/chat.js';
 const Q = '<|"|>';
 const EDIT = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}first${Q},new_string:${Q}second${Q}}<tool_call|>`;
 
-test('three icons open and close their panes; the panes stack, the terminal 300 px under another', async ({ launch }) => {
+test('four icons open and close their panes; the panes stack, the terminal 300 px under another', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: () => 'ok' } });
   await expect(chat(page).editor).toBeVisible();
   const toggles = page.getByRole('group', { name: 'Volets' });
-  await expect(toggles.getByRole('button')).toHaveCount(3);
+  await expect(toggles.getByRole('button')).toHaveCount(4);
   const files = toggles.getByRole('button', { name: 'Fichiers', exact: true });
   const terminal = toggles.getByRole('button', { name: 'Terminal', exact: true });
   // Nothing open at first; a name on hover.

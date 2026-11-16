@@ -10,7 +10,7 @@ import { TipButton } from '../shell/TipButton';
 import type { IconName } from '../shell/icons';
 import { PANES, type OpenPanes, type PaneName } from './panes';
 
-const ICONS: Record<PaneName, IconName> = { files: 'file', changes: 'edit', terminal: 'terminal' };
+const ICONS: Record<PaneName, IconName> = { files: 'file', changes: 'edit', subagents: 'subagents', terminal: 'terminal' };
 
 export interface PanelTogglesProps {
   messages: Messages;

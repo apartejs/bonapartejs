@@ -702,3 +702,91 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+/* ------------------------------------------------------------------------------------------------------------------
+ * Phase 8: sub-agents at work, their pane, and a request of one (board « Une conversation avec des sous-agents au
+ * travail »).
+ * ---------------------------------------------------------------------------------------------------------------- */
+
+const PHASE8 = {
+  fr: { panes: 'Volets', pane: 'Sous-agents', waits: 'Attend le moteur', request: 'Demande d’accord', ask: 'Lance les tests.' },
+  en: { panes: 'Panes', pane: 'Sub-agents', waits: 'Waiting for the engine', request: 'Approval request', ask: 'Run the tests.' },
+};
+
+const SUB_Q = '<|"|>';
+const subCall = (name: string, args: Record<string, string>) =>
+  `<|tool_call>call:${name}{${Object.entries(args)
+    .map(([key, value]) => `${key}:${SUB_Q}${value}${SUB_Q}`)
+    .join(',')}}<tool_call|>`;
+
+/** Three leads in one step; each sub-agent reads a file, then returns a sentence; the conversation sums up. */
+function threeLeads(locale: 'fr' | 'en') {
+  const missions =
+    locale === 'fr'
+      ? [
+          { name: 'Lecteur de logs', mission: 'comparer les 20 derniers runs de CI', tools: 'read' },
+          { name: 'Explorateur', mission: 'ce qui a changé dans la CI et les tests depuis le 4/11', tools: 'read' },
+          { name: 'Mesureur', mission: 'chronométrer les tests en local, fichier par fichier', tools: 'all' },
+        ]
+      : [
+          { name: 'Log reader', mission: 'compare the last 20 CI runs', tools: 'read' },
+          { name: 'Explorer', mission: 'what changed in CI and the tests since 11/4', tools: 'read' },
+          { name: 'Timer', mission: 'time the tests locally, file by file', tools: 'all' },
+        ];
+  const result =
+    locale === 'fr'
+      ? 'Les 6 derniers runs passent de 6 à 14 min : l’étape « test » triple depuis le run 4802.'
+      : 'The last 6 runs went from 6 to 14 min: the « test » step tripled from run 4802.';
+  const summary =
+    locale === 'fr'
+      ? 'Les trois pistes concordent : depuis le 4/11, la suite d’intégration tourne sans cache.'
+      : 'The three leads agree: since 11/4, the integration suite runs without its cache.';
+  return (prompt: string): string => {
+    const answered = prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user');
+    if (prompt.includes('You are a sub-agent')) return answered ? result : subCall('read_file', { path: 'ci.yml' });
+    return answered ? summary : missions.map((mission) => subCall('run_subagent', mission)).join('');
+  };
+}
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`sub-agents at work and their pane, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = PHASE8[locale];
+      const { page, home } = await launch({ locale, engine: { responder: threeLeads(locale), paceMs: 90 } });
+      await writeFile(join(home, 'ci.yml'), 'jobs:\n  test:\n    runs-on: ubuntu-latest\n');
+      await page.emulateMedia({ colorScheme: scheme });
+      const ui = chat(page);
+      await ui.send(locale === 'fr' ? 'La CI met 14 minutes depuis la semaine dernière, contre 6 avant. Trouve pourquoi.' : 'CI takes 14 minutes since last week, against 6 before. Find out why.');
+      await expect(page.locator('.aparte-tool-activity', { hasText: words.waits }).first()).toBeVisible({ timeout: 20_000 });
+      await page.getByRole('group', { name: words.panes }).getByRole('button', { name: words.pane, exact: true }).click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `subagents-working-${locale}-${scheme}.png`) });
+      await expect(ui.streamingReplies).toHaveCount(0, { timeout: 60_000 });
+      await page.locator('.subagents-pane__row').nth(1).click();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(into, `subagents-pane-${locale}-${scheme}.png`) });
+    });
+
+    test(`a request of a sub-agent, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words = PHASE8[locale];
+      const name = locale === 'fr' ? 'Mesureur' : 'Timer';
+      const responder = (prompt: string): string => {
+        const answered = prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user');
+        if (prompt.includes('You are a sub-agent')) return answered ? '…' : subCall('run_command', { program: 'pnpm', args: 'test --reporter=verbose' });
+        return answered ? '…' : subCall('run_subagent', { name, mission: words.ask, tools: 'all' });
+      };
+      const { page } = await launch({ locale, engine: { responder } });
+      await page.emulateMedia({ colorScheme: scheme });
+      await chat(page).send(words.ask);
+      await expect(page.getByRole('region', { name: words.request })).toBeVisible({ timeout: 20_000 });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `subagent-approval-${locale}-${scheme}.png`) });
+    });
+  }
+}

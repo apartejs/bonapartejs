@@ -2444,3 +2444,228 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* « Sous-agents » (task 8.2, board « Une conversation avec des sous-agents au travail »): where they stand,
+   one row each, and the one opened below — its own thread drawn by aparté's view. */
+.subagents-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.subagents-pane__none {
+  margin: 0;
+  padding: var(--aparte-space-6);
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+}
+
+.subagents-pane__summary {
+  margin: 0;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.subagents-pane__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 12px;
+  list-style: none;
+}
+
+.subagents-pane__list li + li {
+  border-block-start: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.subagents-pane__row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--aparte-space-5);
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: var(--aparte-bg);
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.subagents-pane__row:hover {
+  background: var(--aparte-surface-1);
+}
+
+.subagents-pane__row[aria-pressed='true'] {
+  background: var(--bonaparte-accent-soft);
+}
+
+.subagents-pane__row:focus-visible {
+  outline: 2px solid var(--aparte-primary);
+  outline-offset: -2px;
+}
+
+/* The state: a mark drawn by its colour and its shape — and named for whoever does not see it. */
+.subagents-pane__state {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--aparte-radius-full);
+  background: var(--aparte-text-muted);
+}
+
+.subagents-pane__state[data-state='done'] {
+  background: var(--aparte-success);
+}
+
+.subagents-pane__state[data-state='running'] {
+  border: 2px solid var(--aparte-primary);
+  border-inline-end-color: transparent;
+  background: transparent;
+  animation: subagents-turn 0.9s linear infinite;
+}
+
+.subagents-pane__state[data-state='waiting'] {
+  background: var(--aparte-warning);
+}
+
+.subagents-pane__state[data-state='queued'] {
+  border: 2px solid var(--aparte-text-muted);
+  background: transparent;
+}
+
+.subagents-pane__state[data-state='failed'],
+.subagents-pane__state[data-state='stopped'] {
+  border-radius: 2px;
+  background: var(--aparte-error);
+}
+
+@keyframes subagents-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subagents-pane__state[data-state='running'] {
+    animation: none;
+  }
+}
+
+.subagents-pane__what {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--aparte-space-3);
+  min-width: 0;
+}
+
+.subagents-pane__name {
+  font-weight: 600;
+}
+
+.subagents-pane__mission {
+  overflow: hidden;
+  color: var(--aparte-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subagents-pane__meta,
+.subagents-pane__given {
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.subagents-pane__open {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subagents-pane__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-4);
+}
+
+.subagents-pane__title {
+  font-weight: 600;
+}
+
+.subagents-pane__pill[data-state='done'] {
+  background: var(--aparte-success-surface);
+  color: var(--aparte-success-ink);
+}
+
+.subagents-pane__pill[data-state='waiting'] {
+  background: var(--aparte-warning-surface);
+  color: var(--aparte-warning-ink);
+}
+
+.subagents-pane__pill[data-state='failed'],
+.subagents-pane__pill[data-state='stopped'] {
+  background: var(--aparte-error-surface);
+  color: var(--aparte-error-ink);
+}
+
+.subagents-pane__given {
+  margin-inline-start: auto;
+}
+
+.subagents-pane__box {
+  margin: 0;
+  padding: 10px 12px;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: 10px;
+  background: var(--aparte-bg);
+  font-size: 13px;
+}
+
+/* « Sa mission » then the mission: the space between them is the layout's, not a string. */
+.subagents-pane__mission-text {
+  margin-inline-start: 0.4em;
+}
+
+.subagents-pane__result p {
+  margin: 4px 0 0;
+}
+
+.subagents-pane__thread {
+  display: block;
+}
+
+.subagents-pane__note {
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+/* A sub-agent's request names who asks (task 8.2). */
+.approval-card__asker {
+  background: var(--aparte-bg);
+  color: var(--aparte-warning-ink);
+}
+
+.approval-card__only {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: var(--aparte-font-size-xs);
+}
+
+/* The engine busy with a sub-agent: the conversation waits on disk (task 8.2). */
+.engine-card[data-working] .engine-card__dot {
+  background: var(--aparte-primary);
+}
+
+/* The pane says the mission in its own box (the board's « Sa mission »): aparté's view does not say it again. */
+.subagents-pane__thread .aparte-subagent-task {
+  display: none;
+}

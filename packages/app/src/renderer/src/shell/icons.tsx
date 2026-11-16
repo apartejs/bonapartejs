@@ -5,6 +5,7 @@
  */
 
 import {
+  botIcon,
   chevronDownIcon,
   chevronRightIcon,
   closeIcon,
@@ -42,6 +43,7 @@ const ICONS = {
   file: fileIcon,
   edit: editIcon,
   terminal: terminalIcon,
+  subagents: botIcon,
 } as const;
 
 export type IconName = keyof typeof ICONS;

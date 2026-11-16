@@ -167,6 +167,8 @@ export interface EngineState {
    * one, else the one loaded last. Absent when none is known: the first launch.
    */
   resume?: { path: string; name: string; unloadedAt?: string; idleMinutes?: number };
+  /** A sub-agent works in the engine now (task 8.2): the card says « Occupé : sous-agent … ». */
+  working?: { subagent: string };
 }
 
 /** « Moteur et mémoire » (Settings): the engine, and the memory every conversation keeps on disk. */
@@ -816,6 +818,7 @@ export function createCore(deps: CoreDeps): Core {
           }
         : {}),
       ...(engine.mode === 'managed' && !model ? await resumeOf() : {}),
+      ...(conversations.subagentAtWork !== null ? { working: { subagent: conversations.subagentAtWork } } : {}),
     };
   }
 
@@ -1121,6 +1124,8 @@ export function createCore(deps: CoreDeps): Core {
         `[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`,
       ),
   });
+  // A sub-agent takes the engine, or leaves it: the card says who works there (task 8.2).
+  conversations.onSubagentAtWork(() => deps.engineChanged?.());
   // The branches of a conversation (task 7.2): « Brancher », and the sibling the person picks in the chat.
   const branches = createBranches({
     engine: conversations,

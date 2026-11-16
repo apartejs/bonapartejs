@@ -13,7 +13,7 @@ import { Icon, type IconName } from '../shell/icons';
 import { TipButton } from '../shell/TipButton';
 import type { PaneName } from './panes';
 
-const ICONS: Record<PaneName, IconName> = { files: 'file', changes: 'edit', terminal: 'terminal' };
+const ICONS: Record<PaneName, IconName> = { files: 'file', changes: 'edit', subagents: 'subagents', terminal: 'terminal' };
 
 export interface PaneContent {
   /** What the pane says after its title: a project, counts. */

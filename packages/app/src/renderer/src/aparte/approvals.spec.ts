@@ -23,6 +23,12 @@ describe('the approvals store and its resolver', () => {
     expect(store.list('c-1')).toEqual([]);
   });
 
+  it("a sub-agent's call carries who asks: its name, for the card (task 8.2)", async () => {
+    const store = createApprovalsStore();
+    void createApprovalResolver(store)({ ...CALL, agent: { id: 'agent-1', name: 'Mesureur' } }, new AbortController().signal, TURN);
+    expect(store.list('c-1')).toEqual([expect.objectContaining({ id: 'call-1', agent: { id: 'agent-1', name: 'Mesureur' } })]);
+  });
+
   it('a turn stopped while it waits: the request goes, refused (the client resumes nothing then)', async () => {
     const store = createApprovalsStore();
     const controller = new AbortController();

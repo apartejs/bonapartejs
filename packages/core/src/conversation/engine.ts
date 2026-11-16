@@ -378,6 +378,23 @@ export class ConversationEngine {
     });
   }
 
+  /** The sub-agent working in the engine now, by its name (task 8.2: « Occupé : sous-agent … »); none: null. */
+  get subagentAtWork(): string | null {
+    const owner = this.scheduler.busy.find((busy) => busy.kind === 'subagent');
+    return owner?.kind === 'subagent' ? owner.name : null;
+  }
+
+  /** Told each time the sub-agent at work changes: its name, or null when none works any more. */
+  onSubagentAtWork(listener: (name: string | null) => void): () => void {
+    let last = this.subagentAtWork;
+    return this.scheduler.onChange(() => {
+      const now = this.subagentAtWork;
+      if (now === last) return;
+      last = now;
+      listener(now);
+    });
+  }
+
   /** What opening the conversation will cost — said before anything is paid; the slot is not touched. */
   async open(id: string): Promise<Announcement | null> {
     const meta = await this.deps.store.get(id);

@@ -15,6 +15,8 @@ export interface ApprovalRequest {
   conversationId: string | null;
   name: string;
   input: Record<string, unknown>;
+  /** A sub-agent's call (task 8.2): who asks — the card names it. */
+  agent?: { id: string; name?: string };
 }
 
 export interface ApprovalAnswer {
@@ -84,11 +86,20 @@ export function createApprovalsStore(): ApprovalsStore {
  */
 export function createApprovalResolver(store: ApprovalsStore) {
   return (
-    call: { id: string; name: string; input: Record<string, unknown> },
+    call: { id: string; name: string; input: Record<string, unknown>; agent?: { id: string; name?: string } },
     signal: AbortSignal,
     turn?: AparteTurnContext,
   ): Promise<ApprovalDecision> =>
-    store.ask({ id: call.id, conversationId: turn?.conversationId ?? null, name: call.name, input: call.input }, signal);
+    store.ask(
+      {
+        id: call.id,
+        conversationId: turn?.conversationId ?? null,
+        name: call.name,
+        input: call.input,
+        ...(call.agent ? { agent: call.agent } : {}),
+      },
+      signal,
+    );
 }
 
 /**

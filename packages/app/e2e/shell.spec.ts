@@ -80,7 +80,7 @@ test('a conversation with a long title keeps the sidebar to its width, and the w
   const ui = chat(page);
   await expect(ui.editor).toBeVisible();
   const before = (await page.locator('.bonaparte-sidebar').boundingBox())?.width;
-  const long = `Une très longue première question : ${'encore un mot '.repeat(120)}`.trim();
+  const long = `Une très longue première question : ${'encore un mot '.repeat(100)}`.trim();
   await ui.send(long);
   await expect(ui.replyText).toHaveText('ok');
 

@@ -98,6 +98,8 @@ export const en: Messages = {
   engineCard: {
     ready: 'Engine ready',
     line: (context) => `Ready · context ${context} · 1 slot`,
+    busy: 'Engine busy',
+    working: (subagent) => `Busy: sub-agent ${subagent}`,
   },
   modes: { lecture: 'Lecture', repetition: 'Répétition', plume: 'Plume', impro: 'Impro' },
   approval: {
@@ -122,6 +124,33 @@ export const en: Messages = {
       notFound: 'The text to replace is not in the file: the edit will fail.',
       ambiguous: (times) => `The text to replace is there ${times} times: the edit will fail.`,
     },
+    askedBy: (name) => `asked by the sub-agent ${name}`,
+    onlyIt: 'Refusing stops only it: it returns what it has.',
+  },
+  subagentsPane: {
+    summary: (count) => {
+      const parts = [
+        count.done > 0 ? `${count.done} done` : '',
+        count.running > 0 ? `${count.running} running` : '',
+        count.waiting > 0 ? `${count.waiting} waiting for your approval` : '',
+        count.queued > 0 ? `${count.queued} queued` : '',
+        count.failed > 0 ? `${count.failed} failed` : '',
+        count.stopped > 0 ? `${count.stopped} stopped` : '',
+      ].filter(Boolean);
+      const total = `${count.total} ${count.total > 1 ? 'sub-agents' : 'sub-agent'}`;
+      return parts.length > 0 ? `${total} · ${parts.join(', ')}` : total;
+    },
+    states: { done: 'Done', running: 'Running', waiting: 'Waiting for your approval', queued: 'Queued', failed: 'Failed', stopped: 'Stopped' },
+    meta: (calls, seconds) =>
+      [`${calls} ${calls > 1 ? 'tools' : 'tool'}`, seconds === null ? '' : `${seconds} s`].filter(Boolean).join(' · '),
+    given: (tools) =>
+      tools === 'all' ? 'same model · may run commands' : tools === 'read' ? 'same model · read only' : 'same model',
+    notYet: '—',
+    mission: 'Its mission',
+    result: 'Returned to the main agent',
+    note: 'Its work stays here: only its result goes back to your conversation.',
+    none: 'No sub-agent in this conversation. When the agent hands a lead to a sub-agent, it shows here.',
+    list: 'The sub-agents of the conversation',
   },
   tools: {
     labels: {
@@ -580,8 +609,9 @@ export const en: Messages = {
     changes: 'Changes',
     changesWaiting: (count) => `Changes, ${count} waiting`,
     terminal: 'Terminal',
+    subagents: 'Sub-agents',
     over: (name) => `${name}, over the conversation`,
-    close: { files: 'Close the files', changes: 'Close the changes', terminal: 'Close the terminal' },
+    close: { files: 'Close the files', changes: 'Close the changes', subagents: 'Close the sub-agents', terminal: 'Close the terminal' },
     closeTip: 'Close',
   },
   search: {

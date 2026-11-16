@@ -15,13 +15,17 @@ function contextSize(tokens: number): string {
 
 export function EngineCard({ engine, messages }: { engine: EngineStateView; messages: Messages }) {
   if (!engine.model) return null;
+  // A sub-agent works in the engine (task 8.2): its conversation waits on disk, and the card says who works.
+  const subagent = engine.working?.subagent;
   return (
-    <div className="aparte-card engine-card">
+    <div className="aparte-card engine-card" data-working={subagent ? 'subagent' : undefined}>
       <div className="engine-card__name">
-        <span className="engine-card__dot" role="img" aria-label={messages.engineCard.ready} />
+        <span className="engine-card__dot" role="img" aria-label={subagent ? messages.engineCard.busy : messages.engineCard.ready} />
         <span className="engine-card__model">{engine.model.name}</span>
       </div>
-      <p className="engine-card__line">{messages.engineCard.line(contextSize(engine.model.nCtx))}</p>
+      <p className="engine-card__line">
+        {subagent ? messages.engineCard.working(subagent) : messages.engineCard.line(contextSize(engine.model.nCtx))}
+      </p>
     </div>
   );
 }

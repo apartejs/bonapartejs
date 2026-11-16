@@ -35,21 +35,16 @@ export function readSubagentSpec(input: unknown): SubagentSpec | { error: string
 export const runSubagentTool: BuiltinTool = {
   def: {
     name: RUN_SUBAGENT,
+    // Paid in every conversation's prompt: said briefly.
     description:
-      'Hand an independent piece of work to a sub-agent: it works with a context of its own and the tools you give it, ' +
-      'then returns only its result, which you read here. Use it for separate leads you can follow independently ' +
-      '(reading logs, exploring part of the code, measuring something), and give each a complete mission: the sub-agent ' +
-      'sees nothing of this conversation. Several calls in one step run one after another.',
+      'Hand an independent lead to a sub-agent with its own context; you read only its result. ' +
+      'Its mission must be complete: it sees nothing of this conversation.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'A short name for the sub-agent, shown to the person: "Log reader".' },
-        mission: { type: 'string', description: 'What to do, what to look at, and what to give back: complete on its own.' },
-        tools: {
-          type: 'string',
-          enum: ['read', 'all'],
-          description: '"read": read files and search only (the default). "all": it may also edit files and run commands, asked as yours are.',
-        },
+        name: { type: 'string', description: 'Short name shown to the person.' },
+        mission: { type: 'string', description: 'What to do and what to give back.' },
+        tools: { type: 'string', enum: ['read', 'all'], description: '"read" (default) or "all": also edits and commands.' },
       },
       required: ['name', 'mission'],
     },
