@@ -64,8 +64,8 @@ export function useCompaction(deps: CompactionDeps) {
     };
   }, [conversationId, turnsEnded]);
 
-  const chatOf = (id: string): AparteChatImperativeApi | null => {
-    for (const handle of latest.current.handles.values()) if (handle.getConversationId() === id) return handle;
+  const chatOf = (id: string): { chatId: string; handle: AparteChatImperativeApi } | null => {
+    for (const [chatId, handle] of latest.current.handles) if (handle.getConversationId() === id) return { chatId, handle };
     return null;
   };
 
@@ -79,19 +79,26 @@ export function useCompaction(deps: CompactionDeps) {
         setState({ kind: 'refused', reason: outcome.reason });
         return;
       }
-      // aparté's checkpoint, where the core's rebase begins: the first message kept, else the last answer —
-      // which aparté then counts, though the model no longer reads it (apartejs/aparte#246).
-      const handle = chatOf(id);
-      if (handle) {
+      // aparté's checkpoint, where the core's rebase begins: the first message kept, else the last answer — the
+      // summary covering it too (`includesSelf`, aparté 1.12, apartejs/aparte#246): neither sent nor counted.
+      const chat = chatOf(id);
+      if (chat) {
+        const { handle } = chat;
         const shown = handle.getMessages() as unknown as ShownMessage[];
         const users = shown.flatMap((message, index) => (message.role === 'user' ? [index] : []));
         const at = outcome.keptTurns > 0 ? users[users.length - outcome.keptTurns] : shown.length - 1;
         const anchor = at === undefined ? undefined : shown[at];
         if (anchor && at !== undefined) {
           handle.updateMessage(anchor.id, {
-            contextSummary: { summary: outcome.summary, count: outcome.keptTurns > 0 ? at : shown.length, createdAt: Date.now() },
+            contextSummary:
+              outcome.keptTurns > 0
+                ? { summary: outcome.summary, count: at, createdAt: Date.now() }
+                : { summary: outcome.summary, count: shown.length, createdAt: Date.now(), includesSelf: true },
           });
         }
+        // aparté's gauge measures the request that would be sent now when it hears that its chat was compacted —
+        // what aparté's own compaction says; the core compacted this one.
+        window.dispatchEvent(new CustomEvent('aparte-compact-done', { detail: { targetId: chat.chatId } }));
       }
       setState(null);
       setContext(null);

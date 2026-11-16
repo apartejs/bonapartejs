@@ -16,13 +16,15 @@ import { chat } from './fixtures/chat.js';
 const Q = '<|"|>';
 const EDIT = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}old line${Q},new_string:${Q}new line${Q}}<tool_call|>`;
 const ASK = `<|tool_call>call:ask_user{question:${Q}Une date vide : je la garde vide ?${Q}}<tool_call|>`;
+const CHOOSE = `<|tool_call>call:ask_user{question:${Q}Une date vide : que fais-je ?${Q},options:[{title:${Q}La garder vide${Q}},{title:${Q}La refuser${Q}}]}<tool_call|>`;
 
 /** Edits the note when asked about it, asks a question when asked about dates; « Fait. » once it has read a result. */
 function model(prompt: string): string {
   const user = prompt.lastIndexOf('<|turn>user');
-  if (prompt.lastIndexOf('<|tool_response>') > user) return 'Fait.';
+  if (prompt.lastIndexOf('<|tool_response>') > user) return prompt.slice(prompt.lastIndexOf('<|tool_response>')).includes('La refuser') ? 'Refusée, donc.' : 'Fait.';
   const asked = prompt.slice(user);
   if (asked.includes('note')) return EDIT;
+  if (asked.includes('choix')) return CHOOSE;
   if (asked.includes('date')) return ASK;
   return 'ok';
 }
@@ -80,6 +82,22 @@ test('an approval that waits while the engine is unloaded: the page says so and 
   await card.getByRole('button', { name: 'Ouvrir la conversation' }).click();
   await expect(page.locator('.engine-unloaded')).toBeVisible();
   expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
+});
+
+test('a question with choices is answered from the page: its choices are buttons, and the reply goes on (aparté 1.12, apartejs/aparte#250)', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: model } });
+  const ui = chat(page);
+  await ui.send('Un choix de date');
+  await expect(ui.question).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.keyboard.press('Control+j');
+  const card = page$(page).getByRole('article', { name: /^Question/ });
+  await expect(card).toContainText('Une date vide : que fais-je ?');
+  await card.getByRole('button', { name: 'La refuser', exact: true }).click();
+  await expect(card).toHaveCount(0, { timeout: 10_000 });
+  // The conversation went on with that answer.
+  await page.locator('aparte-conversation-list').getByRole('button', { name: /^Un choix de date/ }).click();
+  await expect(ui.replyText).toHaveText('Refusée, donc.', { timeout: 15_000 });
 });
 
 test('a question waits on the page; « Répondre » opens its conversation, where it waits in the composer', async ({ launch }) => {

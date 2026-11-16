@@ -1,14 +1,11 @@
 /**
- * The models the composer's picker lists (task 7.4). aparté's model selector
- * reads the providers of the page's config; a page whose turns run in the
- * core registers none (apartejs/aparte#244). So one descriptive provider
- * carries the core's models — their names, a line with their size and the
- * video memory they take — and is never asked to answer: every turn goes to
- * the core through the stream runner. The config's model is the one the
- * engine runs (or would load): what the picker shows.
+ * The models the composer's picker lists (task 7.4): aparté's model catalogue (`createModelCatalogue`, aparté
+ * 1.12, apartejs/aparte#244) carries the core's models — their names, a line with their size and the video
+ * memory they take — and runs none: every turn goes to the core through the stream runner. The config's model
+ * is the one the engine runs (or would load): what the picker shows.
  */
 
-import { aparteGlobalConfig, type AparteAIModel, type AparteAIProvider } from '@aparte/core';
+import { aparteGlobalConfig, createModelCatalogue, type AparteAIModel, type AparteAIProvider } from '@aparte/core';
 import type { ModelChoiceView } from '@aparte/bonaparte-shared';
 import { formatBytes, type NumberStyle } from '../format';
 import type { Messages } from '../i18n/index';
@@ -26,33 +23,23 @@ export function catalogueOf(models: readonly ModelChoiceView[], messages: Messag
     }));
 }
 
-function provider(models: AparteAIModel[], name: string): AparteAIProvider {
-  return {
-    id: ENGINE_PROVIDER,
-    getMetadata: () => ({ id: ENGINE_PROVIDER, name, isLocal: true }),
-    getModels: () => models,
-    // Never asked: the stream runner sends every turn to the core.
-    chat: () => Promise.reject(new Error('The core answers the turns of this page.')),
-  };
-}
-
 /**
  * Lists `models` in the picker, `current` — the model that runs, or the one a load would bring back — shown
- * chosen. The provider is registered anew: the picker builds its list again only when the providers it was
+ * chosen. The catalogue is registered anew: the picker builds its list again only when the providers it was
  * built from change.
  */
 export function showCatalogue(models: AparteAIModel[], name: string, current: string): void {
-  // The same list again tells aparté nothing: any change of its config draws every conversation list again
-  // at once, an open row menu with it (apartejs/aparte#251).
+  // The same list again tells aparté nothing: a change of its config is work for every element that follows it
+  // (it closed an open row menu until aparté 1.12, apartejs/aparte#251).
   const shown = JSON.stringify([models, name]);
   const registered = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER);
   if (registered && shownList.get(registered) === shown && aparteGlobalConfig.getModelConfig().defaultModel === current) return;
   aparteGlobalConfig.unregisterAIProvider(ENGINE_PROVIDER);
-  const made = provider(models, name);
+  const made = createModelCatalogue({ id: ENGINE_PROVIDER, name, isLocal: true, models });
   shownList.set(made, shown);
   aparteGlobalConfig.registerAIProvider(made);
   aparteGlobalConfig.setModelConfig({ defaultProvider: ENGINE_PROVIDER, defaultModel: current });
 }
 
-/** What each provider registered here lists: one taken down elsewhere is listed again. */
+/** What each catalogue registered here lists: one taken down elsewhere is listed again. */
 const shownList = new WeakMap<AparteAIProvider, string>();

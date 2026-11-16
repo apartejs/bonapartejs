@@ -802,6 +802,7 @@ const INBOX = {
     edit: 'Corrige l’affichage des dates dans src/format.ts',
     ask: 'Ajoute la validation zod au formulaire d’inscription',
     question: 'Une date vide : je la garde vide ou je la refuse ?',
+    choices: ['La garder vide', 'La refuser'],
     night: 'Pourquoi la CI a-t-elle échoué cette nuit ?',
     marker: 'cette nuit',
     synthesis:
@@ -812,6 +813,7 @@ const INBOX = {
     edit: 'Fix how dates are shown in src/format.ts',
     ask: 'Add zod validation to the sign-up form',
     question: 'An empty date: keep it empty or refuse it?',
+    choices: ['Keep it empty', 'Refuse it'],
     night: 'Why did CI fail last night?',
     marker: 'last night',
     synthesis:
@@ -819,7 +821,10 @@ const INBOX = {
   },
 };
 
-/** An edit when the message names src/format.ts, a question when it says zod, a synthesis for last night's CI. */
+/**
+ * An edit when the message names src/format.ts, a question with two choices when it says zod (answered from the
+ * page since aparté 1.12), a synthesis for last night's CI.
+ */
 function inboxModel(locale: 'fr' | 'en') {
   const words = INBOX[locale];
   return (prompt: string): string => {
@@ -829,7 +834,10 @@ function inboxModel(locale: 'fr' | 'en') {
     if (asked.includes('src/format.ts')) {
       return subCall('edit_file', { path: 'src/format.ts', old_string: 'return date.toString();', new_string: 'return date.toLocaleDateString();' });
     }
-    if (asked.includes('zod')) return subCall('ask_user', { question: words.question });
+    if (asked.includes('zod')) {
+      const options = words.choices.map((title) => `{title:${SUB_Q}${title}${SUB_Q}}`).join(',');
+      return `<|tool_call>call:ask_user{question:${SUB_Q}${words.question}${SUB_Q},options:[${options}]}<tool_call|>`;
+    }
     if (asked.includes(words.marker)) return words.synthesis;
     return 'ok';
   };

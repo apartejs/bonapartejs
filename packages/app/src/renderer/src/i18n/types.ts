@@ -155,6 +155,8 @@ export interface Messages {
   subagentsPane: {
     /** « 3 sous-agents · 1 fini, 1 en cours, 1 attend ton accord, 1 en file ». */
     summary(count: Record<'total' | 'done' | 'running' | 'waiting' | 'queued' | 'failed' | 'stopped', number>): string;
+    /** What Stop says while sub-agents work (the composer's button). */
+    stop: string;
     states: Record<'done' | 'running' | 'waiting' | 'queued' | 'failed' | 'stopped', string>;
     /** « 2 outils · 21 s ». */
     meta(calls: number, seconds: number | null): string;

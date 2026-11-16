@@ -88,10 +88,14 @@ test('while one works the other waits for the engine, and says so; the engine ca
   await expect(page.locator('.engine-card__line')).toHaveText('Occupé : sous-agent Lecteur');
   await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Sous-agents', exact: true }).click();
   await expect(pane(page).locator('.subagents-pane__summary')).toHaveText('2 sous-agents · 1 en cours, 1 en file');
+  // While they work, Stop says what it stops (aparté 1.12, apartejs/aparte#249).
+  await expect(ui.stopButton).toHaveAccessibleName('Arrêter les sous-agents');
   // Then the other; then the conversation again, and the card says it is ready.
   await expect(page.locator('.engine-card__line')).toHaveText('Occupé : sous-agent Explorateur', { timeout: 30_000 });
   await expect(ui.replyText).toHaveText('Synthèse.', { timeout: 30_000 });
   await expect(page.locator('.engine-card__line')).toHaveText(/^Prêt/);
+  // The run over, Stop is gone, and the button sends again.
+  await expect(ui.stopButton).toHaveCount(0);
 });
 
 test('a request of a sub-agent names it; refusing it stops only it — it returns what it has, and the reply goes on', async ({ launch }) => {

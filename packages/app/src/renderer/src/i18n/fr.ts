@@ -156,6 +156,7 @@ export const fr: Messages = {
     unreadDot: 'Pas encore lu',
   },
   subagentsPane: {
+    stop: 'Arrêter les sous-agents',
     summary: (count) => {
       const parts = [
         count.done > 0 ? `${count.done} ${count.done > 1 ? 'finis' : 'fini'}` : '',

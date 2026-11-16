@@ -3,14 +3,16 @@
  * the person, across the conversations, decided from here without opening
  * each one. An approval and a sub-agent's request are answered here: the
  * card resolves the same promise as the conversation's own (its chat is
- * mounted, hidden, while it waits). A question opens its conversation, where
- * it waits in the composer — aparté offers no way to answer it from outside
- * (apartejs/aparte#250). A pull request whose CI fails can be handed back to
+ * mounted, hidden, while it waits). A question with choices is answered here
+ * too (aparté 1.12, `observeElicitations`); any other opens its conversation,
+ * where it waits in the composer. A pull request whose CI fails can be handed back to
  * the agent; a turn the engine cut is read again now, its cost said. At the
  * bottom, the replies finished since the person last looked.
  */
 
 import type { InboxView } from '@aparte/bonaparte-shared';
+import type { AparteElicitationPending } from '@aparte/core';
+import { choicesOf } from '../aparte/questions';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ApprovalAnswer, ApprovalRequest } from '../aparte/approvals';
 import { ApprovalCard } from '../chat/ApprovalCard';
@@ -27,6 +29,8 @@ export interface InboxPageProps {
   later: ReadonlySet<string>;
   /** The built-in engine is not loaded: an approval is answered in its conversation, which loads it first. */
   engineDown?: boolean;
+  /** The question a conversation waits on, as its chat puts it on screen: answered from here when it is a choice. */
+  questionOf?(conversationId: string): AparteElicitationPending | undefined;
   onAnswer(id: string, answer: ApprovalAnswer): void;
   onOpen(conversationId: string): void;
   onReadAgain(conversationId: string): Promise<void>;
@@ -139,16 +143,38 @@ export function InboxPage(props: InboxPageProps) {
             </Card>
           );
         })}
-        {inbox.questions.map((item) => (
-          <Card key={item.call.id} kind="question" label={words.kinds.question} title={item.title} at={item.at} locale={locale} open={link(item.conversationId, item.title)}>
-            <p className="inbox-card__title">{item.question}</p>
-            <div className="inbox-card__actions">
-              <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid aparte-btn--sm" onClick={() => props.onOpen(item.conversationId)}>
-                {words.answer}
-              </button>
-            </div>
-          </Card>
-        ))}
+        {inbox.questions.map((item) => {
+          // A question with choices is answered here (aparté 1.12, apartejs/aparte#250); any other opens its
+          // conversation, where it waits in the composer.
+          const pending = props.questionOf?.(item.conversationId);
+          const choices = pending ? choicesOf(pending) : null;
+          return (
+            <Card key={item.call.id} kind="question" label={words.kinds.question} title={item.title} at={item.at} locale={locale} open={link(item.conversationId, item.title)}>
+              <p className="inbox-card__title">{item.question}</p>
+              <div className="inbox-card__actions">
+                {pending && choices
+                  ? choices.map((choice) => (
+                      <button
+                        key={choice.label}
+                        type="button"
+                        className="aparte-btn aparte-btn--outline aparte-btn--sm"
+                        onClick={() => pending.respond({ action: 'accept', content: choice.value })}
+                      >
+                        {choice.label}
+                      </button>
+                    ))
+                  : null}
+                <button
+                  type="button"
+                  className={`aparte-btn aparte-btn--sm ${choices ? 'aparte-btn--ghost' : 'aparte-btn--primary aparte-btn--solid'}`}
+                  onClick={() => props.onOpen(item.conversationId)}
+                >
+                  {choices ? words.open : words.answer}
+                </button>
+              </div>
+            </Card>
+          );
+        })}
         {inbox.ciFailures.map((item) => (
           <Card
             key={`ci-${item.conversationId}`}

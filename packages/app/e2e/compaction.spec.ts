@@ -58,6 +58,8 @@ test('the context nearly full is said; « Compacter » summarises, the thread ma
   await banner.getByRole('button', { name: /^Compacter · / }).click();
   await expect(page.locator('.bonaparte-live-chat:not([hidden])').getByText(/messages résumés pour le modèle/)).toBeVisible({ timeout: 15_000 });
   await expect(banner).toHaveCount(0);
+  // The summary covers the last answer too: the gauge no longer counts it, at once (aparté 1.12, apartejs/aparte#246).
+  await expect.poll(() => page.locator('aparte-context').evaluate((element) => (element as unknown as { used: number }).used)).toBeLessThan(used / 2);
 
   await chat(page).send('Et ensuite ?');
   await expect(chat(page).replyText).toHaveText('Suite.', { timeout: 15_000 });

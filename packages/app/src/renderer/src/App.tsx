@@ -84,6 +84,7 @@ import { Sidebar } from './shell/Sidebar';
 import { createSubagentTracker, setupSubagentLines } from './aparte/subagents';
 import { SubagentsPanel } from './panels/SubagentsPanel';
 import { InboxPage } from './screens/Inbox';
+import { createQuestionsLive } from './aparte/questions';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -148,6 +149,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, []);
   // « À traiter » (task 8.4, Ctrl J): a page in the conversation's place; the chats stay mounted under it.
   const [inboxOpen, setInboxOpen] = useState(false);
+  // The questions the chats put on screen (a hidden one too): « À traiter » answers one with choices.
+  const questions = useMemo(() => createQuestionsLive(), []);
+  const [, heardQuestions] = useState(0);
+  useEffect(() => questions.subscribe(() => heardQuestions((count) => count + 1)), [questions]);
   const [inbox, setInbox] = useState<InboxView | null>(null);
   const [costLater, setCostLater] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -618,6 +623,20 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => setupSubagentLines(subagents), [subagents]);
   const [, heardSubagents] = useState(0);
   useEffect(() => subagents.subscribe(() => heardSubagents((count) => count + 1)), [subagents]);
+  // While a chat's sub-agents work, its Stop says so (aparté 1.12, apartejs/aparte#249); back to « Arrêter » after.
+  useEffect(
+    () =>
+      subagents.subscribe(() => {
+        for (const [chatId, handle] of handles) {
+          const composer = handle.getComposer();
+          if (!composer) continue;
+          const working = subagents.rowsOf(chatId).some((row) => row.state === 'running' || row.state === 'queued');
+          const label = working ? words.current.subagentsPane.stop : null;
+          if (composer.stopLabel !== label) composer.stopLabel = label;
+        }
+      }),
+    [subagents],
+  );
   const [subagentOpen, setSubagentOpen] = useState<string | null>(null);
   useEffect(() => {
     // A line's « Ouvrir » (aparté's `open: 'event'`): the pane opens on that sub-agent.
@@ -700,9 +719,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, [runningModel, engine.mode, messages, locale]);
 
   // The engine unloaded (task 7.4; board « Coûts annoncés », 5): the conversation stays, a card says what
-  // loading costs. A message sent meanwhile is held — apartejs/aparte#245: aparté's send cannot be
-  // cancelled, so it is stopped here, in the window's capture phase, before aparté's client and controller
-  // hear it, and its text put back in the composer.
+  // loading costs. A message sent meanwhile is held: aparté's `aparte-before-send`, cancelled, keeps it in the
+  // composer, text and files, with nothing added to the thread (aparté 1.12, apartejs/aparte#245) — a message
+  // queued during a reply too.
   const engineDown = engine.mode === 'managed' && engine.status !== 'ready';
   // The model a load brings back: the one unloaded (or known), else the one loading now.
   const toLoad = engine.resume ?? (engine.model ? { path: engine.model.path, name: engine.model.name } : undefined);
@@ -720,17 +739,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   useEffect(() => {
     const hold = (event: Event): void => {
       if (!downRef.current) return;
-      event.stopImmediatePropagation();
-      const text = (event as CustomEvent<{ content?: string }>).detail?.content ?? '';
-      const composer = event.composedPath().find((node): node is HTMLElement & { setValue(value: string): void } =>
-        node instanceof HTMLElement && node.tagName === 'APARTE-COMPOSER',
-      );
-      // The composer empties itself once the event is dispatched: the text goes back after.
-      queueMicrotask(() => composer?.setValue(text));
+      event.preventDefault();
       setHeld(true);
     };
-    window.addEventListener('aparte-send', hold, { capture: true });
-    return () => window.removeEventListener('aparte-send', hold, { capture: true });
+    window.addEventListener('aparte-before-send', hold, { capture: true });
+    return () => window.removeEventListener('aparte-before-send', hold, { capture: true });
   }, []);
   const loadAndSend = async (): Promise<void> => {
     const path = toLoad?.path;
@@ -974,6 +987,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           requests={approvals.list()}
           later={costLater}
           engineDown={engineDown}
+          questionOf={(id) => questions.of(id)}
           onAnswer={(id, answer) => approvals.answer(id, answer)}
           onOpen={(id) => goTo(id)}
           onReadAgain={async (id) => {

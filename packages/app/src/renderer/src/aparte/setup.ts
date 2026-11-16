@@ -18,6 +18,10 @@ export function setupAparte(locale: Locale): void {
   // Its options answer to 1 to 9 and Escape is « Laisse-le choisir » (aparté 1.10); an answer is
   // changed by the next message, not on its receipt (apartejs/aparte#223).
   setupAskUser();
+  // A message written while a reply runs waits above the field, and goes when the reply ends — after a Stop it
+  // comes back into the field (board « … sous-agents au travail »: « ton message attendra »; aparté 1.12,
+  // apartejs/aparte#248).
+  aparteGlobalConfig.setQueueWhileStreaming(true);
   setAparteLocale(locale);
 }
 
