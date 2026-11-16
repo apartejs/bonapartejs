@@ -237,6 +237,18 @@ describe('going back before a message', { timeout: 30_000 }, () => {
     expect((await rewind.rewind(id, target, 'both')).memory).toMatchObject({ kind: 'reread' });
   });
 
+  it('the turn after going back restores the memory the branch was given: no re-reading said for what the restore serves', async () => {
+    // Found by the real smoke (task 7.5): 1 299 of 1 329 tokens served, and still a « relecture » step.
+    const { id, engine, rewind, target } = await rig();
+    await rewind.rewind(id, target, 'conversation');
+    const steps: string[] = [];
+    await engine.turn(id, { text: 'Et ensuite ?' }, (event) => {
+      if (event.type === 'step') steps.push(`${event.name}:${event.phase}`);
+    });
+    expect(steps).toContain('restore:end');
+    expect(steps.filter((step) => step.startsWith('reread'))).toEqual([]);
+  });
+
   it('refuses a message that is not the one the window names: nothing moves', async () => {
     const { id, rewind, a, branchOf } = await rig();
     const before = await branchOf();

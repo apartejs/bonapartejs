@@ -64,6 +64,10 @@ async function rig(options: { summary?: string; truncate?: boolean; mode?: PlayM
 }
 
 describe('compaction is a rebase', { timeout: 30_000 }, () => {
+  it('asks the summary to keep, word for word, the facts read in files and from tools (task 7.5: a real model lost a code word)', () => {
+    expect(SUMMARY_QUESTION).toMatch(/word for word, every fact read in a file, from a tool or from the user/);
+  });
+
   it('summarises, then the prompt starts again from the system prompt and the summary — the early turns gone', async () => {
     const { id, engine, prompts, say, entries } = await rig();
     await say('Premier message.');

@@ -526,10 +526,12 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     }
     const result = await core.compact(id);
     console.log(
-      `[smoke] compaction: ${result.ok ? `${result.tokensBefore} → ${result.tokensAfter} tokens (estimated), ${result.compactedTurns} turns folded, summary « ${result.summary.slice(0, 120)}… »` : `refused (${result.reason})`}`,
+      `[smoke] compaction: ${result.ok ? `${result.tokensBefore} → ${result.tokensAfter} tokens (estimated), ${result.compactedTurns} turns folded, the code word ${result.summary.toUpperCase().includes('PERIWINKLE') ? 'kept' : 'LOST'} in a summary of ${result.summary.length} characters` : `refused (${result.reason})`}`,
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    // The summary itself keeps it: asked without tools, the model can only answer from it.
+    expect(result.summary.toUpperCase()).toContain('PERIWINKLE');
     const after = await turnIn(id, 'What was the code word in notes.txt? Reply with the word only.');
     console.log(`[smoke] after the compaction: « ${after.text.trim().slice(0, 40)} », ${after.usage.inputTokens} tokens read`);
     expect(after.text.toUpperCase()).toContain('PERIWINKLE');
@@ -551,7 +553,9 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     );
     expect(engine.family.id).not.toBe('gemma');
     expect(after.text.toUpperCase()).toContain('SAFFRON');
-    // What was announced is what was read, give or take the new message and its opening.
-    expect(Math.abs(uncached - cost.announcement.rereadTokens)).toBeLessThan(Math.max(64, cost.announcement.rereadTokens * 0.5));
+    // What was announced is the whole prompt of the new model — its system turn served by a seed it prepared
+    // first, the rest read by the turn —, estimated on the careful side (three characters a token).
+    expect(cost.announcement.rereadTokens).toBeGreaterThanOrEqual(after.usage.inputTokens * 0.8);
+    expect(cost.announcement.rereadTokens).toBeLessThanOrEqual(after.usage.inputTokens * 2);
   }, TIMEOUT);
 });

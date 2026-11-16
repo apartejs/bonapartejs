@@ -19,8 +19,9 @@ import { isRefrozen, type JournalEntry } from '../journal/types.js';
 export const SUMMARY_QUESTION =
   'Summarize this conversation so far, for your own use: it will replace the earlier turns in your context. ' +
   'Keep what the work needs to continue — the user’s goal and constraints, the decisions taken and why, ' +
-  'the files and code involved (paths, names), what was done and verified, what failed, what remains to do. ' +
-  'Be factual and complete; no preamble, no advice to the user.';
+  'the files and code involved (paths, names), what was done and verified, what failed, what remains to do — ' +
+  'and, word for word, every fact read in a file, from a tool or from the user that a later turn may need: ' +
+  'values, names, codes, numbers, results. Be factual and complete; no preamble, no advice to the user.';
 
 /** The longest summary asked for. */
 export const SUMMARY_MAX_TOKENS = 1536;

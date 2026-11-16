@@ -273,8 +273,12 @@ interface Turning {
 }
 
 /** Was this state saved before some of the conversation's entries — is it older than the conversation? */
+/**
+ * A state saved before text the branch froze since: older than its conversation. Only text counts — a going
+ * back, a pause, an answer to it freeze none (task 7.5: a going back was said as a re-reading the restore served).
+ */
 function savedBefore(entries: readonly JournalEntry[], savedAt: string): boolean {
-  return entries.some((entry) => entry.kind !== 'system' && entry.at > savedAt);
+  return entries.some((entry) => entry.kind !== 'system' && (entry.rendered ?? '') !== '' && entry.at > savedAt);
 }
 
 /** The text a state saved at `savedAt` leaves to read: what the entries after it froze into the prompt. */
@@ -927,6 +931,9 @@ export class ConversationEngine {
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
       if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
     }
+    // What the branch froze before this turn: a state saved after it is not behind for the notes this turn
+    // appends next — they are read with the message, as it is.
+    const known = journal.entries().length;
     // A model turn left open by calls nobody answered (a limit, a pause given up): closed before any note.
     if (!input.resume) await closeOpenTurn(journal, family);
     if (!input.resume) {
@@ -1010,7 +1017,7 @@ export class ConversationEngine {
       history: entries.some((entry) => entry.kind === 'user'),
       sink,
       rereading: false,
-      behind: saved !== null && savedBefore(entries, saved.savedAt),
+      behind: saved !== null && savedBefore(entries.slice(0, known), saved.savedAt),
     };
     this.turning.set(key, turning);
     this.lastRun.set(key, { engine, tokens: used });
