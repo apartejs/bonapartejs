@@ -496,6 +496,7 @@ export const en: Messages = {
   },
   engineUnloaded: {
     title: (name) => `${name} is unloaded`,
+    titleLoading: (name) => `${name} is loading…`,
     cost: (duration, vram) => `Loading it takes ~${duration} and ${vram} of video memory.`,
     idle: (time, minutes) => `Unloaded at ${time} after ${minutes} min without activity.`,
     unloadedAt: (time) => `Unloaded at ${time}.`,

@@ -943,7 +943,21 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           bornIn.current.set(id, project.current?.id ?? null);
         }}
         aboveComposer={
-          request ? (
+          // The engine down comes first (review of phase 7): a send is held, an approval would resume into
+          // nothing — loading it is what everything else waits for.
+          engineDown && toLoad ? (
+            <EngineUnloadedCard
+              messages={messages}
+              style={style}
+              resume={engine.resume ?? toLoad}
+              cost={resumeCost ? { seconds: resumeCost.seconds, vramBytes: resumeCost.vramBytes } : null}
+              held={held}
+              loading={loadingModel || engine.status === 'starting' || engine.status === 'restarting'}
+              failed={loadFailed}
+              onLoad={() => void loadAndSend()}
+              onOther={() => pickerOpener.current?.()}
+            />
+          ) : request ? (
             <ApprovalCard
               request={request}
               mode={mode}
@@ -961,18 +975,6 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             />
           ) : rewinding.rewound && rewinding.rewound.conversationId === conversationId ? (
             <RewindBanner rewound={rewinding.rewound} messages={messages} locale={locale} busy={rewinding.busy} onUndo={rewinding.undo} />
-          ) : engineDown && toLoad ? (
-            <EngineUnloadedCard
-              messages={messages}
-              style={style}
-              resume={engine.resume ?? toLoad}
-              cost={resumeCost ? { seconds: resumeCost.seconds, vramBytes: resumeCost.vramBytes } : null}
-              held={held}
-              loading={loadingModel}
-              failed={loadFailed}
-              onLoad={() => void loadAndSend()}
-              onOther={() => pickerOpener.current?.()}
-            />
           ) : memory ? (
             <MemoryBanner
               announcement={memory}

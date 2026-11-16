@@ -498,6 +498,7 @@ export const fr: Messages = {
   },
   engineUnloaded: {
     title: (name) => `${name} est déchargé`,
+    titleLoading: (name) => `${name} se charge…`,
     cost: (duration, vram) => `Le charger prend ~${duration} et ${vram} de mémoire vidéo.`,
     idle: (time, minutes) => `Déchargé à ${time} après ${minutes} min sans activité.`,
     unloadedAt: (time) => `Déchargé à ${time}.`,

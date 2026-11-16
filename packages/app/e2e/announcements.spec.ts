@@ -157,3 +157,37 @@ test('under a reply, a restart waits for its end — or cuts it, « Maintenant �
   await restart(page).getByRole('button', { name: 'Maintenant' }).click();
   await expect(engineFacts(page)).toContainText(/16\D?384 jetons/, { timeout: 12_000 });
 });
+
+// ── What the review of phase 7 found ──
+
+test('unloaded, the card comes before every other banner: a send is never held without a word', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ask(page, 'Premier');
+  await ask(page, 'Second');
+  const second = chat(page).userMessages.nth(1);
+  await second.hover();
+  await second.getByRole('button', { name: 'Revenir avant' }).click();
+  await page.getByRole('dialog', { name: 'Revenir avant « Second » ?' }).getByRole('button', { name: 'Revenir' }).click();
+  await expect(page.locator('.rewind-banner')).toBeVisible();
+
+  await unload(page);
+  await expect(card(page)).toContainText('gemma-4-e2e est déchargé');
+});
+
+test('a load under way says so, and offers no second one', async ({ launch }) => {
+  // A load that takes time, as a real model's.
+  const { page } = await launch({ managed: { models: MODELS }, env: { FAKE_LLAMA_LOAD_MS: '4000' } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ask(page, 'Bonjour');
+  await engineSettings(page);
+  await page.getByRole('button', { name: 'Redémarrer' }).click();
+  await page.getByRole('dialog', { name: 'Redémarrer le moteur ?' }).getByRole('button', { name: 'Redémarrer' }).click();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Conversations' }).click();
+  await expect(card(page)).toContainText('gemma-4-e2e se charge');
+  await expect(card(page).getByRole('button', { name: 'Charger et envoyer' })).toHaveCount(0);
+  await expect(card(page)).toBeHidden({ timeout: 20_000 });
+});
+

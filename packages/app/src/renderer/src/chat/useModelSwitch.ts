@@ -83,14 +83,15 @@ export function useModelSwitch(deps: ModelSwitchDeps) {
     if (!was) return;
     setBusy(true);
     setRefused(null);
-    latest.current.onSwitching(was.conversationId);
+    // Only « Changer » moves this conversation: with « Brancher sur ce modèle » the copy does.
+    if (as === 'here') latest.current.onSwitching(was.conversationId);
     const result = await bridge
       .invoke(engineSwitch, { path: was.path, ...(was.conversationId ? { conversationId: was.conversationId } : {}), as })
       .catch(() => null);
     if (pending.current !== was) return;
     setBusy(false);
     if (!result || !result.ok) {
-      latest.current.onSwitchFailed(was.conversationId);
+      if (as === 'here') latest.current.onSwitchFailed(was.conversationId);
       setRefused(result ? result.error.code : 'failed');
       return;
     }

@@ -494,6 +494,7 @@ export interface Messages {
   /** The engine unloaded (task 7.4; board « Coûts annoncés », 5): the card above the composer. */
   engineUnloaded: {
     title(name: string): string;
+    titleLoading(name: string): string;
     cost(duration: string, vram: string): string;
     idle(time: string, minutes: number): string;
     unloadedAt(time: string): string;

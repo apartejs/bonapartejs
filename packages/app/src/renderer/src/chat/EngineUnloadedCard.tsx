@@ -19,6 +19,7 @@ export interface EngineUnloadedCardProps {
   cost: { seconds: number; vramBytes: number } | null;
   /** A message was sent meanwhile: it waits in the composer. */
   held: boolean;
+  /** A load under way — this card's, or one started elsewhere (a restart, a change of model): no second one. */
   loading: boolean;
   failed: boolean;
   onLoad(): void;
@@ -34,7 +35,7 @@ export function EngineUnloadedCard({ messages, style, resume, cost, held, loadin
     <div className="aparte-alert engine-unloaded" role="status">
       <Icon name="engine" />
       <div className="aparte-alert__body">
-        <p className="aparte-alert__title">{words.title(resume.name)}</p>
+        <p className="aparte-alert__title">{loading ? words.titleLoading(resume.name) : words.title(resume.name)}</p>
         {cost ? (
           <p className="aparte-alert__message">{words.cost(formatDuration(cost.seconds, style.locale), formatBytes(cost.vramBytes, style))}</p>
         ) : null}
@@ -49,20 +50,16 @@ export function EngineUnloadedCard({ messages, style, resume, cost, held, loadin
             {words.failed}
           </p>
         ) : null}
-        <div className="engine-unloaded__actions">
-          <button
-            type="button"
-            className="aparte-btn aparte-btn--primary aparte-btn--solid"
-            disabled={loading}
-            aria-busy={loading || undefined}
-            onClick={onLoad}
-          >
-            {loading ? words.loading : words.load}
-          </button>
-          <button type="button" className="aparte-btn aparte-btn--outline" disabled={loading} onClick={onOther}>
-            {words.other}
-          </button>
-        </div>
+        {loading ? null : (
+          <div className="engine-unloaded__actions">
+            <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={onLoad}>
+              {words.load}
+            </button>
+            <button type="button" className="aparte-btn aparte-btn--outline" onClick={onOther}>
+              {words.other}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
