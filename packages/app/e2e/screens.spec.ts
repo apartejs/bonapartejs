@@ -597,12 +597,12 @@ const PHASE7 = {
   },
 } as const;
 
-/** A reply that brings the conversation to 92 % of its window: the context nearly full. */
+/** A reply that brings the conversation to 92 % of its window, as the engine counts it (the fake one: four characters a token). */
 function filling(nCtx: number) {
   return (prompt: string): string => {
     if (prompt.includes('Summarize this conversation so far')) return 'Facts:\nThe hours are decimal.\nWork:\nThe format of the hours was fixed.';
-    const room = Math.floor(0.92 * nCtx - (prompt.length / 3 + 8));
-    return 'Une longue réponse sur le travail fait. '.repeat(Math.max(1, Math.floor((room * 3) / 40)));
+    const room = Math.floor(0.92 * nCtx - Math.ceil(prompt.length / 4));
+    return 'Une longue réponse sur le travail fait. '.repeat(Math.max(1, Math.floor((room * 4) / 40)));
   };
 }
 
@@ -654,6 +654,10 @@ for (const locale of ['fr', 'en'] as const) {
       // « Revenir avant », its dialog, then its banner.
       const second = ui.userMessages.nth(1);
       await second.hover();
+      // Its buttons, in words (aparté 1.11).
+      await expect(second.getByRole('button', { name: words.back })).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `message-actions-${locale}-${scheme}.png`) });
       await second.getByRole('button', { name: words.back }).click();
       await expect(page.locator('.rewind-dialog')).toBeVisible();
       await page.waitForTimeout(400);
@@ -663,7 +667,8 @@ for (const locale of ['fr', 'en'] as const) {
       await page.screenshot({ path: join(into, `rewind-banner-${locale}-${scheme}.png`) });
 
       // « Brancher »: the branches of the conversation.
-      await page.getByRole('button', { name: words.branch, exact: true }).click();
+      // The header's: the first in the page (each message of the person has its own).
+      await page.getByRole('button', { name: words.branch, exact: true }).first().click();
       await page.waitForTimeout(300);
       await page.screenshot({ path: join(into, `branches-${locale}-${scheme}.png`) });
       await page.keyboard.press('Escape');

@@ -16,8 +16,8 @@ import { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { familyLayer } from '../families/index.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import { KvStore, type LiveConfig } from '../kv/kv-store.js';
-import { startFakeLlamaServer, type FakeLlamaServer, type FakeLlamaServerOptions } from '../testing/fake-llama-server.js';
-import { ConversationEngine, ContextFullError, EngineFailedError, type TurnEvent } from './engine.js';
+import { fakeTokenize, startFakeLlamaServer, type FakeLlamaServer, type FakeLlamaServerOptions } from '../testing/fake-llama-server.js';
+import { ConversationEngine, ContextFullError, EngineFailedError, REPLY_ROOM, type TurnEvent } from './engine.js';
 import { ConversationStore } from './store.js';
 import type { ToolDef } from '../tools/types.js';
 
@@ -462,6 +462,18 @@ describe('ConversationEngine — when it does not go well', () => {
     await expect(say(meta.id, 'long '.repeat(400))).rejects.toMatchObject({ announcement: { kind: 'context-full' } });
     expect(server.finished).toBe(before);
     expect((await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'user')).toEqual([]);
+  });
+
+  it('a message the engine has room for is sent, though an estimate of the whole (three characters a token) would refuse it', async () => {
+    // Prose runs past three characters a token: estimated, a conversation the engine held at 75 % looked full.
+    const answer = 'Une longue réponse sur le travail fait. '.repeat(300);
+    const { store, conversation, say } = await rig({ server: { responder: (prompt) => (prompt.includes('Et ensuite') ? 'Suite.' : answer) } });
+    const meta = await conversation();
+    await say(meta.id, 'Explique.');
+    const held = fakeTokenize(frozenPrompt((await openJournal(store.dir, meta.id)).entries())).length;
+    await store.update(meta.id, { contextCap: held + REPLY_ROOM + 200 });
+    const { result } = await say(meta.id, 'Et ensuite ?');
+    expect(result.stopped).toBeUndefined();
   });
 
   it("respects a conversation's own cap, below the engine's context", async () => {

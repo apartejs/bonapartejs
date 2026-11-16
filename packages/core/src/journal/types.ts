@@ -26,6 +26,8 @@ export interface Usage {
   outputTokens: number;
   /** Tokens served by the KV cache rather than evaluated. */
   cacheReadTokens?: number;
+  /** What the engine held once this answer was written, as it counted it (llama.cpp's `tokens_cached`). */
+  contextTokens?: number;
 }
 
 export interface PendingCall {

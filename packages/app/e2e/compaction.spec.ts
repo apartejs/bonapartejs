@@ -19,13 +19,13 @@ function model(prompt: string): string {
   return LONG;
 }
 
-/** An answer that brings the conversation to 92 % of a window of `nCtx` (the core counts a token for three characters). */
+/** An answer that brings the conversation to 92 % of a window of `nCtx`, as the engine counts it (the fake one: four characters a token). */
 function filling(nCtx: number) {
   return (prompt: string): string => {
     if (prompt.includes('Summarize this conversation so far')) return 'RÉSUMÉ DU TRAVAIL.';
     if (prompt.slice(prompt.lastIndexOf('<|turn>user')).includes('Et ensuite')) return 'Suite.';
-    const room = Math.floor(0.92 * nCtx - (prompt.length / 3 + 8));
-    return 'Une longue réponse sur le travail fait. '.repeat(Math.max(1, Math.floor((room * 3) / 40)));
+    const room = Math.floor(0.92 * nCtx - Math.ceil(prompt.length / 4));
+    return 'Une longue réponse sur le travail fait. '.repeat(Math.max(1, Math.floor((room * 4) / 40)));
   };
 }
 
@@ -51,6 +51,10 @@ test('the context nearly full is said; « Compacter » summarises, the thread ma
   const { page, prompts } = await longConversation(launch, 1, 8000);
   const banner = page.getByRole('status').filter({ hasText: /Contexte plein à \d+ %/ });
   await expect(banner).toBeVisible({ timeout: 10_000 });
+  // Its figure is the gauge's: what the engine counted, not an estimate beside it.
+  const used = await page.locator('aparte-context').evaluate((element) => (element as unknown as { used: number }).used);
+  const said = /([\d\s  ]+) \//.exec((await banner.textContent()) ?? '')?.[1] ?? '';
+  expect(Number(said.replace(/\D/g, ''))).toBe(used);
   await banner.getByRole('button', { name: /^Compacter · / }).click();
   await expect(page.locator('.bonaparte-live-chat:not([hidden])').getByText(/messages résumés pour le modèle/)).toBeVisible({ timeout: 15_000 });
   await expect(banner).toHaveCount(0);

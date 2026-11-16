@@ -17,7 +17,7 @@ import { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { familyLayer } from '../families/index.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import { KvStore, type LiveConfig } from '../kv/kv-store.js';
-import { startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
+import { fakeTokenize, startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
 import { CompactionError, SUMMARY_QUESTION } from './compact.js';
 import { ConversationEngine } from './engine.js';
 import { ConversationStore } from './store.js';
@@ -159,6 +159,29 @@ describe('compaction is a rebase', { timeout: 30_000 }, () => {
     const full = await engine.contextOf(id);
     expect(full).toMatchObject({ kind: 'context-full', window: Math.floor(used / 0.95) });
     expect(full!.compactSeconds).toBeGreaterThan(0);
+  });
+
+  it('counts the context as the engine counted it after the last answer, as the gauge does — not an estimate', async () => {
+    // The gauge shows the engine's count; an estimate (three characters to a token) said 92 % beside a gauge at 69 %.
+    const { id, engine, store, say, prompts } = await rig();
+    await say('Premier message.');
+    await say('Deuxième message.');
+    const counted = fakeTokenize(prompts.at(-1)!).length + fakeTokenize(LONG).length;
+    // At 85 % of what the engine holds, nothing to say — though the estimate would be past the window.
+    await store.update(id, { contextCap: Math.floor(counted / 0.85) });
+    expect(await engine.contextOf(id)).toBeNull();
+    await store.update(id, { contextCap: Math.floor(counted / 0.95) });
+    expect(await engine.contextOf(id)).toMatchObject({ kind: 'context-full', used: counted });
+  });
+
+  it('compacts a conversation the engine holds at 90 % — an estimate of the whole found no room for the summary', async () => {
+    const { id, engine, store, say, prompts } = await rig();
+    await say('Premier message.');
+    await say('Deuxième message.');
+    await say('Troisième message.');
+    const counted = fakeTokenize(prompts.at(-1)!).length + fakeTokenize(LONG).length;
+    await store.update(id, { contextCap: Math.floor(counted / 0.9) });
+    await expect(engine.compact(id, () => undefined)).resolves.toMatchObject({ summary: 'RÉSUMÉ : le format des heures est corrigé.' });
   });
 
   it('a memory to read again says what compacting first would take', async () => {

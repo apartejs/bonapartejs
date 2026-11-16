@@ -50,6 +50,22 @@ export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3) + 8;
 }
 
+/**
+ * What a branch holds, as the engine counted it after its last answer — the gauge's figure —, with an
+ * estimate only for what was frozen since (results, a message, notes). Null when no answer since the
+ * prompt was last frozen again (a rebase, a change of model) carries the engine's count.
+ */
+export function countedContext(entries: readonly JournalEntry[]): number | null {
+  const boundary = Math.max(0, entries.findLastIndex(isRefrozen));
+  const at = entries.findLastIndex(
+    (entry, index) => index > boundary && entry.kind === 'assistant' && (entry.usage?.contextTokens ?? 0) > 0,
+  );
+  if (at < 0) return null;
+  const counted = (entries[at] as Extract<JournalEntry, { kind: 'assistant' }>).usage!.contextTokens!;
+  const since = entries.slice(at + 1).map((entry) => entry.rendered ?? '').join('');
+  return counted + (since ? Math.ceil(since.length / 3) : 0);
+}
+
 /** Room kept for the answer: a message that leaves less is refused before it is sent. */
 export const REPLY_ROOM = 1024;
 
@@ -397,7 +413,8 @@ export class ConversationEngine {
     const engineWindow = engine.live?.nCtx || (await engine.client.props().catch(() => ({ nCtx: 0 }))).nCtx || Number.POSITIVE_INFINITY;
     const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
     if (!Number.isFinite(window)) return null;
-    const used = estimateTokens(frozenPrompt(entries));
+    // The engine's count, as the gauge beside it shows; an estimate only before an answer carries one.
+    const used = countedContext(entries) ?? estimateTokens(frozenPrompt(entries));
     // The summary reads a prompt its memory serves; then it is written, and the short prompt read.
     const announced = announceContext(used, window, this.compactionTail(engine));
     return announced?.kind === 'context-full' ? announced : null;
@@ -597,7 +614,9 @@ export class ConversationEngine {
       const question = family.renderUser(SUMMARY_QUESTION) + family.beginAssistant({ thinking: false });
       const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
       const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
-      const used = estimateTokens(frozen + question);
+      // What the engine holds, as it counted it, then the question: an estimate of the whole (three characters
+      // a token) found no room in a conversation the engine held at 92 %, just when it had to be compacted.
+      const used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(question);
       const nPredict = Math.min(SUMMARY_MAX_TOKENS, Math.floor(window - used - 64));
       if (nPredict < 256) throw new CompactionError('no-room', 'There is no room left in the context for a summary: nothing was compacted.');
 
@@ -1063,7 +1082,10 @@ export class ConversationEngine {
     // Never a context shift: what does not fit is refused before anything is sent.
     const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
     const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
-    const used = estimateTokens(frozen + userRendered + opening);
+    // What the engine holds, as it counted it, and what this turn adds: an estimate of the whole (three
+    // characters a token) refused, in prose, messages the engine had room for. The server refuses what does
+    // not fit after all (below).
+    const used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(userRendered + opening);
     if (used + REPLY_ROOM > window) throw new ContextFullError(this.contextFull(engine, used, window));
 
     const user =
@@ -1139,6 +1161,7 @@ export class ConversationEngine {
                     inputTokens: stats.progress?.total ?? stats.promptUncachedTokens,
                     outputTokens: stats.predictedTokens,
                     cacheReadTokens: stats.progress?.cache ?? 0,
+                    ...(stats.contextTokens ? { contextTokens: stats.contextTokens } : {}),
                   };
                   this.measure(engine, stats.promptUncachedTokens, stats.promptMs);
                   this.lastRun.set(key, { engine, tokens: stats.contextTokens || used });
