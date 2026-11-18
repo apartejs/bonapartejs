@@ -7,15 +7,15 @@
  */
 
 import { posix, win32 } from 'node:path';
-import type { CoreDeps } from '@aparte/bonaparte-core';
+import type { CatalogueEntry, CoreDeps } from '@aparte/bonaparte-core';
 
 export function e2eEngineDeps(
   env: Record<string, string | undefined>,
   e2e: boolean,
-): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh'> {
+): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> {
   if (!e2e) return {};
   // GitHub's CLI: the test's fake one, or none — a test run never asks GitHub.
-  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh'> = { gh: null };
+  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> = { gh: null };
   try {
     const gh = JSON.parse(env['BONAPARTE_E2E_GH_COMMAND'] ?? 'null') as unknown;
     if (Array.isArray(gh) && gh.length > 0 && gh.every((part) => typeof part === 'string')) deps.gh = gh as string[];
@@ -42,7 +42,35 @@ export function e2eEngineDeps(
   if (disk && (win32.isAbsolute(disk) || posix.isAbsolute(disk))) deps.diskRoots = async () => [disk];
   const releases = env['BONAPARTE_E2E_LLAMA_RELEASES'];
   deps.llamaReleases = releases && /^http:\/\/127\.0\.0\.1:\d+\//.test(releases) ? releases : null;
+  // The models recommended: the test's hub (and its catalogue), never Hugging Face (task 9.5).
+  const hub = env['BONAPARTE_E2E_MODEL_HUB'];
+  deps.modelHub = hub && /^http:\/\/127\.0\.0\.1:\d+$/.test(hub) ? hub : null;
+  const catalogue = catalogueOf(env['BONAPARTE_E2E_MODEL_CATALOGUE']);
+  if (catalogue) deps.modelCatalogue = catalogue;
   return deps;
+}
+
+function catalogueOf(text: string | undefined): CatalogueEntry[] | undefined {
+  let read: unknown;
+  try {
+    read = JSON.parse(text ?? 'null');
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(read)) return undefined;
+  const isEntry = (one: unknown): one is CatalogueEntry => {
+    const entry = one as Record<string, unknown>;
+    return (
+      typeof one === 'object' &&
+      one !== null &&
+      ['id', 'name', 'repo', 'file'].every((key) => typeof entry[key] === 'string') &&
+      (entry['family'] === 'gemma' || entry['family'] === 'qwen') &&
+      typeof entry['sha256'] === 'string' &&
+      /^[0-9a-f]{64}$/.test(entry['sha256']) &&
+      ['bytes', 'context', 'fromGiB'].every((key) => typeof entry[key] === 'number')
+    );
+  };
+  return read.filter(isEntry);
 }
 
 /**

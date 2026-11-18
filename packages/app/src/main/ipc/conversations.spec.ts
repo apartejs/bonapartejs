@@ -134,7 +134,7 @@ describe('the conversation channels', () => {
     const { call } = await setup();
     await call('conversations.save', { document: DOC });
     await expect(call('conversations.status', { ids: ['broken', 'c-1'] })).resolves.toEqual({
-      'c-1': { projectId: null, memory: 'saved', waiting: true, unread: false },
+      'c-1': { projectId: null, kind: 'code', memory: 'saved', waiting: true, unread: false },
     });
   });
 
@@ -148,11 +148,11 @@ describe('the conversation channels', () => {
     const { call, store } = await setup();
     await call('conversations.save', { document: DOC });
     await expect(call('conversations.status', { ids: ['c-1', 'gone'] })).resolves.toEqual({
-      'c-1': { projectId: null, memory: 'saved', waiting: true, unread: false },
+      'c-1': { projectId: null, kind: 'code', memory: 'saved', waiting: true, unread: false },
     });
     await store.update('c-1', { projectId: 'p-1' });
     await expect(call('conversations.status', { ids: ['c-1'] })).resolves.toEqual({
-      'c-1': { projectId: 'p-1', memory: 'saved', waiting: true, unread: false },
+      'c-1': { projectId: 'p-1', kind: 'code', memory: 'saved', waiting: true, unread: false },
     });
     await expect(call('conversations.status', { ids: Array.from({ length: 501 }, (_, n) => `c-${n}`) })).rejects.toThrow();
   });

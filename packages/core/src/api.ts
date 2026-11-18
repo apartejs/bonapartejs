@@ -10,7 +10,7 @@
  * joined instead, and spoken to in the family its template says.
  */
 
-import { access, statfs } from 'node:fs/promises';
+import { access, mkdir, statfs } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
@@ -69,6 +69,8 @@ import { CompactionError, type CompactionRefusal } from './conversation/compact.
 import type { CompactResult } from './conversation/engine.js';
 import { createRewind, type RewindPreview, type RewindResult, type RewindTarget, type RewindWhat } from './conversation/rewind.js';
 import { DiskScan, diskRoots } from './models/disk-scan.js';
+import { CATALOGUE, modelUrl, recommendedModels, type CatalogueEntry } from './models/catalogue.js';
+import { downloadFile } from './models/download.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
@@ -165,6 +167,25 @@ export interface CoreDeps {
   llamaReleases?: string | null;
   /** The system's vault, for the services' keys (task 9.1). Without it, a key is refused, never written. */
   secrets?: SecretStore;
+  /** Where the recommended models are downloaded from (default: Hugging Face); null: never asked (tests). */
+  modelHub?: string | null;
+  /** Tests only: the models recommended, instead of the product's catalogue. */
+  modelCatalogue?: readonly CatalogueEntry[];
+}
+
+/** A model bonaparte recommends for this machine (task 9.5), and where it stands on it. */
+export interface RecommendedModel {
+  id: string;
+  family: CatalogueEntry['family'];
+  name: string;
+  file: string;
+  /** Its size, said before it is downloaded. */
+  bytes: number;
+  context: number;
+  /** Where it is kept once downloaded; null until then. */
+  path: string | null;
+  /** A download in progress. */
+  downloading: { done: number; total: number | null } | null;
 }
 
 /** A provider as the window sees it: whether it has a key, never the key. */
@@ -297,6 +318,10 @@ export interface Core {
   llamaCpp(options?: { checkLatest?: boolean }): Promise<LlamaCppState>;
   /** Downloads the newest build, verifies it, and keeps it. Only when the person asks. */
   installLlamaCpp(): Promise<LlamaCppState>;
+  /** The models bonaparte recommends for this machine's memory (task 9.5): asks nothing of the hub. */
+  recommendedModels(): Promise<RecommendedModel[]>;
+  /** Downloads one of them, verifies it, keeps it in `<data>/models`: only when the person asks. */
+  downloadModel(id: string): Promise<RecommendedModel>;
   /** The conversations: their cards, their journals, their turns on the engine. */
   readonly conversations: ConversationEngine;
   readonly conversationStore: ConversationStore;
@@ -857,6 +882,55 @@ export function createCore(deps: CoreDeps): Core {
     return install;
   }
 
+  // ── The models bonaparte recommends, downloaded on demand (task 9.5) ──
+  const ownModels = join(deps.dataDir, 'models');
+  const catalogue = deps.modelCatalogue ?? CATALOGUE;
+  const hub = deps.modelHub === undefined ? 'https://huggingface.co' : deps.modelHub;
+  const downloads = new Map<string, { progress: { done: number; total: number | null }; done: Promise<RecommendedModel> }>();
+
+  async function recommendedView(entry: CatalogueEntry): Promise<RecommendedModel> {
+    const path = join(ownModels, entry.file);
+    return {
+      id: entry.id,
+      family: entry.family,
+      name: entry.name,
+      file: entry.file,
+      bytes: entry.bytes,
+      context: entry.context,
+      path: (await access(path).then(() => true, () => false)) ? path : null,
+      downloading: downloads.get(entry.id)?.progress ?? null,
+    };
+  }
+
+  async function recommended(): Promise<RecommendedModel[]> {
+    return Promise.all(recommendedModels(await gpuBytes(), catalogue).map(recommendedView));
+  }
+
+  function downloadModel(id: string): Promise<RecommendedModel> {
+    const running = downloads.get(id);
+    if (running) return running.done;
+    const entry = catalogue.find((one) => one.id === id);
+    if (!entry) return Promise.reject(new Error(`« ${id} » is not one bonaparte recommends: only those are downloaded.`));
+    if (hub === null) return Promise.reject(new Error('There is no hub to download a model from.'));
+    const job = { progress: { done: 0, total: entry.bytes as number | null }, done: Promise.resolve() as unknown as Promise<RecommendedModel> };
+    job.done = (async () => {
+      try {
+        await mkdir(ownModels, { recursive: true });
+        await downloadFile({
+          url: modelUrl(entry, hub),
+          dest: join(ownModels, entry.file),
+          sha256: entry.sha256,
+          onProgress: (progress) => (job.progress = progress),
+        });
+      } finally {
+        downloads.delete(id);
+      }
+      return recommendedView(entry);
+    })();
+    downloads.set(id, job);
+    return job.done;
+  }
+
   function gpuBytes(): Promise<number | null> {
     gpu ??= (deps.gpuMemory ?? machineGpuBytes)().catch(() => null);
     return gpu;
@@ -937,7 +1011,12 @@ export function createCore(deps: CoreDeps): Core {
   async function modelRoots(): Promise<ScanRoot[]> {
     const added = await appSettings.get('modelFolders').catch(() => []);
     const folders = Array.isArray(added) ? added.filter((dir): dir is string => typeof dir === 'string') : [];
-    return [...(deps.modelRoots ?? defaultScanRoots(env)), ...folders.map((dir) => ({ dir, source: 'custom' as const }))];
+    return [
+      // The models bonaparte downloaded (task 9.5), wherever the others are looked for.
+      { dir: ownModels, source: 'bonaparte' as const },
+      ...(deps.modelRoots ?? defaultScanRoots(env)),
+      ...folders.map((dir) => ({ dir, source: 'custom' as const })),
+    ];
   }
 
   async function models(): Promise<ModelChoice[]> {
@@ -1943,6 +2022,8 @@ export function createCore(deps: CoreDeps): Core {
     },
     llamaCpp,
     installLlamaCpp,
+    recommendedModels: recommended,
+    downloadModel,
   };
   return core;
 }

@@ -66,6 +66,10 @@ export type { Locale } from './ipc/app.js';
 export {
   engineLlama,
   engineLlamaInstall,
+  engineModelDownload,
+  engineRecommended,
+  recommendedModelSchema,
+  modelDownloadResultSchema,
   engineLoad,
   engineLoadResultSchema,
   engineModels,
@@ -95,6 +99,8 @@ export type {
   EngineStateView,
   LlamaCppStateView,
   LlamaInstallResult,
+  ModelDownloadResult,
+  RecommendedModelView,
   ModelChoiceView,
 } from './ipc/engine.js';
 export {

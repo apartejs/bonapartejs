@@ -47,7 +47,7 @@ export const modelChoiceSchema = z.object({
   path: z.string(),
   name: z.string(),
   sizeBytes: z.number(),
-  source: z.enum(['lmstudio', 'hf-cache', 'custom', 'manual']),
+  source: z.enum(['bonaparte', 'lmstudio', 'hf-cache', 'custom', 'manual']),
   family: familyIdSchema.nullable(),
   supported: z.boolean(),
   problem: z.enum(['unsupported-family', 'no-chat-template', 'unreadable']).optional(),
@@ -117,6 +117,42 @@ export const engineLlama = defineChannel(
 
 /** Downloads the newest build for this machine: only on a click, its size said before. */
 export const engineLlamaInstall = defineChannel('engine.llama.install', z.void(), llamaInstallResultSchema);
+
+/** A model bonaparte recommends for this machine (task 9.5): its size said before it is downloaded. */
+export const recommendedModelSchema = z.object({
+  id: z.string(),
+  family: z.enum(['gemma', 'qwen']),
+  name: z.string(),
+  file: z.string(),
+  bytes: z.number(),
+  context: z.number(),
+  /** Where it is kept once downloaded; null until then. */
+  path: z.string().nullable(),
+  downloading: z.object({ done: z.number(), total: z.number().nullable() }).nullable(),
+});
+
+export type RecommendedModelView = z.infer<typeof recommendedModelSchema>;
+
+/** The models recommended for this machine's memory: asks nothing of the hub. */
+export const engineRecommended = defineChannel('engine.recommended', z.void(), z.array(recommendedModelSchema));
+
+export const modelDownloadResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), model: recommendedModelSchema }),
+  z.object({
+    ok: z.literal(false),
+    // `digest`: the file downloaded is not the one published — deleted, never loaded.
+    error: z.object({ code: z.enum(['digest', 'failed']), detail: z.string() }),
+  }),
+]);
+
+export type ModelDownloadResult = z.infer<typeof modelDownloadResultSchema>;
+
+/** Downloads one of the models recommended: only on a click, its size said before. */
+export const engineModelDownload = defineChannel(
+  'engine.model.download',
+  z.object({ id: z.string().min(1).max(128) }),
+  modelDownloadResultSchema,
+);
 
 /** Changing model, said before it is paid (task 7.4; board « Coûts annoncés », 3). */
 export const modelSwitchViewSchema = z.object({

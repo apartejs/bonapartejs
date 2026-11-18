@@ -37,7 +37,7 @@ const LLAMA = {
 
 function setup(
   loadModel: Core['loadModel'],
-  llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'>> = {},
+  llama: Partial<Pick<Core, 'llamaCpp' | 'installLlamaCpp' | 'recommendedModels' | 'downloadModel' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'>> = {},
 ) {
   const listeners = new Map<string, Listener>();
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
@@ -117,6 +117,20 @@ describe('the engine channels', () => {
     await expect(call('engine.llama', { checkLatest: true })).resolves.toEqual(LLAMA);
     await expect(call('engine.llama', {})).resolves.toEqual(LLAMA);
     expect(asked).toEqual([{ checkLatest: true }, { checkLatest: false }]);
+  });
+
+  it('give the models recommended, and download one — a file that is not the one published said in its own words', async () => {
+    const model = { id: 'qwen3-8b', family: 'qwen' as const, name: 'Qwen3 8B', file: 'Qwen3-8B-Q4_K_M.gguf', bytes: 5, context: 32768, path: null, downloading: null };
+    const { call } = setup(async () => READY, {
+      recommendedModels: async () => [model],
+      downloadModel: async () => ({ ...model, path: 'C:\data\models\Qwen3-8B-Q4_K_M.gguf' }),
+    });
+    await expect(call('engine.recommended', undefined)).resolves.toEqual([model]);
+    await expect(call('engine.model.download', { id: 'qwen3-8b' })).resolves.toMatchObject({ ok: true, model: { id: 'qwen3-8b' } });
+    const mismatch = setup(async () => READY, {
+      downloadModel: async () => Promise.reject(new DigestMismatchError('https://huggingface.co/x.gguf')),
+    }).call;
+    await expect(mismatch('engine.model.download', { id: 'qwen3-8b' })).resolves.toMatchObject({ ok: false, error: { code: 'digest' } });
   });
 
   it('install llama.cpp, and say a file that is not the one published in its own words', async () => {

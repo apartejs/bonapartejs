@@ -5,3 +5,4 @@ export * from './fake-gguf.js';
 export * from './fake-llama-releases.js';
 export * from './temp-repo.js';
 export * from './fake-openai-server.js';
+export * from './fake-model-hub.js';

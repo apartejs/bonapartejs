@@ -9,7 +9,7 @@ import { readdir, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 
-export type ModelSource = 'lmstudio' | 'hf-cache' | 'custom' | 'manual';
+export type ModelSource = 'bonaparte' | 'lmstudio' | 'hf-cache' | 'custom' | 'manual';
 
 export interface DiscoveredModel {
   /** Absolute path of the .gguf file. */

@@ -15,6 +15,8 @@ import {
 import {
   engineLlama,
   engineLlamaInstall,
+  engineModelDownload,
+  engineRecommended,
   engineLoad,
   engineModels,
   engineState,
@@ -25,6 +27,7 @@ import {
   engineApplySettings,
   type EngineLoadResult,
   type LlamaInstallResult,
+  type ModelDownloadResult,
 } from '@aparte/bonaparte-shared';
 import type { IpcRegistry } from './register.js';
 
@@ -41,7 +44,7 @@ export function registerEngineChannels(
   ipc: IpcRegistry,
   core: Pick<
     Core,
-    'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
+    'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'recommendedModels' | 'downloadModel' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
   >,
 ): void {
   ipc.handle(engineState, () => core.engineState());
@@ -70,6 +73,16 @@ export function registerEngineChannels(
   ipc.handle(engineLlamaInstall, async (): Promise<LlamaInstallResult> => {
     try {
       return { ok: true, state: await core.installLlamaCpp() };
+    } catch (error) {
+      const detail = (error instanceof Error ? error.message : String(error)).slice(-4000);
+      return { ok: false, error: { code: error instanceof DigestMismatchError ? 'digest' : 'failed', detail } };
+    }
+  });
+
+  ipc.handle(engineRecommended, () => core.recommendedModels());
+  ipc.handle(engineModelDownload, async ({ id }): Promise<ModelDownloadResult> => {
+    try {
+      return { ok: true, model: await core.downloadModel(id) };
     } catch (error) {
       const detail = (error instanceof Error ? error.message : String(error)).slice(-4000);
       return { ok: false, error: { code: error instanceof DigestMismatchError ? 'digest' : 'failed', detail } };

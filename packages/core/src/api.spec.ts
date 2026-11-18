@@ -19,6 +19,10 @@ import { spawnHidden, type SpawnedProcess, type SpawnFn } from './process/spawn.
 import { FAKE_QWEN_TEMPLATE, startFakeLlamaServer, type FakeLlamaServer } from './testing/fake-llama-server.js';
 import { startFakeLlamaReleases, type FakeLlamaReleases } from './testing/fake-llama-releases.js';
 import { writeFakeGguf } from './testing/fake-gguf.js';
+import { startFakeModelHub, type FakeModelHub } from './testing/fake-model-hub.js';
+import { DigestMismatchError } from './models/download.js';
+import type { CatalogueEntry } from './models/catalogue.js';
+import { createHash } from 'node:crypto';
 
 const BIN = fileURLToPath(new URL('./testing/fake-llama-bin.mjs', import.meta.url));
 const GiB = 1024 ** 3;
@@ -66,6 +70,8 @@ async function setup(overrides: Partial<CoreDeps> = {}) {
     gpuMemory: async () => 24 * GiB,
     // A test never asks GitHub: the ones that need releases start their own.
     llamaReleases: null,
+    // Nor Hugging Face: the ones that download start their own hub.
+    modelHub: null,
     logger: () => undefined,
     ...overrides,
   });
@@ -444,6 +450,89 @@ describe('createCore — the llama.cpp it runs', () => {
       current: { source: 'configured' },
       updateAvailable: false,
     });
+  });
+});
+
+describe('createCore — the models it recommends (task 9.5)', () => {
+  let hubs: FakeModelHub[] = [];
+  afterEach(async () => {
+    await Promise.all(hubs.map((one) => one.close()));
+    hubs = [];
+  });
+
+  /** A catalogue of one small model, and the hub that serves it — or serves other bytes than announced. */
+  async function published(options: { tampered?: boolean; paceMs?: number } = {}) {
+    const work = await mkdtemp(join(tmpdir(), 'bp-hub-'));
+    dirs.push(work);
+    const file = join(work, 'small.gguf');
+    await writeFakeGguf(file, { paddingBytes: 8192 });
+    const body = await readFile(file);
+    const entry: CatalogueEntry = {
+      id: 'gemma-small',
+      family: 'gemma',
+      name: 'Gemma small',
+      repo: 'google/gemma-small-gguf',
+      file: 'gemma-small.gguf',
+      bytes: body.length,
+      sha256: createHash('sha256').update(body).digest('hex'),
+      context: 8192,
+      fromGiB: 0,
+    };
+    const served = options.tampered ? Buffer.concat([body, Buffer.from('!')]) : body;
+    const hub = await startFakeModelHub({
+      files: { 'google/gemma-small-gguf/gemma-small.gguf': served },
+      ...(options.paceMs ? { paceMs: options.paceMs } : {}),
+    });
+    hubs.push(hub);
+    return { entry, hub };
+  }
+
+  it('says the models recommended for the machine, with their size — downloading nothing', async () => {
+    const { entry, hub } = await published();
+    const { core } = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    expect(await core.recommendedModels()).toEqual([
+      { id: 'gemma-small', family: 'gemma', name: 'Gemma small', file: 'gemma-small.gguf', bytes: entry.bytes, context: 8192, path: null, downloading: null },
+    ]);
+    expect(hub.downloads).toBe(0);
+  });
+
+  it('recommends by the memory of the card: the catalogue of the product on a 24 GiB card', async () => {
+    const { core } = await setup();
+    expect((await core.recommendedModels()).map((one) => one.id)).toEqual(['gemma-4-26b-a4b', 'qwen3-30b-a3b']);
+  });
+
+  it('downloads one when asked, keeps it in its own folder, and lists it among the models found', async () => {
+    const { entry, hub } = await published();
+    const { core, dir } = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    const kept = join(dir, 'data', 'models', 'gemma-small.gguf');
+    expect(await core.downloadModel('gemma-small')).toMatchObject({ id: 'gemma-small', path: kept, downloading: null });
+    expect(hub.downloads).toBe(1);
+    expect((await core.models()).find((model) => model.path === kept)).toMatchObject({ source: 'bonaparte', supported: true });
+    expect((await core.recommendedModels())[0]).toMatchObject({ path: kept });
+  });
+
+  it('says how far a download is while it runs', async () => {
+    const { entry, hub } = await published({ paceMs: 150 });
+    const { core } = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    const running = core.downloadModel('gemma-small');
+    await vi.waitFor(async () => expect((await core.recommendedModels())[0]!.downloading).toMatchObject({ total: entry.bytes }));
+    await running;
+    expect((await core.recommendedModels())[0]!.downloading).toBeNull();
+  });
+
+  it('deletes a file that is not the one announced — never listed, never loaded', async () => {
+    const { entry, hub } = await published({ tampered: true });
+    const { core, dir } = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    await expect(core.downloadModel('gemma-small')).rejects.toBeInstanceOf(DigestMismatchError);
+    expect(await readdir(join(dir, 'data', 'models')).catch(() => [])).toEqual([]);
+    expect((await core.recommendedModels())[0]).toMatchObject({ path: null, downloading: null });
+  });
+
+  it('downloads only a model of its catalogue, and never asks a hub in a test that gives none', async () => {
+    const { entry } = await published();
+    const { core } = await setup({ modelCatalogue: [entry] });
+    await expect(core.downloadModel('anything-else')).rejects.toThrow(/not one bonaparte recommends/);
+    await expect(core.downloadModel('gemma-small')).rejects.toThrow(/no hub/);
   });
 });
 
