@@ -19,13 +19,16 @@ import {
   pluginsSetEnabled,
   searchKeysList,
   searchKeysSet,
+  extensionsTry,
+  extensionsInstall,
+  extensionsCode,
 } from '@aparte/bonaparte-shared';
 import type { ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
 
 export function registerPluginChannels(
   ipc: IpcRegistry,
-  core: Pick<Core, 'plugins' | 'addedPlugins' | 'searchKeys'>,
+  core: Pick<Core, 'plugins' | 'addedPlugins' | 'searchKeys' | 'extensions'>,
   options: { chooseFolder?: ChooseFolder; changed?: () => void } = {},
 ): void {
   const changed = (): void => options.changed?.();
@@ -59,6 +62,17 @@ export function registerPluginChannels(
     return statuses();
   });
   ipc.handle(pluginsPickFolder, async () => ({ path: (await options.chooseFolder?.()) ?? null }));
+  ipc.handle(extensionsTry, async ({ conversationId, id }) => {
+    await core.extensions.try(conversationId, id);
+    changed();
+    return statuses();
+  });
+  ipc.handle(extensionsInstall, async ({ conversationId, id }) => {
+    await core.extensions.install(conversationId, id);
+    changed();
+    return statuses();
+  });
+  ipc.handle(extensionsCode, ({ conversationId, id }) => core.extensions.code(conversationId, id));
   ipc.handle(searchKeysList, () => core.searchKeys.list());
   ipc.handle(searchKeysSet, ({ provider, key }) => core.searchKeys.set(provider, key));
 }

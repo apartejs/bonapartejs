@@ -38,6 +38,7 @@ export const pluginStatusSchema = z.object({
   /** A plugin of a third party's view, served in its own frame (task 11.2). */
   view: z.string().optional(),
   trial: z.string().optional(),
+  commands: z.array(z.object({ name: z.string(), description: localized })).optional(),
 });
 
 /** The plugins, and whether each is on for a project. */
@@ -76,6 +77,12 @@ const keyedSearch = z.enum(['brave', 'tavily', 'serper']);
 const keysKept = z.object({ brave: z.boolean(), tavily: z.boolean(), serper: z.boolean() });
 export const searchKeysList = defineChannel('search.keys', z.void(), keysKept);
 export const searchKeysSet = defineChannel('search.setKey', z.object({ provider: keyedSearch, key: z.string().max(512).nullable() }), keysKept);
+
+/** A plugin made in a conversation (task 11.4): its card's « Essayer dans cette conversation », « Installer », « Voir le code ». */
+const extensionRef = z.object({ conversationId: idSchema, id: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64) });
+export const extensionsTry = defineChannel('extensions.try', extensionRef, statuses);
+export const extensionsInstall = defineChannel('extensions.install', extensionRef, statuses);
+export const extensionsCode = defineChannel('extensions.code', extensionRef, z.object({ code: z.string(), rev: z.number(), dir: z.string() }).nullable());
 
 /** « Parcourir… »: the system's folder dialog, in the main process. */
 export const pluginsPickFolder = defineChannel('plugins.pickFolder', z.void(), z.object({ path: z.string().nullable() }));

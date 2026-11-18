@@ -925,6 +925,26 @@ export interface Messages {
       addOff: string;
       addOn: string;
     };
+    /** A plugin made in a conversation (task 11.4): its card, its tools' lines, its « / » command on trial. */
+    card: {
+      made: string;
+      adds: string;
+      may: string;
+      tool(name: string): string;
+      command(name: string): string;
+      pane(title: string): string;
+      nothing: string;
+      install: string;
+      try: string;
+      code: string;
+      hideCode: string;
+      installed: string;
+      trying: string;
+      kept: string;
+      failed(error: string): string;
+      lines: { harness_inspect: string; extension_define: string; extension_run: string; extension_stop: string; extension_undefine: string };
+      trialGroup: string;
+    };
     search: {
       title: string;
       intro: string;

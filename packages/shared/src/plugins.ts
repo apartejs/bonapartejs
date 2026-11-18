@@ -170,6 +170,8 @@ export interface PluginStatus {
   view?: string;
   /** A plugin made in a conversation, tried there and there only (task 11.4): that conversation. */
   trial?: string;
+  /** Its « / » commands, while it runs (task 11.4). */
+  commands?: PluginCommandContribution[];
 }
 
 // ——— The context of the Node half ———

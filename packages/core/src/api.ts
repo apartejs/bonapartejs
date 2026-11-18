@@ -100,7 +100,7 @@ import {
   type TurnInput,
   type TurnResult,
 } from './conversation/engine.js';
-import type { BrowserService, PlayMode, TerminalService } from '@aparte/bonaparte-shared';
+import type { BrowserService, PlayMode, PluginStatus, TerminalService } from '@aparte/bonaparte-shared';
 import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
@@ -370,6 +370,12 @@ export interface Core {
   readonly plugins: PluginHost;
   /** The plugins the person adds (task 11.1): read first, then each run in a process of its own. */
   readonly addedPlugins: AddedPlugins;
+  /** The plugins made in a conversation (task 11.4): tried there, installed, their code read. */
+  readonly extensions: {
+    try(conversationId: string, id: string): Promise<PluginStatus>;
+    install(conversationId: string, id: string): Promise<PluginStatus>;
+    code(conversationId: string, id: string): Promise<{ code: string; rev: number; dir: string } | null>;
+  };
   /** The keys of the online search engines (task 11.3): in the vault, said kept or not, never handed back. */
   readonly searchKeys: {
     list(): Promise<Record<KeyedSearch, boolean>>;
@@ -1858,6 +1864,24 @@ export function createCore(deps: CoreDeps): Core {
     permissions,
     plugins,
     addedPlugins,
+    extensions: {
+      async try(conversationId, id) {
+        const extension = extensions.get(conversationId, id);
+        if (!extension) throw new Error(`No plugin ${id} was made in this conversation.`);
+        return addedPlugins.tryExtension(extension);
+      },
+      async install(conversationId, id) {
+        const extension = extensions.get(conversationId, id);
+        if (!extension) throw new Error(`No plugin ${id} was made in this conversation.`);
+        const title = (await conversationStore.get(conversationId).catch(() => undefined))?.title;
+        return addedPlugins.installExtension(extension, title || undefined);
+      },
+      async code(conversationId, id) {
+        const extension = extensions.get(conversationId, id);
+        if (!extension) return null;
+        return { code: await readFile(join(extension.dir, EXTENSION_ENTRY), 'utf8'), rev: extension.rev, dir: extension.dir };
+      },
+    },
     searchKeys: {
       list: searchKeysKept,
       async set(provider, key) {

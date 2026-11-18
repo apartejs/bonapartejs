@@ -40,12 +40,13 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
-import { attachToken, ENGINE_READY, focusComposer, prefill, sendWhenFree, shownComposer, speakingForThePerson, type Composer } from './aparte/composer';
+import { attachToken, ENGINE_READY, focusComposer, prefill, sendAsPerson, sendWhenFree, shownComposer, speakingForThePerson, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
 import { registerToolLines } from './aparte/tool-lines';
+import { registerExtensionCard } from './aparte/extension-card';
 import { speakAsBonaparte } from './aparte/words';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
@@ -296,6 +297,41 @@ function Workspace({
         ),
     [plugins, locale],
   );
+  // The « / » commands of the plugins that run (task 11.4): a plugin tried in a conversation, there only, under
+  // « À l'essai » (a group: a row carries no badge, apartejs/aparte#261). Run, the command asks its plugin, which
+  // says what to send in the person's name or to tell.
+  const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages });
+  commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages };
+  useEffect(() => {
+    const collect = (event: Event): void => {
+      const detail = (event as CustomEvent<{ add(command: { id: string; name: string; description: string; group?: string; order: number; run(context: { notify(text: string): void }): void }): void }>).detail;
+      const now = commandsOf.current;
+      for (const plugin of now.plugins) {
+        if (plugin.builtin || !plugin.active || !plugin.enabled) continue;
+        if (plugin.trial !== undefined && plugin.trial !== now.conversationId) continue;
+        for (const command of plugin.commands ?? []) {
+          detail.add({
+            id: `plugin:${plugin.id}:${command.name}`,
+            name: command.name,
+            description: localize(command.description, now.locale),
+            ...(plugin.trial !== undefined ? { group: now.messages.plugins.card.trialGroup } : {}),
+            order: 300,
+            run: (context) =>
+              void bridge
+                .invoke(pluginsInvoke, { pluginId: plugin.id, action: command.name, payload: {}, ...(now.projectId ? { projectId: now.projectId } : {}) })
+                .then((answer) => {
+                  const said = (answer ?? {}) as { send?: unknown; notify?: unknown };
+                  if (typeof said.send === 'string' && said.send.trim()) sendAsPerson(said.send);
+                  if (typeof said.notify === 'string' && said.notify.trim()) context.notify(said.notify);
+                })
+                .catch((error: unknown) => context.notify(String(error instanceof Error ? error.message : error))),
+          });
+        }
+      }
+    };
+    window.addEventListener('aparte-collect-commands', collect);
+    return () => window.removeEventListener('aparte-collect-commands', collect);
+  }, []);
   // « Titres automatiques » switched off (task 11.3): a conversation keeps the untitled word until it is renamed.
   const autoTitles = plugins.find((plugin) => plugin.id === 'auto-titles')?.enabled ?? true;
   const titledBy = conversationManager.manager;
@@ -717,6 +753,8 @@ function Workspace({
 
   useEffect(() => registerStepLabels(messages), [messages]);
   useEffect(() => registerToolLines(messages), [messages]);
+  // A plugin made in a conversation (task 11.4): its tools' lines, and its card under extension_define.
+  useEffect(() => registerExtensionCard(messages, locale), [messages, locale]);
   useEffect(() => speakAsBonaparte(messages), [messages]);
   // The sub-agents (task 8.2): aparté's line for each in the reply, and what the pane says of them.
   const subagents = useMemo(() => createSubagentTracker(), []);

@@ -377,6 +377,7 @@ export class PluginHost {
       ...(added?.update ? { update: added.update } : {}),
       ...(!plugin.builtin && manifest?.entry.view ? { view: manifest.entry.view } : {}),
       ...(this.trials.has(plugin.id) ? { trial: this.trials.get(plugin.id)! } : {}),
+      ...(plugin.active && manifest?.contributes.commands.length ? { commands: manifest.contributes.commands } : {}),
     };
   }
 
