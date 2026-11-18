@@ -76,6 +76,10 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       return jsonError(400, 'The built-in engine reads no image: send text, or describe what the image shows.');
     }
 
+    // A conversation on a service (task 9.2): the service's own loop, through aparté's handler — never the
+    // built-in engine, which it does not need.
+    if (await core.serviceOf(conversationId)) return core.turnOnService(conversationId, raw as Record<string, unknown>, request);
+
     let engine: Engine | undefined;
     try {
       engine = await core.engine();

@@ -165,6 +165,9 @@ importers:
       '@aparte/plugin-diff':
         specifier: 1.13.0
         version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/provider-openai-compat':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       zod:
         specifier: 'catalog:'
         version: 4.6.7
@@ -324,6 +327,12 @@ packages:
 
   '@aparte/plugin-triggers@1.13.0':
     resolution: {integrity: sha512-JYC3Mud7cKGX344Wt4Hw0YDJnejRAsXMHn2mstrVmiKuAYbdy/lpAPOuVTf/hEtwAllxJQdY93jb1vCIsNxRsg==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@aparte/core': '>=1.13.0 <2.0.0'
+
+  '@aparte/provider-openai-compat@1.13.0':
+    resolution: {integrity: sha512-qbo3gYwmAzHjnBRxXdxJ2gxYtdp9Xmshmejx5AKyL3Q8JJRAhSbnicCEXV7OVkGE1Rd9ymJ/kaSStKgltacRdw==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': '>=1.13.0 <2.0.0'
@@ -3540,6 +3549,10 @@ snapshots:
       '@aparte/core': 1.13.0
 
   '@aparte/plugin-triggers@1.13.0(@aparte/core@1.13.0)':
+    dependencies:
+      '@aparte/core': 1.13.0
+
+  '@aparte/provider-openai-compat@1.13.0(@aparte/core@1.13.0)':
     dependencies:
       '@aparte/core': 1.13.0
 

@@ -96,3 +96,15 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
   }
   return { stable, project: project.join('\n\n') };
 }
+
+/**
+ * The system prompt of a conversation on a service (task 9.2): who bonaparte is, where it works, the language of
+ * its replies and the project's instructions. No tool convention nor inventory: the service is handed the tools
+ * by its own API. Sent whole at every turn — nothing is frozen there, the service keeps no memory.
+ */
+export function buildServicePrompt(options: Omit<SystemPromptOptions, 'family' | 'tools'>): string {
+  const blocks = [IDENTITY[options.kind], renderPerimeter(options.perimeter)];
+  if (options.replyLanguage) blocks.push(`Write your replies to the person in ${options.replyLanguage}.`);
+  if (options.projectInstructions) blocks.push(`Project instructions:\n${options.projectInstructions}`);
+  return blocks.join('\n\n');
+}

@@ -93,7 +93,8 @@ import type { PlayMode, TerminalService } from '@aparte/bonaparte-shared';
 import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
-import { toolsFor } from './prompt/system-prompt.js';
+import { buildServicePrompt, toolsFor } from './prompt/system-prompt.js';
+import { serveOnService } from './agent/endpoint.js';
 import { builtinTools } from './tools/builtin/index.js';
 import { appliedChanges, type AppliedChange } from './checkpoints/changes.js';
 import { CheckpointStore, type ChangedFile, type UndoResult } from './checkpoints/store.js';
@@ -119,7 +120,7 @@ import { ConversationStore } from './conversation/store.js';
 import { KvStore, memoriesRefusedBy } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
 import { probeEndpoint, type ProbeResult } from './providers/probe.js';
-import { ProviderRegistry, type NewProvider, type Provider } from './providers/registry.js';
+import { BUILTIN_PROVIDER, ProviderRegistry, type NewProvider, type Provider } from './providers/registry.js';
 import type { SecretStore } from './providers/secrets.js';
 
 /** Whose perimeter a pane browses: a conversation's, else a project's, else the home folder. */
@@ -411,6 +412,10 @@ export interface Core {
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult>;
+  /** The service a conversation runs on (task 9.2), when it is not the built-in engine's. */
+  serviceOf(conversationId: string): Promise<Provider | undefined>;
+  /** A turn of a conversation on a service: aparté's own loop, the core's tools and policy (task 9.2). */
+  turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response>;
   /**
    * The mode a conversation runs in. Impro set before this run of the app is
    * not kept without a new confirmation (security rule 9): Plume until the
@@ -1291,6 +1296,87 @@ export function createCore(deps: CoreDeps): Core {
     }
   }
 
+  async function serviceOf(conversationId: string): Promise<Provider | undefined> {
+    const meta = await conversationStore.get(conversationId);
+    if (!meta || meta.engineId === BUILTIN_PROVIDER.id) return undefined;
+    const provider = await providerRegistry.get(meta.engineId);
+    return provider?.kind === 'openai-compat' ? provider : undefined;
+  }
+
+  async function turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
+    const meta = await conversationStore.get(conversationId);
+    const provider = await serviceOf(conversationId);
+    if (!meta || !provider) throw new Error(`The conversation ${conversationId} is not on a service.`);
+    const place = await rootsOf(conversationId);
+    const { mode } = await modeOf(conversationId);
+    const registry = tools.view(plugins.visibleTo(place.projectId));
+    const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
+    const instructions = project ? ((await readProjectInstructions(project.roots))?.text ?? '') : '';
+    const messageId = typeof raw['messageId'] === 'string' ? raw['messageId'] : 'turn';
+    const originals = keepOriginals(conversationId, messageId);
+    // What the turn says is kept in the journal, the truth (task 9.2): the message, then the answer — nothing
+    // frozen, no `rendered`: a service keeps no memory, and the built-in engine would read it again.
+    const journal = await openJournal(conversationStore.dir, conversationId, meta.branchId);
+    if (!raw['resume']) {
+      const messages = ((raw['request'] as { messages?: { role?: string; content?: unknown }[] } | undefined)?.messages ?? []).filter(
+        (message) => message.role === 'user',
+      );
+      const asked = messages.at(-1)?.content;
+      const text = typeof asked === 'string' ? asked : Array.isArray(asked) ? asked.map((part) => (part as { text?: string }).text ?? '').join('') : '';
+      await journal.append({ kind: 'user', text, messageId });
+    }
+    let answer = '';
+    return serveOnService(
+      {
+        provider,
+        key: await providerRegistry.keyOf(provider.id),
+        model: meta.modelId,
+        tools: toolsFor(meta.kind, registry.list()),
+        run: async (call, signal) => {
+          const def = registry.get(call.name)?.def;
+          let roots = place.roots;
+          // A change waits for its conversation's own branch (task 6.7), as on the built-in engine.
+          if (def && (def.effect === 'write' || def.effect === 'execute')) {
+            const moved = await ensureBranch(conversationId);
+            if (moved && 'error' in moved) return { toolCallId: call.id, name: call.name, content: moved.error, failed: true };
+            if (moved) roots = [...moved.roots];
+          }
+          // A service's context is not known: the output is cut as for a context of 32 k.
+          return registry.run(call, { conversationId, roots, nCtx: 32_768, signal, ...originals });
+        },
+        judge: (tool, input) =>
+          permissions.evaluate({
+            tool,
+            input,
+            mode,
+            ...(place.projectId ? { projectId: place.projectId } : {}),
+            roots: place.roots,
+            ...(place.barred ? { barred: place.barred } : {}),
+          }),
+        system: buildServicePrompt({
+          kind: meta.kind,
+          perimeter: place.projectId ? place.roots : [],
+          replyLanguage: deps.replyLanguage?.() ?? 'English',
+          ...(instructions ? { projectInstructions: instructions } : {}),
+        }),
+        secret: (await installationSecret(deps.dataDir)).toString('hex'),
+        maxTurns: Number(await appSettings.get('maxToolRounds').catch(() => 25)) || 25,
+      },
+      raw,
+      request,
+      (line) => {
+        if (line.type === 'text-delta' && line['agentId'] === undefined) answer += String(line['delta'] ?? '');
+        if (line.type === 'run-done' && answer) {
+          return journal
+            .append({ kind: 'assistant', raw: answer, messageId })
+            .then(() => undefined)
+            .catch((error: unknown) => log(`[bonaparte] the answer of ${conversationId} was not journaled: ${String(error)}`));
+        }
+        return undefined;
+      },
+    );
+  }
+
   // Each turn that ends, told to whoever listens: the main process's notifications (task 8.5).
   const turnEnds = new Set<(end: TurnEnd) => void>();
   async function tellTurnEnd(conversationId: string, outcome: TurnResult | 'failed'): Promise<void> {
@@ -1689,6 +1775,8 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     agentTurn,
+    serviceOf,
+    turnOnService,
     modeOf,
 
     async setMode(conversationId, mode, options = {}) {
