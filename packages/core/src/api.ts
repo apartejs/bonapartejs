@@ -379,6 +379,8 @@ export interface Core {
     probe(url: string, key?: string): Promise<ProbeResult>;
     add(service: NewProvider, key?: string): Promise<ProviderView>;
     remove(id: string): Promise<void>;
+    /** The models a service offers now, asked with its key; empty when it does not answer. */
+    models(id: string): Promise<string[]>;
     /** The core's own use: a service's key, never handed to the window. */
     keyOf(id: string): Promise<string | undefined>;
   };
@@ -414,6 +416,11 @@ export interface Core {
   ): Promise<TurnResult>;
   /** The service a conversation runs on (task 9.2), when it is not the built-in engine's. */
   serviceOf(conversationId: string): Promise<Provider | undefined>;
+  /**
+   * A conversation not started yet goes to the service and model the person picked (task 9.3); one that has
+   * begun keeps its own. False when the provider is not a service the core knows.
+   */
+  startOnService(conversationId: string, providerId: string, model: string): Promise<boolean>;
   /** A turn of a conversation on a service: aparté's own loop, the core's tools and policy (task 9.2). */
   turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response>;
   /**
@@ -1303,6 +1310,15 @@ export function createCore(deps: CoreDeps): Core {
     return provider?.kind === 'openai-compat' ? provider : undefined;
   }
 
+  async function startOnService(conversationId: string, providerId: string, model: string): Promise<boolean> {
+    const provider = await providerRegistry.get(providerId);
+    if (provider?.kind !== 'openai-compat' || !model) return false;
+    const meta = await conversationStore.ensure(conversationId, { kind: 'code', engineId: provider.id, modelId: model, mode: 'repetition' });
+    if ((await openJournal(conversationStore.dir, conversationId, meta.branchId)).entries().length > 0) return false;
+    await conversationStore.update(conversationId, { engineId: provider.id, modelId: model });
+    return true;
+  }
+
   async function turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
     const meta = await conversationStore.get(conversationId);
     const provider = await serviceOf(conversationId);
@@ -1719,6 +1735,13 @@ export function createCore(deps: CoreDeps): Core {
       add: async (service, key) => viewOf(await providerRegistry.add(service, key)),
       remove: (id) => providerRegistry.remove(id),
       keyOf: (id) => providerRegistry.keyOf(id),
+      models: async (id) => {
+        const provider = await providerRegistry.get(id);
+        if (!provider?.url) return [];
+        const key = await providerRegistry.keyOf(id);
+        const found = await probeEndpoint(provider.url, key === undefined ? {} : { key });
+        return 'models' in found ? found.models : [];
+      },
     },
     addModelFolder: (folder) => addModelFolders([folder]),
 
@@ -1776,6 +1799,7 @@ export function createCore(deps: CoreDeps): Core {
 
     agentTurn,
     serviceOf,
+    startOnService,
     turnOnService,
     modeOf,
 

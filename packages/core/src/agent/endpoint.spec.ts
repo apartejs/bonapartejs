@@ -156,6 +156,36 @@ describe('a conversation on a service (task 9.2)', () => {
     }
   });
 
+  it('a new conversation started on a service: its first turn names the service and the model, and it stays there (task 9.3)', async () => {
+    const { core, service, provider } = await rig(() => ({ text: 'Me voici.' }));
+    // The page saved it first, as every new conversation: on the built-in engine.
+    await core.conversationStore.ensure('c3', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    const handler = createAgentHandler(core);
+    const turn = (query: string, text: string) =>
+      handler(
+        new Request(`${AGENT_ENDPOINT}/c/c3${query}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ v: 1, messageId: `m-${text}`, request: ask(text), clientTools: [] }),
+        }),
+      );
+    const first = await turn(`?provider=${provider.id}&model=${encodeURIComponent('qwen3:8b')}`, 'Bonjour');
+    expect(first.status).toBe(200);
+    expect(said((await first.text()).split('\n').filter(Boolean).map((line) => JSON.parse(line) as Line))).toBe('Me voici.');
+    expect(await core.conversationStore.get('c3')).toMatchObject({ engineId: provider.id, modelId: 'qwen3:8b' });
+    expect(service.requests).toHaveLength(1);
+    // A provider named later is no first turn: it changes nothing.
+    const second = await turn('?provider=builtin', 'Encore');
+    expect(second.status).toBe(200);
+    await second.text();
+    expect(service.requests).toHaveLength(2);
+  });
+
+  it("a service's models, read with its key (task 9.3)", async () => {
+    const { core, provider } = await rig(() => ({ text: '' }));
+    await expect(core.providers.models(provider.id)).resolves.toEqual(['qwen3:8b']);
+  });
+
   it('the turn is written into the journal: the message and the answer — nothing frozen, no memory to keep', async () => {
     const { core, post } = await rig(() => ({ text: 'Bonjour Paul.' }));
     await post({ messageId: 'm1', request: ask('Bonjour') });

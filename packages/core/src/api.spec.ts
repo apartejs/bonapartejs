@@ -829,6 +829,17 @@ describe('createCore — the providers (task 9.1)', () => {
     expect(secrets.held.size).toBe(0);
   });
 
+  it('a conversation on a service has no memory to show, whatever the built-in engine holds (task 9.3)', async () => {
+    const { core, gemma } = await setup({ secrets: vault() });
+    await core.loadModel(gemma);
+    const service = await core.providers.add({ kind: 'openai-compat', label: 'Ollama', url: 'http://127.0.0.1:9/v1' });
+    await core.conversationStore.ensure('c2', { kind: 'code', engineId: service.id, modelId: 'qwen3:8b', mode: 'repetition' });
+    const meta = await core.conversationStore.get('c2');
+    await (await openJournal(core.conversationStore.dir, 'c2', meta!.branchId)).append({ kind: 'user', text: 'Bonjour' });
+    expect(await core.conversations.status('c2')).toMatchObject({ memory: null });
+    expect((await core.memory()).rows.map((row) => row.id)).not.toContain('c2');
+  }, 20_000);
+
   it('without a vault, a key is refused, never written; a service without one is added', async () => {
     const { core } = await setup();
     await expect(core.providers.add({ kind: 'openai-compat', label: 'LM Studio', url: 'http://localhost:1234/v1' }, 'sk-x')).rejects.toThrow(/vault/);

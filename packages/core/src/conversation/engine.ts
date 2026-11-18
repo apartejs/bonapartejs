@@ -481,6 +481,8 @@ export class ConversationEngine {
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
     const waiting = entries.at(-1)?.kind === 'pending';
     const unread = unreadAnswer(entries, meta) !== null;
+    // On a service (task 9.3): no memory is kept, whatever the built-in engine holds.
+    if (meta.engineId !== 'builtin') return { memory: null, waiting, unread };
     const engine = await this.deps.engine();
     if (engine) this.follow(engine);
     if (!engine?.live || !entries.some((entry) => entry.kind === 'user')) return { memory: null, waiting, unread };
@@ -550,6 +552,8 @@ export class ConversationEngine {
     if (!engine?.live) return [];
     const rows: MemoryRow[] = [];
     for (const meta of await this.deps.store.list()) {
+      // A conversation on a service keeps no memory: nothing to list (task 9.3).
+      if (meta.engineId !== 'builtin') continue;
       // A journal that cannot be read leaves out only its own row (review of phase 8).
       const entries = await openJournal(this.deps.store.dir, meta.id, meta.branchId)
         .then((journal) => journal.entries())

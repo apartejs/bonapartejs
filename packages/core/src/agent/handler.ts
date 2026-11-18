@@ -78,6 +78,9 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
 
     // A conversation on a service (task 9.2): the service's own loop, through aparté's handler — never the
     // built-in engine, which it does not need.
+    // Started on a service the person picked before the first message (task 9.3): the first turn names it.
+    const asked = url.searchParams.get('provider');
+    if (asked && asked !== 'builtin') await core.startOnService(conversationId, asked, url.searchParams.get('model') ?? '');
     if (await core.serviceOf(conversationId)) return core.turnOnService(conversationId, raw as Record<string, unknown>, request);
 
     let engine: Engine | undefined;
