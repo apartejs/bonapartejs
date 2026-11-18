@@ -875,6 +875,7 @@ export const en: Messages = {
     browser: 'Browser',
     over: (name) => `${name}, over the conversation`,
     close: { files: 'Close the files', changes: 'Close the changes', subagents: 'Close the sub-agents', terminal: 'Close the terminal', browser: 'Close the browser' },
+    closePlugin: (name) => `Close ${name}`,
     closeTip: 'Close',
   },
   search: {

@@ -878,6 +878,7 @@ export const fr: Messages = {
     browser: 'Navigateur',
     over: (name) => `${name}, par-dessus la conversation`,
     close: { files: 'Fermer les fichiers', changes: 'Fermer les changements', subagents: 'Fermer les sous-agents', terminal: 'Fermer le terminal', browser: 'Fermer le navigateur' },
+    closePlugin: (name) => `Fermer ${name}`,
     closeTip: 'Fermer',
   },
   search: {

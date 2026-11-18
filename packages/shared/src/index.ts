@@ -41,7 +41,7 @@ export type {
 export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';
-export { APP_EVENT, pluginsAck, pluginsInvoke } from './ipc/plugins.js';
+export { APP_EVENT, pluginsAck, pluginsInvoke, pluginsOverview, pluginStatusSchema } from './ipc/plugins.js';
 export type { AppEvent, CommandOutputView } from './ipc/plugins.js';
 export { appliedChangeSchema, changesList, changesRevert, revertResultSchema } from './ipc/changes.js';
 export type { AppliedChangeView, RevertResultView } from './ipc/changes.js';
@@ -158,3 +158,5 @@ export { browserBack, browserCancelPick, browserCloseTab, browserConsole, browse
 export type { BrowserTabView, PickedElement } from './ipc/browser.js';
 export { runsList, runsStart, runsStop, runViewSchema } from './ipc/runs.js';
 export type { RunViewData } from './ipc/runs.js';
+export { readFromView, readToView, VIEW_CHANNEL } from './plugin-view.js';
+export type { FromView, ToView, ViewTheme } from './plugin-view.js';

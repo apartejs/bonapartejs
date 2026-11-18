@@ -14,7 +14,7 @@
 
 import { app, dialog, protocol } from 'electron';
 // Constants only: this file must load with nothing but Electron beside it.
-import { APP_SCHEME } from '@aparte/bonaparte-shared/agent';
+import { APP_SCHEME, PLUGIN_SCHEME } from '@aparte/bonaparte-shared/agent';
 
 const e2e = process.env['BONAPARTE_E2E'] === '1';
 
@@ -22,6 +22,11 @@ protocol.registerSchemesAsPrivileged([
   {
     scheme: APP_SCHEME,
     privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+  // A plugin's view, in a sandboxed frame of its own origin (task 11.2): its scripts load as modules across.
+  {
+    scheme: PLUGIN_SCHEME,
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
   },
 ]);
 

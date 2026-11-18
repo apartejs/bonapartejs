@@ -351,6 +351,7 @@ export class PluginHost {
       tools: [...(this.activations.get(plugin.id)?.tools ?? [])],
       ...(added?.source ? { source: added.source } : {}),
       ...(added?.update ? { update: added.update } : {}),
+      ...(!plugin.builtin && manifest?.entry.view ? { view: manifest.entry.view } : {}),
     };
   }
 

@@ -59,7 +59,7 @@ import {
 } from './engine.js';
 import { changesList, changesRevert } from './changes.js';
 import { filesChanged, filesList, filesRead } from './files.js';
-import { pluginsAck, pluginsInvoke } from './plugins.js';
+import { pluginsAck, pluginsInvoke, pluginsOverview } from './plugins.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
 import { projectsAddFolder, projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
 import { engineMemory, engineReleaseMemory, engineRestart, engineUnload } from './memory.js';
@@ -95,6 +95,7 @@ export const CHANNELS = [
   conversationsAttachProject,
   pluginsInvoke,
   pluginsAck,
+  pluginsOverview,
   engineState,
   engineModels,
   engineLoad,

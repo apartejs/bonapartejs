@@ -166,6 +166,8 @@ export interface PluginStatus {
   source?: PluginSource;
   /** A newer version found where it came from: proposed, never made in silence. */
   update?: string;
+  /** The view of a plugin of a third party, served in its own frame (task 11.2). */
+  view?: string;
 }
 
 // ——— The context of the Node half ———

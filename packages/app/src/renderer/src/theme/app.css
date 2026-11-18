@@ -3856,3 +3856,12 @@ body {
   font-family: var(--aparte-font-family);
   font-weight: var(--aparte-font-weight-semibold);
 }
+
+/* The view of a plugin of a third party (task 11.2): its sandboxed frame fills its pane. */
+.plugin-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--aparte-bg);
+}

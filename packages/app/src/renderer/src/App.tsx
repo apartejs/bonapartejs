@@ -33,6 +33,9 @@ import {
   providersList,
   providersModels,
   providersSwitch,
+  pluginsOverview,
+  localize,
+  type PluginStatus,
   type InboxView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -59,7 +62,8 @@ import { NO_TABS, openTab, withAgentTab, type TerminalTabs } from './panels/term
 import { PanelDock } from './panels/PanelDock';
 import { BrowserPanel } from './panels/BrowserPanel';
 import { PanelToggles } from './panels/PanelToggles';
-import { close as closePane, opened, opensByItself, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
+import { PluginFrame } from './panels/PluginFrame';
+import { close as closePane, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { RewindBanner } from './chat/RewindBanner';
@@ -271,6 +275,27 @@ function Workspace({
   }, []);
   // The panes beside the conversation (task 6.2), and whether Changements opens by itself.
   const [panes, setPanes] = useState<OpenPanes>([]);
+  // The plugins (task 11.2): the panes of those of third parties, each a view in a sandboxed frame.
+  const [plugins, setPlugins] = useState<PluginStatus[]>([]);
+  const pluginsProject = activeProject?.id;
+  useEffect(() => {
+    const read = (): void => {
+      void bridge.invoke(pluginsOverview, pluginsProject ? { projectId: pluginsProject } : {}).then((found) => setPlugins(found as PluginStatus[]));
+    };
+    read();
+    return bridge.on((event) => {
+      if (event.kind === 'plugins') read();
+    });
+  }, [pluginsProject]);
+  const pluginPanes = useMemo(
+    () =>
+      plugins
+        .filter((plugin) => !plugin.builtin && plugin.active && plugin.enabled && plugin.view)
+        .flatMap((plugin) =>
+          plugin.panes.map((pane) => ({ pane: pluginPane(plugin.id, pane.id), label: localize(pane.title, locale), pluginId: plugin.id, view: plugin.view! })),
+        ),
+    [plugins, locale],
+  );
   const autoOpen = useRef(true);
   useEffect(() => {
     bridge
@@ -1290,7 +1315,17 @@ function Workspace({
           ) : null
         }
         // A discussion has no code panes (task 9.7).
-        panels={discussion ? undefined : <PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
+        panels={
+          discussion ? undefined : (
+            <PanelToggles
+              messages={messages}
+              open={panes}
+              waiting={changesWaiting}
+              plugins={pluginPanes}
+              onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))}
+            />
+          )
+        }
       />
       <div className="aparte-app-shell__main bonaparte-main">
       <div className="bonaparte-conversation" hidden={inboxOpen}>
@@ -1452,9 +1487,17 @@ function Workspace({
       <PanelDock
         messages={messages}
         hidden={inboxOpen}
-        shown={shownPanes(panes, narrow)}
+        shown={shownPanes(panes, narrow).filter((pane) => !pluginOfPane(pane) || pluginPanes.some((one) => one.pane === pane))}
         narrow={narrow}
+        labels={Object.fromEntries(pluginPanes.map((one) => [one.pane, one.label]))}
         content={{
+          // The panes of plugins of third parties (task 11.2), each its view in a sandboxed frame.
+          ...Object.fromEntries(
+            pluginPanes.map((one) => [
+              one.pane,
+              { body: <PluginFrame pluginId={one.pluginId} view={one.view} title={one.label} {...(activeProject ? { projectId: activeProject.id } : {})} /> },
+            ]),
+          ),
           // The built-in browser (task 10.1): its page taken off whenever a page goes over the conversation.
           browser: {
             body: (

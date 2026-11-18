@@ -12,6 +12,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  protocol,
   safeStorage,
   session,
   shell,
@@ -45,6 +46,10 @@ import { trayMenu, type EngineRow, type TrayActions, type TrayIcon, type Waiting
 import ptyProcessPath from './terminals/pty-process?modulePath';
 import pluginProcessPath from './plugin-host/plugin-process?modulePath';
 import { pluginProcessStarter, type UtilityProcessLike } from './plugin-host/process-host.js';
+import { PLUGIN_SCHEME, servePluginFile } from './plugin-host/protocol.js';
+// A path, not the package: the main build keeps packages outside, and only a file it bundles is read as text.
+import kitStyles from '../../node_modules/@aparte/core/dist/index.css?raw';
+import appTokens from '../renderer/src/theme/tokens.css?raw';
 import { createTerminalService } from './terminals/pty-host.js';
 import { findShells } from './terminals/shells.js';
 import { createMainWindow } from './windows.js';
@@ -300,6 +305,19 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   if (browsing.error) console.error(`[bonaparte] the browser did not start: ${browsing.error}`);
   // The plugins the person added, each in its own process: those switched off stay so.
   await core.addedPlugins.start().catch((error: unknown) => console.error(`[bonaparte] the added plugins did not start: ${String(error)}`));
+  // A plugin's view (task 11.2): its own files only, the kit's stylesheet and the app's tokens, a strict policy.
+  protocol.handle(PLUGIN_SCHEME, async (request) => {
+    const answer = await servePluginFile(request.url, {
+      dirOf: (id, rev) => {
+        if (rev) return null;
+        const plugin = core.plugins.get(id);
+        return plugin && !plugin.builtin && plugin.dir ? plugin.dir : null;
+      },
+      kitCss: `${kitStyles}
+${appTokens}`,
+    });
+    return new Response(answer.body, { status: answer.status, headers: answer.headers });
+  });
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),

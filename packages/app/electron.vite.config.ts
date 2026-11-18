@@ -38,7 +38,8 @@ const CSP = [
   "worker-src 'self' blob:",
   "base-uri 'none'",
   "form-action 'none'",
-  "frame-src 'none'",
+  // The views of plugins of third parties, each in a sandboxed frame of its own origin (task 11.2).
+  "frame-src bonaparte-plugin:",
   "object-src 'none'",
 ].join('; ');
 

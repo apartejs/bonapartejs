@@ -618,6 +618,7 @@ export interface Messages {
     /** A pane over the conversation, in a narrow window. */
     over(name: string): string;
     close: { files: string; changes: string; subagents: string; terminal: string; browser: string };
+    closePlugin(name: string): string;
     closeTip: string;
   };
   /** A conversation on its own branch (board « Branches et conversations », task 6.7). */

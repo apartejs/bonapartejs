@@ -98,7 +98,8 @@ test('the page carries its Content-Security-Policy: nothing loads from elsewhere
   const policy = await page.evaluate(() => document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content') ?? '');
   expect(policy).toContain("default-src 'none'");
   expect(policy).toContain("script-src 'self'");
-  expect(policy).toContain("frame-src 'none'");
+  // A frame only for a plugin's view, on its own origin (task 11.2): never a page of elsewhere.
+  expect(policy).toMatch(/frame-src bonaparte-plugin:(;|$)/);
 });
 
 test('the window opens no other window', async ({ launch }) => {

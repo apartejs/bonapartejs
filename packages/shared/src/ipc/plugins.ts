@@ -13,9 +13,34 @@ const idSchema = z.string().min(1).max(128);
 
 export const pluginsInvoke = defineChannel(
   'plugins.invoke',
-  z.object({ pluginId: idSchema, action: z.string().min(1).max(64), payload: z.unknown() }),
+  // The project of the conversation shown: a plugin it turned off answers nothing there (review of phase 6).
+  z.object({ pluginId: idSchema, action: z.string().min(1).max(64), payload: z.unknown(), projectId: idSchema.optional() }),
   z.unknown(),
 );
+
+const localized = z.union([z.string(), z.object({ en: z.string(), fr: z.string().optional() })]);
+
+/** A plugin as the window shows it (tasks 11.2 and 11.3). */
+export const pluginStatusSchema = z.object({
+  id: z.string(),
+  name: localized,
+  version: z.string(),
+  description: localized.optional(),
+  builtin: z.boolean(),
+  effects: z.array(z.object({ effect: z.enum(['read', 'write', 'execute', 'network']), what: localized })),
+  enabled: z.boolean(),
+  active: z.boolean(),
+  error: z.string().optional(),
+  panes: z.array(z.object({ id: z.string(), title: localized, multiple: z.boolean(), shortcut: z.string().optional() })),
+  tools: z.array(z.string()),
+  source: z.unknown().optional(),
+  update: z.string().optional(),
+  /** A plugin of a third party's view, served in its own frame (task 11.2). */
+  view: z.string().optional(),
+});
+
+/** The plugins, and whether each is on for a project. */
+export const pluginsOverview = defineChannel('plugins.overview', z.object({ projectId: idSchema.optional() }), z.array(pluginStatusSchema));
 
 export const pluginsAck = defineChannel(
   'plugins.ack',
@@ -37,6 +62,8 @@ export type AppEvent =
   | { kind: 'command'; conversationId: string; output: CommandOutputView }
   /** The engine changed (started, ready, stopped, unloaded for want of work): the window reads it again. */
   | { kind: 'engine' }
+  /** The plugins changed (one added, removed, switched on or off, stopped): the window reads them again (task 11.2). */
+  | { kind: 'plugins' }
   /** The built-in browser changed (a tab, its address, its console, the agent reading): the pane reads it again (task 10.1). */
   | { kind: 'browser' }
   /** A notification or the notification area's menu was clicked: the window shows that conversation (task 8.5). */

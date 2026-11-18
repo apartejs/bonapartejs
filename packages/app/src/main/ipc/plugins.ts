@@ -5,10 +5,11 @@
  */
 
 import type { Core } from '@aparte/bonaparte-core';
-import { pluginsAck, pluginsInvoke } from '@aparte/bonaparte-shared';
+import { pluginsAck, pluginsInvoke, pluginsOverview } from '@aparte/bonaparte-shared';
 import type { IpcRegistry } from './register.js';
 
 export function registerPluginChannels(ipc: IpcRegistry, core: Pick<Core, 'plugins'>): void {
-  ipc.handle(pluginsInvoke, ({ pluginId, action, payload }) => core.plugins.invoke(pluginId, action, payload));
+  ipc.handle(pluginsInvoke, ({ pluginId, action, payload, projectId }) => core.plugins.invoke(pluginId, action, payload, projectId ? { projectId } : {}));
+  ipc.handle(pluginsOverview, ({ projectId }) => core.plugins.status(projectId));
   ipc.handle(pluginsAck, ({ pluginId, instanceId, chars }) => core.plugins.acknowledge(pluginId, instanceId, chars));
 }
