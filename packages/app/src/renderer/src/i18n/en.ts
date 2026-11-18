@@ -565,6 +565,14 @@ export const en: Messages = {
       failed: 'The model could not be loaded.',
     },
   },
+  serviceDown: {
+    kind: 'Connected service',
+    title: 'The service no longer answers',
+    line: (service) => `${service} no longer answers`,
+    kept: (host) => `${host} · your message is kept: « Retry » sends it again.`,
+    retry: 'Retry',
+    builtin: 'Switch to the built-in engine',
+  },
   engineUnloaded: {
     title: (name) => `${name} is unloaded`,
     titleLoading: (name) => `${name} is loading…`,

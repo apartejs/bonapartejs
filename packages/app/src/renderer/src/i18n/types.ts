@@ -563,6 +563,15 @@ export interface Messages {
     refused: Record<'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
   };
   /** The engine unloaded (task 7.4; board « Coûts annoncés », 5): the card above the composer. */
+  /** A service that no longer answers (task 9.3). */
+  serviceDown: {
+    kind: string;
+    title: string;
+    line(service: string): string;
+    kept(host: string): string;
+    retry: string;
+    builtin: string;
+  };
   engineUnloaded: {
     title(name: string): string;
     titleLoading(name: string): string;

@@ -567,6 +567,14 @@ export const fr: Messages = {
       failed: 'Le modèle n’a pas pu être chargé.',
     },
   },
+  serviceDown: {
+    kind: 'Service branché',
+    title: 'Le service ne répond plus',
+    line: (service) => `${service} ne répond plus`,
+    kept: (host) => `${host} · ton message est gardé : « Réessayer » le renvoie.`,
+    retry: 'Réessayer',
+    builtin: 'Passer au moteur intégré',
+  },
   engineUnloaded: {
     title: (name) => `${name} est déchargé`,
     titleLoading: (name) => `${name} se charge…`,

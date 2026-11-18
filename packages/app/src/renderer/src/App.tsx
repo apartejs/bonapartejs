@@ -68,6 +68,7 @@ import { catalogueOf, showCatalogue, showServices, type ServiceCatalogue } from 
 import { ServiceSwitchDialog, type ServiceSwitchAsking } from './dialogs/ServiceSwitchDialog';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
+import { ServiceDownCard } from './chat/ServiceDownCard';
 import { STOP_REPLIES } from './settings/LaunchSettings';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
 import { useRewind } from './chat/useRewind';
@@ -729,6 +730,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   // The services added (task 9.3): their models offered in the composer's picker, beside the engine's.
   const servicesKnown = useRef<ServiceCatalogue[]>([]);
+  const serviceHosts = useRef(new Map<string, string>());
+  // A service that did not answer a turn of the conversation shown (task 9.3): said until a turn starts again.
+  const [serviceDown, setServiceDown] = useState<{ conversationId: string; service: string; host: string } | null>(null);
   // Going to a service between two turns: what it loses said first, in a dialog.
   const [toService, setToService] = useState<(ServiceSwitchAsking & { conversationId: string; provider: string; revert: () => void }) | null>(null);
   const [toServiceBusy, setToServiceBusy] = useState(false);
@@ -748,15 +752,31 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       );
       if (!live) return;
       servicesKnown.current = found;
+      for (const provider of all) if (provider.url) serviceHosts.current.set(provider.id, hostOf(provider.url));
       showServices(found satisfies ServiceCatalogue[]);
     })().catch(() => undefined);
     return () => {
       live = false;
     };
   }, []);
+  const downOn = useRef<{ conversationId: string | null; service: { id: string; label: string } | null }>({ conversationId: null, service: null });
+  useEffect(() => {
+    const failed = (): void => {
+      const { conversationId: id, service } = downOn.current;
+      if (id && service) setServiceDown({ conversationId: id, service: service.label, host: serviceHosts.current.get(service.id) ?? service.label });
+    };
+    const started = (): void => setServiceDown(null);
+    window.addEventListener('aparte-message-error', failed);
+    window.addEventListener('aparte-message-start', started);
+    return () => {
+      window.removeEventListener('aparte-message-error', failed);
+      window.removeEventListener('aparte-message-start', started);
+    };
+  }, []);
   // The conversation shown on a service: the picker shows its model; a new conversation after it starts there too,
   // as the picker shows. One on the built-in engine brings the picker — and the next new one — back to the engine.
   const shownService = conversationId ? (statuses[conversationId]?.service ?? null) : null;
+  downOn.current = { conversationId, service: shownService };
   useEffect(() => {
     if (!conversationId) return;
     const status = statuses[conversationId];
@@ -1161,6 +1181,22 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
               onLoad={() => void loadAndSend()}
               onOther={() => pickerOpener.current?.()}
             />
+          ) : serviceDown && serviceDown.conversationId === conversationId ? (
+            <ServiceDownCard
+              messages={messages}
+              service={serviceDown.service}
+              host={serviceDown.host}
+              onService={shownService !== null}
+              onRetry={() => {
+                // aparté's own retry of the answer that failed: the message kept goes again.
+                const last = handles.get(deck.shown)?.getMessages().findLast((message) => message.role === 'assistant');
+                if (last) window.dispatchEvent(new CustomEvent('aparte-retry', { detail: { messageId: last.id, targetId: deck.shown } }));
+              }}
+              onBuiltin={() => {
+                if (engine.model) modelSwitch.ask(engine.model.path, engine.model.name, () => undefined);
+                else pickerOpener.current?.();
+              }}
+            />
           ) : request ? (
             <ApprovalCard
               request={request}
@@ -1373,4 +1409,13 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
       )}
     </main>
   );
+}
+
+/** An address as the board names a service: its host and port (`localhost:11434`). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }

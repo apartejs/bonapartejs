@@ -75,3 +75,34 @@ test('between two turns: to a service, what it loses said first; back to the bui
   await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
   expect(service!.requests).toHaveLength(1);
 });
+
+test('the service stops answering: said, the message kept; « Passer au moteur intégré », then « Réessayer » (task 9.3)', async ({ launch }) => {
+  const { page, service } = await launch({
+    managed: { models: MODELS },
+    service: { models: ['qwen3:8b'], responder: () => ({ text: 'Réponse du service.' }) },
+  });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await picker(page).click();
+  await page.getByText(/^Ollama$/i).click();
+  await page.getByRole('option', { name: /qwen3:8b/ }).click();
+  await ui.send('Première question');
+  await expect(ui.replyText).toHaveText('Réponse du service.', { timeout: 15_000 });
+  await expect(page.locator('aparte-context')).toHaveCount(0);
+
+  await service!.close();
+  await ui.send('Deuxième question');
+  const down = page.locator('.service-down');
+  await expect(down).toContainText('Ollama ne répond plus', { timeout: 15_000 });
+  await expect(down).toContainText('ton message est gardé');
+  await expect(ui.userMessages.last()).toContainText('Deuxième question');
+
+  await down.getByRole('button', { name: 'Passer au moteur intégré' }).click();
+  const back = page.getByRole('dialog', { name: 'Passer à gemma-4-e2e ?' });
+  await back.getByRole('button', { name: 'Changer' }).click();
+  await expect(back).toBeHidden({ timeout: 15_000 });
+  await down.getByRole('button', { name: 'Réessayer' }).click();
+  await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+  await expect(down).toHaveCount(0);
+});
