@@ -58,8 +58,17 @@ describe('e2eEngineDeps', () => {
   it('ignores what it cannot read', () => {
     expect(
       e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: 'node fake.mjs', BONAPARTE_E2E_ENGINE_PORT: 'eighty' }, true),
-    ).toEqual({ gh: null, llamaReleases: null, modelHub: null, modelCatalogue: [] });
-    expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ gh: null, llamaReleases: null, modelHub: null, modelCatalogue: [] });
+    ).toEqual({ gh: null, llamaReleases: null, modelHub: null, modelCatalogue: [], resourceProbes: expect.any(Object) });
+    expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ gh: null, llamaReleases: null, modelHub: null, modelCatalogue: [], resourceProbes: expect.any(Object) });
+  });
+});
+
+describe('the readings of a test run (task 12.4)', () => {
+  it('are the figures the test gives, never the card's PowerShell probe', async () => {
+    const deps = e2eEngineDeps({ BONAPARTE_E2E_RESOURCES: JSON.stringify({ cpu: 12, usedBytes: 8, totalBytes: 16 }) }, true);
+    expect(await deps.resourceProbes!.system()).toEqual({ cpu: 12, memory: { usedBytes: 8, totalBytes: 16 } });
+    expect(await deps.resourceProbes!.gpu!()).toBeNull();
+    expect(e2eEngineDeps({}, false).resourceProbes).toBeUndefined();
   });
 });
 
