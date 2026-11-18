@@ -82,8 +82,12 @@ export class AddedPlugins {
    */
   async tryExtension(extension: Extension): Promise<PluginStatus> {
     const known = this.host.get(extension.id);
-    if (known && (known.builtin || this.host.status().find((one) => one.id === extension.id)?.trial === undefined)) {
+    const trial = this.trialOf(extension.id);
+    if (known && (known.builtin || trial === undefined)) {
       throw new Error(`A plugin ${extension.id} is already added: give this one another id to try it.`);
+    }
+    if (trial !== undefined && trial !== extension.conversationId) {
+      throw new Error(`A plugin ${extension.id} is on trial in another conversation: give this one another id to try it.`);
     }
     await this.host.forget(extension.id);
     this.host.add(extension.manifest, { builtin: false, dir: extension.dir });
@@ -91,14 +95,36 @@ export class AddedPlugins {
     return this.host.activateRemote(extension.id, () => this.options.start({ pluginId: extension.id, dir: extension.dir }));
   }
 
-  /** The trial ends: all it added goes. */
-  async stopTrial(id: string): Promise<void> {
-    if (this.host.status().find((one) => one.id === id)?.trial === undefined) return;
+  /** The trial ends: all it added goes. Asked by a conversation, only that conversation's own trial. */
+  async stopTrial(id: string, conversationId?: string): Promise<void> {
+    const trial = this.trialOf(id);
+    if (trial === undefined) return;
+    if (conversationId !== undefined && trial !== conversationId) return;
     await this.host.forget(id);
   }
 
-  /** « Installer »: the revision becomes a plugin added like the others, said to come from its conversation. */
+  private trialOf(id: string): string | undefined {
+    return this.host.status().find((one) => one.id === id)?.trial;
+  }
+
+  /**
+   * « Installer »: the revision becomes a plugin added like the others, said to come from its conversation. It never
+   * takes the place of a built-in, of a plugin the person added from elsewhere, or of another conversation's trial;
+   * one installed from this same conversation before is replaced by it.
+   */
   async installExtension(extension: Extension, title?: string): Promise<PluginStatus> {
+    const known = this.host.get(extension.id);
+    if (known?.builtin) throw new Error(`The id ${extension.id} is a built-in plugin's: this plugin cannot take its place. Give it another id.`);
+    const trial = this.trialOf(extension.id);
+    if (trial !== undefined && trial !== extension.conversationId) {
+      throw new Error(`A plugin ${extension.id} is on trial in another conversation: give this one another id.`);
+    }
+    if (known && trial === undefined) {
+      const source = (await this.host.keptState()).get(extension.id)?.source;
+      if (source?.kind !== 'conversation' || source.conversationId !== extension.conversationId) {
+        throw new Error(`A plugin ${extension.id} is already added: give this one another id to install it.`);
+      }
+    }
     await this.stopTrial(extension.id);
     const read = await this.options.installer.preview({ kind: 'folder', path: extension.dir });
     if (!read.ok) throw new Error(read.error);

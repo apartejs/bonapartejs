@@ -108,6 +108,10 @@ describe('the tools that make a plugin (task 11.4)', () => {
     const tool = registry.get('plugin__changelog__today')!.def;
     expect(host.visibleTo(undefined, 'c1')(tool)).toBe(true);
     expect(host.visibleTo(undefined, 'c2')(tool)).toBe(false);
+    // Another conversation's stop or undefine leaves this trial as it is.
+    await registry.run({ id: 't2b', name: 'extension_stop', input: { id: 'changelog' } }, ctx('c2'));
+    await registry.run({ id: 't2c', name: 'extension_undefine', input: { id: 'changelog' } }, ctx('c2'));
+    expect(registry.get('plugin__changelog__today')).toBeDefined();
     await registry.run({ id: 't3', name: 'extension_stop', input: { id: 'changelog' } }, ctx('c1'));
     expect(registry.get('plugin__changelog__today')).toBeUndefined();
     await registry.run({ id: 't4', name: 'extension_undefine', input: { id: 'changelog' } }, ctx('c1'));

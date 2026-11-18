@@ -123,9 +123,9 @@ export function extensionTools(deps: ExtensionToolsDeps): BuiltinTool[] {
         source: 'builtin',
         where: 'core',
       },
-      handler: async (call) => {
+      handler: async (call, ctx) => {
         const id = text(call.input, 'id') ?? '';
-        await deps.added.stopTrial(id);
+        await deps.added.stopTrial(id, ctx.conversationId);
         return { content: `The trial of ${id} ended.` };
       },
     },
@@ -140,7 +140,7 @@ export function extensionTools(deps: ExtensionToolsDeps): BuiltinTool[] {
       },
       handler: async (call, ctx) => {
         const id = text(call.input, 'id') ?? '';
-        await deps.added.stopTrial(id);
+        await deps.added.stopTrial(id, ctx.conversationId);
         await deps.store.undefine(ctx.conversationId, id);
         return { content: `${id} was removed from this conversation.` };
       },

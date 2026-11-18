@@ -164,12 +164,12 @@ describe('the plugins the person adds (task 11.1)', () => {
 });
 
 describe('a plugin made in a conversation, tried and installed (task 11.4)', () => {
-  async function extensionOf(data: string) {
+  async function extensionOf(data: string, conversationId = 'c1', id = 'changelog') {
     const { ExtensionStore } = await import('./extensions.js');
     const store = new ExtensionStore({ dataDir: data, env: () => ({ ...process.env }) as Record<string, string> });
-    const defined = await store.define('c1', {
+    const defined = await store.define(conversationId, {
       manifest: {
-        id: 'changelog',
+        id,
         name: 'Changelog',
         version: '0.1.0',
         effects: [{ effect: 'read', what: 'nothing' }],
@@ -207,5 +207,41 @@ describe('a plugin made in a conversation, tried and installed (task 11.4)', () 
     const again = await rig(data);
     await again.added.start();
     expect(again.registry.get('plugin__changelog__today')).toBeDefined();
+  });
+
+  it('installed, it never takes the place of a built-in, nor of a plugin the person added from elsewhere', async () => {
+    const data = await temp('bp-added-data-');
+    const { host, added, registry } = await rig(data);
+    host.add({ id: 'terminal', name: 'Terminal', version: '1.0.0' }, { builtin: true });
+    await expect(added.installExtension(await extensionOf(data, 'c1', 'terminal'))).rejects.toThrow(/built-in/);
+    expect(host.get('terminal')?.builtin).toBe(true);
+
+    const preview = await added.preview({ kind: 'folder', path: await pluginFolder() });
+    if (!preview.ok) throw new Error(preview.error);
+    await added.install(preview.preview.stagingId, { enable: true });
+    await expect(added.installExtension(await extensionOf(data, 'c1', 'revue-pr'))).rejects.toThrow(/already added/);
+    expect(registry.get('plugin__revue-pr__peek')).toBeDefined();
+    expect(host.status().find((one) => one.id === 'revue-pr')?.source).toMatchObject({ kind: 'folder' });
+  });
+
+  it('installed again from its conversation, a newer revision replaces the one installed', async () => {
+    const data = await temp('bp-added-data-');
+    const { added } = await rig(data);
+    await added.installExtension(await extensionOf(data));
+    expect(await added.installExtension(await extensionOf(data))).toMatchObject({ id: 'changelog', active: true, source: { kind: 'conversation', conversationId: 'c1' } });
+  });
+
+  it('one conversation never takes over, installs or ends the trial of another', async () => {
+    const data = await temp('bp-added-data-');
+    const { host, added, registry } = await rig(data);
+    await added.tryExtension(await extensionOf(data, 'c1'));
+    const other = await extensionOf(data, 'c2');
+    await expect(added.tryExtension(other)).rejects.toThrow(/another conversation/);
+    await expect(added.installExtension(other)).rejects.toThrow(/another conversation/);
+    await added.stopTrial('changelog', 'c2');
+    expect(host.status().find((one) => one.id === 'changelog')).toMatchObject({ active: true, trial: 'c1' });
+    expect(registry.get('plugin__changelog__today')).toBeDefined();
+    await added.stopTrial('changelog', 'c1');
+    expect(registry.get('plugin__changelog__today')).toBeUndefined();
   });
 });

@@ -79,7 +79,7 @@ export const searchKeysList = defineChannel('search.keys', z.void(), keysKept);
 export const searchKeysSet = defineChannel('search.setKey', z.object({ provider: keyedSearch, key: z.string().max(512).nullable() }), keysKept);
 
 /** A plugin made in a conversation (task 11.4): its card's « Essayer dans cette conversation », « Installer », « Voir le code ». */
-const extensionRef = z.object({ conversationId: idSchema, id: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64) });
+const extensionRef = z.object({ conversationId: idSchema, id: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64), rev: z.number().int().positive() });
 export const extensionsTry = defineChannel('extensions.try', extensionRef, statuses);
 export const extensionsInstall = defineChannel('extensions.install', extensionRef, statuses);
 export const extensionsCode = defineChannel('extensions.code', extensionRef, z.object({ code: z.string(), rev: z.number(), dir: z.string() }).nullable());

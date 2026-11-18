@@ -44,6 +44,16 @@ describe('a plugin made in a conversation (task 11.4)', () => {
     expect(extensions.latest('c1')).toMatchObject([{ id: 'changelog', rev: 2 }]);
   });
 
+  it('an earlier revision is still read as it was — what its card showed, not the newest', async () => {
+    const { extensions } = await store();
+    await extensions.define('c1', { manifest: MANIFEST, code: CODE });
+    await extensions.define('c1', { manifest: { ...MANIFEST, version: '0.2.0', effects: [{ effect: 'network', what: 'call a server' }] }, code: CODE });
+    expect(await extensions.revision('c1', 'changelog', 1)).toMatchObject({ rev: 1, manifest: { version: '0.1.0', effects: [{ effect: 'execute' }] } });
+    expect(await extensions.revision('c1', 'changelog', 2)).toMatchObject({ rev: 2, manifest: { version: '0.2.0' } });
+    expect(await extensions.revision('c1', 'changelog', 3)).toBeUndefined();
+    expect(await extensions.revision('c1', '../c2', 1)).toBeUndefined();
+  });
+
   it('a code that does not compile is refused, with what to fix; nothing of it is kept', async () => {
     const { data, extensions } = await store();
     const refused = await extensions.define('c1', { manifest: MANIFEST, code: 'export default { activate(ctx) { ctx.registerCommand( } };' });

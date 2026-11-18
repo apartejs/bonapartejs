@@ -62,17 +62,17 @@ export function registerPluginChannels(
     return statuses();
   });
   ipc.handle(pluginsPickFolder, async () => ({ path: (await options.chooseFolder?.()) ?? null }));
-  ipc.handle(extensionsTry, async ({ conversationId, id }) => {
-    await core.extensions.try(conversationId, id);
+  ipc.handle(extensionsTry, async ({ conversationId, id, rev }) => {
+    await core.extensions.try(conversationId, id, rev);
     changed();
     return statuses();
   });
-  ipc.handle(extensionsInstall, async ({ conversationId, id }) => {
-    await core.extensions.install(conversationId, id);
+  ipc.handle(extensionsInstall, async ({ conversationId, id, rev }) => {
+    await core.extensions.install(conversationId, id, rev);
     changed();
     return statuses();
   });
-  ipc.handle(extensionsCode, ({ conversationId, id }) => core.extensions.code(conversationId, id));
+  ipc.handle(extensionsCode, ({ conversationId, id, rev }) => core.extensions.code(conversationId, id, rev));
   ipc.handle(searchKeysList, () => core.searchKeys.list());
   ipc.handle(searchKeysSet, ({ provider, key }) => core.searchKeys.set(provider, key));
 }

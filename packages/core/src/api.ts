@@ -372,9 +372,10 @@ export interface Core {
   readonly addedPlugins: AddedPlugins;
   /** The plugins made in a conversation (task 11.4): tried there, installed, their code read. */
   readonly extensions: {
-    try(conversationId: string, id: string): Promise<PluginStatus>;
-    install(conversationId: string, id: string): Promise<PluginStatus>;
-    code(conversationId: string, id: string): Promise<{ code: string; rev: number; dir: string } | null>;
+    /** Each acts on the revision its card shows (`rev`), never a newer one the person has not seen. */
+    try(conversationId: string, id: string, rev: number): Promise<PluginStatus>;
+    install(conversationId: string, id: string, rev: number): Promise<PluginStatus>;
+    code(conversationId: string, id: string, rev: number): Promise<{ code: string; rev: number; dir: string } | null>;
   };
   /** The keys of the online search engines (task 11.3): in the vault, said kept or not, never handed back. */
   readonly searchKeys: {
@@ -1865,19 +1866,19 @@ export function createCore(deps: CoreDeps): Core {
     plugins,
     addedPlugins,
     extensions: {
-      async try(conversationId, id) {
-        const extension = extensions.get(conversationId, id);
-        if (!extension) throw new Error(`No plugin ${id} was made in this conversation.`);
+      async try(conversationId, id, rev) {
+        const extension = await extensions.revision(conversationId, id, rev);
+        if (!extension) throw new Error(`No revision ${rev} of the plugin ${id} was made in this conversation.`);
         return addedPlugins.tryExtension(extension);
       },
-      async install(conversationId, id) {
-        const extension = extensions.get(conversationId, id);
-        if (!extension) throw new Error(`No plugin ${id} was made in this conversation.`);
+      async install(conversationId, id, rev) {
+        const extension = await extensions.revision(conversationId, id, rev);
+        if (!extension) throw new Error(`No revision ${rev} of the plugin ${id} was made in this conversation.`);
         const title = (await conversationStore.get(conversationId).catch(() => undefined))?.title;
         return addedPlugins.installExtension(extension, title || undefined);
       },
-      async code(conversationId, id) {
-        const extension = extensions.get(conversationId, id);
+      async code(conversationId, id, rev) {
+        const extension = await extensions.revision(conversationId, id, rev);
         if (!extension) return null;
         return { code: await readFile(join(extension.dir, EXTENSION_ENTRY), 'utf8'), rev: extension.rev, dir: extension.dir };
       },

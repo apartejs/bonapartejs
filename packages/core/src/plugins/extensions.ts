@@ -71,6 +71,24 @@ export class ExtensionStore {
     return this.known.get(conversationId)?.get(id);
   }
 
+  /** One revision as it was written — what its card showed —, read from disk; none when it is not there. */
+  async revision(conversationId: string, id: string, rev: number): Promise<Extension | undefined> {
+    if (!/^[\w-]{1,128}$/.test(conversationId) || !/^[a-z][a-z0-9-]*$/.test(id) || !Number.isInteger(rev) || rev < 1) return undefined;
+    const dir = this.dirOf(conversationId, id, rev);
+    const raw = await readFile(join(dir, PLUGIN_MANIFEST_FILE), 'utf8').catch(() => null);
+    if (raw === null) return undefined;
+    let json: unknown = null;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+    const parsed = parseManifest(json);
+    if (!parsed.ok) return undefined;
+    const code = await readFile(join(dir, EXTENSION_ENTRY), 'utf8').catch(() => '');
+    return { conversationId, id, rev, dir, manifest: parsed.manifest, lines: code.split('\n').filter(Boolean).length };
+  }
+
   async define(conversationId: string, input: { manifest: unknown; code: string }): Promise<DefineResult> {
     if (!/^[\w-]{1,128}$/.test(conversationId)) return { ok: false, error: 'This conversation cannot hold a plugin.' };
     const raw = typeof input.manifest === 'object' && input.manifest !== null ? { ...(input.manifest as Record<string, unknown>), entry: { node: EXTENSION_ENTRY } } : input.manifest;
