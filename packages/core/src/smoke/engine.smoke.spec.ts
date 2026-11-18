@@ -537,6 +537,121 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     expect(after.text.toUpperCase()).toContain('PERIWINKLE');
   }, TIMEOUT);
 
+  // ── Phase 8: sub-agents, on the slot their turn lends, then on two slots ──
+
+  interface Leads {
+    events: StreamRunEvent[];
+    usage: StreamUsage | undefined;
+    seconds: number;
+  }
+
+  /** One turn that hands the model's leads to sub-agents: each reads one file and gives its code word back. */
+  async function leads(id: string, files: Record<string, string>): Promise<Leads> {
+    for (const [name, word] of Object.entries(files)) await writeFile(join(home, name), `The code word is ${word}.\n`);
+    await core.conversationStore.ensure(id, { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    const names = Object.keys(files);
+    const ask =
+      `Call the run_subagent tool ${names.length} times in this same step, one call for each of these files: ${names.join(', ')}. ` +
+      'Give each the name of its file, tools "read", and this mission: "Use the read_file tool to read <the file>, then reply with the code word it contains and nothing else." ' +
+      'When their results come back, reply with the code words they found, separated by spaces, and nothing else.';
+    const events: StreamRunEvent[] = [];
+    const started = Date.now();
+    const options = turnOf(`m-${id}`, ask, events);
+    const usage = (await runnerFor(id)({
+      ...options,
+      emitter: (event: StreamRunEvent) => {
+        events.push(event);
+        // What each sub-agent did, and when: the verdict of « together » or « in turn » is read from it.
+        const agentId = (event as { agentId?: string }).agentId;
+        if (agentId && /^(agent-start|agent-end|tool-start|tool-resolved|step-start|step-end)$/.test(event.type)) {
+          const name = (event as { name?: string }).name;
+          console.log(`[smoke]   +${((Date.now() - started) / 1000).toFixed(1)} s ${agentId.slice(-6)} ${event.type}${name ? ` ${name}` : ''}`);
+        }
+      },
+    } as RunnerOptions)) as StreamUsage | undefined;
+    return { events, usage, seconds: (Date.now() - started) / 1000 };
+  }
+
+  /** What each sub-agent did, in the order of the stream: when it started, its first tool, when it ended. */
+  function agentsOf(events: StreamRunEvent[]): { id: string; start: number; firstTool: number; end: number; status?: string }[] {
+    const agents = new Map<string, { id: string; start: number; firstTool: number; end: number; status?: string }>();
+    events.forEach((event, at) => {
+      const agentId = (event as { agentId?: string }).agentId;
+      if (!agentId) return;
+      const agent = agents.get(agentId) ?? { id: agentId, start: at, firstTool: -1, end: -1 };
+      if (event.type === 'tool-start' && agent.firstTool < 0) agent.firstTool = at;
+      if (event.type === 'agent-end') {
+        agent.end = at;
+        agent.status = (event as { status?: string }).status;
+      }
+      agents.set(agentId, agent);
+    });
+    return [...agents.values()];
+  }
+
+  it('three real sub-agents in turn on the slot their turn lends: each gives its word back, and the conversation goes on from its memory', async () => {
+    const result = await leads('smoke-subagents', { 'alpha.txt': 'JUNIPER', 'beta.txt': 'CARDAMOM', 'gamma.txt': 'SORREL' });
+    const agents = agentsOf(result.events);
+    // The conversation's own answer: the sub-agents' words are theirs.
+    const answer = textOf(result.events.filter((event) => !(event as { agentId?: string }).agentId)).trim();
+    const uncached = (result.usage?.inputTokens ?? 0) - (result.usage?.cacheReadTokens ?? 0);
+    console.log(
+      `[smoke] sub-agents in turn: ${agents.length} ran (${agents.map((agent) => agent.status).join(', ')}) in ${result.seconds.toFixed(1)} s; ` +
+        `« ${answer.slice(-80)} »; the conversation's last round: ${result.usage?.cacheReadTokens} of ${result.usage?.inputTokens} served by the cache (${uncached} read)`,
+    );
+    expect(agents).toHaveLength(3);
+    expect(agents.every((agent) => agent.status === 'done')).toBe(true);
+    // One after the other: a sub-agent works only once the one before has ended.
+    const ordered = [...agents].sort((a, b) => a.firstTool - b.firstTool);
+    for (let next = 1; next < ordered.length; next += 1) expect(ordered[next]!.firstTool).toBeGreaterThan(ordered[next - 1]!.end);
+    for (const word of ['JUNIPER', 'CARDAMOM', 'SORREL']) expect(answer.toUpperCase()).toContain(word);
+    // The slot came home: the conversation's state restored, only its calls' results read.
+    expect(uncached).toBeLessThan(600);
+  }, TIMEOUT);
+
+  it('two real sub-agents in parallel on two slots: said first, then both at once — and the conversation goes on from its memory', async () => {
+    const cost = await core.restartCost({ subagents: 'parallel' });
+    console.log(`[smoke] « En parallèle »: ${cost.parallel?.slots} slots, ${((cost.parallel?.vramBytesEach ?? 0) / 1024 ** 3).toFixed(2)} GiB each`);
+    expect(cost.parallel?.slots).toBe(2);
+    const started = Date.now();
+    await core.applyEngineSettings({ subagents: 'parallel' }, { restart: true });
+    await expect.poll(async () => (await core.memory()).engine.slots, { timeout: TIMEOUT }).toBe(2);
+    engine = (await core.engine())!;
+    console.log(`[smoke] restarted with two slots in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+
+    // What llama.cpp itself says: how many of its slots work at once, read while the turn runs.
+    let atOnce = 0;
+    let watching = true;
+    const watcher = (async () => {
+      while (watching) {
+        const working = (await engine.client.slots().catch(() => [])).filter((slot) => slot.processing).length;
+        atOnce = Math.max(atOnce, working);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    })();
+    const result = await leads('smoke-parallel', { 'delta.txt': 'TAMARIND', 'epsilon.txt': 'FENNEL' }).finally(() => {
+      watching = false;
+    });
+    await watcher;
+    const agents = agentsOf(result.events);
+    // The conversation's own answer: the sub-agents' words are theirs.
+    const answer = textOf(result.events.filter((event) => !(event as { agentId?: string }).agentId)).trim();
+    const uncached = (result.usage?.inputTokens ?? 0) - (result.usage?.cacheReadTokens ?? 0);
+    console.log(
+      `[smoke] sub-agents in parallel: ${agents.length} ran (${agents.map((agent) => agent.status).join(', ')}) in ${result.seconds.toFixed(1)} s; ` +
+        `« ${answer.slice(-80)} »; the conversation's last round: ${result.usage?.cacheReadTokens} of ${result.usage?.inputTokens} served by the cache (${uncached} read)`,
+    );
+    console.log(`[smoke] llama.cpp's slots working at once: ${atOnce}`);
+    expect(agents).toHaveLength(2);
+    expect(agents.every((agent) => agent.status === 'done')).toBe(true);
+    // Together: neither waited for the engine, and llama.cpp had both slots working at once.
+    const waited = result.events.filter((event) => event.type === 'step-start' && (event as { name?: string }).name === 'slot-wait');
+    expect(waited).toEqual([]);
+    expect(atOnce).toBe(2);
+    for (const word of ['TAMARIND', 'FENNEL']) expect(answer.toUpperCase()).toContain(word);
+    expect(uncached).toBeLessThan(600);
+  }, TIMEOUT);
+
   it.skipIf(!MODEL2)('a change of model: said first, then the conversation rendered again in the new family and answered there', async () => {
     const id = 'smoke-switch';
     await turnIn(id, 'Remember this code word: SAFFRON. Reply with OK and nothing else.');

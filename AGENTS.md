@@ -881,6 +881,26 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
+- **2026-11-18, phase 8 — 17/17 green** (the change of model skipped: no
+  second model given). Gemma 4 26B-A4B-it UD-Q4_K_XL, llama.cpp b12383
+  Vulkan, Radeon 8060S, `-c 8192`, K/V f16, `--cache-ram 0`, aparté 1.13.0,
+  loaded in 9 s (45.8 GiB of RAM free, for 16.7 GiB announced). The fifteen
+  cases of phase 7 again (restore of 1,401 tokens in 1.4 s, all served;
+  branch 1,423 of 1,433; seed 1,318 of 1,318; the agent's last round 1,422
+  of 1,445; reload restored in 1.4 s, restart in 16.6 s restored in 2.6 s;
+  Stop 122 ms; going back 30 read of 1,472; a compaction 5,789 → 2,128
+  tokens kept the code word), and two of phase 8, through aparté's runner
+  and the handler: three real sub-agents in turn on the slot their turn
+  lends, each reading its file and giving its word back, in 28.4 s — the
+  conversation's last round served by the cache but for 50 of 1,686 tokens,
+  its memory home again; then « En parallèle », said first (2 slots,
+  0.35 GiB each), the engine relaunched with two slots in 25.5 s, two real
+  sub-agents with neither waiting for the engine and llama.cpp's `/slots`
+  showing both working at once, in 30.8 s, the last round 33 read of 1,899.
+  One finding, in the smoke itself: « the second called its tool before the
+  first ended » is not « together » — a sub-agent's first completion takes
+  seconds; the verdict reads llama.cpp's slots.
+
 - **2026-11-16, phase 7 — 16/16 green.** Gemma 4 26B-A4B-it UD-Q4_K_XL,
   llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`, K/V f16, one slot,
   `--cache-ram 0`, loaded in 45 s (58.4 GiB of RAM free, for 16.7 GiB
