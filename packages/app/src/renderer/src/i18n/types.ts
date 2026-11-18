@@ -1052,6 +1052,8 @@ export interface Messages {
       detail(count: number): string;
       release(count: number): string;
       choose: string;
+      /** No older memory to let go: this one will not be saved. */
+      nothing: string;
     };
     otherModel: {
       context: string;

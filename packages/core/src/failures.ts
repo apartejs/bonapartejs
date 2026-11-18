@@ -35,3 +35,28 @@ export function decideLoad(input: {
   if (input.offload && input.suggestion !== null) return { go: true, gpuLayers: input.suggestion };
   return { go: false, error: new ModelTooBigError(input.vramBytes, input.gpuBytes, input.suggestion) };
 }
+
+/** Kept free on the disk beyond a memory saved: the system and the other programs need room too. */
+export const DISK_MARGIN_BYTES = 512 * 1024 ** 2;
+
+/**
+ * The disk nearly full (task 12.3, board « Quand quelque chose casse », « Disque »): said before the memory of the
+ * conversation is saved — the oldest memories to let go, as few as make room for it with its margin. Null when it
+ * fits; `enough: false` when even all of them would not.
+ */
+export function planDiskRoom(input: {
+  freeBytes: number;
+  needBytes: number;
+  saved: readonly { id: string; bytes: number; at: string }[];
+}): { release: string[]; enough: boolean } | null {
+  const missing = input.needBytes + DISK_MARGIN_BYTES - input.freeBytes;
+  if (missing <= 0) return null;
+  const release: string[] = [];
+  let freed = 0;
+  for (const state of [...input.saved].sort((a, b) => a.at.localeCompare(b.at))) {
+    if (freed >= missing) break;
+    release.push(state.id);
+    freed += state.bytes;
+  }
+  return { release, enough: freed >= missing };
+}

@@ -1113,6 +1113,7 @@ export const fr: Messages = {
           : 'Pour sauver la conversation en cours, il faut libérer une mémoire ancienne : cette conversation-là devra être relue.',
       release: (count) => (count > 1 ? `Libérer les ${count}` : 'Libérer la plus ancienne'),
       choose: 'Choisir lesquelles…',
+      nothing: 'Aucune mémoire ancienne à libérer : celle-ci ne pourra pas être sauvée, et cette conversation sera relue.',
     },
     otherModel: {
       context: 'En rouvrant une conversation',

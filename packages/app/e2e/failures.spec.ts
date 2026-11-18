@@ -47,3 +47,24 @@ test('the engine stops during a reply: what is safe, what is lost, its log, and 
   await card.getByRole('button', { name: 'Relancer et relire' }).click();
   await expect(card).toBeHidden({ timeout: 15_000 });
 });
+
+test('the disk nearly full, said as a turn ends: how much is free, and the oldest memory to let go', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS }, env: { BONAPARTE_E2E_FREE_BYTES: String(1024 * 1024) } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ui.send('Bonjour');
+  const card = page.getByRole('alert').filter({ hasText: 'Le disque est presque plein' });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await expect(card).toContainText(/Plus que 1 Mo libres sur /);
+  // Nothing older to let go yet: said as it is.
+  await expect(card).toContainText('Aucune mémoire ancienne à libérer');
+
+  await page.keyboard.press('Control+N');
+  await ui.send('Une autre question');
+  await expect(card).toContainText('il faut libérer une mémoire ancienne', { timeout: 15_000 });
+  await card.getByRole('button', { name: 'Libérer la plus ancienne' }).click();
+  await expect(card).toContainText('Aucune mémoire ancienne à libérer', { timeout: 15_000 });
+  await card.getByRole('button', { name: 'Choisir lesquelles…' }).click();
+  await expect(page.getByRole('heading', { name: 'Moteur et mémoire' })).toBeVisible();
+});

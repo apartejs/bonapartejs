@@ -36,6 +36,7 @@ describe('the memory channels', () => {
     const core: MemoryCore = {
       memory: async () => ({ engine: { running: false, since: null, model: null, busy: false, nCtx: 8192, cacheType: 'f16', slots: 1 }, budgetBytes: 1, usedBytes: 0, rows: [], seed: null }),
       releaseMemory: async (id) => void done.push(`release ${id}`),
+      diskCheck: async (id) => (id === 'full' ? { freeBytes: 1, drive: 'C:', needBytes: 2, release: ['old'], enough: true } : null),
       unloadModel: async () => void done.push('unload'),
       restartEngine: async () => void done.push('restart'),
     };
@@ -46,6 +47,9 @@ describe('the memory channels', () => {
     await expect(call('engine.memory', undefined)).resolves.toMatchObject({ budgetBytes: 1 });
     await call('engine.releaseMemory', { id: 'c1' });
     await expect(call('engine.releaseMemory', { id: '' })).rejects.toThrow();
+    // The disk nearly full, asked for one conversation (task 12.3).
+    await expect(call('engine.diskCheck', { id: 'full' })).resolves.toMatchObject({ drive: 'C:', release: ['old'] });
+    await expect(call('engine.diskCheck', { id: 'fine' })).resolves.toBeNull();
     await call('engine.unload', undefined);
     await call('engine.restart', undefined);
     expect(done).toEqual(['release c1', 'unload', 'restart']);

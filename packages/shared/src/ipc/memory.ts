@@ -38,6 +38,13 @@ export type MemoryOverviewView = z.infer<typeof memoryOverviewSchema>;
 export type MemoryRowView = z.infer<typeof memoryRowSchema>;
 
 export const engineMemory = defineChannel('engine.memory', z.void(), memoryOverviewSchema);
+/** The disk nearly full, said before a conversation's memory is saved (task 12.3); null when it fits. */
+export const engineDiskCheck = defineChannel(
+  'engine.diskCheck',
+  z.object({ id: z.string().min(1).max(128) }),
+  z.object({ freeBytes: z.number(), drive: z.string(), needBytes: z.number(), release: z.array(z.string()), enough: z.boolean() }).nullable(),
+);
+
 export const engineReleaseMemory = defineChannel('engine.releaseMemory', z.object({ id: z.string().min(1).max(128) }), z.void());
 export const engineUnload = defineChannel('engine.unload', z.void(), z.void());
 export const engineRestart = defineChannel('engine.restart', z.void(), z.void());

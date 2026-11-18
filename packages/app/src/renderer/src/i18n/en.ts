@@ -1110,6 +1110,7 @@ export const en: Messages = {
           : 'To save the conversation in progress, one older memory needs to be released: that conversation will be read again.',
       release: (count) => (count > 1 ? `Release the ${count}` : 'Release the oldest'),
       choose: 'Choose which…',
+      nothing: 'No older memory to release: this one cannot be saved, and this conversation will be read again.',
     },
     otherModel: {
       context: 'On reopening a conversation',

@@ -3,7 +3,9 @@ import { setupCommands } from '@aparte/plugin-triggers/commands';
 import { useConversationManager, type AparteChatImperativeApi } from '@aparte/react';
 import {
   conversationsMemory,
+  engineDiskCheck,
   engineLoad,
+  engineReleaseMemory,
   engineModels,
   engineState,
   type ModelChoiceView,
@@ -104,6 +106,8 @@ import type { EngineLike } from './logo/mascot-state';
 import { useMascotState } from './logo/useMascotState';
 import { TooBigCard } from './failures/TooBigCard';
 import { EngineDiedCard } from './failures/EngineDied';
+import { DiskFullCard } from './failures/DiskFullCard';
+import { TURN_ACTIVITY } from './aparte/runner';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -865,6 +869,25 @@ function Workspace({
   // The engine stopped during a reply (task 12.3): the conversation, and the memory it has to read again.
   const [engineDied, setEngineDied] = useState<{ conversationId: string; rereadSeconds: number | null } | null>(null);
   const [relaunching, setRelaunching] = useState(false);
+  // The disk nearly full (task 12.3): checked as a turn ends, before the conversation's memory is saved.
+  const [diskFull, setDiskFull] = useState<{ conversationId: string; check: { freeBytes: number; drive: string; release: string[] } } | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const checkDisk = (id: string): void => {
+    void bridge
+      .invoke(engineDiskCheck, { id })
+      .then((check) => setDiskFull(check ? { conversationId: id, check } : null))
+      .catch(() => undefined);
+  };
+  const checkDiskRef = useRef(checkDisk);
+  checkDiskRef.current = checkDisk;
+  useEffect(() => {
+    const heard = (event: Event): void => {
+      const { conversationId: id, activity } = (event as CustomEvent<{ conversationId: string; activity: string }>).detail;
+      if (activity === 'done') checkDiskRef.current(id);
+    };
+    window.addEventListener(TURN_ACTIVITY, heard);
+    return () => window.removeEventListener(TURN_ACTIVITY, heard);
+  }, []);
   // Going to a service between two turns: what it loses said first, in a dialog.
   const [toService, setToService] = useState<(ServiceSwitchAsking & { conversationId: string; provider: string; revert: () => void }) | null>(null);
   const [toServiceBusy, setToServiceBusy] = useState(false);
@@ -1490,7 +1513,24 @@ function Workspace({
         aboveComposer={
           // The engine down comes first (review of phase 7): a send is held, an approval would resume into
           // nothing — loading it is what everything else waits for.
-          engineDied && engineDied.conversationId === conversationId ? (
+          diskFull && diskFull.conversationId === conversationId ? (
+            <DiskFullCard
+              messages={messages}
+              style={style}
+              check={diskFull.check}
+              busy={releasing}
+              onRelease={() => {
+                const { conversationId: id, check } = diskFull;
+                setReleasing(true);
+                void (async () => {
+                  for (const one of check.release) await bridge.invoke(engineReleaseMemory, { id: one }).catch(() => undefined);
+                  setAsked((count) => count + 1);
+                  checkDisk(id);
+                })().finally(() => setReleasing(false));
+              }}
+              onChoose={() => setSettingsPage('engine')}
+            />
+          ) : engineDied && engineDied.conversationId === conversationId ? (
             <EngineDiedCard
               messages={messages}
               locale={locale}

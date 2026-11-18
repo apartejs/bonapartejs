@@ -12,10 +12,10 @@ import type { CatalogueEntry, CoreDeps } from '@aparte/bonaparte-core';
 export function e2eEngineDeps(
   env: Record<string, string | undefined>,
   e2e: boolean,
-): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> {
+): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'freeDiskBytes' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> {
   if (!e2e) return {};
   // GitHub's CLI: the test's fake one, or none — a test run never asks GitHub.
-  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> = { gh: null };
+  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'freeDiskBytes' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> = { gh: null };
   try {
     const gh = JSON.parse(env['BONAPARTE_E2E_GH_COMMAND'] ?? 'null') as unknown;
     if (Array.isArray(gh) && gh.length > 0 && gh.every((part) => typeof part === 'string')) deps.gh = gh as string[];
@@ -35,6 +35,9 @@ export function e2eEngineDeps(
   }
   const gpu = Number(env['BONAPARTE_E2E_GPU_BYTES']);
   if (Number.isFinite(gpu) && gpu > 0) deps.gpuMemory = async () => gpu;
+  // The free space a test says the disk has (task 12.3: the disk nearly full).
+  const free = Number(env['BONAPARTE_E2E_FREE_BYTES']);
+  if (Number.isFinite(free) && free >= 0 && env['BONAPARTE_E2E_FREE_BYTES'] !== undefined) deps.freeDiskBytes = async () => free;
   const port = Number(env['BONAPARTE_E2E_ENGINE_PORT']);
   if (Number.isInteger(port) && port > 0 && port < 65536) deps.port = port;
   // « Chercher sur tout le disque »: the test's folder, never the person's drives.

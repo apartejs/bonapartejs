@@ -11,7 +11,7 @@
  */
 
 import { access, mkdir, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, parse, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
@@ -27,7 +27,7 @@ import {
   type RestartAnnouncement,
 } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
-import { decideLoad } from './failures.js';
+import { decideLoad, planDiskRoom } from './failures.js';
 import {
   readGpuMemoryBytes,
   readLlamaDeviceMemory,
@@ -167,6 +167,8 @@ export interface CoreDeps {
   diskRoots?: () => Promise<string[]>;
   /** The card's video memory (default: read on the machine; null when unknown). */
   gpuMemory?: () => Promise<number | null>;
+  /** The free space on the disk of a folder (task 12.3); null when the system does not say. Tests give their own. */
+  freeDiskBytes?: (dir: string) => Promise<number | null>;
   /** Injected in tests: what spawnHidden launches with. */
   spawn?: SpawnFn;
   logger?: (line: string) => void;
@@ -491,6 +493,11 @@ export interface Core {
   memory(): Promise<MemoryOverview>;
   /** « Libérer »: a saved memory let go; reopening its conversation will say what reading it again costs. */
   releaseMemory(id: string): Promise<void>;
+  /**
+   * The disk nearly full (task 12.3): said before the memory of a conversation in the engine is saved — the free
+   * space, its drive, what the memory needs, and the oldest memories to let go. Null when it fits.
+   */
+  diskCheck(conversationId: string): Promise<{ freeBytes: number; drive: string; needBytes: number; release: string[]; enough: boolean } | null>;
   /** « Décharger »: the video memory freed; the memories on disk kept (the one in the engine saved first). */
   unloadModel(): Promise<void>;
   /** « Redémarrer »: the same model loaded again — announced by the window before. */
@@ -2146,6 +2153,26 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     releaseMemory: (id) => conversations.release(id),
+
+    async diskCheck(conversationId) {
+      if (!loaded) return null;
+      const freeBytes = await (deps.freeDiskBytes ?? ((dir: string) => statfs(dir).then((disk) => disk.bavail * disk.bsize, () => null)))(kvDir);
+      if (freeBytes === null) return null;
+      const rows = await conversations.memory();
+      const row = rows.find((one) => one.id === conversationId && one.state === 'engine');
+      if (!row) return null;
+      const launch = await launchSettings();
+      const needBytes = row.tokens * kvBytesPerToken(loaded.info, (supervisor.live?.cacheTypeK ?? launch.cacheType) as KvCacheType);
+      const saved = rows
+        .filter((one) => one.state === 'saved' && one.id !== conversationId && one.bytes !== null)
+        .map((one) => ({ id: one.id, bytes: one.bytes!, at: one.at }));
+      const planned = planDiskRoom({ freeBytes, needBytes, saved });
+      if (!planned) return null;
+      // The drive as the person names it: « C: » on Windows, the mount's root elsewhere.
+      const root = parse(resolve(kvDir)).root;
+      const drive = process.platform === 'win32' ? root.replace(/[\\/]+$/, '') : root;
+      return { freeBytes, drive, needBytes, ...planned };
+    },
 
     async unloadModel() {
       // A reply in progress keeps the engine: cutting it would lose its answer and its memory.

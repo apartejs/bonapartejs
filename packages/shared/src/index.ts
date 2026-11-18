@@ -70,7 +70,7 @@ export { changedFileSchema, fileEntrySchema, fileScopeSchema, filesChanged, file
 export type { ChangedFileView, FileEntryView, FileScopeView, FileTextView } from './ipc/files.js';
 export { diskScanStateSchema, modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from './ipc/models.js';
 export type { DiskScanStateView } from './ipc/models.js';
-export { engineMemory, engineReleaseMemory, engineRestart, engineUnload, memoryOverviewSchema, memoryRowSchema } from './ipc/memory.js';
+export { engineDiskCheck, engineMemory, engineReleaseMemory, engineRestart, engineUnload, memoryOverviewSchema, memoryRowSchema } from './ipc/memory.js';
 export type { MemoryOverviewView, MemoryRowView } from './ipc/memory.js';
 export { searchQuery, searchResultSchema } from './ipc/search.js';
 export { probeResultSchema, providersAdd, providersList, providersModels, providersProbe, providersRemove, providersSwitch, providerViewSchema } from './ipc/providers.js';
