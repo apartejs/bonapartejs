@@ -22,6 +22,11 @@ export interface CatalogueEntry {
   context: number;
   /** The video memory (GiB) from which it is the one recommended for its family. */
   fromGiB: number;
+  /**
+   * The files of the same model it is a new version of (task 13.1): one of
+   * them on the disk, this one offered as an update — never in silence.
+   */
+  replaces?: readonly string[];
 }
 
 export const CATALOGUE: readonly CatalogueEntry[] = [

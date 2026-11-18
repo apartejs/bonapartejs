@@ -109,6 +109,7 @@ export class EngineSupervisor {
   private liveEngine: LiveEngine | null = null;
   private loadedModel: LoadedModel | null = null;
   private holds = 0;
+  private freeWaiters: (() => void)[] = [];
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly measures: MeasureStore;
   private readonly probe: ProcessProbe;
@@ -291,7 +292,14 @@ export class EngineSupervisor {
       released = true;
       this.holds -= 1;
       this.armIdleTimer();
+      if (this.holds === 0) for (const resolve of this.freeWaiters.splice(0)) resolve();
     };
+  }
+
+  /** Resolves once no turn holds the engine — an update never installs under a reply (task 13.1). */
+  whenFree(): Promise<void> {
+    if (this.holds === 0) return Promise.resolve();
+    return new Promise((resolve) => this.freeWaiters.push(resolve));
   }
 
   /** Stops the server (if any) and forgets what it served; the configuration stays. */

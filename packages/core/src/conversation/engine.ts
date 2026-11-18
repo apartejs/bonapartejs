@@ -501,6 +501,30 @@ export class ConversationEngine {
     return { memory, waiting, unread };
   }
 
+  /**
+   * The conversations whose memory is for this model file (task 13.1): the tokens of each, read again one by one
+   * once the file changes. Those that keep no memory cost nothing more than they already do.
+   */
+  async keptFor(modelPath: string): Promise<number[]> {
+    const same = (a: string, b: string): boolean =>
+      process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
+    const tokens: number[] = [];
+    for (const meta of await this.deps.store.list()) {
+      if (meta.engineId !== 'builtin' || !same(meta.modelId, modelPath)) continue;
+      const owner = this.ownerOf(meta);
+      if (this.scheduler.isResident(owner)) {
+        const entries = await openJournal(this.deps.store.dir, meta.id, meta.branchId)
+          .then((journal) => journal.entries())
+          .catch(() => null);
+        if (entries?.some((entry) => entry.kind === 'user')) tokens.push(estimateTokens(frozenPrompt(entries)));
+        continue;
+      }
+      const manifest = await this.deps.kv.manifest(ownerKey(owner));
+      if (manifest) tokens.push(manifest.promptTokenCount);
+    }
+    return tokens;
+  }
+
   /** The window shows the conversation (task 8.4): what it finished so far is read. Not activity: the list keeps its order. */
   async markSeen(id: string): Promise<void> {
     if (await this.deps.store.get(id)) await this.deps.store.mark(id, { seenAt: new Date().toISOString() });

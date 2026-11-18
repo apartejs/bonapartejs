@@ -143,6 +143,7 @@ import type { CommandOutputEvent, ToolDef } from './tools/types.js';
 import { ConversationStore, type ConversationMeta } from './conversation/store.js';
 import { KvStore, memoriesRefusedBy } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
+import { modelUpdates, rereadCost, type ModelUpdate, type UpdatesView } from './updates/check.js';
 import { probeEndpoint, type ProbeResult } from './providers/probe.js';
 import { BUILTIN_PROVIDER, ProviderRegistry, type NewProvider, type Provider } from './providers/registry.js';
 import type { SecretStore } from './providers/secrets.js';
@@ -381,6 +382,22 @@ export interface Core {
   recommendedModels(): Promise<RecommendedModel[]>;
   /** Downloads one of them, verifies it, keeps it in `<data>/models`: only when the person asks. */
   downloadModel(id: string): Promise<RecommendedModel>;
+  /**
+   * What can be updated (task 13.1): llama.cpp and the models, each with its cost — the app's own update lives in
+   * the main process. `check` asks GitHub for llama.cpp's newest build; nothing is downloaded.
+   */
+  updates(options?: { check?: boolean }): Promise<UpdatesView>;
+  /** llama.cpp updated once no reply holds the engine: the memory saved, the build installed, the same model loaded again. */
+  updateLlamaCpp(): Promise<LlamaCppState>;
+  /**
+   * The new version of a model downloaded and verified, once no reply holds the engine; the conversations on the
+   * file it replaces move onto it (each read again, announced, when it is opened). The old file stays on the disk.
+   */
+  updateModel(id: string): Promise<void>;
+  /** « Garder la version actuelle »: that version is never offered again. */
+  keepModel(id: string): Promise<void>;
+  /** Resolves once no reply holds the engine: nothing installs under a reply (design §7.6). */
+  whenIdle(): Promise<void>;
   /** `bonaparte doctor` (task 9.6): Node, llama.cpp as a load would find it, the memories' folder, the card. Loads nothing. */
   doctor(): Promise<DoctorReport>;
   /** The conversations: their cards, their journals, their turns on the engine. */
@@ -1060,6 +1077,56 @@ export function createCore(deps: CoreDeps): Core {
     })();
     downloads.set(id, job);
     return job.done;
+  }
+
+  // ── The updates (task 13.1) ──
+  async function keptModels(): Promise<string[]> {
+    const kept = await appSettings.get('keptModels').catch(() => []);
+    return Array.isArray(kept) ? kept.filter((one): one is string => typeof one === 'string') : [];
+  }
+
+  async function offeredModels(): Promise<ModelUpdate[]> {
+    return modelUpdates(catalogue, (await models()).map((model) => model.path), await keptModels());
+  }
+
+  async function updates(options: { check?: boolean } = {}): Promise<UpdatesView> {
+    const llama = await llamaCpp(options.check ? { checkLatest: true } : {});
+    const offered = await offeredModels();
+    return {
+      llama: llama.updateAvailable && llama.latest ? llama.latest : null,
+      models: await Promise.all(
+        offered.map(async ({ entry, replaces }) => ({
+          id: entry.id,
+          name: entry.name,
+          file: entry.file,
+          bytes: entry.bytes,
+          replaces,
+          reread: rereadCost(await conversations.keptFor(replaces), measures.get(replaces)?.prefillTokensPerSecond),
+          downloading: downloads.get(entry.id)?.progress ?? null,
+        })),
+      ),
+    };
+  }
+
+  async function updateModel(id: string): Promise<void> {
+    const offer = (await offeredModels()).find((one) => one.entry.id === id);
+    if (!offer) throw new Error(`No new version of « ${id} » is offered.`);
+    const fresh = await downloadModel(id);
+    if (!fresh.path) throw new Error(`The new version of « ${id} » was not kept.`);
+    // A conversation never changes model under a reply.
+    await supervisor.whenFree();
+    for (const meta of await conversationStore.list()) {
+      if (meta.engineId === BUILTIN_PROVIDER.id && samePath(meta.modelId, offer.replaces)) {
+        await conversationStore.update(meta.id, { modelId: fresh.path });
+      }
+    }
+    const chosen = await appSettings.get('defaultModel').catch(() => '');
+    if (typeof chosen === 'string' && chosen && samePath(chosen, offer.replaces)) await appSettings.set('defaultModel', fresh.path);
+  }
+
+  async function keepModel(id: string): Promise<void> {
+    const kept = await keptModels();
+    if (!kept.includes(id)) await appSettings.set('keptModels', [...kept, id]);
   }
 
   function gpuBytes(): Promise<number | null> {
@@ -2445,6 +2512,29 @@ export function createCore(deps: CoreDeps): Core {
     installLlamaCpp,
     recommendedModels: recommended,
     downloadModel,
+    updates,
+    async updateLlamaCpp() {
+      // Nothing installs under a reply: the update waits for the end of the turn, then saves the memory.
+      const was = loaded?.path ?? supervisor.loaded?.modelPath;
+      for (;;) {
+        await supervisor.whenFree();
+        if (!was && supervisor.status() === 'stopped') break;
+        try {
+          await this.unloadModel();
+          break;
+        } catch (error) {
+          // A turn began between the two: wait for it too.
+          if (!supervisor.held) throw error;
+        }
+      }
+      await installLlamaCpp();
+      // The same model again: its conversations' memory stays valid, the model did not change.
+      if (was) await this.loadModel(was);
+      return llamaCpp();
+    },
+    updateModel,
+    keepModel,
+    whenIdle: () => supervisor.whenFree(),
     doctor: () =>
       runDoctor({
         nodeVersion: process.version,

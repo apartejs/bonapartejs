@@ -225,6 +225,21 @@ describe('EngineSupervisor — a managed engine', () => {
     await waitFor(() => supervisor.status() === 'stopped');
   });
 
+  it('whenFree waits for the last turn that holds the engine (task 13.1)', async () => {
+    const { supervisor } = await setup();
+    await supervisor.whenFree();
+    const first = supervisor.hold();
+    const second = supervisor.hold();
+    let free = false;
+    const waiting = supervisor.whenFree().then(() => (free = true));
+    first();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(free).toBe(false);
+    second();
+    await waiting;
+    expect(free).toBe(true);
+  });
+
   it('says stopped only once it has forgotten what it served', async () => {
     const { supervisor, modelA } = await setup();
     await supervisor.configure(MANAGED);

@@ -1002,3 +1002,109 @@ describe('createCore — the providers (task 9.1)', () => {
     await expect(core.providers.add({ kind: 'openai-compat', label: 'LM Studio', url: 'http://localhost:1234/v1' })).resolves.toMatchObject({ label: 'LM Studio' });
   });
 });
+
+describe('createCore — the updates (task 13.1)', () => {
+  const opened: { close(): Promise<void> }[] = [];
+  afterEach(async () => {
+    await Promise.all(opened.splice(0).map((one) => one.close()));
+  });
+
+  /** A new version of the setup's `gemma-4-test.gguf`, published on a hub of the test. */
+  async function newVersion(dir: string): Promise<{ entry: CatalogueEntry; hub: FakeModelHub }> {
+    const file = join(dir, 'gemma-4-test-v2.gguf');
+    await writeFakeGguf(file, { paddingBytes: 6000 });
+    const body = await readFile(file);
+    const entry: CatalogueEntry = {
+      id: 'gemma-4-test',
+      family: 'gemma',
+      name: 'Gemma 4 test',
+      repo: 'google/gemma-4-test-gguf',
+      file: 'gemma-4-test-v2.gguf',
+      bytes: body.length,
+      sha256: createHash('sha256').update(body).digest('hex'),
+      context: 8192,
+      fromGiB: 0,
+      replaces: ['gemma-4-test.gguf'],
+    };
+    const hub = await startFakeModelHub({ files: { 'google/gemma-4-test-gguf/gemma-4-test-v2.gguf': body } });
+    opened.push(hub);
+    return { entry, hub };
+  }
+
+  async function withMemory() {
+    const scratch = await mkdtemp(join(tmpdir(), 'bp-upd-'));
+    dirs.push(scratch);
+    const { entry, hub } = await newVersion(scratch);
+    const set = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    await set.core.loadModel(set.gemma);
+    await set.core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: set.gemma, mode: 'repetition' });
+    await set.core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    await set.core.unloadModel();
+    return { ...set, entry, hub };
+  }
+
+  it('offers a new version of a model on the disk, with the conversations it makes to read again — downloading nothing', async () => {
+    const { core, gemma, entry, hub } = await withMemory();
+    const updates = await core.updates();
+    expect(updates.llama).toBeNull();
+    expect(updates.models).toEqual([
+      {
+        id: 'gemma-4-test',
+        name: 'Gemma 4 test',
+        file: 'gemma-4-test-v2.gguf',
+        bytes: entry.bytes,
+        replaces: gemma,
+        reread: { conversations: 1, tokens: expect.any(Number), seconds: expect.any(Number) },
+        downloading: null,
+      },
+    ]);
+    expect(updates.models[0]!.reread.tokens).toBeGreaterThan(0);
+    expect(hub.downloads).toBe(0);
+  }, 20_000);
+
+  it('« Télécharger » downloads it, moves those conversations onto it, and keeps the old file', async () => {
+    const { core, gemma, dir } = await withMemory();
+    await core.updateModel('gemma-4-test');
+    const kept = join(dir, 'data', 'models', 'gemma-4-test-v2.gguf');
+    expect((await core.conversationStore.get('c1'))?.modelId).toBe(kept);
+    expect((await readdir(join(dir, 'models')))).toContain('gemma-4-test.gguf');
+    expect((await core.updates()).models).toEqual([]);
+    expect(gemma).not.toBe(kept);
+  }, 20_000);
+
+  it('« Garder la version actuelle » never offers it again', async () => {
+    const { core, hub } = await withMemory();
+    await core.keepModel('gemma-4-test');
+    expect((await core.updates()).models).toEqual([]);
+    expect(hub.downloads).toBe(0);
+  }, 20_000);
+
+  it('updates llama.cpp only once no reply holds the engine, then loads the same model again', async () => {
+    const github = await startFakeLlamaReleases({ build: 'b12383' });
+    opened.push(github);
+    const { core, gemma } = await setup({ llamaReleases: github.url });
+    expect((await core.updates({ check: true })).llama).toEqual({ build: 'b12383', bytes: github.bytes });
+    await core.loadModel(gemma);
+    const release = core.hold();
+    const updating = core.updateLlamaCpp();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(github.downloads).toBe(0);
+    release();
+    await updating;
+    expect(github.downloads).toBe(1);
+    expect(await core.engineState()).toMatchObject({ status: 'ready', model: { path: gemma } });
+    expect((await core.updates()).llama).toBeNull();
+  }, 30_000);
+
+  it('whenIdle waits for the reply that holds the engine', async () => {
+    const { core } = await setup();
+    await core.whenIdle();
+    const release = core.hold();
+    let idle = false;
+    const waiting = core.whenIdle().then(() => (idle = true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(idle).toBe(false);
+    release();
+    await waiting;
+  });
+});
