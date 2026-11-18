@@ -92,6 +92,8 @@ export const APP_SETTINGS: SettingField[] = [
   // Derived from the free space (task 3.4) until the person sets one.
   { key: 'kvBudgetBytes', type: 'number', scopes: GLOBAL, default: null, min: 0, step: 1, integer: true, advanced: true },
   { key: 'autoUpdateApp', type: 'boolean', scopes: GLOBAL, default: true },
+  // The shortcuts the person changed (task 12.1): an action's id → its keys, '' for none; the others keep their default.
+  { key: 'shortcuts', type: 'keys', scopes: GLOBAL, default: {} },
   { key: 'notifications.replyDone', type: 'select', scopes: GLOBAL, default: 'banner', options: NOTIFY },
   { key: 'notifications.approval', type: 'select', scopes: GLOBAL, default: 'banner', options: NOTIFY },
   { key: 'notifications.question', type: 'select', scopes: GLOBAL, default: 'badge', options: NOTIFY },

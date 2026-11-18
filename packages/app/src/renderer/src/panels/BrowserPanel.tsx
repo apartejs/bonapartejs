@@ -26,6 +26,7 @@ import { TipButton } from '../shell/TipButton';
 import { BrowserConsole } from './BrowserConsole';
 import { NewTab, type RunScope } from './NewTab';
 import { describeElement, ElementCard, PageComments, usePageTools } from './PageTools';
+import { useShortcut } from '../shortcuts/useShortcuts';
 
 type Device = 'desktop' | 'phone';
 
@@ -122,16 +123,11 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
     read();
   };
 
-  // Ctrl T: a new tab, while the pane is shown.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (hidden || !(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 't') return;
-      event.preventDefault();
-      void openTab();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [hidden]);
+  // Ctrl T (task 12.1: its keys are the person's): a new tab, while the pane is shown.
+  useShortcut('newTab', () => {
+    if (hidden) return false;
+    void openTab();
+  });
 
   const closeTab = async (tabId: string): Promise<void> => {
     await bridge.invoke(browserCloseTab, { tabId });

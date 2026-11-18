@@ -14,6 +14,7 @@ const fields: SettingField[] = [
   { key: 'cacheType', type: 'select', scopes: ['global'], options: ['f16', 'q8_0'] },
   { key: 'gpuLayers', type: 'number', scopes: ['global'], min: 0, integer: true, allowAll: true },
   { key: 'plugin:web:apiKey', type: 'string', scopes: ['global'] },
+  { key: 'shortcuts', type: 'keys', scopes: ['global'] },
 ];
 
 describe('validateSettingValue', () => {
@@ -45,5 +46,16 @@ describe('validateSettingValue', () => {
     expect(() => validateSettingValue(fields, 'conversation', 'thinking', 'yes')).toThrow(/boolean/i);
     expect(() => validateSettingValue(fields, 'global', 'cacheType', 'q2_k')).toThrow(/option/i);
     expect(() => validateSettingValue(fields, 'global', 'plugin:web:apiKey', 'x'.repeat(5000))).toThrow(/long/i);
+  });
+});
+
+describe('the person’s shortcuts (task 12.1)', () => {
+  it('keeps an action’s key combination, or none; refuses anything else', () => {
+    expect(() => validateSettingValue(fields, 'global', 'shortcuts', { newConversation: 'Ctrl+N', cycleMode: 'Ctrl+Shift+M', terminal: 'Ctrl+`' })).not.toThrow();
+    expect(() => validateSettingValue(fields, 'global', 'shortcuts', { changes: '' })).not.toThrow();
+    expect(() => validateSettingValue(fields, 'global', 'shortcuts', ['Ctrl+N'])).toThrow(/key/i);
+    expect(() => validateSettingValue(fields, 'global', 'shortcuts', { 'new conversation': 'Ctrl+N' })).toThrow(/key/i);
+    expect(() => validateSettingValue(fields, 'global', 'shortcuts', { newConversation: 'Ctrl+N; rm -rf' })).toThrow(/key/i);
+    expect(() => validateSettingValue(fields, 'global', 'shortcuts', Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`a${i}`, 'Ctrl+N'])))).toThrow(/key/i);
   });
 });

@@ -290,7 +290,37 @@ export interface Messages {
     back: string;
     open: string;
     groups: { application: string; engine: string; agent: string };
-    pages: { general: string; appearance: string; engine: string; models: string; permissions: string; plugins: string; mcp: string };
+    pages: { general: string; appearance: string; shortcuts: string; engine: string; models: string; permissions: string; plugins: string; mcp: string };
+    /** Réglages · Raccourcis (task 12.1). */
+    shortcuts: {
+      search: string;
+      hint: string;
+      groups: { conversations: string; agent: string; panes: string };
+      actions: {
+        newConversation: string;
+        search: string;
+        inbox: string;
+        sidebar: string;
+        previousConversation: string;
+        nextConversation: string;
+        cycleMode: string;
+        rewindLast: string;
+        changes: string;
+        terminal: string;
+        browser: string;
+        newTab: string;
+      };
+      /** The keys aparté owns: shown, not changed here. */
+      fixed: { send: string; approve: string; stop: string };
+      fixedNote: string;
+      capture: string;
+      conflict: (other: string) => string;
+      none: string;
+      /** Each key in the person's words; « or » between two choices. */
+      keys: Record<string, string>;
+      or: string;
+      noMatch: string;
+    };
     versions(app: string, llama: string): string;
     llamaMissing: string;
     /** Réglages · Serveurs MCP (task 10.5, board « Réglages · Serveurs MCP »). */

@@ -19,8 +19,9 @@ import { PermissionsPage } from './Permissions';
 import { ProjectPage } from './ProjectPage';
 import { McpServersPage } from './McpServers';
 import { PluginsPage } from './Plugins';
+import { ShortcutsPage } from './Shortcuts';
 
-export type SettingsPageName = 'general' | 'appearance' | 'engine' | 'models' | 'permissions' | 'plugins' | 'mcp';
+export type SettingsPageName = 'general' | 'appearance' | 'shortcuts' | 'engine' | 'models' | 'permissions' | 'plugins' | 'mcp';
 
 /** Said on the window when a setting changed: `{ key, value }`. */
 export const SETTING_CHANGED = 'bonaparte-setting';
@@ -39,7 +40,7 @@ export interface PageProps {
 }
 
 const GROUPS: { group: 'application' | 'engine' | 'agent'; pages: SettingsPageName[] }[] = [
-  { group: 'application', pages: ['general', 'appearance'] },
+  { group: 'application', pages: ['general', 'appearance', 'shortcuts'] },
   { group: 'engine', pages: ['engine', 'models'] },
   { group: 'agent', pages: ['permissions', 'plugins', 'mcp'] },
 ];
@@ -135,6 +136,7 @@ export function SettingsView({
         <h1 className="settings__heading">{project ? project.name : words.pages[page]}</h1>
         {props && page === 'general' ? <GeneralPage {...props} /> : null}
         {props && page === 'appearance' ? <AppearancePage {...props} /> : null}
+        {props && page === 'shortcuts' ? <ShortcutsPage {...props} /> : null}
         {props && page === 'models' ? <ModelsPage {...props} /> : null}
         {props && page === 'engine' ? <EngineMemoryPage {...props} onPage={onPage} /> : null}
         {props && page === 'permissions' && !project ? (

@@ -90,21 +90,28 @@ export function useRewind(deps: RewindDeps) {
     return { chatKey, conversationId, messageId: detail.messageId, userIndex, text: textOf(shown[index]!.content) };
   };
 
+  /** « Revenir avant » asked on a message of the person's: its dialog, its cost read before anything moves. */
+  const ask = (detail: Pick<AparteActionEventDetail, 'messageId' | 'targetId'>): boolean => {
+    const message = named(detail);
+    if (!message) return false;
+    setAsking({ ...message, excerpt: excerpt(message.text), preview: null });
+    void bridge
+      .invoke(conversationsRewindPreview, { id: message.conversationId, userIndex: message.userIndex, text: message.text })
+      .then((preview) => setAsking((was) => (was && was.messageId === message.messageId ? { ...was, preview } : was)))
+      .catch(() => setAsking(null));
+    return true;
+  };
+
   useEffect(() => {
     const acted = (event: Event): void => {
       const detail = (event as CustomEvent<AparteActionEventDetail>).detail;
       if (detail.actionId !== REWIND_ACTION && detail.actionId !== BRANCHES_ACTION) return;
-      const message = named(detail);
-      if (!message) return;
       if (detail.actionId === BRANCHES_ACTION) {
-        latest.current.openBranchesAt(message.conversationId, message.userIndex);
+        const message = named(detail);
+        if (message) latest.current.openBranchesAt(message.conversationId, message.userIndex);
         return;
       }
-      setAsking({ ...message, excerpt: excerpt(message.text), preview: null });
-      void bridge
-        .invoke(conversationsRewindPreview, { id: message.conversationId, userIndex: message.userIndex, text: message.text })
-        .then((preview) => setAsking((was) => (was && was.messageId === message.messageId ? { ...was, preview } : was)))
-        .catch(() => setAsking(null));
+      ask(detail);
     };
     document.addEventListener('aparte-action', acted);
     return () => document.removeEventListener('aparte-action', acted);
@@ -252,6 +259,12 @@ export function useRewind(deps: RewindDeps) {
     rewound,
     busy,
     cancel: () => setAsking(null),
+    /** Ctrl Alt Z (task 12.1): « Revenir avant » on the last message of the person's in this chat. */
+    askLast: (chatKey: string): boolean => {
+      const shown = (latest.current.handles.get(chatKey)?.getMessages() ?? []) as unknown as ShownMessage[];
+      const last = [...shown].reverse().find((message) => message.role === 'user');
+      return last ? ask({ messageId: last.id, targetId: chatKey }) : false;
+    },
     rewind: (what: RewindWhatView) => void rewind(what),
     undo: () => void undo(),
     showBranch: (conversationId: string, branchId: string) => void showBranch(conversationId, branchId),

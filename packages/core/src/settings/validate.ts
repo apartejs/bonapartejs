@@ -9,6 +9,8 @@ import type { SettingField, SettingScope } from './resolve.js';
 
 const MAX_STRING = 4096;
 const MAX_ITEMS = 64;
+/** A key combination: modifiers then one key, as the window's shortcut registry writes it. */
+const COMBO = /^(?:(?:Ctrl|Alt|Shift|Meta)\+){0,4}[^\s+]{1,16}$/;
 
 export function validateSettingValue(fields: SettingField[], scope: SettingScope, key: string, value: unknown): void {
   const field = fields.find((candidate) => candidate.key === key);
@@ -43,6 +45,17 @@ export function validateSettingValue(fields: SettingField[], scope: SettingScope
       if (typeof value !== 'string') throw new Error(`Setting ${key} expects a string`);
       if (value.length > MAX_STRING) throw new Error(`Setting ${key} is too long`);
       return;
+    case 'keys': {
+      const entries = value && typeof value === 'object' && !Array.isArray(value) ? Object.entries(value) : null;
+      if (
+        !entries ||
+        entries.length > MAX_ITEMS ||
+        !entries.every(([action, combo]) => /^[a-zA-Z]{1,64}$/.test(action) && typeof combo === 'string' && (combo === '' || COMBO.test(combo)))
+      ) {
+        throw new Error(`Setting ${key} expects an action's key combination for each action`);
+      }
+      return;
+    }
     case 'list':
       if (!Array.isArray(value) || value.length > MAX_ITEMS || !value.every((item) => typeof item === 'string' && item.length <= MAX_STRING)) {
         throw new Error(`Setting ${key} expects a list of at most ${MAX_ITEMS} strings`);

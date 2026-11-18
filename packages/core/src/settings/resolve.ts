@@ -22,7 +22,8 @@ export type SettingsLayer = 'default' | SettingScope;
 
 export interface SettingField {
   key: string;
-  type: 'string' | 'number' | 'boolean' | 'select' | 'list';
+  /** `keys`: an action's id → its key combination (« Ctrl+Shift+M »), or '' for none (task 12.1). */
+  type: 'string' | 'number' | 'boolean' | 'select' | 'list' | 'keys';
   /** Scopes where the setting can be changed — at least one. */
   scopes: SettingScope[];
   default?: unknown;

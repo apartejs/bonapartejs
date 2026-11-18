@@ -4131,3 +4131,98 @@ body {
   font-size: var(--aparte-font-size-xs);
   white-space: pre;
 }
+
+/* Réglages · Raccourcis (task 12.1, board « Réglages · Raccourcis »). */
+.shortcuts-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+}
+
+.shortcuts-page__search {
+  flex: 0 1 280px;
+  min-width: 0;
+}
+
+.shortcut-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shortcut-row + .shortcut-row {
+  border-top: 1px solid var(--aparte-border);
+}
+
+.shortcut-row__button,
+.shortcut-row--fixed {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--aparte-text);
+  font: inherit;
+  text-align: start;
+}
+
+.shortcut-row__button {
+  border-radius: var(--aparte-radius-md, 8px);
+  cursor: pointer;
+}
+
+.shortcut-row__button:hover {
+  background: var(--aparte-surface-1);
+}
+
+.shortcut-row--capturing .shortcut-row__button {
+  background: var(--bonaparte-accent-soft);
+}
+
+.shortcut-row__label {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shortcut-row__note,
+.shortcut-row__none,
+.shortcut-row__or {
+  color: var(--aparte-text-muted);
+  font-size: 0.85em;
+}
+
+.shortcut-row__keys,
+.shortcut-row__choice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.shortcut-row__keys {
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.shortcut-row__capture {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border: 1.5px dashed var(--aparte-primary);
+  border-radius: 6px;
+  color: var(--aparte-text-muted);
+  font-size: 0.85em;
+}
+
+.shortcut-row__refused {
+  margin: 0 4px 8px;
+}

@@ -99,6 +99,7 @@ import { createSubagentTracker, setupSubagentLines } from './aparte/subagents';
 import { SubagentsPanel } from './panels/SubagentsPanel';
 import { InboxPage } from './screens/Inbox';
 import { createQuestionsLive } from './aparte/questions';
+import { useShortcut, useShortcutKeys } from './shortcuts/useShortcuts';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -160,35 +161,23 @@ function Workspace({
   const [creatingProject, setCreatingProject] = useState(false);
   // « Rechercher » (Ctrl K): opened from anywhere in the window.
   const [searching, setSearching] = useState(false);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        // Over the settings: they close, and the search opens over the conversations.
-        setSettingsPage(null);
-        setSearching(true);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  // Every shortcut of the app, heard once (task 12.1): each action is taken where it runs.
+  useShortcutKeys();
+  useShortcut('search', () => {
+    // Over the settings: they close, and the search opens over the conversations.
+    setSettingsPage(null);
+    setSearching(true);
+  });
   // « À traiter » (task 8.4, Ctrl J): a page in the conversation's place; the chats stay mounted under it.
   const [inboxOpen, setInboxOpen] = useState(false);
   // The questions the chats put on screen (a hidden one too): « À traiter » answers one with choices.
   const questions = useMemo(() => createQuestionsLive(), []);
   const [inbox, setInbox] = useState<InboxView | null>(null);
   const [costLater, setCostLater] = useState<ReadonlySet<string>>(new Set());
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault();
-        setSettingsPage(null);
-        setInboxOpen((was) => !was);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useShortcut('inbox', () => {
+    setSettingsPage(null);
+    setInboxOpen((was) => !was);
+  });
   // The sidebar folded into icons: by the person (Ctrl B), or by a narrow window (under 1 100 px).
   const [foldedByPerson, setFoldedByPerson] = useState(false);
   const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
@@ -209,17 +198,10 @@ function Workspace({
   };
   const toggleRef = useRef(toggleSidebar);
   toggleRef.current = toggleSidebar;
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'b') {
-        event.preventDefault();
-        setSettingsPage(null);
-        toggleRef.current();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  useShortcut('sidebar', () => {
+    setSettingsPage(null);
+    toggleRef.current();
+  });
   // The projects, and how the sidebar groups the conversations (the setting « sidebarGrouping »).
   const [projects, setProjects] = useState<ProjectView[]>([]);
   const readProjects = (): void => {
@@ -420,6 +402,8 @@ function Workspace({
   // The resolver owns the decision: aparté's page policy is never consulted.
   const approvals = useMemo(() => createApprovalsStore(), []);
   const open = useRef<string | null>(null);
+  // What Échap needs to know to stop a reply: the chat shown, and whether a request waits there.
+  const stopRef = useRef<{ shown: string; waiting: boolean }>({ shown: '', waiting: false });
   open.current = conversationId;
   // A call paused before a reload is asked again as its conversation loads: aparté names its turn.
   const approvalResolver = useMemo(() => createApprovalResolver(approvals), [approvals]);
@@ -1077,6 +1061,69 @@ function Workspace({
     return () => window.removeEventListener('aparte-message-start', paid);
   }, []);
 
+  // The shortcuts of the conversations, the agent and the panes (task 12.1).
+  const changeMode = (next: PlayMode): void => {
+    setMode(next);
+    if (!conversationId) picked.current = true;
+    // The core keeps it: the next call of the conversation is decided in it.
+    if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
+  };
+  useShortcut('newConversation', () => {
+    setSettingsPage(null);
+    newConversation();
+  });
+  /** The conversations in the order the sidebar shows them. */
+  const stepConversation = (by: 1 | -1): boolean => {
+    const ids = [...document.querySelectorAll<HTMLElement>('.bonaparte-conversations [data-conv-id]')]
+      .map((row) => row.dataset['convId'])
+      .filter((id): id is string => Boolean(id))
+      .filter((id, index, all) => all.indexOf(id) === index);
+    if (ids.length === 0) return false;
+    const at = conversationId ? ids.indexOf(conversationId) : -1;
+    const next = ids[at < 0 ? (by > 0 ? 0 : ids.length - 1) : Math.min(ids.length - 1, Math.max(0, at + by))];
+    if (!next || next === conversationId) return true;
+    setSettingsPage(null);
+    goTo(next);
+    return true;
+  };
+  useShortcut('previousConversation', () => stepConversation(-1));
+  useShortcut('nextConversation', () => stepConversation(1));
+  useShortcut('cycleMode', () => {
+    // A discussion has no mode to change (task 9.7).
+    if (discussion || settingsPage) return false;
+    const order: PlayMode[] = ['lecture', 'repetition', 'plume', 'impro'];
+    changeMode(order[(order.indexOf(mode) + 1) % order.length]!);
+  });
+  useShortcut('rewindLast', () => (settingsPage || inboxOpen ? false : rewinding.askLast(deck.shown)));
+  const togglePaneKey = (pane: 'changes' | 'terminal' | 'browser'): boolean => {
+    if (discussion || settingsPage) return false;
+    setPanes((was) => togglePane(was, pane, narrow));
+    return true;
+  };
+  useShortcut('changes', () => togglePaneKey('changes'));
+  useShortcut('terminal', () => togglePaneKey('terminal'));
+  useShortcut('browser', () => togglePaneKey('browser'));
+  // Échap stops the reply of the conversation shown, when nothing else takes it: no request or question waits, no
+  // dialog or menu is open, and the key was not typed in a field of its own (apartejs/aparte#264).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented || event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
+      // A dialog, a menu or a list open on screen takes Échap first (aparté's selects keep theirs in the page, closed).
+      const overlays = document.querySelectorAll<HTMLElement>('dialog[open], [role="menu"], [role="listbox"]');
+      if ([...overlays].some((overlay) => overlay.checkVisibility())) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target && target.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('aparte-composer')) return;
+      const handle = handles.get(stopRef.current.shown);
+      const composer = handle?.getComposer();
+      if (!handle?.isStreaming() || !composer || (composer as unknown as Composer).panelActive || stopRef.current.waiting) return;
+      event.preventDefault();
+      composer.cancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  stopRef.current = { shown: deck.shown, waiting: request !== undefined };
+
   const style = { locale, units: messages.units };
   return (
     <>
@@ -1496,12 +1543,7 @@ function Workspace({
           <ComposerToolbar
             messages={messages}
             mode={mode}
-            onMode={(next) => {
-              setMode(next);
-              if (!conversationId) picked.current = true;
-              // The core keeps it: the next call of the conversation is decided in it.
-              if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
-            }}
+            onMode={changeMode}
             engine={engine}
             scope={() =>
               conversationId ? { conversationId } : project.current ? { projectId: project.current.id } : {}
