@@ -108,6 +108,15 @@ describe('the plugins the person adds (task 11.1)', () => {
     expect(again.registry.get('plugin__revue-pr__peek')).toBeDefined();
   });
 
+  it('a plugin put in <data>/plugins/ by hand is started, said to come from its own folder', async () => {
+    const data = await temp('bp-added-data-');
+    const { cp } = await import('node:fs/promises');
+    await cp(await pluginFolder(), join(data, 'plugins', 'revue-pr'), { recursive: true });
+    const { host, added } = await rig(data);
+    await added.start();
+    expect(host.status().find((one) => one.id === 'revue-pr')).toMatchObject({ active: true, source: { kind: 'folder', path: join(data, 'plugins', 'revue-pr') } });
+  });
+
   it('« Ajouter sans activer »: kept, switched off, nothing run', async () => {
     const data = await temp('bp-added-data-');
     const { registry, added } = await rig(data);

@@ -126,6 +126,9 @@ import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { AddedPlugins } from './plugins/added.js';
 import { ENTRY_TOOLS } from './plugins/entries.js';
+
+/** The online search engines that need a key. */
+export type KeyedSearch = 'brave' | 'tavily' | 'serper';
 import { PluginHost } from './plugins/host.js';
 import { PluginInstaller } from './plugins/install.js';
 import type { PluginPort } from './plugins/remote.js';
@@ -364,6 +367,11 @@ export interface Core {
   readonly plugins: PluginHost;
   /** The plugins the person adds (task 11.1): read first, then each run in a process of its own. */
   readonly addedPlugins: AddedPlugins;
+  /** The keys of the online search engines (task 11.3): in the vault, said kept or not, never handed back. */
+  readonly searchKeys: {
+    list(): Promise<Record<KeyedSearch, boolean>>;
+    set(provider: KeyedSearch, key: string | null): Promise<Record<KeyedSearch, boolean>>;
+  };
   /** The MCP servers (task 10.5): their tools join the registry at the first turn, judged by the same policy. */
   readonly mcp: McpService;
   /**
@@ -1335,6 +1343,12 @@ export function createCore(deps: CoreDeps): Core {
       return permissions.evaluate({ tool, input, mode, ...(projectId ? { projectId } : {}) });
     },
   });
+  // The keys of the online search engines: said kept or not, never handed back (task 11.3).
+  const searchKeysKept = async (): Promise<Record<KeyedSearch, boolean>> => ({
+    brave: await vault.has('search-brave'),
+    tavily: await vault.has('search-tavily'),
+    serper: await vault.has('search-serper'),
+  });
   // The plugins the person adds (task 11.1): fetched and read in `<data>/plugins/`, each run in a process of its own.
   const addedPlugins = new AddedPlugins({
     host: plugins,
@@ -1836,6 +1850,14 @@ export function createCore(deps: CoreDeps): Core {
     permissions,
     plugins,
     addedPlugins,
+    searchKeys: {
+      list: searchKeysKept,
+      async set(provider, key) {
+        if (key === null || key.trim() === '') await vault.delete(`search-${provider}`);
+        else await vault.set(`search-${provider}`, key.trim());
+        return searchKeysKept();
+      },
+    },
     mcp,
     runs: {
       async list(scope) {

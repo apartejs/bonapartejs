@@ -70,6 +70,12 @@ export const pluginsSetEnabled = defineChannel('plugins.setEnabled', z.object({ 
 export const pluginsRemove = defineChannel('plugins.remove', z.object({ id: idSchema }), statuses);
 /** Where each came from asked for a newer version: proposed, never made. */
 export const pluginsCheckUpdates = defineChannel('plugins.checkUpdates', z.void(), statuses);
+/** The keys of the online search engines (task 11.3): kept or not — never a key handed back to the window. */
+const keyedSearch = z.enum(['brave', 'tavily', 'serper']);
+const keysKept = z.object({ brave: z.boolean(), tavily: z.boolean(), serper: z.boolean() });
+export const searchKeysList = defineChannel('search.keys', z.void(), keysKept);
+export const searchKeysSet = defineChannel('search.setKey', z.object({ provider: keyedSearch, key: z.string().max(512).nullable() }), keysKept);
+
 /** « Parcourir… »: the system's folder dialog, in the main process. */
 export const pluginsPickFolder = defineChannel('plugins.pickFolder', z.void(), z.object({ path: z.string().nullable() }));
 

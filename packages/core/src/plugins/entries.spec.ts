@@ -114,3 +114,25 @@ describe('the built-in entries of the core (task 11.3)', () => {
     expect(lastUserPart(prompts.at(-1)!)).toMatch(/Tools now available:[\s\S]*web_search/);
   });
 });
+
+describe('the keys of the online search engines (task 11.3, deferred from 10.4)', () => {
+  it('kept in the vault, said kept or not — never handed back; forgotten on demand', async () => {
+    const kept = new Map<string, string>();
+    const dir = await mkdtemp(join(tmpdir(), 'bp-search-keys-'));
+    dirs.push(dir);
+    const core = createCore({
+      dataDir: join(dir, 'data'),
+      env: {},
+      home: join(dir, 'home'),
+      gh: null,
+      logger: () => undefined,
+      secrets: { get: async (name) => kept.get(name), set: async (name, value) => void kept.set(name, value), delete: async (name) => void kept.delete(name), has: async (name) => kept.has(name) },
+    });
+    cores.push(core);
+    expect(await core.searchKeys.list()).toEqual({ brave: false, tavily: false, serper: false });
+    expect(await core.searchKeys.set('brave', 'BSA-secret')).toEqual({ brave: true, tavily: false, serper: false });
+    expect(kept.get('search-brave')).toBe('BSA-secret');
+    expect(JSON.stringify(await core.searchKeys.list())).not.toContain('BSA-secret');
+    expect(await core.searchKeys.set('brave', null)).toEqual({ brave: false, tavily: false, serper: false });
+  });
+});

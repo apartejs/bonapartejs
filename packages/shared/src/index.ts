@@ -55,6 +55,8 @@ export {
   pluginsRemove,
   pluginsSetEnabled,
   pluginStatusSchema,
+  searchKeysList,
+  searchKeysSet,
 } from './ipc/plugins.js';
 export type { PluginAddRequestView } from './ipc/plugins.js';
 export type { AppEvent, CommandOutputView } from './ipc/plugins.js';

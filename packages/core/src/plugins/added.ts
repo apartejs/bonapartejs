@@ -29,8 +29,13 @@ export class AddedPlugins {
   async start(): Promise<void> {
     await this.options.installer.clearStaging();
     const found = await this.host.discover(this.options.installer.root);
+    const state = await this.host.keptState();
     for (const plugin of found) {
       if (!plugin.manifest) continue;
+      // Put there by hand: it came from that very folder.
+      if (!state.get(plugin.id) && plugin.dir && !state.error) {
+        await state.record(plugin.id, { kind: 'folder', path: plugin.dir }, (this.options.now?.() ?? new Date()).toISOString()).catch(() => undefined);
+      }
       await this.activate(plugin.id).catch(() => undefined);
     }
   }

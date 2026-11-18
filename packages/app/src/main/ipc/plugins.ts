@@ -17,13 +17,15 @@ import {
   pluginsPreview,
   pluginsRemove,
   pluginsSetEnabled,
+  searchKeysList,
+  searchKeysSet,
 } from '@aparte/bonaparte-shared';
 import type { ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
 
 export function registerPluginChannels(
   ipc: IpcRegistry,
-  core: Pick<Core, 'plugins' | 'addedPlugins'>,
+  core: Pick<Core, 'plugins' | 'addedPlugins' | 'searchKeys'>,
   options: { chooseFolder?: ChooseFolder; changed?: () => void } = {},
 ): void {
   const changed = (): void => options.changed?.();
@@ -57,4 +59,6 @@ export function registerPluginChannels(
     return statuses();
   });
   ipc.handle(pluginsPickFolder, async () => ({ path: (await options.chooseFolder?.()) ?? null }));
+  ipc.handle(searchKeysList, () => core.searchKeys.list());
+  ipc.handle(searchKeysSet, ({ provider, key }) => core.searchKeys.set(provider, key));
 }

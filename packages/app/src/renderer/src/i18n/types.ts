@@ -290,7 +290,7 @@ export interface Messages {
     back: string;
     open: string;
     groups: { application: string; engine: string; agent: string };
-    pages: { general: string; appearance: string; engine: string; models: string; permissions: string; mcp: string };
+    pages: { general: string; appearance: string; engine: string; models: string; permissions: string; plugins: string; mcp: string };
     versions(app: string, llama: string): string;
     llamaMissing: string;
     /** Réglages · Serveurs MCP (task 10.5, board « Réglages · Serveurs MCP »). */
@@ -857,6 +857,79 @@ export interface Messages {
     cancel: string;
     confirm: string;
     failed: string;
+  };
+  /** Réglages · Plugins and « Ajouter un plugin » (task 11.3). */
+  plugins: {
+    intro: string;
+    add: string;
+    create: string;
+    /** What « Créer avec l’agent » puts in a new conversation's composer. */
+    createPrompt: string;
+    filter: string;
+    show: string;
+    tabs: { all(count: number): string; on(count: number): string; off(count: number): string };
+    created: string;
+    added: string;
+    builtin: string;
+    builtinHint: string;
+    none: string;
+    empty: string;
+    appScope: string;
+    projectScope(name: string): string;
+    effects: { read: string; write: string; execute: string; network: string; ui: string };
+    from: { folder: string; npm: string; git: string; conversation(title: string): string };
+    settings: string;
+    remove(name: string): string;
+    update(version: string): string;
+    updateCheck: string;
+    stopped(error: string): string;
+    switchFor(name: string): string;
+    addDialog: {
+      title: string;
+      close: string;
+      source: string;
+      folder: string;
+      npm: string;
+      git: string;
+      folderLabel: string;
+      browse: string;
+      npmLabel: string;
+      npmPlaceholder: string;
+      npmHelp: string;
+      gitUrl: string;
+      gitUrlPlaceholder: string;
+      gitRef: string;
+      gitRefPlaceholder: string;
+      read: string;
+      reading: string;
+      failed(error: string): string;
+      manifestRead: string;
+      replaces(version: string): string;
+      before: string;
+      nothing: string;
+      willAdd(parts: readonly string[]): string;
+      tool(name: string): string;
+      pane(title: string): string;
+      command(name: string): string;
+      warning: string;
+      cancel: string;
+      addOff: string;
+      addOn: string;
+    };
+    search: {
+      title: string;
+      intro: string;
+      provider: string;
+      providers: { embedded: string; brave: string; tavily: string; serper: string; searxng: string };
+      key: string;
+      keyKept: string;
+      keyNone: string;
+      saveKey: string;
+      forgetKey: string;
+      url: string;
+      urlPlaceholder: string;
+      close: string;
+    };
   };
   newProject: {
     open: string;

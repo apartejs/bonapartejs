@@ -296,6 +296,12 @@ function Workspace({
         ),
     [plugins, locale],
   );
+  // « Titres automatiques » switched off (task 11.3): a conversation keeps the untitled word until it is renamed.
+  const autoTitles = plugins.find((plugin) => plugin.id === 'auto-titles')?.enabled ?? true;
+  const titledBy = conversationManager.manager;
+  useEffect(() => {
+    titledBy?.setTitleProvider(autoTitles ? null : async () => messages.inbox.untitled);
+  }, [autoTitles, titledBy, messages]);
   const autoOpen = useRef(true);
   useEffect(() => {
     bridge
@@ -1037,7 +1043,19 @@ function Workspace({
   return (
     <>
     {settingsPage ? (
-      <SettingsView messages={messages} locale={locale} page={settingsPage} onPage={setSettingsPage} onBack={() => setSettingsPage(null)} />
+      <SettingsView
+        messages={messages}
+        locale={locale}
+        page={settingsPage}
+        onPage={setSettingsPage}
+        onBack={() => setSettingsPage(null)}
+        onCreatePlugin={() => {
+          // « Créer avec l’agent » (task 11.3): a new conversation, its composer asking for a plugin.
+          setSettingsPage(null);
+          goTo(null);
+          setTimeout(() => prefill(messages.plugins.createPrompt), 0);
+        }}
+      />
     ) : null}
     <div className="aparte-app-shell bonaparte-shell" hidden={settingsPage !== null}>
       {folded ? (

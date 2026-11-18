@@ -18,8 +18,9 @@ import { ModelsPage } from './Models';
 import { PermissionsPage } from './Permissions';
 import { ProjectPage } from './ProjectPage';
 import { McpServersPage } from './McpServers';
+import { PluginsPage } from './Plugins';
 
-export type SettingsPageName = 'general' | 'appearance' | 'engine' | 'models' | 'permissions' | 'mcp';
+export type SettingsPageName = 'general' | 'appearance' | 'engine' | 'models' | 'permissions' | 'plugins' | 'mcp';
 
 /** Said on the window when a setting changed: `{ key, value }`. */
 export const SETTING_CHANGED = 'bonaparte-setting';
@@ -40,7 +41,7 @@ export interface PageProps {
 const GROUPS: { group: 'application' | 'engine' | 'agent'; pages: SettingsPageName[] }[] = [
   { group: 'application', pages: ['general', 'appearance'] },
   { group: 'engine', pages: ['engine', 'models'] },
-  { group: 'agent', pages: ['permissions', 'mcp'] },
+  { group: 'agent', pages: ['permissions', 'plugins', 'mcp'] },
 ];
 
 export function SettingsView({
@@ -49,12 +50,15 @@ export function SettingsView({
   page,
   onPage,
   onBack,
+  onCreatePlugin,
 }: {
   messages: Messages;
   locale: Locale;
   page: SettingsPageName;
   onPage(page: SettingsPageName): void;
   onBack(): void;
+  /** « Créer avec l’agent » (task 11.3): a new conversation that asks for a plugin. */
+  onCreatePlugin?(): void;
 }) {
   const words = messages.settings;
   const [values, setValues] = useState<Values | null>(null);
@@ -124,7 +128,7 @@ export function SettingsView({
         ))}
         {versions ? <span className="settings__versions">{words.versions(versions.app, versions.llama ?? words.llamaMissing)}</span> : null}
       </nav>
-      <div className={`settings__page${page === 'engine' || page === 'mcp' || project ? ' settings__page--wide' : ''}`}>
+      <div className={`settings__page${page === 'engine' || page === 'mcp' || page === 'plugins' || project ? ' settings__page--wide' : ''}`}>
         <h1 className="settings__heading">{project ? project.name : words.pages[page]}</h1>
         {props && page === 'general' ? <GeneralPage {...props} /> : null}
         {props && page === 'appearance' ? <AppearancePage {...props} /> : null}
@@ -142,6 +146,7 @@ export function SettingsView({
           />
         ) : null}
         {props && page === 'permissions' && project ? <ProjectPage messages={messages} projectId={project.id} /> : null}
+        {page === 'plugins' ? <PluginsPage messages={messages} locale={locale} onCreate={() => onCreatePlugin?.()} /> : null}
         {page === 'mcp' ? <McpServersPage messages={messages} /> : null}
       </div>
     </div>
