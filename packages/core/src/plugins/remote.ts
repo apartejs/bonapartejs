@@ -52,15 +52,48 @@ export interface PluginChildPort {
 const START_TIMEOUT_MS = 20_000;
 const DISPOSE_GRACE_MS = 2_000;
 
+/** A message's shape, checked before the host acts on it: a plugin's code can post anything on its port. */
+function wellFormed(message: unknown): message is FromPluginProcess {
+  if (typeof message !== 'object' || message === null) return false;
+  const m = message as Record<string, unknown>;
+  const text = (key: string): boolean => typeof m[key] === 'string';
+  const num = (key: string): boolean => typeof m[key] === 'number';
+  switch (m['t']) {
+    case 'register-tool':
+    case 'register-command':
+      return text('name');
+    case 'ready':
+    case 'disposed':
+      return true;
+    case 'failed':
+      return text('error');
+    case 'result':
+      return num('id') && typeof m['result'] === 'object' && m['result'] !== null;
+    case 'use':
+      return num('id') && num('callId') && text('tool') && typeof m['input'] === 'object' && m['input'] !== null;
+    case 'command-result':
+      return num('id') && typeof m['ok'] === 'boolean';
+    case 'emit':
+      return text('instanceId') && text('event');
+    case 'log':
+      return text('message');
+    default:
+      return false;
+  }
+}
+
 /**
  * The plugin as the host knows it. `file` is the plugin's Node half; `settings` the keys whose values it starts
- * with; `onCrash` hears that its process ended while it was active.
+ * with; `onCrash` hears that its process ended while it was active — with the reason when the host stopped it for
+ * a message it could not act on. Whatever the plugin posts, nothing it sends can throw in the app: a message of no
+ * known shape, or one the host refuses (a tool its manifest does not declare, a tool registered twice), fails this
+ * plugin alone.
  */
 export function remoteModule(options: {
   start: () => PluginPort;
   file: string;
   settings: readonly string[];
-  onCrash: (code: number | null) => void;
+  onCrash: (code: number | null, reason?: string) => void;
 }): PluginNodeModule {
   return {
     activate: (ctx) =>
@@ -73,6 +106,7 @@ export function remoteModule(options: {
         const calls = new Map<number, { resolve: (result: PluginToolResult) => void; invocation: PluginToolInvocation }>();
         const commands = new Map<number, { resolve: (value: unknown) => void; reject: (error: Error) => void }>();
         let undone: (() => void) | null = null;
+        let fault: string | null = null;
 
         const stop = (): void => {
           for (const call of calls.values()) call.resolve({ content: 'The plugin stopped before it answered.', failed: true });
@@ -91,10 +125,35 @@ export function remoteModule(options: {
           stop();
           undone?.();
           if (!started) reject(new Error(`The plugin's process stopped as it started${code === null ? '' : ` (code ${code})`}.`));
-          else if (!disposing) options.onCrash(code);
+          else if (!disposing) options.onCrash(code, fault ?? undefined);
         });
 
-        port.onMessage((message) => {
+        /** Stops the plugin for what it sent: before it is ready its start fails; after, it is torn down as a crash. */
+        const misbehaved = (reason: string): void => {
+          if (fault !== null) return;
+          fault = reason;
+          if (!started) {
+            clearTimeout(timer);
+            disposing = true;
+            reject(new Error(reason));
+          }
+          port.kill();
+        };
+
+        port.onMessage((received) => {
+          if (fault !== null) return;
+          if (!wellFormed(received)) {
+            misbehaved('It sent a message the app cannot read: stopped.');
+            return;
+          }
+          try {
+            act(received);
+          } catch (error) {
+            misbehaved(error instanceof Error ? error.message : String(error));
+          }
+        });
+
+        const act = (message: FromPluginProcess): void => {
           switch (message.t) {
             case 'register-tool':
               ctx.registerToolHandler(message.name, (invocation) => {
@@ -177,7 +236,7 @@ export function remoteModule(options: {
               port.kill();
               return;
           }
-        });
+        };
 
         const config = Object.fromEntries(options.settings.map((key) => [key, ctx.getConfig(key)]));
         port.postMessage({ t: 'activate', pluginId: ctx.pluginId, file: options.file, config });

@@ -49,7 +49,13 @@ function processOf(module: unknown) {
     onMessage: (listener) => void toChild.push(listener as (message: unknown) => void),
   };
   runPluginChild(child, async () => module);
-  return { parent, crash: (code: number) => exits.forEach((listener) => listener(code)), killed: () => killed };
+  return {
+    parent,
+    crash: (code: number) => exits.forEach((listener) => listener(code)),
+    killed: () => killed,
+    /** A message the plugin's code sends by itself, past its context. */
+    inject: (message: unknown) => send(toParent, message),
+  };
 }
 
 const MANIFEST = {
@@ -162,6 +168,36 @@ describe('a plugin of a third party, in its own process (task 11.1)', () => {
     expect(status).toMatchObject({ active: false, error: expect.stringMatching(/no token/) });
     expect(registry.get('plugin__revue-pr__peek')).toBeUndefined();
     expect(process.killed()).toBe(true);
+  });
+
+  it('a tool its manifest does not declare fails the plugin alone, said — the app stays', async () => {
+    const module: PluginNodeModule = { activate: (ctx) => ctx.registerToolHandler('commits_today', async () => ({ content: 'x' })) };
+    const { status, process } = await rig(module);
+    expect(status).toMatchObject({ active: false, error: expect.stringMatching(/commits_today/) });
+    expect(process.killed()).toBe(true);
+  });
+
+  it('a tool registered twice fails the plugin alone, said — the app stays', async () => {
+    const module: PluginNodeModule = {
+      activate(ctx) {
+        ctx.registerToolHandler('peek', async () => ({ content: 'x' }));
+        ctx.registerToolHandler('peek', async () => ({ content: 'y' }));
+      },
+    };
+    const { status, registry, process } = await rig(module);
+    expect(status).toMatchObject({ active: false, error: expect.stringMatching(/peek/) });
+    expect(registry.get('plugin__revue-pr__peek')).toBeUndefined();
+    expect(process.killed()).toBe(true);
+  });
+
+  it('a message of no known shape, once it runs, stops the plugin alone, said — the app stays', async () => {
+    const module: PluginNodeModule = { activate: (ctx) => ctx.registerToolHandler('peek', async () => ({ content: 'x' })) };
+    const { host, registry, process } = await rig(module);
+    process.inject(null);
+    process.inject({ t: 'result', id: 1 });
+    await vi.waitFor(() => expect(registry.get('plugin__revue-pr__peek')).toBeUndefined());
+    expect(process.killed()).toBe(true);
+    expect(host.status()[0]).toMatchObject({ active: false, error: expect.stringMatching(/message/) });
   });
 
   it('a file that is no plugin module is said', async () => {

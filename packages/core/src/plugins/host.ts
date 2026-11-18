@@ -221,8 +221,8 @@ export class PluginHost {
           start,
           file,
           settings: manifest!.contributes.settings.map((setting) => setting.key),
-          onCrash: (code) => {
-            plugin.error = `Its process stopped${code === null ? '' : ` (code ${code})`}: switch it on again to restart it.`;
+          onCrash: (code, reason) => {
+            plugin.error = `${reason ?? `Its process stopped${code === null ? '' : ` (code ${code})`}.`} Switch it on again to restart it.`;
             this.log(`[plugin ${id}] ${plugin.error}`);
             void this.teardown(id);
           },
