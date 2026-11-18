@@ -125,6 +125,7 @@ import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, rem
 import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { AddedPlugins } from './plugins/added.js';
+import { ENTRY_TOOLS } from './plugins/entries.js';
 import { PluginHost } from './plugins/host.js';
 import { PluginInstaller } from './plugins/install.js';
 import type { PluginPort } from './plugins/remote.js';
@@ -1315,7 +1316,9 @@ export function createCore(deps: CoreDeps): Core {
   const visibleTo = (projectId: string | undefined) => {
     const byPlugins = plugins.visibleTo(projectId);
     const byServers = mcp.visibleTo(projectId);
-    return (def: ToolDef) => byPlugins(def) && byServers(def);
+    // A built-in entry switched off takes its tool of the core out (« Sous-agents », task 11.3).
+    const offTools = new Set(Object.entries(ENTRY_TOOLS).filter(([entry]) => !plugins.isEnabled(entry, projectId)).map(([, tool]) => tool));
+    return (def: ToolDef) => byPlugins(def) && byServers(def) && !offTools.has(def.name);
   };
   const plugins = new PluginHost({
     registry: tools,
@@ -1839,6 +1842,9 @@ export function createCore(deps: CoreDeps): Core {
         const place = await runRoot(scope);
         const alreadyRunning = await projectRuns.alreadyRunning();
         if (!place) return { projectName: null, runs: [], alreadyRunning };
+        // « Scripts du projet » switched off, for the app or this project (task 11.3): nothing of it is offered.
+        const projectId = scope.projectId ?? (scope.conversationId ? (await conversationStore.get(scope.conversationId).catch(() => undefined))?.projectId : undefined);
+        if (!plugins.isEnabled('project-scripts', projectId)) return { projectName: place.name, runs: [], alreadyRunning };
         return { projectName: place.name, runs: (await projectRuns.list(place.root)).runs, alreadyRunning };
       },
       async start(scope, kind, name) {

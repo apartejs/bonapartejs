@@ -38,6 +38,8 @@ export interface AppFacts {
   seen?(): void;
   /** The built-in browser's pages (task 10.1): the pane's channels reach them. */
   browser?: BuiltinBrowser;
+  /** The plugins changed (task 11.3): the window reads them again. */
+  pluginsChanged?(): void;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -59,7 +61,7 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerModeChannels(ipc, core);
   registerFileChannels(ipc, core);
   registerChangeChannels(ipc, core);
-  registerPluginChannels(ipc, core);
+  registerPluginChannels(ipc, core, { chooseFolder: facts.chooseFolder, ...(facts.pluginsChanged ? { changed: facts.pluginsChanged } : {}) });
   registerProjectChannels(ipc, core, facts.chooseFolder);
   ipc.handle(searchQuery, ({ query, conversationId, projectId }) =>
     core.search(query, { ...(conversationId ? { conversationId } : {}), ...(projectId ? { projectId } : {}) }),

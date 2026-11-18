@@ -41,7 +41,22 @@ export type {
 export { defineChannel } from './ipc/contract.js';
 export type { Bridge, Channel } from './ipc/contract.js';
 export { CHANNELS } from './ipc/channels.js';
-export { APP_EVENT, pluginsAck, pluginsInvoke, pluginsOverview, pluginStatusSchema } from './ipc/plugins.js';
+export {
+  APP_EVENT,
+  pluginAddRequestSchema,
+  pluginsAck,
+  pluginsCheckUpdates,
+  pluginsDiscard,
+  pluginsInstall,
+  pluginsInvoke,
+  pluginsOverview,
+  pluginsPickFolder,
+  pluginsPreview,
+  pluginsRemove,
+  pluginsSetEnabled,
+  pluginStatusSchema,
+} from './ipc/plugins.js';
+export type { PluginAddRequestView } from './ipc/plugins.js';
 export type { AppEvent, CommandOutputView } from './ipc/plugins.js';
 export { appliedChangeSchema, changesList, changesRevert, revertResultSchema } from './ipc/changes.js';
 export type { AppliedChangeView, RevertResultView } from './ipc/changes.js';

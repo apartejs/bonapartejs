@@ -48,6 +48,7 @@ import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../tools/types.js';
 import { PluginState } from './state.js';
 import { remoteModule, type PluginPort } from './remote.js';
+import { CORE_ENTRIES } from './entries.js';
 
 export const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
@@ -260,6 +261,14 @@ export class PluginHost {
 
   async deactivate(id: string): Promise<void> {
     await this.teardown(id);
+  }
+
+  /** The built-in entries of the core (task 11.3): listed and switched as plugins, with nothing of their own to run. */
+  async activateBuiltinEntries(): Promise<void> {
+    for (const entry of CORE_ENTRIES) {
+      if (!this.plugins.has(entry.id)) this.add(entry, { builtin: true });
+      await this.activate(entry.id, { activate: () => undefined });
+    }
   }
 
   /** A plugin removed, or about to be replaced by a newer one: torn down, then forgotten. */

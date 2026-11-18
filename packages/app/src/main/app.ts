@@ -304,6 +304,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   core.plugins.add(browserManifest, { builtin: true });
   const browsing = await core.plugins.activate('browser', browser);
   if (browsing.error) console.error(`[bonaparte] the browser did not start: ${browsing.error}`);
+  // The core's own entries on the Plugins page (« Sous-agents », « Scripts du projet », « Titres automatiques »).
+  await core.plugins.activateBuiltinEntries();
   // The plugins the person added, each in its own process: those switched off stay so.
   await core.addedPlugins.start().catch((error: unknown) => console.error(`[bonaparte] the added plugins did not start: ${String(error)}`));
   // A plugin's view (task 11.2): its own files only, the kit's stylesheet and the app's tokens, a strict policy.
@@ -334,6 +336,7 @@ ${appTokens}`,
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   registerAllChannels(ipc, core, {
     browser: builtinBrowser,
+    pluginsChanged: () => push({ kind: 'plugins' }),
     version: () => __BONAPARTE_VERSION__,
     locale: interfaceLocale,
     // The system's folder dialog, over the window — or the test's folder in a test run.

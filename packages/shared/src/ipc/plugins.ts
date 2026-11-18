@@ -42,6 +42,37 @@ export const pluginStatusSchema = z.object({
 /** The plugins, and whether each is on for a project. */
 export const pluginsOverview = defineChannel('plugins.overview', z.object({ projectId: idSchema.optional() }), z.array(pluginStatusSchema));
 
+const statuses = z.array(pluginStatusSchema);
+
+/** « Ajouter un plugin »: from a folder, from npm, from a git repository (task 11.3). */
+export const pluginAddRequestSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('folder'), path: z.string().min(1).max(1024) }),
+  z.object({ kind: z.literal('npm'), spec: z.string().min(1).max(256) }),
+  z.object({ kind: z.literal('git'), url: z.string().min(1).max(2048), ref: z.string().min(1).max(256) }),
+]);
+export type PluginAddRequestView = z.infer<typeof pluginAddRequestSchema>;
+
+/** Its manifest read, nothing of it run: what the dialog shows before « Ajouter ». */
+export const pluginsPreview = defineChannel(
+  'plugins.preview',
+  pluginAddRequestSchema,
+  z.union([
+    z.object({ ok: z.literal(true), preview: z.object({ stagingId: z.string(), manifest: z.record(z.string(), z.unknown()), source: z.unknown(), replaces: z.string().optional() }) }),
+    z.object({ ok: z.literal(false), error: z.string() }),
+  ]),
+);
+/** « Ajouter et activer » or « Ajouter sans activer ». */
+export const pluginsInstall = defineChannel('plugins.install', z.object({ stagingId: z.string().uuid(), enable: z.boolean() }), statuses);
+/** « Annuler »: what was read is let go. */
+export const pluginsDiscard = defineChannel('plugins.discard', z.object({ stagingId: z.string().uuid() }), z.void());
+/** A plugin switched on or off — for the app, or for one project. */
+export const pluginsSetEnabled = defineChannel('plugins.setEnabled', z.object({ id: idSchema, enabled: z.boolean(), projectId: idSchema.optional() }), statuses);
+export const pluginsRemove = defineChannel('plugins.remove', z.object({ id: idSchema }), statuses);
+/** Where each came from asked for a newer version: proposed, never made. */
+export const pluginsCheckUpdates = defineChannel('plugins.checkUpdates', z.void(), statuses);
+/** « Parcourir… »: the system's folder dialog, in the main process. */
+export const pluginsPickFolder = defineChannel('plugins.pickFolder', z.void(), z.object({ path: z.string().nullable() }));
+
 export const pluginsAck = defineChannel(
   'plugins.ack',
   z.object({ pluginId: idSchema, instanceId: z.string().max(128), chars: z.number().int().min(0).max(10_000_000) }),
