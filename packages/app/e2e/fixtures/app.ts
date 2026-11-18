@@ -115,6 +115,8 @@ export interface LaunchOptions {
    * code conversation that may change files. `false`: no project — a new conversation is a discussion (task 9.7).
    */
   project?: boolean;
+  /** The app as electron-builder packed it (task 13.2): its executable, launched instead of `out/` under Electron. */
+  executable?: string;
 }
 
 /** One completion the managed engine was asked for. */
@@ -335,7 +337,9 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       home,
       extra: { ...managedEnv, ...options.env },
     });
-    app = await electron.launch({ args: [entry], cwd: appRoot, env, timeout: 30_000 });
+    app = options.executable
+      ? await electron.launch({ executablePath: options.executable, args: [], cwd: appRoot, env, timeout: 30_000 })
+      : await electron.launch({ args: [entry], cwd: appRoot, env, timeout: 30_000 });
     const child = app.process();
     child.stdout?.on('data', (chunk: Buffer) => lines.push(`[main] ${chunk.toString()}`));
     child.stderr?.on('data', (chunk: Buffer) => lines.push(`[main] ${chunk.toString()}`));

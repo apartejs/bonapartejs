@@ -1,0 +1,59 @@
+name: release
+
+# The installers (task 13.2): built on a tag `v*` that Paul pushes, and
+# published as a draft release of the repository — electron-updater reads its
+# `latest.yml`. Nothing here runs on a branch, and nothing is signed yet
+# (design §17.2): Windows warns at the first install.
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NX_DAEMON: 'false'
+
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the product's platform; macOS and Linux at best.
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - name: Use Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # The tag is the version: a release whose tag and package disagree would
+      # offer an update that is not one.
+      - name: Check the version
+        shell: bash
+        run: |
+          version=$(node -p "require('./packages/app/package.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app $version"; exit 1; }
+
+      - name: Build and publish the installer
+        working-directory: packages/app
+        run: pnpm exec electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

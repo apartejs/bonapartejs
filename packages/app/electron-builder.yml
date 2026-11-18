@@ -1,0 +1,60 @@
+# The installer (task 13.2): a per-user NSIS installer on Windows, updated from
+# the releases of the repository (electron-updater reads `publish`). macOS and
+# Linux are built at best. The code is not signed yet: Windows warns at the
+# first install (design §17.2, Paul's decision).
+
+appId: dev.apartejs.bonaparte
+productName: bonaparte
+copyright: Copyright © 2026 Paul Richez
+
+directories:
+  output: dist
+
+# What electron-vite built, and the icons the main process reads. The
+# workspace packages are bundled into `out/`; only the third-party
+# dependencies of the app travel in node_modules.
+files:
+  - out/**
+  - resources/**
+  - package.json
+  - '!**/*.map'
+
+# node-pty's native module and its console agent run from the disk, never from
+# the archive; it loads under Electron without a rebuild (a lesson of v0).
+asarUnpack:
+  - node_modules/node-pty/**
+npmRebuild: false
+nodeGypRebuild: false
+
+win:
+  target:
+    - nsis
+  icon: resources/icons/app-512.png
+
+nsis:
+  # Per user, no administrator: installed under the person's own folder.
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  # The conversations and their memory live in the data folder: an uninstall
+  # never takes them.
+  deleteAppDataOnUninstall: false
+  artifactName: bonaparte-setup-${version}.${ext}
+
+mac:
+  target:
+    - dmg
+  icon: resources/icons/app-512.png
+  category: public.app-category.developer-tools
+
+linux:
+  target:
+    - AppImage
+  icon: resources/icons/app-512.png
+  category: Development
+
+publish:
+  provider: github
+  owner: apartejs
+  repo: bonapartejs
+  releaseType: draft
