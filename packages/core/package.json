@@ -49,6 +49,7 @@
     "@aparte/engine": "1.13.0",
     "@aparte/plugin-diff": "1.13.0",
     "@aparte/provider-openai-compat": "1.13.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "zod": "catalog:"
   },
   "devDependencies": {

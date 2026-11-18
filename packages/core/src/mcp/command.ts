@@ -1,0 +1,58 @@
+/**
+ * The command of a stdio MCP server, as it can be launched without a shell (task 10.5). On Windows the usual
+ * commands are wrappers: `npx` and `npm` are `.cmd` files, which only a shell runs — they run instead as `node`
+ * and npm's own script beside it. A program found on the PATH runs by its full path. Any other `.cmd` or `.bat`
+ * is refused: running it would hand its arguments to `cmd.exe`, a command line. Elsewhere, nothing changes.
+ */
+
+import { existsSync } from 'node:fs';
+import { win32 } from 'node:path';
+
+export interface ResolveOptions {
+  env: Record<string, string | undefined>;
+  platform?: NodeJS.Platform;
+  exists?: (path: string) => boolean;
+}
+
+const NPM_SCRIPTS: Record<string, string> = { npx: 'npx-cli.js', npm: 'npm-cli.js' };
+
+export function resolveCommand(command: string, args: readonly string[], options: ResolveOptions): { command: string; args: string[] } {
+  if ((options.platform ?? process.platform) !== 'win32') return { command, args: [...args] };
+  const exists = options.exists ?? existsSync;
+  const path = Object.entries(options.env).find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? '';
+  const extensions = (Object.entries(options.env).find(([key]) => key.toUpperCase() === 'PATHEXT')?.[1] ?? '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .filter(Boolean);
+
+  const found = find(command, path, extensions, exists) ?? (/\.(cmd|bat)$/i.test(command) ? command : null);
+  if (!found) return { command, args: [...args] };
+  const extension = win32.extname(found).toLowerCase();
+  if (extension !== '.cmd' && extension !== '.bat') return { command: found, args: [...args] };
+
+  const script = NPM_SCRIPTS[win32.basename(found, win32.extname(found)).toLowerCase()];
+  const dir = win32.dirname(found);
+  if (script) {
+    const node = win32.join(dir, 'node.exe');
+    const cli = win32.join(dir, 'node_modules', 'npm', 'bin', script);
+    if (exists(node) && exists(cli)) return { command: node, args: [cli, ...args] };
+  }
+  throw new Error(
+    `${command} is a Windows batch file (${win32.basename(found)}): it would run through a shell, which bonaparte never does. Give the program itself (node, python, an .exe).`,
+  );
+}
+
+/** The file a command names: itself when it has a path, else the first of the PATH, with each PATHEXT tried. */
+function find(command: string, path: string, extensions: readonly string[], exists: (path: string) => boolean): string | null {
+  const named = /[\\/]/.test(command);
+  const dirs = named ? [''] : path.split(';').filter(Boolean);
+  const own = win32.extname(command) !== '';
+  for (const dir of dirs) {
+    const base = dir ? win32.join(dir, command) : command;
+    if (own && exists(base)) return base;
+    for (const extension of extensions) {
+      const candidate = `${base}${extension.toLowerCase()}`;
+      if (exists(candidate)) return candidate;
+    }
+  }
+  return null;
+}
