@@ -8,6 +8,7 @@
 import type { ConversationMemoryView } from '@aparte/bonaparte-shared';
 import { formatBytes, formatDuration, formatTokens, type NumberStyle } from '../format';
 import type { Messages } from '../i18n/index';
+import { FailureCard } from '../failures/FailureCard';
 
 type Announcement = NonNullable<ConversationMemoryView['announcement']>;
 
@@ -18,11 +19,35 @@ export interface MemoryBannerProps {
   onContinue(): void;
   /** « Compacter d'abord » (task 7.3): the conversation summarised before it is read again. */
   onCompactFirst?(): void;
+  /**
+   * Its memory made with another model (task 12.3, board « Quand quelque chose casse »): that model, if it is still
+   * on the machine, with what loading it costs, and the model the engine runs.
+   */
+  otherModel?: { saved: { path: string; name: string; seconds: number } | null; savedName: string; running: string };
+  onBack?(path: string, name: string): void;
 }
 
-export function MemoryBanner({ announcement, messages, style, onContinue, onCompactFirst }: MemoryBannerProps) {
+export function MemoryBanner({ announcement, messages, style, onContinue, onCompactFirst, otherModel, onBack }: MemoryBannerProps) {
   const text = messages.memory;
   const { locale } = style;
+  if (announcement.kind === 'reread' && announcement.reason === 'other-model' && otherModel) {
+    const words = messages.failures.otherModel;
+    const back = otherModel.saved;
+    return (
+      <FailureCard
+        tone="neutral"
+        className="memory-banner"
+        context={words.context}
+        title={words.title}
+        headline={words.headline(otherModel.savedName, otherModel.running)}
+        detail={words.detail}
+        actions={[
+          ...(back && onBack ? [{ label: words.back(back.name, formatDuration(back.seconds, locale)), run: () => onBack(back.path, back.name) }] : []),
+          { label: words.reread(formatDuration(announcement.seconds, locale)), run: onContinue, weight: back ? ('secondary' as const) : ('primary' as const) },
+        ]}
+      />
+    );
+  }
   const estimated = announcement.estimated ? ` ${text.estimated}` : '';
   if (announcement.kind === 'restore') {
     const saved = new Date(announcement.savedAt);

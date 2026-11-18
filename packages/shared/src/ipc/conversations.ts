@@ -33,6 +33,8 @@ export const rereadAnnouncementSchema = z.object({
   /** A memory let go under the disk budget: when, and which budget. */
   evicted: z.object({ at: z.string(), budgetBytes: z.number(), byPerson: z.literal(true).optional() }).optional(),
   compactSeconds: z.number().optional(),
+  /** `other-model`: the model its memory was made with — « Repasser à … » (task 12.3). */
+  savedWith: z.string().optional(),
   estimated: z.boolean(),
 });
 

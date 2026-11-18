@@ -131,5 +131,13 @@ test('« Brancher sur ce modèle »: the original, opened again, says its re-rea
   // The copy is shown; the original, opened again by its id (both say « Bonjour »), whatever the list's order.
   await conversationList(page).list.locator(`[data-conv-id="${original}"]`).click();
   await expect(page.locator('.memory-banner')).toContainText('autre modèle', { timeout: 10_000 });
+  // The board « Quand quelque chose casse » (task 12.3): which model made it, which one runs, and the two ways.
+  const card = page.locator('.memory-banner');
+  await expect(card).toContainText('En rouvrant une conversation');
+  await expect(card).toContainText('Sa mémoire vient d’un autre modèle');
+  await expect(card).toContainText('Sauvée avec gemma-4-e2e, le moteur tourne qwen-e2e');
+  await expect(card.getByRole('button', { name: /^Relire avec ce modèle · ~/ })).toBeVisible();
+  await card.getByRole('button', { name: /^Repasser à gemma-4-e2e · ~/ }).click();
+  await expect(page.getByRole('dialog', { name: 'Passer à gemma-4-e2e ?' })).toBeVisible();
 });
 

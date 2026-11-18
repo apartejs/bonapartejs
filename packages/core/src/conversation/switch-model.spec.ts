@@ -179,7 +179,8 @@ describe('opening a conversation of another model', { timeout: 30_000 }, () => {
     const { id, engine, say, load } = await rig();
     await say('Bonjour');
     load('qwen');
-    expect(await engine.open(id)).toMatchObject({ kind: 'reread', reason: 'other-model' });
+    // The model its memory came from, to go back to it (task 12.3, « Repasser à … »).
+    expect(await engine.open(id)).toMatchObject({ kind: 'reread', reason: 'other-model', savedWith: 'gemma.gguf' });
   });
 
   it('on its own model, a conversation is restored as before', async () => {

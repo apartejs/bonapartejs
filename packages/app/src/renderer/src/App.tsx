@@ -1593,6 +1593,23 @@ function Workspace({
               messages={messages}
               style={style}
               onContinue={() => setMemory(null)}
+              {...(memory.kind === 'reread' && memory.reason === 'other-model' && memory.savedWith
+                ? {
+                    otherModel: (() => {
+                      const savedWith = memory.savedWith;
+                      const kept = modelChoices.find((model) => model.path === savedWith);
+                      return {
+                        saved: kept ? { path: kept.path, name: kept.name, seconds: kept.announcement?.seconds ?? 0 } : null,
+                        savedName: kept?.name ?? savedWith.split(/[\\/]/).pop()!.replace(/\.gguf$/i, ''),
+                        running: engine.model?.name ?? '',
+                      };
+                    })(),
+                    onBack: (path: string, name: string) => {
+                      setMemory(null);
+                      modelSwitch.ask(path, name, () => undefined);
+                    },
+                  }
+                : {})}
               onCompactFirst={() => {
                 setMemory(null);
                 if (conversationId) compaction.compact(conversationId);

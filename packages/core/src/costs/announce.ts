@@ -58,6 +58,8 @@ export interface RereadAnnouncement {
   reason: RereadReason;
   /** A memory let go: when, and under which budget. */
   evicted?: { at: string; budgetBytes: number; byPerson?: true };
+  /** `other-model`: the model the conversation's memory was made with — to go back to it (task 12.3). */
+  savedWith?: string;
   compactSeconds?: number;
   estimated: boolean;
 }

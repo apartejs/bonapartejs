@@ -438,7 +438,11 @@ export class ConversationEngine {
       measures: prefill === undefined ? {} : { prefillTokensPerSecond: prefill },
     });
     // « Compacter d'abord »: the reading the summary needs, the summary written, and the short prompt read.
-    if (announced?.kind === 'reread') return { ...announced, compactSeconds: announced.seconds + this.compactionTail(engine) };
+    // Made with another model: which one, to go back to it (task 12.3).
+    const savedWith = switching ? branchModel(entries).modelId : undefined;
+    if (announced?.kind === 'reread') {
+      return { ...announced, compactSeconds: announced.seconds + this.compactionTail(engine), ...(savedWith ? { savedWith } : {}) };
+    }
     return announced;
   }
 
