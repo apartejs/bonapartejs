@@ -290,9 +290,40 @@ export interface Messages {
     back: string;
     open: string;
     groups: { application: string; engine: string; agent: string };
-    pages: { general: string; appearance: string; engine: string; models: string; permissions: string };
+    pages: { general: string; appearance: string; engine: string; models: string; permissions: string; mcp: string };
     versions(app: string, llama: string): string;
     llamaMissing: string;
+    /** Réglages · Serveurs MCP (task 10.5, board « Réglages · Serveurs MCP »). */
+    mcp: {
+      intro: string;
+      paste: string;
+      add: string;
+      filter: string;
+      show: string;
+      tabs: { all(count: number): string; connected(count: number): string; stopped(count: number): string; failed(count: number): string };
+      empty: string;
+      none: string;
+      state: Record<'connected' | 'failed' | 'stopped' | 'off' | 'connecting', string>;
+      expand(name: string): string;
+      collapse(name: string): string;
+      app: string;
+      project(name: string): string;
+      tools(count: number): string;
+      start: string;
+      restart: string;
+      reconnect: string;
+      stop: string;
+      remove: string;
+      refused(reason: string): string;
+      stoppedLine: string;
+      offLine: string;
+      readOnly(count: number): string;
+      writes(count: number): string;
+      more(count: number): string;
+      hint: string;
+      pasteDialog: { title: string; label: string; placeholder: string; submit: string; cancel: string; added(count: number): string; broken(names: string): string; unreadable: string; notJson: string };
+      addDialog: { title: string; name: string; nameHint: string; target: string; targetHint: string; scope: string; submit: string; cancel: string; errors: Record<'name' | 'target' | 'unreadable', string> };
+    };
     general: {
       language: string;
       languageHint: string;

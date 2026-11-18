@@ -6,6 +6,7 @@
  */
 
 import { appInfo } from './app.js';
+import { mcpAdd, mcpOverview, mcpPaste, mcpRemove, mcpStart, mcpStop } from './mcp.js';
 import {
   conversationsArchive,
   conversationsDelete,
@@ -148,4 +149,10 @@ export const CHANNELS = [
   providersRemove,
   providersModels,
   providersSwitch,
+  mcpOverview,
+  mcpStart,
+  mcpStop,
+  mcpRemove,
+  mcpPaste,
+  mcpAdd,
 ] as const;

@@ -3280,3 +3280,155 @@ body {
   gap: var(--aparte-space-3);
   margin-top: var(--aparte-space-3);
 }
+
+/* Réglages · Serveurs MCP (settings/McpServers.tsx, board « Réglages · Serveurs MCP »). */
+.mcp-page__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--aparte-space-4);
+}
+
+.mcp-page__head .settings__intro {
+  flex: 1 1 360px;
+  margin: 0;
+}
+
+.mcp-page__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-3);
+}
+
+.mcp-page__search {
+  flex: 1 1 260px;
+}
+
+.mcp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: var(--aparte-radius-lg);
+}
+
+.mcp-server {
+  padding: var(--aparte-space-3) var(--aparte-space-4);
+}
+
+.mcp-server + .mcp-server {
+  border-top: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.mcp-server__row {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-3);
+  min-width: 0;
+}
+
+.mcp-server__dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--aparte-radius-full);
+  border: 1.5px solid var(--aparte-text-muted);
+}
+
+.mcp-server__dot--connected {
+  background: var(--aparte-success);
+  border-color: var(--aparte-success);
+}
+
+.mcp-server__dot--failed {
+  background: var(--aparte-error);
+  border-color: var(--aparte-error);
+}
+
+.mcp-server__dot--connecting {
+  border-color: var(--aparte-warning);
+}
+
+.mcp-server__name {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-2);
+  flex: none;
+}
+
+.mcp-server__target {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--aparte-code-font-family);
+  font-size: var(--aparte-font-size-xs);
+  color: var(--aparte-text-muted);
+}
+
+.mcp-server__count {
+  flex: none;
+  font-size: var(--aparte-font-size-sm);
+  color: var(--aparte-text-muted);
+}
+
+.mcp-server__line {
+  margin: var(--aparte-space-2) 0 0 calc(var(--aparte-space-8) + var(--aparte-space-3));
+  font-size: var(--aparte-font-size-sm);
+  color: var(--aparte-text-muted);
+}
+
+.mcp-server__line--failed {
+  color: var(--aparte-error-ink);
+}
+
+.mcp-server__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-3);
+  margin: var(--aparte-space-3) 0 0 calc(var(--aparte-space-8) + var(--aparte-space-3));
+  padding: var(--aparte-space-3) var(--aparte-space-4);
+  border-radius: var(--aparte-radius-lg);
+  background: var(--aparte-surface-1);
+}
+
+.mcp-server__heading {
+  margin: 0 0 var(--aparte-space-2);
+  font-size: var(--aparte-font-size-sm);
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+.mcp-server__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mcp-server__chip code {
+  font-family: var(--aparte-code-font-family);
+  font-size: var(--aparte-font-size-xs);
+}
+
+.mcp-dialog__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-4);
+}
+
+.mcp-dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-2);
+}
+
+.mcp-dialog__text {
+  width: 100%;
+  font-family: var(--aparte-code-font-family);
+  font-size: var(--aparte-font-size-xs);
+}

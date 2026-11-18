@@ -73,6 +73,8 @@ import { CATALOGUE, modelUrl, recommendedModels, type CatalogueEntry } from './m
 import { downloadFile } from './models/download.js';
 import { runDoctor, type DoctorReport } from './doctor/doctor.js';
 import { createWebSearch, type EmbeddedSearch } from './search/service.js';
+import { McpService } from './mcp/service.js';
+import { withoutSecrets } from './process/env.js';
 import type { OnlineProvider, SearchProvider } from './search/online.js';
 import { compareWithJournal } from './agent/divergence.js';
 import type { AgentMessage } from './agent/body.js';
@@ -342,6 +344,8 @@ export interface Core {
   readonly permissions: PermissionEngine;
   /** The plugins: their tools join the registry, what they reach is judged by the same policy. */
   readonly plugins: PluginHost;
+  /** The MCP servers (task 10.5): their tools join the registry at the first turn, judged by the same policy. */
+  readonly mcp: McpService;
   /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
   readonly checkpoints: CheckpointStore;
   /** The « Fichiers » pane: a perimeter listed and read — a conversation's, a project's, or the home folder. */
@@ -1251,6 +1255,20 @@ export function createCore(deps: CoreDeps): Core {
     searxngUrl: async () => String(await appSettings.get('webSearchUrl').catch(() => '')),
     ...(deps.fetch ? { fetch: deps.fetch } : {}),
   });
+  // The MCP servers (task 10.5): nothing starts with the app; the first turn starts them.
+  const mcp = new McpService({
+    dataDir: deps.dataDir,
+    registry: tools,
+    env: () => withoutSecrets(process.env),
+    log,
+    ...(deps.spawn ? { spawn: deps.spawn } : {}),
+  });
+  // What a conversation of a project sees: the plugins it keeps, the MCP servers of the app and its own.
+  const visibleTo = (projectId: string | undefined) => {
+    const byPlugins = plugins.visibleTo(projectId);
+    const byServers = mcp.visibleTo(projectId);
+    return (def: ToolDef) => byPlugins(def) && byServers(def);
+  };
   const plugins = new PluginHost({
     registry: tools,
     log,
@@ -1293,7 +1311,7 @@ export function createCore(deps: CoreDeps): Core {
     },
     prompt: (meta) => ({
       kind: meta.kind,
-      tools: toolsFor(meta.kind, tools.view(plugins.visibleTo(meta.projectId)).list()),
+      tools: toolsFor(meta.kind, tools.view(visibleTo(meta.projectId)).list()),
       perimeter: !meta.projectId
         ? []
         : meta.worktree
@@ -1362,6 +1380,8 @@ export function createCore(deps: CoreDeps): Core {
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult> {
+    // The first turn starts the MCP servers, in the background: their tools are told at the next turn (task 10.5).
+    mcp.startAll();
     const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
       name: tool.name,
       description: typeof tool.description === 'string' ? tool.description : '',
@@ -1377,7 +1397,7 @@ export function createCore(deps: CoreDeps): Core {
     const { roots, projectId, barred } = await rootsOf(conversationId);
     // Only the tools its kind is told of: a discussion's call to a file tool finds none (task 9.7).
     const kind = (await conversationStore.get(conversationId))?.kind ?? 'code';
-    const visible = plugins.visibleTo(projectId);
+    const visible = visibleTo(projectId);
     const told = new Set(toolsFor(kind, tools.view(visible).list()).map((tool) => tool.name));
     // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
     try {
@@ -1461,12 +1481,13 @@ export function createCore(deps: CoreDeps): Core {
   }
 
   async function turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
+    mcp.startAll();
     const meta = await conversationStore.get(conversationId);
     const provider = await serviceOf(conversationId);
     if (!meta || !provider) throw new Error(`The conversation ${conversationId} is not on a service.`);
     const place = await rootsOf(conversationId);
     const { mode } = await modeOf(conversationId);
-    const registry = tools.view(plugins.visibleTo(place.projectId));
+    const registry = tools.view(visibleTo(place.projectId));
     const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
     const instructions = project ? ((await readProjectInstructions(project.roots))?.text ?? '') : '';
     const messageId = typeof raw['messageId'] === 'string' ? raw['messageId'] : 'turn';
@@ -1741,6 +1762,8 @@ export function createCore(deps: CoreDeps): Core {
           log(`[bonaparte] a memory was not saved: ${String(error)}`),
         );
       await plugins.deactivateAll();
+      // Every MCP server's whole tree goes down with the app.
+      await mcp.stopAll();
       await supervisor.stop();
     },
     conversations,
@@ -1748,6 +1771,7 @@ export function createCore(deps: CoreDeps): Core {
     tools,
     permissions,
     plugins,
+    mcp,
     checkpoints,
 
     files: {
@@ -2013,7 +2037,7 @@ export function createCore(deps: CoreDeps): Core {
         conversationId,
         mode: (await modeOf(conversationId)).mode,
         ...(place.projectId ? { projectId: place.projectId } : {}),
-        registry: tools.view(plugins.visibleTo(place.projectId)),
+        registry: tools.view(visibleTo(place.projectId)),
         permissions,
         place: { roots: place.roots, ...(place.barred ? { barred: place.barred } : {}) },
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),

@@ -17,6 +17,7 @@ import { searchQuery } from '@aparte/bonaparte-shared';
 import { registerExportChannel, registerSettingsChannels } from './settings.js';
 import { registerMemoryChannels, registerModelChannels } from './models.js';
 import { registerProviderChannels } from './providers.js';
+import { registerMcpChannels } from './mcp.js';
 import type { IpcRegistry } from './register.js';
 
 export interface AppFacts {
@@ -37,6 +38,7 @@ export interface AppFacts {
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
   ipc.handle(appInfo, () => ({ version: facts.version(), locale: facts.locale() }));
   registerEngineChannels(ipc, core);
+  registerMcpChannels(ipc, core);
   registerConversationChannels(ipc, core, facts.seen ? { seen: facts.seen } : {});
   ipc.handle(conversationsOpenFolder, async ({ id }) => {
     const branch = await core.branchOf(id);

@@ -34,4 +34,5 @@ export { SettingsStore } from './settings/store.js';
 export type { ConversationMeta } from './conversation/store.js';
 export { ConversationEngine, ContextFullError, EngineFailedError, NoEngineError } from './conversation/engine.js';
 export { runDoctor, MIN_NODE_MAJOR, LOW_DISK_BYTES } from './doctor/doctor.js';
+export type { McpServerView } from './mcp/service.js';
 export type { DoctorCheck, DoctorEnv, DoctorReport, DoctorStatus } from './doctor/doctor.js';

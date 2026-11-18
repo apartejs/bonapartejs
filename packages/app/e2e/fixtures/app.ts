@@ -41,6 +41,8 @@ const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** What the app launches instead of llama.cpp in a managed test: the core's fake binary. */
 const FAKE_LLAMA_BIN = join(appRoot, '..', 'core', 'src', 'testing', 'fake-llama-bin.mjs');
 const FAKE_GH = join(appRoot, '..', 'core', 'src', 'testing', 'fake-gh.mjs');
+/** A stdio MCP server for the tests (task 10.5): `echo` read-only, `write_note` not, and others. */
+export const FAKE_MCP_SERVER = join(appRoot, '..', 'core', 'src', 'testing', 'fake-mcp-server.mjs');
 
 const GiB = 1024 ** 3;
 
@@ -102,6 +104,8 @@ export interface LaunchOptions {
    * its results, or a verification page. Without it, a test run searches nothing.
    */
   search?: { results?: { title: string; href: string; snippet: string }[]; blocked?: boolean };
+  /** The MCP servers of the app (task 10.5), as `config/mcp-servers.json` holds them: `{ <name>: entry }`. */
+  mcp?: Record<string, Record<string, unknown>>;
   /**
    * A project on the app's home folder, made before the launch (default): a new conversation works in it, as a
    * code conversation that may change files. `false`: no project — a new conversation is a discussion (task 9.7).
@@ -282,6 +286,9 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       }
       hub = await startFakeModelHub({ files, ...(options.hub.paceMs ? { paceMs: options.hub.paceMs } : {}) });
       Object.assign(managedEnv, { BONAPARTE_E2E_MODEL_HUB: hub.url, BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify(catalogue) });
+    }
+    if (options.mcp) {
+      await writeFile(join(dataDir, 'config', 'mcp-servers.json'), JSON.stringify({ mcpServers: options.mcp }));
     }
     if (options.search) {
       searchEngine = await startFakeSearchEngine(options.search);

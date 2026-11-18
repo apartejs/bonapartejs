@@ -147,3 +147,5 @@ export type { ConversationCard } from './ipc/conversations.js';
 export type { BranchView, ContextFullView, ConversationDocument, ConversationMemoryView, ConversationStatusView, InboxView, RewindWhatView } from './ipc/conversations.js';
 export { modesGet, modesSet, modeViewSchema, playModeSchema, toolPreviewSchema, toolsPreview } from './ipc/modes.js';
 export type { ModeView, ToolPreviewView } from './ipc/modes.js';
+export { mcpAdd, mcpOverview, mcpPaste, mcpRemove, mcpServerViewSchema, mcpStart, mcpStop } from './ipc/mcp.js';
+export type { McpServerViewData } from './ipc/mcp.js';
