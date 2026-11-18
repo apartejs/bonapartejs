@@ -64,7 +64,7 @@ describe('e2eEngineDeps', () => {
 });
 
 describe('the readings of a test run (task 12.4)', () => {
-  it('are the figures the test gives, never the card's PowerShell probe', async () => {
+  it('are the figures the test gives, never the card’s PowerShell probe', async () => {
     const deps = e2eEngineDeps({ BONAPARTE_E2E_RESOURCES: JSON.stringify({ cpu: 12, usedBytes: 8, totalBytes: 16 }) }, true);
     expect(await deps.resourceProbes!.system()).toEqual({ cpu: 12, memory: { usedBytes: 8, totalBytes: 16 } });
     expect(await deps.resourceProbes!.gpu!()).toBeNull();
