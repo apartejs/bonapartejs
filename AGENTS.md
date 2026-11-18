@@ -161,6 +161,20 @@ card says what it adds and what it may do, « Essayer dans cette
 conversation » runs it there alone, its « / » command marked « À
 l'essai », and « Installer » keeps it with the others. A section below
 that names something not built yet says so.
+Phase 12 is done: the finishing. The shortcuts are one registry, each
+changed in « Réglages · Raccourcis » (captured, a conflict said, kept
+across a restart); the mascot in its bicorne lives in the sidebar's head,
+its state read from the turn's events; the app's icon is drawn from the
+same tokens. When something breaks a card says when, what, what is safe
+and what is lost, and what can be done: a model too big for the card (a
+part on the processor, said slower, or a smaller one), llama.cpp missing
+(downloaded, a file chosen, or a service), the engine dead in a reply (its
+log, « Relancer et relire »), a service that stops answering, a memory
+saved by another model, the disk nearly full — never « erreur inconnue ».
+A conversation has its own temperature, reasoning and context cap
+(« Réglages de la conversation… »), and the engine's card shows the
+processor, the memory and the graphics card. Every button has a name, and
+the shell's Tab order is written in a test.
 
 ## apartéJS frictions — MANDATORY
 
@@ -783,6 +797,38 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   « / » commands come from `PluginStatus.commands` through
   `aparte-collect-commands`, a trial's under the group « À l'essai »
   (aparté's rows carry no badge: apartejs/aparte#261).
+- **Shortcuts** (`renderer/src/shortcuts/registry.ts`, `useShortcuts.ts`,
+  `settings/Shortcuts.tsx`; task 12.1): one registry of actions and their
+  default combos (`SHORTCUTS`), the person's own in the `shortcuts` setting
+  (type `keys`, checked by `COMBO` in the core); `useShortcut(action, run)`
+  is the only way a screen binds one, a change is said on the window
+  (`bonaparte-shortcut`). While a combo is captured nothing fires
+  (`CAPTURING`). Escape stops the reply only when no overlay is visible
+  (`checkVisibility`: aparté's selects keep hidden listboxes in the page).
+- **The mascot** (`renderer/src/logo/`, task 12.2): `mascotState` derives
+  its state from the runner's events (`TURN_ACTIVITY`, `aparte/runner.ts`)
+  and the engine's; « content » lasts `HAPPY_MS`. Its keyframes move only
+  transform and opacity, and stop under reduced motion. The app's icon
+  (`main/icons/draw.ts` `appIcon`) is drawn with the tray's icons by
+  `scripts/make-icons.mjs`.
+- **Failures** (`core/src/failures.ts`, `renderer/src/failures/`; task 12.3):
+  `decideLoad` refuses a model too big before anything is launched
+  (`ModelTooBigError`, its offload said by `suggestOffload`); `planDiskRoom`
+  keeps `DISK_MARGIN_BYTES` free and names the memories it would let go;
+  `engineLog()` keeps the last lines of a llama.cpp that died;
+  `useLlamaBinary` takes a file the person chose in the system's dialog,
+  never a path from the window, and asks the card again of it. The layers
+  « Une partie sur le processeur » keeps hold for that model only
+  (`engine.gpuLayersModel`); « Tout sur la carte », in « Moteur et
+  mémoire », puts them back. The engine's log is the one that died, even
+  once relaunched, until a start asked for. One `FailureCard` draws them
+  all, in the kit's tones (danger, warning, neutral).
+- **A conversation's own settings and the resource monitor** (task 12.4,
+  `core/src/plugins/entries.ts` `conversation-settings`, `resource-monitor`):
+  `ConversationMeta.temperature` and `thinking` reach the sampling of the
+  conversation's next turn; the cap is `contextCap`. The monitor samples
+  only while a window wants it (`resources.start`), pushed as `AppEvent`
+  `resources`; a test run's readings are fixed (`BONAPARTE_E2E_RESOURCES`).
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
   mounted and hidden (a reply goes on). The app's settings live in the
   core's `SettingsStore` (`config/global.json`, under `settings`), checked
@@ -1073,6 +1119,20 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `node_modules` (the kit's sheet, apartejs/aparte#260).
 - **aparté's « / » list hides its group headings while a filter is typed**
   (apartejs/aparte#261): a test that reads a group types « / » alone.
+- **The kit's alert has no « error » tone**: `aparte-alert--error` draws a
+  note's colour. Its tones are danger, warning, success, info, neutral, primary and secondary;
+  `theme/kit-classes.spec.ts` refuses a tone the kit does not define.
+- **Chromium's Tab goes on from where the focus was**, not from the top: a
+  test of the Tab order focuses a mark at the start of `body` first.
+- **The managed fake engine ignores the fixture's `responder`**: it is a
+  binary of its own, which answers `FAKE_LLAMA_ANSWER`.
+- **A Gemma 4 state weighs far more than its full-attention layers**: the
+  sliding windows and llama.cpp's checkpoints are saved with it (1,156 MiB
+  for 1,416 tokens). Room on the disk is counted from what the states of
+  the model weigh, measured, not from `kvBytesPerToken`.
+- **`appSettings.setEngine` does not reach a config already read**: a load
+  that offloads layers drops the cached config (`config = undefined`)
+  before it launches.
 
 ## Real-model smoke results
 
