@@ -48,6 +48,7 @@ import pluginProcessPath from './plugin-host/plugin-process?modulePath';
 import { pluginProcessStarter, type UtilityProcessLike } from './plugin-host/process-host.js';
 import { PLUGIN_SCHEME, servePluginFile } from './plugin-host/protocol.js';
 // A path, not the package: the main build keeps packages outside, and only a file it bundles is read as text.
+// aparté gives its kit to a frame no other way (apartejs/aparte#260).
 import kitStyles from '../../node_modules/@aparte/core/dist/index.css?raw';
 import appTokens from '../renderer/src/theme/tokens.css?raw';
 import { createTerminalService } from './terminals/pty-host.js';
