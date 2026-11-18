@@ -47,10 +47,22 @@ export function AttachProject({ open, messages, projects, busy, failed, onCancel
         ) : (
           <div role="radiogroup" aria-label={words.title} className="attach-project__list">
             {projects.map((project) => (
-              <label key={project.id} className="aparte-choice attach-project__choice">
-                <input type="radio" name="attach-project" value={project.id} checked={picked === project.id} onChange={() => setPicked(project.id)} />
-                <span className="attach-project__name">{project.name}</span>
-                <span className="aparte-field-hint">{project.roots[0] ?? ''}</span>
+              <label
+                key={project.id}
+                className={`aparte-field-choice aparte-field-choice--boxed attach-project__choice${picked === project.id ? ' aparte-field-choice--selected' : ''}`}
+              >
+                <input
+                  type="radio"
+                  className="aparte-radio"
+                  name="attach-project"
+                  value={project.id}
+                  checked={picked === project.id}
+                  onChange={() => setPicked(project.id)}
+                />
+                <span className="aparte-field-choice__body">
+                  <span className="attach-project__name">{project.name}</span>
+                  <span className="aparte-field-hint">{project.roots[0] ?? ''}</span>
+                </span>
               </label>
             ))}
           </div>

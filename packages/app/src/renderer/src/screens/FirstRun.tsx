@@ -389,9 +389,11 @@ export interface FirstRunProps {
   onReady(state: EngineStateView): void;
   /** A service was added: the conversation begins there. */
   onService(service: { provider: string; model: string }): void;
+  /** Opened again after the first launch: back to the conversations, nothing changed. */
+  onBack?(): void;
 }
 
-export function FirstRun({ messages, locale, onReady, onService }: FirstRunProps) {
+export function FirstRun({ messages, locale, onReady, onService, onBack }: FirstRunProps) {
   const text = messages.engineSetup;
   const style: NumberStyle = { locale, units: messages.units };
   const [engine, setEngineChoice] = useState<'builtin' | 'service'>('builtin');
@@ -529,7 +531,14 @@ export function FirstRun({ messages, locale, onReady, onService }: FirstRunProps
     <section className="engine-setup first-run" aria-labelledby="engine-setup-title">
       <div className="aparte-card engine-setup__card first-run__card">
         <header className="aparte-card__header engine-setup__header">
-          <p className="first-run__brand">{text.brand}</p>
+          <div className="first-run__top">
+            <p className="first-run__brand">{text.brand}</p>
+            {onBack ? (
+              <button type="button" className="aparte-btn aparte-btn--sm aparte-btn--ghost" onClick={onBack}>
+                {text.back}
+              </button>
+            ) : null}
+          </div>
           <h1 id="engine-setup-title" className="engine-setup__title">
             {text.title}
           </h1>

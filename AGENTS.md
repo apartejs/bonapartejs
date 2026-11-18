@@ -113,8 +113,23 @@ their row). When the window is not in front: a banner by the person's
 setting for each event (a reply done, an approval, a question, a failure),
 never an approval given from it; the icon of the notification area in four
 colours, its menu (what waits, the engine, « Libérer le modèle », « Ne pas
-déranger pendant 1 h », « Quitter ») and the taskbar's badge. A section
-below that names something not built yet says so.
+déranger pendant 1 h », « Quitter ») and the taskbar's badge.
+Phase 9 is done but for its task 9.4 (Llama, Mistral and gpt-oss, put off
+by Paul): the services and the first launch. A service the person already
+has — Ollama, LM Studio, a llama-server already running, an
+OpenAI-compatible API — is probed, added (its key in the system's vault),
+and a conversation runs there in aparté's own loop with the core's tools and
+approval policy; a conversation goes to a service between two turns, what it
+loses said first, and comes back to the built-in engine read again for its
+model; a service that stops answering is said, the message kept. A
+conversation without a project is a discussion, as in the market's chats:
+no file reached, nothing run, the web only; « Travailler dans un projet… »
+makes it a code conversation, nothing read again. The first launch offers
+the built-in engine — llama.cpp, the card, the models found, the models
+recommended for the card (Google's Gemma 4 and Qwen's Qwen 3, downloaded on a
+click and verified), the context and its gauge — or a service, tested then
+connected. `bonaparte doctor` says what the machine has for the built-in
+engine. A section below that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -290,6 +305,7 @@ pnpm build                                     # every package; the app goes to 
 pnpm --filter @aparte/bonaparte-app test:e2e   # end-to-end (Playwright); it builds first
 pnpm dev                                       # the app, with reload — this one opens a window
 node --test ".claude/hooks/*.test.mjs"         # the guard hooks and the agent and skill definitions
+node packages/cli/dist/cli.js doctor           # what the machine has for the built-in engine (after pnpm build)
 ```
 
 One file at a time:
@@ -346,7 +362,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **The packages**: `packages/shared` (contracts: modes, the IPC channels, the
   address of the agent), `packages/core` (Node only: the engine side, the
   agent handler, the fake llama-server under `src/testing/`), `packages/app`
-  (Electron: `src/main`, `src/preload`, `src/renderer`, `e2e`).
+  (Electron: `src/main`, `src/preload`, `src/renderer`, `e2e`),
+  `packages/cli` (`@aparte/bonaparte`: `bonaparte doctor`, its words in
+  French and English; launching the app from it is task 13.3).
 - **End-to-end tests** (`packages/app/e2e/`): `fixtures/app.ts` is the only
   place that launches the app, and `fixtures/chat.ts` holds every selector
   into aparté's chat, which documents none: a release that moves one breaks
@@ -607,6 +625,36 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   conversation's mode (`granted` lets pass what only the mode asks). A
   built-in plugin imports no `fs`, `net`, `http(s)`, `child_process` nor
   `node-pty` (lint). A project may turn a plugin off (`visibleTo`).
+- **Services** (`core/src/providers/`, `core/src/agent/endpoint.ts`;
+  task 9.1 to 9.3): `ProviderRegistry` keeps the services in
+  `config/providers.json`, their keys in the vault (`<id>.key`), never sent
+  back to the window. `probeEndpoint` asks `/props` (llama.cpp), then
+  `/v1/models`, within 5 s. A conversation on a service (`engineId` the
+  service's id) runs in aparté's `createAparteAgentHandler`, wrapped by
+  `serveOnService`: the core's registry, `PermissionEngine.evaluate` as its
+  approval policy, `ask_user` as the window's tool; its turns are written to
+  the journal without `rendered` (a service keeps no memory). Every service
+  is OpenAI-compatible, a llama-server already running too (`<address>/v1`);
+  the built-in engine alone speaks `/completion`. A first turn with
+  `?provider=&model=` starts there; `switchProvider` leaves the built-in
+  engine (an `engine` entry with no family), `switchModel` comes back,
+  rendered again. A service conversation has no memory mark and no gauge,
+  and a send to it never waits for the built-in engine. Tests use
+  `testing/fake-openai-server.ts`.
+- **The discussion** (task 9.7): a conversation without a project
+  (`kind: 'discussion'`, `?kind=discussion` on its first turn) has the
+  network tools only and Lecture, no mode switch, no code panes;
+  `attachProject` makes it a code conversation, the project and its tools
+  told as notes at the next turn. At launch, a new conversation starts in
+  the project made last.
+- **The first launch** (`renderer/src/screens/FirstRun.tsx`, task 9.6): shown
+  until an engine is chosen — a model known or a service added. The models
+  recommended (`core/src/models/catalogue.ts`, read on the hub's official
+  repositories) per tier of video memory; `downloadModel` puts one in
+  `<data>/models`, a root of the inventory (source `bonaparte`), its SHA-256
+  checked. A test run never asks Hugging Face (`modelHub: null`; the e2e
+  fixture's `hub` is a local one, `testing/fake-model-hub.ts`). `core.doctor()`
+  (`core/src/doctor/`) is what `bonaparte doctor` prints.
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
   mounted and hidden (a reply goes on). The app's settings live in the
   core's `SettingsStore` (`config/global.json`, under `settings`), checked

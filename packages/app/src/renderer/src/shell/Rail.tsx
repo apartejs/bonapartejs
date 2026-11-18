@@ -23,6 +23,8 @@ export interface RailProps {
   statuses: Statuses;
   onExpand(): void;
   onNewConversation(): void;
+  /** « Nouvelle discussion » (task 9.7): a conversation without a project, offered folded too (review of phase 9). */
+  onNewDiscussion?(): void;
   onSearch(): void;
   onOpen(id: string): void;
   onSettings(): void;
@@ -36,6 +38,7 @@ export function Rail(props: RailProps) {
     <nav className="bonaparte-rail" aria-label={words.navCollapsed}>
       <TipButton label={words.expand} tip={words.expandTip} icon="panel" side="end" onClick={props.onExpand} />
       <TipButton label={words.newConversation} icon="plus" side="end" className="bonaparte-bordered" onClick={props.onNewConversation} />
+      {props.onNewDiscussion ? <TipButton label={words.newDiscussion} icon="conversation" side="end" onClick={props.onNewDiscussion} /> : null}
       <TipButton label={messages.search.open} tip={words.searchTip} icon="search" side="end" onClick={props.onSearch} />
       {shown.length > 0 ? <span className="bonaparte-rail__separator" role="separator" /> : null}
       {shown.map((conversation) => {

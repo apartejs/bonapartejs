@@ -12,7 +12,15 @@ export const fr: Messages = {
   chat: {
     empty: 'Pose une question pour commencer.',
   },
+  noEngine: {
+    title: 'Aucun moteur n’est prêt',
+    body: 'Le moteur intégré n’a pas encore de modèle, et les services ne proposent aucun modèle pour l’instant.',
+    held: 'Ton message attend dans le champ : prépare le moteur intégré, ou démarre ton service puis relis-le.',
+    setup: 'Préparer le moteur intégré…',
+    readAgain: 'Relire les services',
+  },
   engineSetup: {
+    back: 'Retour aux conversations',
     title: 'Préparons le moteur',
     lede: 'Le moteur intégré fait tourner ton modèle avec llama.cpp et garde la mémoire de chaque conversation. Tu peux aussi brancher un service que tu as déjà. Rien n’est chargé ni envoyé avant ton clic.',
     modelsLegend: 'Modèles trouvés',
@@ -106,7 +114,7 @@ export const fr: Messages = {
           'Les coûts annoncés précisément : le service ne dit ni sa mémoire vidéo ni son temps de chargement.',
           'Le préfixe partagé entre conversations.',
         ],
-        later: 'Tu pourras passer au moteur intégré à tout moment, dans les réglages.',
+        later: 'Tu pourras préparer le moteur intégré à tout moment : Réglages, Moteur et mémoire.',
       },
       connect: 'Se connecter',
       connecting: 'Connexion…',
@@ -412,6 +420,7 @@ export const fr: Messages = {
     },
     engine: {
       intro: 'Ce que le moteur fait tourner, et ce que chaque conversation garde sur disque pour reprendre vite.',
+      setup: 'Préparer le moteur intégré…',
       engine: 'Moteur',
       runningSince: (duration) => `En marche depuis ${duration}`,
       stopped: 'Déchargé : aucun modèle en mémoire vidéo',

@@ -155,3 +155,17 @@ test("a row's menu opens on a right click; a conversation is pinned, renamed and
   await expect(list.row('Deuxième')).toHaveCount(0);
 });
 
+
+test('« Nouvelle discussion » is offered in every shape of the sidebar: one list, and folded (review of phase 9)', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' }, settings: { sidebarGrouping: 'single' } });
+  await expect(chat(page).editor).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Projets et conversations', exact: true });
+  await nav.getByRole('button', { name: 'Nouvelle discussion' }).click();
+  await chat(page).send('Une discussion');
+  await expect(chat(page).replies).toHaveCount(1, { timeout: 15_000 });
+  await expect(chat(page).modeShown).toHaveCount(0);
+
+  await page.keyboard.press('Control+B');
+  const rail = page.getByRole('navigation', { name: 'Projets et conversations, barre réduite' });
+  await expect(rail.getByRole('button', { name: 'Nouvelle discussion' })).toBeVisible();
+});

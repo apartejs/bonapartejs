@@ -72,6 +72,9 @@ import { DiskScan, diskRoots } from './models/disk-scan.js';
 import { CATALOGUE, modelUrl, recommendedModels, type CatalogueEntry } from './models/catalogue.js';
 import { downloadFile } from './models/download.js';
 import { runDoctor, type DoctorReport } from './doctor/doctor.js';
+import { compareWithJournal } from './agent/divergence.js';
+import type { AgentMessage } from './agent/body.js';
+import type { Outcome, PendingCall, Usage } from './journal/types.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
@@ -1454,16 +1457,31 @@ export function createCore(deps: CoreDeps): Core {
     const originals = keepOriginals(conversationId, messageId);
     // What the turn says is kept in the journal, the truth (task 9.2): the message, then the answer — nothing
     // frozen, no `rendered`: a service keeps no memory, and the built-in engine would read it again.
-    const journal = await openJournal(conversationStore.dir, conversationId, meta.branchId);
-    if (!raw['resume']) {
-      const messages = ((raw['request'] as { messages?: { role?: string; content?: unknown }[] } | undefined)?.messages ?? []).filter(
-        (message) => message.role === 'user',
-      );
-      const asked = messages.at(-1)?.content;
-      const text = typeof asked === 'string' ? asked : Array.isArray(asked) ? asked.map((part) => (part as { text?: string }).text ?? '').join('') : '';
-      await journal.append({ kind: 'user', text, messageId });
+    let journal = await openJournal(conversationStore.dir, conversationId, meta.branchId);
+    const resume = raw['resume'] as { outcomes?: Record<string, Outcome> } | undefined;
+    if (resume) {
+      // The pause answered: the conversation no longer waits (« À traiter », the row's mark).
+      if (journal.entries().at(-1)?.kind === 'pending' && resume.outcomes) await journal.append({ kind: 'outcomes', outcomes: resume.outcomes });
+    } else {
+      // Compared with the journal as on the built-in engine (review of phase 9): a new message is added; an answer
+      // asked again or a message changed branches the journal, so that it says what the window shows.
+      const request = raw['request'] as { messages?: AgentMessage[]; _meta?: { historySummary?: string } } | undefined;
+      const divergence = compareWithJournal(request?.messages ?? [], journal.entries(), request?._meta?.historySummary);
+      if (divergence.kind === 'mismatch') {
+        return new Response(JSON.stringify({ error: { message: 'This history is not the one of this conversation: open it again.' } }), {
+          status: 409,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (divergence.kind !== 'append') {
+        journal = await journal.fork(divergence.afterEntryId);
+        await conversationStore.update(conversationId, { branchId: journal.branchId });
+      }
+      if (divergence.kind !== 'retry') await journal.append({ kind: 'user', text: divergence.text, messageId });
     }
     let answer = '';
+    // Stopped by the person: never told as an end.
+    let aborted = false;
     return serveOnService(
       {
         provider,
@@ -1504,12 +1522,24 @@ export function createCore(deps: CoreDeps): Core {
       request,
       (line) => {
         if (line.type === 'text-delta' && line['agentId'] === undefined) answer += String(line['delta'] ?? '');
-        if (line.type === 'run-done' && answer) {
-          return journal
-            .append({ kind: 'assistant', raw: answer, messageId })
-            .then(() => undefined)
+        const usage = (line['usage'] as Usage | undefined) ?? { inputTokens: 0, outputTokens: 0 };
+        // Its end told as every turn's (review of phase 9): the notifications, the tray, « À traiter ».
+        if (line.type === 'run-done' && !aborted) {
+          return (answer ? journal.append({ kind: 'assistant', raw: answer, messageId }) : Promise.resolve())
+            .then(() => tellTurnEnd(conversationId, { usage }))
             .catch((error: unknown) => log(`[bonaparte] the answer of ${conversationId} was not journaled: ${String(error)}`));
         }
+        if (line.type === 'run-suspended') {
+          const pending = (line['pending'] as PendingCall[] | undefined) ?? [];
+          const ticket = String(line['ticket'] ?? '');
+          // The pause is kept, as on the built-in engine: the row says it waits, « À traiter » lists it.
+          return journal
+            .append({ kind: 'pending', calls: pending, ticket })
+            .then(() => tellTurnEnd(conversationId, { usage, suspended: { pending, ticket } }))
+            .catch((error: unknown) => log(`[bonaparte] the pause of ${conversationId} was not journaled: ${String(error)}`));
+        }
+        if (line.type === 'run-aborted') aborted = true;
+        if (line.type === 'run-error') return tellTurnEnd(conversationId, 'failed');
         return undefined;
       },
     );

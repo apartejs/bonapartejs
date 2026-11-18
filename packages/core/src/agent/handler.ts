@@ -47,6 +47,35 @@ function refName(value: string | null): string | null {
   return value && /^[\p{L}\p{N}_][\p{L}\p{N}_./-]{0,99}$/u.test(value) && !value.includes('..') && !value.endsWith('/') && !value.endsWith('.lock') ? value : null;
 }
 
+/**
+ * A conversation's first turn: what the window chose before it had any — the page may have saved the
+ * conversation already, made in the default mode. After that, the core's choices stand. Both paths, the
+ * built-in engine and a service, start a conversation through it.
+ */
+async function applyFirstTurn(core: Core, conversationId: string, url: URL): Promise<void> {
+  const chosen = playModeSchema.safeParse(url.searchParams.get('mode'));
+  // Started in a project: it belongs to it, and runs in its default mode unless the person chose one.
+  const project = await core.projects.get(url.searchParams.get('project') ?? '');
+  if (project) await core.conversationStore.update(conversationId, { projectId: project.id });
+  // Without a project, a discussion when the window says so (task 9.7): in Lecture, whatever mode was shown.
+  const discussion = !project && url.searchParams.get('kind') === 'discussion';
+  if (discussion) {
+    await core.conversationStore.update(conversationId, { kind: 'discussion' });
+    await core.setMode(conversationId, 'lecture', { confirmed: false });
+  }
+  const mode = discussion ? undefined : chosen.success ? chosen.data : project?.defaultMode;
+  // Only a mode the person picked in this run confirms Impro: a default read from disk does not
+  // (security rule 9) — the window says `picked=1` when the person chose it in the switch.
+  const picked = chosen.success && url.searchParams.get('picked') === '1';
+  if (mode) await core.setMode(conversationId, mode, { confirmed: picked });
+  // On its own branch (task 6.7): chosen before its first message, made at its first write.
+  if (project && url.searchParams.get('worksIn') === 'branch') {
+    const branch = refName(url.searchParams.get('branch'));
+    const base = refName(url.searchParams.get('base'));
+    await core.conversationStore.update(conversationId, { worksIn: 'branch', ...(branch ? { branch } : {}), ...(base ? { base } : {}) });
+  }
+}
+
 export function createAgentHandler(core: Core): (request: Request) => Promise<Response> {
   return async (request) => {
     const url = new URL(request.url);
@@ -80,7 +109,11 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
     // built-in engine, which it does not need.
     // Started on a service the person picked before the first message (task 9.3): the first turn names it.
     const asked = url.searchParams.get('provider');
-    if (asked && asked !== 'builtin') await core.startOnService(conversationId, asked, url.searchParams.get('model') ?? '');
+    if (asked && asked !== 'builtin' && (await core.startOnService(conversationId, asked, url.searchParams.get('model') ?? ''))) {
+      // Its first turn: what the window chose before it — a project, a discussion, a mode, a branch — as on the
+      // built-in engine (review of phase 9: a discussion started on a service got every tool of a code one).
+      await applyFirstTurn(core, conversationId, url);
+    }
     if (await core.serviceOf(conversationId)) return core.turnOnService(conversationId, raw as Record<string, unknown>, request);
 
     let engine: Engine | undefined;
@@ -118,31 +151,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       );
     }
     const entries = (await openJournal(core.conversationStore.dir, conversationId, meta.branchId)).entries();
-    // A conversation's first turn runs in the mode the person chose before it had any — the page may
-    // have saved the conversation already, made in the default mode. After that, the core's mode stands.
-    const chosen = playModeSchema.safeParse(url.searchParams.get('mode'));
-    if (entries.length === 0) {
-      // Started in a project: it belongs to it, and runs in its default mode unless the person chose one.
-      const project = await core.projects.get(url.searchParams.get('project') ?? '');
-      if (project) await core.conversationStore.update(conversationId, { projectId: project.id });
-      // Without a project, a discussion when the window says so (task 9.7): in Lecture, whatever mode was shown.
-      if (!project && url.searchParams.get('kind') === 'discussion') {
-        await core.conversationStore.update(conversationId, { kind: 'discussion' });
-        await core.setMode(conversationId, 'lecture', { confirmed: false });
-      }
-      const discussion = !project && url.searchParams.get('kind') === 'discussion';
-      const mode = discussion ? undefined : chosen.success ? chosen.data : project?.defaultMode;
-      // Only a mode the person picked in this run confirms Impro: a default read from disk does not
-      // (security rule 9) — the window says `picked=1` when the person chose it in the switch.
-      const picked = chosen.success && url.searchParams.get('picked') === '1';
-      if (mode) await core.setMode(conversationId, mode, { confirmed: picked });
-      // On its own branch (task 6.7): chosen before its first message, made at its first write.
-      if (project && url.searchParams.get('worksIn') === 'branch') {
-        const branch = refName(url.searchParams.get('branch'));
-        const base = refName(url.searchParams.get('base'));
-        await core.conversationStore.update(conversationId, { worksIn: 'branch', ...(branch ? { branch } : {}), ...(base ? { base } : {}) });
-      }
-    }
+    if (entries.length === 0) await applyFirstTurn(core, conversationId, url);
     const divergence = compareWithJournal(body.data.request.messages, entries, body.data.request._meta?.historySummary);
     if (divergence.kind === 'mismatch') {
       return jsonError(409, 'This history is not the one of this conversation: open it again.');

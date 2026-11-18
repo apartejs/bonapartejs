@@ -79,7 +79,7 @@ test('between two turns: to a service, what it loses said first; back to the bui
   expect(service!.requests).toHaveLength(1);
 });
 
-test('the service stops answering: said, the message kept; « Passer au moteur intégré », then « Réessayer » (task 9.3)', async ({ launch }) => {
+test('the service stops answering: said, the message kept; « Passer au moteur intégré » sends it again there (task 9.3, review of phase 9)', async ({ launch }) => {
   const { page, service } = await launch({
     managed: { models: MODELS },
     service: { models: ['qwen3:8b'], responder: () => ({ text: 'Réponse du service.' }) },
@@ -106,7 +106,8 @@ test('the service stops answering: said, the message kept; « Passer au moteur i
   const back = page.getByRole('dialog', { name: 'Passer à gemma-4-e2e ?' });
   await back.getByRole('button', { name: 'Changer' }).click();
   await expect(back).toBeHidden({ timeout: 15_000 });
-  await down.getByRole('button', { name: 'Réessayer' }).click();
+  // Moved, the message kept goes again on the built-in engine: the card said what it would do, it is done.
   await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
   await expect(down).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Modèle' })).toContainText('gemma-4-e2e');
 });

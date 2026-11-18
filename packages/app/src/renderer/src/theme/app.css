@@ -3238,3 +3238,45 @@ body {
   color: var(--aparte-text-muted);
   font-size: 12px;
 }
+
+/* « Travailler dans un projet… » (dialogs/AttachProject.tsx): one boxed choice per project. */
+.attach-project__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-2);
+  margin-top: var(--aparte-space-4);
+}
+
+.attach-project__name {
+  display: block;
+  font-weight: var(--aparte-font-weight-medium);
+}
+
+.attach-project__choice .aparte-field-hint {
+  font-family: var(--aparte-code-font-family);
+  font-size: var(--aparte-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+/* The conversations kept mounted under the first launch's panel opened again (review of phase 9). */
+.workspace-holder {
+  display: contents;
+}
+
+.workspace-holder[hidden] {
+  display: none;
+}
+
+.first-run__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aparte-space-4);
+}
+
+.no-engine-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-3);
+  margin-top: var(--aparte-space-3);
+}

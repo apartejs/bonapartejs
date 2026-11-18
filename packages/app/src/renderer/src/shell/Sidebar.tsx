@@ -142,6 +142,10 @@ export function Sidebar(props: SidebarProps) {
         <span className="bonaparte-wordmark">{words.brand}</span>
         <TipButton label={words.collapse} tip={words.collapseTip} icon="panel" onClick={props.onCollapse} />
         <TipButton label={words.newConversation} icon="plus" className="bonaparte-bordered" onClick={props.onNewConversation} />
+        {/* One list has no « Discussions » section: its button stands here (review of phase 9). */}
+        {props.grouping === 'single' && props.onNewDiscussion ? (
+          <TipButton label={words.newDiscussion} icon="conversation" onClick={props.onNewDiscussion} />
+        ) : null}
       </div>
       <button type="button" className="bonaparte-search-field" aria-label={words.searchLabel} onClick={props.onSearch}>
         <Icon name="search" />

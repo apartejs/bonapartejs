@@ -1243,7 +1243,8 @@ export class ConversationEngine {
       if (!meta) throw new Error(`There is no conversation ${id}.`);
       const created = await this.deps.store.create({
         kind: meta.kind,
-        engineId: meta.engineId,
+        // The copy goes to the built-in engine's model, whatever the original runs on — a service included.
+        engineId: 'builtin',
         modelId: target.modelPath,
         mode: meta.mode,
         ...(meta.projectId ? { projectId: meta.projectId } : {}),
@@ -1322,7 +1323,9 @@ export class ConversationEngine {
     if (onAnotherModel(branchModel(journal.entries()), engine)) {
       ({ meta, journal } = await this.changeModel(meta, journal, engine, instructions));
     }
-    if (!journal.entries().some((entry) => entry.kind === 'system')) {
+    // A branch frozen again (a change of model) has its system turn in that entry: one started on a service has
+    // no other, and never reads a second one after the person's message (review of phase 9).
+    if (!journal.entries().some((entry) => entry.kind === 'system' || (isRefrozen(entry) && entry.rendered !== undefined))) {
       const asked = this.deps.prompt(meta);
       const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
       await journal.append({

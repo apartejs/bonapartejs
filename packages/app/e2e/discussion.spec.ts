@@ -61,3 +61,32 @@ test('« Travailler dans un projet… »: the discussion works in a project — 
     await rm(folder, { recursive: true, force: true });
   }
 });
+
+test('« Nouveau projet… » left without a project: the next project made takes no discussion with it (review of phase 9)', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'spanwise-'));
+  try {
+    const { page } = await launch({ project: false, engine: { responder: () => 'Entendu.' }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    const ui = chat(page);
+    await ui.send('Une discussion');
+    await expect(ui.replies).toHaveCount(1, { timeout: 15_000 });
+    await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Plus d’actions' }).click();
+    await page.getByRole('menuitem', { name: 'Travailler dans un projet…' }).click();
+    await page.getByRole('dialog', { name: 'Travailler dans un projet' }).getByRole('button', { name: 'Nouveau projet…' }).click();
+    const create = page.getByRole('dialog', { name: 'Nouveau projet' });
+    await create.getByRole('button', { name: 'Annuler' }).click();
+    await expect(create).toBeHidden();
+
+    // Later, a project made from the sidebar: the discussion stays one.
+    const nav = page.getByRole('navigation', { name: 'Projets et conversations', exact: true });
+    await nav.getByRole('button', { name: 'Nouveau projet' }).click();
+    await create.getByRole('button', { name: 'Choisir un dossier…' }).click();
+    await create.getByRole('button', { name: 'Créer le projet' }).click();
+    await expect(create).toBeHidden();
+    await expect(nav.getByRole('group', { name: /^spanwise-/ })).toBeVisible();
+    await expect(nav.getByRole('group', { name: 'Discussions', exact: true })).toContainText('Une discussion');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});

@@ -12,7 +12,15 @@ export const en: Messages = {
   chat: {
     empty: 'Ask something to get started.',
   },
+  noEngine: {
+    title: 'No engine is ready',
+    body: 'The built-in engine has no model yet, and the services offer no model for now.',
+    held: 'Your message waits in the field: prepare the built-in engine, or start your service and read it again.',
+    setup: 'Prepare the built-in engine…',
+    readAgain: 'Read the services again',
+  },
   engineSetup: {
+    back: 'Back to the conversations',
     title: 'Let’s set up the engine',
     lede: 'The built-in engine runs your model with llama.cpp and keeps the memory of each conversation. You can also plug in a service you already have. Nothing is loaded or sent before you click.',
     modelsLegend: 'Models found',
@@ -106,7 +114,7 @@ export const en: Messages = {
           'Costs announced precisely: the service tells neither its video memory nor its loading time.',
           'The prefix shared between conversations.',
         ],
-        later: 'You can move to the built-in engine at any time, in the settings.',
+        later: 'You can prepare the built-in engine at any time: Settings, Engine and memory.',
       },
       connect: 'Connect',
       connecting: 'Connecting…',
@@ -412,6 +420,7 @@ export const en: Messages = {
     },
     engine: {
       intro: 'What the engine runs, and what each conversation keeps on disk to resume fast.',
+      setup: 'Prepare the built-in engine…',
       engine: 'Engine',
       runningSince: (duration) => `Running for ${duration}`,
       stopped: 'Unloaded: no model in video memory',

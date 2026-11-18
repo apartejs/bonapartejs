@@ -34,7 +34,11 @@ export interface Messages {
   chat: {
     empty: string;
   };
+  /** No engine can answer (review of phase 9): the card above the composer. */
+  noEngine: { title: string; body: string; held: string; setup: string; readAgain: string };
   engineSetup: {
+    /** Back from the panel opened again after the first launch. */
+    back: string;
     title: string;
     lede: string;
     modelsLegend: string;
@@ -368,6 +372,8 @@ export interface Messages {
     };
     engine: {
       intro: string;
+      /** The first launch's panel of the built-in engine, opened again (review of phase 9). */
+      setup: string;
       engine: string;
       runningSince(duration: string): string;
       stopped: string;

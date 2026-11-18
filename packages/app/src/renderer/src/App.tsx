@@ -70,6 +70,7 @@ import { ServiceSwitchDialog, type ServiceSwitchAsking } from './dialogs/Service
 import { AttachProject } from './dialogs/AttachProject';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
+import { NoEngineCard } from './chat/NoEngineCard';
 import { ServiceDownCard } from './chat/ServiceDownCard';
 import { STOP_REPLIES } from './settings/LaunchSettings';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
@@ -85,7 +86,7 @@ import type { Messages } from './i18n/index';
 import { FirstRun } from './screens/FirstRun';
 import { ConversationHeader } from './shell/ConversationHeader';
 import { Rail } from './shell/Rail';
-import { ENGINE_CHANGED } from './settings/EngineMemory';
+import { ENGINE_CHANGED, SETUP_ENGINE } from './settings/EngineMemory';
 import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
 import { Sidebar } from './shell/Sidebar';
 import { createSubagentTracker, setupSubagentLines } from './aparte/subagents';
@@ -788,6 +789,8 @@ function Workspace({
   // The services added (task 9.3): their models offered in the composer's picker, beside the engine's.
   const servicesKnown = useRef<ServiceCatalogue[]>([]);
   const engineAtStart = useRef(engine);
+  // « Passer au moteur intégré » asked from the card of a service that did not answer: retried once moved.
+  const retryAfterSwitch = useRef<string | null>(null);
   // The service chosen for want of a model: once the built-in engine runs, a new conversation goes back to it.
   const autoService = useRef<{ provider: string; model: string } | null>(null);
   useEffect(() => {
@@ -805,9 +808,10 @@ function Workspace({
   const [toService, setToService] = useState<(ServiceSwitchAsking & { conversationId: string; provider: string; revert: () => void }) | null>(null);
   const [toServiceBusy, setToServiceBusy] = useState(false);
   const [toServiceFailed, setToServiceFailed] = useState(false);
-  useEffect(() => {
-    let live = true;
-    void (async () => {
+  const [readingServices, setReadingServices] = useState(false);
+  const servicesLive = useRef(true);
+  const readServices = async (): Promise<void> => {
+    {
       const all = await bridge.invoke(providersList, undefined);
       const found = await Promise.all(
         all
@@ -818,7 +822,7 @@ function Workspace({
             models: await bridge.invoke(providersModels, { id: provider.id }).catch(() => [] as string[]),
           })),
       );
-      if (!live) return;
+      if (!servicesLive.current) return;
       servicesKnown.current = found;
       for (const provider of all) if (provider.url) serviceHosts.current.set(provider.id, hostOf(provider.url));
       showServices(found satisfies ServiceCatalogue[]);
@@ -829,10 +833,15 @@ function Workspace({
         autoService.current = chosenService.current;
         setServicePicked((count) => count + 1);
       }
-    })().catch(() => undefined);
+    }
+  };
+  useEffect(() => {
+    servicesLive.current = true;
+    void readServices().catch(() => undefined);
     return () => {
-      live = false;
+      servicesLive.current = false;
     };
+    // Read once at mount; « Relire les services » reads them again.
   }, []);
   const downOn = useRef<{ conversationId: string | null; service: { id: string; label: string } | null }>({ conversationId: null, service: null });
   useEffect(() => {
@@ -947,6 +956,15 @@ function Workspace({
     },
     onSwitched: (id) => {
       if (id === shownIdRef.current) setMemory(null);
+      // The statuses read again: the picker, the gauge and the cards follow the provider it is on now.
+      setAsked((count) => count + 1);
+      // Moved off a service that did not answer (« Passer au moteur intégré »): its message kept goes again here.
+      if (id && id === retryAfterSwitch.current) {
+        retryAfterSwitch.current = null;
+        setServiceDown(null);
+        const last = handles.get(deck.shown)?.getMessages().findLast((message) => message.role === 'assistant');
+        if (last) window.dispatchEvent(new CustomEvent('aparte-retry', { detail: { messageId: last.id, targetId: deck.shown } }));
+      }
     },
   });
 
@@ -1005,6 +1023,7 @@ function Workspace({
           statuses={statuses}
           onExpand={toggleSidebar}
           onNewConversation={newConversation}
+          onNewDiscussion={newDiscussion}
           onSearch={() => setSearching(true)}
           onOpen={(id) => goTo(id)}
           onSettings={() => setSettingsPage('general')}
@@ -1160,9 +1179,14 @@ function Workspace({
         open={creatingProject}
         messages={messages}
         defaultMode={defaultModeShown}
-        onClose={() => setCreatingProject(false)}
+        onClose={() => {
+          // Left without a project: no discussion waits to be attached to the next one made (review of phase 9).
+          attachAfterCreate.current = null;
+          setCreatingProject(false);
+        }}
         onCreated={(made) => {
           setCreatingProject(false);
+          readProjects();
           // Made from « Travailler dans un projet… »: the discussion goes on in it.
           const waiting = attachAfterCreate.current;
           attachAfterCreate.current = null;
@@ -1170,7 +1194,6 @@ function Workspace({
             attachTo(waiting, made.id);
             return;
           }
-          readProjects();
           project.current = made;
           setActiveProject(made);
           // A fresh conversation, in the project and its mode — an Impro default as any default (rule 9).
@@ -1296,6 +1319,19 @@ function Workspace({
               onLoad={() => void loadAndSend()}
               onOther={() => pickerOpener.current?.()}
             />
+          ) : engineDown ? (
+            <NoEngineCard
+              messages={messages}
+              held={held}
+              reading={readingServices}
+              onSetup={() => window.dispatchEvent(new Event(SETUP_ENGINE))}
+              onReadAgain={() => {
+                setReadingServices(true);
+                void readServices()
+                  .catch(() => undefined)
+                  .finally(() => setReadingServices(false));
+              }}
+            />
           ) : serviceDown && serviceDown.conversationId === conversationId ? (
             <ServiceDownCard
               messages={messages}
@@ -1308,6 +1344,12 @@ function Workspace({
                 if (last) window.dispatchEvent(new CustomEvent('aparte-retry', { detail: { messageId: last.id, targetId: deck.shown } }));
               }}
               onBuiltin={() => {
+                // No model known to the built-in engine: its panel, to prepare it (review of phase 9).
+                if (!engine.model && !engine.resume) {
+                  window.dispatchEvent(new Event(SETUP_ENGINE));
+                  return;
+                }
+                retryAfterSwitch.current = conversationId;
                 if (engine.model) modelSwitch.ask(engine.model.path, engine.model.name, () => undefined);
                 else pickerOpener.current?.();
               }}
@@ -1368,7 +1410,16 @@ function Workspace({
             scope={() =>
               conversationId ? { conversationId } : project.current ? { projectId: project.current.id } : {}
             }
-            onPickModel={modelSwitch.ask}
+            onPickModel={(path, name, revert) => {
+              const begun = (handles.get(deck.shown)?.getMessages().length ?? 0) > 0;
+              // Not begun: it no longer starts on the service the picker showed (review of phase 9).
+              if (!begun && chosenService.current) {
+                chosenService.current = null;
+                autoService.current = null;
+                setServicePicked((count) => count + 1);
+              }
+              modelSwitch.ask(path, name, revert);
+            }}
             opener={pickerOpener}
             service={shownService ? { id: shownService.id, model: shownService.model } : chosenService.current ? { id: chosenService.current.provider, model: chosenService.current.model } : null}
             discussion={discussion}
@@ -1479,6 +1530,13 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
   // A service added (task 9.6): an engine is chosen, the first launch is not shown again.
   const [serviceAdded, setServiceAdded] = useState<boolean | null>(null);
   const [startOn, setStartOn] = useState<{ provider: string; model: string } | null>(null);
+  // « Préparer le moteur intégré… » (the settings, the card): the first launch's panel again (review of phase 9).
+  const [setupAsked, setSetupAsked] = useState(false);
+  useEffect(() => {
+    const ask = (): void => setSetupAsked(true);
+    window.addEventListener(SETUP_ENGINE, ask);
+    return () => window.removeEventListener(SETUP_ENGINE, ask);
+  }, []);
 
   useEffect(() => {
     let current = true;
@@ -1540,7 +1598,27 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
           }}
         />
       ) : (
-        <Workspace messages={messages} locale={locale} engine={engine} startOn={startOn} />
+        <>
+          {setupAsked ? (
+            <FirstRun
+              messages={messages}
+              locale={locale}
+              onReady={(state) => {
+                setEngine(state);
+                setSetupAsked(false);
+              }}
+              onService={(service) => {
+                setStartOn(service);
+                setSetupAsked(false);
+              }}
+              onBack={() => setSetupAsked(false)}
+            />
+          ) : null}
+          {/* Kept mounted under the panel: a reply goes on, a draft stays. */}
+          <div className="workspace-holder" hidden={setupAsked}>
+            <Workspace messages={messages} locale={locale} engine={engine} startOn={startOn} />
+          </div>
+        </>
       )}
     </main>
   );

@@ -26,6 +26,8 @@ const GIB = 1024 ** 3;
 
 /** Said on the window when the settings close: the window reads the engine's state again (unloaded, restarted). */
 export const ENGINE_CHANGED = 'bonaparte-engine';
+/** Asks the window for the first launch's panel again, over the conversations (review of phase 9). */
+export const SETUP_ENGINE = 'bonaparte-setup-engine';
 
 export function EngineMemoryPage({ messages, locale, values, change, onPage }: PageProps & { onPage(page: 'models'): void }) {
   const words = messages.settings.engine;
@@ -137,6 +139,10 @@ export function EngineMemoryPage({ messages, locale, values, change, onPage }: P
           ) : null}
           <button type="button" className="aparte-btn aparte-btn--outline" onClick={() => onPage('models')}>
             {words.changeModel}
+          </button>
+          {/* llama.cpp, the models recommended, « Démarrer »: the first launch's panel (review of phase 9). */}
+          <button type="button" className="aparte-btn aparte-btn--outline" onClick={() => window.dispatchEvent(new Event(SETUP_ENGINE))}>
+            {words.setup}
           </button>
         </div>
         <LaunchSettings

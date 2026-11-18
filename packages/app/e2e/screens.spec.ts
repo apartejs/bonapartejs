@@ -879,3 +879,57 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+// Phase 9: the first launch (its recommended models, a service tested), and a discussion attached to a project.
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the first launch and the discussion, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words =
+        locale === 'fr'
+          ? { service: /Un service existant/, test: 'Tester la connexion', newDiscussion: 'Nouvelle discussion', more: 'Plus d’actions', attach: 'Travailler dans un projet…' }
+          : { service: /A service you already have/, test: 'Test the connection', newDiscussion: 'New discussion', more: 'More actions', attach: 'Work in a project…' };
+
+      const first = await launch({
+        locale,
+        managed: { models: MODELS, gpuBytes: CARD },
+        hub: { models: { 'gemma-4-e4b': { family: 'gemma' }, 'qwen3-8b': { family: 'qwen' } }, paceMs: 1500 },
+        service: { models: ['qwen3:8b', 'gemma3:12b'], responder: () => ({ text: 'ok' }) },
+        serviceAdded: false,
+      });
+      const page = first.page;
+      await page.emulateMedia({ colorScheme: scheme });
+      await first.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1400));
+      await expect(page.locator('.recommended-row')).toHaveCount(2);
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `first-run-${locale}-${scheme}.png`), animations: 'disabled' });
+      await page.locator('.recommended-row').first().getByRole('button').click();
+      await expect(page.locator('.recommended-row').first().getByRole('progressbar')).toBeVisible();
+      await page.screenshot({ path: join(into, `first-run-downloading-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      await page.getByRole('radio', { name: words.service }).click();
+      await page.getByRole('textbox', { name: locale === 'fr' ? 'Adresse' : 'Address' }).fill(`${first.service!.url}/v1`);
+      await page.getByRole('button', { name: words.test }).click();
+      await expect(page.locator('.first-run__tested--ok')).toBeVisible();
+      await page.screenshot({ path: join(into, `first-run-service-${locale}-${scheme}.png`), animations: 'disabled' });
+      await first.close();
+
+      const second = await launch({ locale, engine: { responder: () => 'ok' } });
+      await second.page.emulateMedia({ colorScheme: scheme });
+      await second.page.getByRole('button', { name: words.newDiscussion }).first().click();
+      await chat(second.page).send(locale === 'fr' ? 'Que dit la météo à Lille ?' : 'What is the weather in Lille?');
+      await expect(chat(second.page).replies).toHaveCount(1, { timeout: 15_000 });
+      await expect(chat(second.page).streamingReplies).toHaveCount(0, { timeout: 15_000 });
+      await second.page.mouse.move(1, 1);
+      await second.page.waitForTimeout(300);
+      await second.page.screenshot({ path: join(into, `discussion-${locale}-${scheme}.png`), animations: 'disabled' });
+      await second.page.getByRole('button', { name: words.more }).click();
+      await second.page.getByRole('menuitem', { name: words.attach }).click();
+      await expect(second.page.getByRole('dialog')).toBeVisible();
+      await second.page.waitForTimeout(300);
+      await second.page.screenshot({ path: join(into, `attach-project-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}
