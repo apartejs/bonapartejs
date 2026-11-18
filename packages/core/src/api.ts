@@ -1309,6 +1309,8 @@ export function createCore(deps: CoreDeps): Core {
   };
   const plugins = new PluginHost({
     registry: tools,
+    // What is switched off, for the app or a project, kept across restarts (task 11.1).
+    stateFile: join(deps.dataDir, 'config', 'plugins.json'),
     log,
     webSearch,
     ...(deps.browser ? { browser: deps.browser } : {}),

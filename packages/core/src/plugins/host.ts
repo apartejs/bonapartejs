@@ -46,6 +46,7 @@ import type { SpawnedProcess, SpawnFn } from '../process/spawn.js';
 import { spawnTree, stopProcessTree } from '../process/tree.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../tools/types.js';
+import { PluginState } from './state.js';
 
 export const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
@@ -54,6 +55,10 @@ export const FLOW_CONTROL = { highWatermark: 100_000, lowWatermark: 5_000, ackSi
 
 export interface PluginHostOptions {
   registry: ToolRegistry;
+  /** What is switched off, kept across restarts (task 11.1); without it, in memory only. */
+  state?: PluginState;
+  /** Or the file it is kept in, opened at the first activation (the core is made synchronously). */
+  stateFile?: string;
   /** A plugin's setting, as the person set it; undefined falls back to the manifest's default. */
   config?: (pluginId: string, key: string) => unknown;
   log?: (message: string) => void;
@@ -124,14 +129,21 @@ export class PluginHost {
   private readonly activations = new Map<string, Activation>();
   /** The module each plugin was activated with: switched on again, it comes back with it. */
   private readonly modules = new Map<string, PluginNodeModule>();
-  private readonly disabled = new Set<string>();
-  private readonly disabledFor = new Map<string, Set<string>>();
+  /** What is switched off, for the app or a project: kept in `config/plugins.json` when a state is given. */
+  private state: PluginState | null;
   /** Which plugin owns a tool of the registry. */
   private readonly owners = new Map<string, string>();
   private readonly log: (message: string) => void;
 
   constructor(private readonly options: PluginHostOptions) {
     this.log = options.log ?? (() => undefined);
+    this.state = options.state ?? null;
+  }
+
+  private async stateOf(): Promise<PluginState> {
+    this.state ??= await PluginState.open(this.options.stateFile ?? null);
+    if (this.state.error) this.log(this.state.error);
+    return this.state;
   }
 
   /** A plugin, from its manifest: a built-in one keeps its tools' names, another is named after it. */
@@ -189,7 +201,8 @@ export class PluginHost {
     const plugin = this.plugins.get(id);
     if (!plugin) throw new Error(`There is no plugin ${id}.`);
     this.modules.set(id, module);
-    if (!plugin.manifest || this.disabled.has(id) || this.activations.has(id)) return this.statusOf(plugin);
+    const state = await this.stateOf();
+    if (!plugin.manifest || state.isOff(id) || this.activations.has(id)) return this.statusOf(plugin);
     const manifest = plugin.manifest;
     const activation: Activation = {
       closed: false,
@@ -226,7 +239,7 @@ export class PluginHost {
   async invoke(id: string, command: string, payload: unknown, options: { projectId?: string } = {}): Promise<unknown> {
     const activation = this.activations.get(id);
     if (!activation || activation.closed) throw new Error(`The plugin ${id} is not active.`);
-    if (options.projectId && this.disabledFor.get(options.projectId)?.has(id)) {
+    if (options.projectId && this.state?.isOff(id, options.projectId)) {
       throw new Error(`The plugin ${id} is turned off for this project.`);
     }
     const handler = activation.commands.get(command);
@@ -251,25 +264,23 @@ export class PluginHost {
    * project's conversations: a project turns off what the app runs.
    */
   async setEnabled(id: string, enabled: boolean, options: { projectId?: string } = {}): Promise<void> {
+    const state = await this.stateOf();
     if (options.projectId) {
-      const off = this.disabledFor.get(options.projectId) ?? new Set<string>();
-      if (enabled) off.delete(id);
-      else off.add(id);
-      this.disabledFor.set(options.projectId, off);
+      await state.setOff(id, !enabled, options.projectId);
       return;
     }
     if (enabled) {
-      this.disabled.delete(id);
+      await state.setOff(id, false);
       const module = this.modules.get(id);
       if (module) await this.activate(id, module);
       return;
     }
-    this.disabled.add(id);
+    await state.setOff(id, true);
     await this.teardown(id);
   }
 
   isEnabled(id: string, projectId?: string): boolean {
-    return !this.disabled.has(id) && !(projectId !== undefined && this.disabledFor.get(projectId)?.has(id));
+    return !(this.state?.isOff(id, projectId) ?? false);
   }
 
   /** Which tools a conversation of this project sees: a plugin its project turned off is not there. */

@@ -6,7 +6,7 @@
 
 export type { PlayMode, ToolEffect, Verdict } from './modes.js';
 export { AGENT_ENDPOINT, APP_ORIGIN, APP_SCHEME } from './agent.js';
-export { localize, parseManifest, PLUGIN_EFFECTS, pluginManifestSchema, usableEffects } from './plugins.js';
+export { localize, parseManifest, PLUGIN_EFFECTS, pluginManifestSchema, pluginSourceSchema, usableEffects } from './plugins.js';
 export type {
   LocalizedText,
   PluginCommandHandler,
@@ -28,6 +28,8 @@ export type {
   BrowserAction,
   BrowserConsoleLine,
   PluginSettingField,
+  PluginCommandContribution,
+  PluginSource,
   PluginSignal,
   PluginStatus,
   PluginToolContribution,

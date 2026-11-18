@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { localize, parseManifest, pluginManifestSchema } from './plugins.js';
+import { localize, parseManifest, pluginManifestSchema, pluginSourceSchema } from './plugins.js';
 
 const base = {
   id: 'changelog',
@@ -23,7 +23,7 @@ describe('the manifest of a plugin', () => {
 
   it('gives every list its empty default', () => {
     const manifest = pluginManifestSchema.parse(base);
-    expect(manifest.contributes).toEqual({ tools: [], panes: [], settings: [] });
+    expect(manifest.contributes).toEqual({ tools: [], panes: [], settings: [], commands: [] });
     expect(manifest.entry).toEqual({});
   });
 
@@ -64,6 +64,22 @@ describe('the manifest of a plugin', () => {
       contributes: { settings: [{ key: 'maxEntries', label: 'Entries', type: 'number', default: 20 }] },
     });
     expect(manifest.contributes.settings[0]?.default).toBe(20);
+  });
+});
+
+describe('what a plugin adds, and where it came from (task 11.1)', () => {
+  it('contributes « / » commands: a plain name and what it does', () => {
+    const manifest = pluginManifestSchema.parse({ ...base, contributes: { commands: [{ name: 'changelog', description: { en: 'Sum up the commits of the day', fr: 'Résumer les commits du jour' } }] } });
+    expect(manifest.contributes.commands).toEqual([{ name: 'changelog', description: { en: 'Sum up the commits of the day', fr: 'Résumer les commits du jour' } }]);
+    expect(pluginManifestSchema.safeParse({ ...base, contributes: { commands: [{ name: 'Change Log', description: 'x' }] } }).success).toBe(false);
+  });
+
+  it('comes from a folder, npm with its version pinned, git with its commit, or a conversation', () => {
+    expect(pluginSourceSchema.parse({ kind: 'folder', path: 'D:/dev/plugins/revue-pr' })).toMatchObject({ kind: 'folder' });
+    expect(pluginSourceSchema.parse({ kind: 'npm', name: '@acme/revue-pr', version: '0.3.0' })).toMatchObject({ version: '0.3.0' });
+    expect(pluginSourceSchema.parse({ kind: 'git', url: 'https://example.com/revue-pr.git', ref: 'main', commit: 'a'.repeat(40) })).toMatchObject({ ref: 'main' });
+    expect(pluginSourceSchema.parse({ kind: 'conversation', conversationId: 'c1', title: 'Une commande /changelog' })).toMatchObject({ kind: 'conversation' });
+    expect(pluginSourceSchema.safeParse({ kind: 'npm', name: '@acme/revue-pr' }).success).toBe(false);
   });
 });
 

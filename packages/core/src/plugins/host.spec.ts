@@ -18,6 +18,7 @@ import { writeFileTool } from '../tools/builtin/write-file.js';
 import { ToolRegistry } from '../tools/registry.js';
 import type { ToolContext } from '../tools/types.js';
 import { PluginHost } from './host.js';
+import { PluginState } from './state.js';
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -537,5 +538,26 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     await expect(opener.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
     expect(await reader.ctx!.browser!.read()).toMatchObject({ text: 'secret' });
     await expect(reader.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
+  });
+});
+
+describe('PluginHost — what is switched off is kept (task 11.1)', () => {
+  it('a plugin switched off before a restart is not activated after it, and can be switched on again', async () => {
+    const file = join(await tempDir('bp-host-state-'), 'plugins.json');
+    const first = new PluginHost({ registry: new ToolRegistry(), state: await PluginState.open(file) });
+    first.add(manifest('notes', { contributes: { tools: [readTool('note_read')] } }), { builtin: true });
+    await first.activate('notes', capture());
+    await first.setEnabled('notes', false);
+    await first.setEnabled('notes', false, { projectId: 'p1' });
+
+    const registry = new ToolRegistry();
+    const again = new PluginHost({ registry, state: await PluginState.open(file) });
+    again.add(manifest('notes', { contributes: { tools: [readTool('note_read')] } }), { builtin: true });
+    await again.activate('notes', capture());
+    expect(again.status()[0]).toMatchObject({ enabled: false, active: false });
+    expect(registry.get('note_read')).toBeUndefined();
+    await again.setEnabled('notes', true);
+    expect(again.status()[0]).toMatchObject({ enabled: true, active: true });
+    expect(again.isEnabled('notes', 'p1')).toBe(false);
   });
 });

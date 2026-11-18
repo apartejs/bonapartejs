@@ -71,6 +71,15 @@ const settingSchema = z
   })
   .strict();
 
+const commandSchema = z
+  .object({
+    /** Typed after « / »: a plain name. */
+    name: z.string().min(1).max(32).regex(/^[a-z][a-z0-9-]*$/),
+    /** Shown beside it in the menu. */
+    description: localizedText(120),
+  })
+  .strict();
+
 export const pluginManifestSchema = z
   .object({
     id: z.string().min(2).max(64).regex(/^[a-z][a-z0-9-]*$/),
@@ -86,9 +95,11 @@ export const pluginManifestSchema = z
         tools: z.array(toolSchema).default([]),
         panes: z.array(paneSchema).default([]),
         settings: z.array(settingSchema).default([]),
+        /** « / » commands: run, they call the command of the same name its Node half registers. */
+        commands: z.array(commandSchema).default([]),
       })
       .strict()
-      .default({ tools: [], panes: [], settings: [] }),
+      .default({ tools: [], panes: [], settings: [], commands: [] }),
   })
   .strict()
   .superRefine((manifest, ctx) => {
@@ -110,6 +121,22 @@ export type PluginManifestInput = z.input<typeof pluginManifestSchema>;
 export type PluginToolContribution = PluginManifest['contributes']['tools'][number];
 export type PluginPaneContribution = PluginManifest['contributes']['panes'][number];
 export type PluginSettingField = PluginManifest['contributes']['settings'][number];
+export type PluginCommandContribution = PluginManifest['contributes']['commands'][number];
+
+/**
+ * Where a plugin came from (task 11.1): a folder copied, an npm package at the version it had when added, a git
+ * repository at the commit it had, or a conversation that made it (task 11.4). An update is proposed against it,
+ * never made in silence.
+ */
+export const pluginSourceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('folder'), path: z.string().min(1).max(1024) }).strict(),
+  z.object({ kind: z.literal('npm'), name: z.string().min(1).max(214), version: z.string().min(1).max(64) }).strict(),
+  z
+    .object({ kind: z.literal('git'), url: z.string().min(1).max(2048), ref: z.string().min(1).max(256), commit: z.string().regex(/^[0-9a-f]{7,64}$/) })
+    .strict(),
+  z.object({ kind: z.literal('conversation'), conversationId: z.string().min(1).max(128), title: z.string().max(256).optional() }).strict(),
+]);
+export type PluginSource = z.infer<typeof pluginSourceSchema>;
 
 /** A manifest read, or why not — in words that say where. */
 export function parseManifest(raw: unknown): { ok: true; manifest: PluginManifest } | { ok: false; error: string } {
