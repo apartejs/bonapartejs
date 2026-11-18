@@ -34,6 +34,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useId, useState } from 'react';
 import { Glyph } from '../shell/icons';
+import { TooBigCard } from '../failures/TooBigCard';
 import { bridge } from '../bridge';
 import { formatBytes, formatSeconds, type NumberStyle } from '../format';
 import type { Messages } from '../i18n/index';
@@ -495,12 +496,12 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
   const chosen = models?.find((model) => model.path === selected) ?? null;
   const cost = chosen?.announcement ?? null;
 
-  async function start(): Promise<void> {
+  async function start(offload = false): Promise<void> {
     if (!chosen) return;
     setLoading(true);
     setFailure(null);
     try {
-      const result = await bridge.invoke(engineLoad, { path: chosen.path });
+      const result = await bridge.invoke(engineLoad, { path: chosen.path, ...(offload ? { offload } : {}) });
       if (result.ok) {
         onReady(result.state);
         return;
@@ -735,7 +736,20 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                 </div>
               ) : null}
 
-              {failure ? (
+              {failure?.code === 'too-big' && failure.tooBig && chosen ? (
+                <TooBigCard
+                  messages={messages}
+                  style={style}
+                  model={chosen.name}
+                  tooBig={failure.tooBig}
+                  busy={loading}
+                  onOffload={() => void start(true)}
+                  onSmaller={() => {
+                    setFailure(null);
+                    document.querySelector<HTMLElement>('.first-run__models input:checked, .first-run__models input')?.focus();
+                  }}
+                />
+              ) : failure ? (
                 <div className="aparte-alert aparte-alert--danger engine-setup__failure" role="alert">
                   <div className="aparte-alert__body">
                     <p className="aparte-alert__title">{text.failed.title}</p>

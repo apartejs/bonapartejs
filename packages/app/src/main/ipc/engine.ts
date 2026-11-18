@@ -9,6 +9,7 @@ import {
   EngineBusyError,
   EngineStoppedError,
   ModelNotListedError,
+  ModelTooBigError,
   UnsupportedFamilyError,
   type Core,
 } from '@aparte/bonaparte-core';
@@ -36,6 +37,9 @@ function loadError(error: unknown): EngineLoadResult {
   const said = error instanceof EngineStoppedError && error.said ? error.said : undefined;
   const detail = (said ?? (error instanceof Error ? error.message : String(error))).slice(-4000);
   if (error instanceof ModelNotListedError) return { ok: false, error: { code: 'not-listed', detail } };
+  if (error instanceof ModelTooBigError) {
+    return { ok: false, error: { code: 'too-big', detail, tooBig: { neededBytes: error.neededBytes, gpuBytes: error.gpuBytes, gpuLayers: error.gpuLayers } } };
+  }
   if (error instanceof UnsupportedFamilyError) return { ok: false, error: { code: error.code, detail } };
   return { ok: false, error: { code: 'failed', detail } };
 }
@@ -49,9 +53,9 @@ export function registerEngineChannels(
 ): void {
   ipc.handle(engineState, () => core.engineState());
   ipc.handle(engineModels, () => core.models());
-  ipc.handle(engineLoad, async ({ path }) => {
+  ipc.handle(engineLoad, async ({ path, offload }) => {
     try {
-      return { ok: true, state: await core.loadModel(path) };
+      return { ok: true, state: await core.loadModel(path, offload ? { offload } : {}) };
     } catch (error) {
       return loadError(error);
     }

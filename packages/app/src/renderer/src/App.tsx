@@ -102,6 +102,7 @@ import { createQuestionsLive } from './aparte/questions';
 import { useShortcut, useShortcutKeys } from './shortcuts/useShortcuts';
 import type { EngineLike } from './logo/mascot-state';
 import { useMascotState } from './logo/useMascotState';
+import { TooBigCard } from './failures/TooBigCard';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -942,6 +943,8 @@ function Workspace({
   const [held, setHeld] = useState(false);
   const [loadingModel, setLoadingModel] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  // A model too big for the card (task 12.3): nothing loaded before the person chooses.
+  const [tooBig, setTooBig] = useState<{ neededBytes: number; gpuBytes: number; gpuLayers: number | null } | null>(null);
   useEffect(() => {
     if (!engineDown) {
       setHeld(false);
@@ -961,13 +964,18 @@ function Workspace({
     window.addEventListener('aparte-before-send', hold, { capture: true });
     return () => window.removeEventListener('aparte-before-send', hold, { capture: true });
   }, []);
-  const loadAndSend = async (): Promise<void> => {
+  const loadAndSend = async (offload = false): Promise<void> => {
     const path = toLoad?.path;
     if (!path) return;
     setLoadingModel(true);
     setLoadFailed(false);
-    const result = await bridge.invoke(engineLoad, { path }).catch(() => null);
+    const result = await bridge.invoke(engineLoad, { path, ...(offload ? { offload } : {}) }).catch(() => null);
     setLoadingModel(false);
+    if (result && !result.ok && result.error.code === 'too-big' && result.error.tooBig) {
+      setTooBig(result.error.tooBig);
+      return;
+    }
+    setTooBig(null);
     if (!result?.ok) {
       setLoadFailed(true);
       return;
@@ -1459,7 +1467,20 @@ function Workspace({
         aboveComposer={
           // The engine down comes first (review of phase 7): a send is held, an approval would resume into
           // nothing — loading it is what everything else waits for.
-          engineDown && toLoad ? (
+          engineDown && toLoad && tooBig ? (
+            <TooBigCard
+              messages={messages}
+              style={style}
+              model={toLoad.name}
+              tooBig={tooBig}
+              busy={loadingModel}
+              onOffload={() => void loadAndSend(true)}
+              onSmaller={() => {
+                setTooBig(null);
+                pickerOpener.current?.();
+              }}
+            />
+          ) : engineDown && toLoad ? (
             <EngineUnloadedCard
               messages={messages}
               style={style}

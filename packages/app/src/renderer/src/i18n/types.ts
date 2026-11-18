@@ -53,7 +53,7 @@ export interface Messages {
     empty: { title: string; body: string };
     failed: {
       title: string;
-      reason: Record<'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
+      reason: Record<'not-listed' | 'unsupported-family' | 'no-chat-template' | 'too-big' | 'failed', string>;
     };
     /** The llama.cpp a load runs, and keeping it up to date. */
     /** The first launch (task 9.6, board « Premier lancement »). */
@@ -769,7 +769,7 @@ export interface Messages {
     branch: string;
     change: string;
     loading: string;
-    refused: Record<'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
+    refused: Record<'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'too-big' | 'failed', string>;
   };
   /** The engine unloaded (task 7.4; board « Coûts annoncés », 5): the card above the composer. */
   /** A service that no longer answers (task 9.3). */
@@ -1003,6 +1003,63 @@ export interface Messages {
       url: string;
       urlPlaceholder: string;
       close: string;
+    };
+  };
+  /** When something breaks (task 12.3, board « Quand quelque chose casse »). */
+  failures: {
+    safe: string;
+    lost: string;
+    tooBig: {
+      context: string;
+      title: string;
+      headline(needed: string, card: string): string;
+      detail(model: string): string;
+      offload: string;
+      noOffload: string;
+      smaller: string;
+    };
+    llamaMissing: {
+      context: string;
+      title: string;
+      headline: string;
+      detail: string;
+      download(build: string, size: string): string;
+      pick: string;
+      service: string;
+      picked: string;
+      pickFailed(reason: string): string;
+    };
+    engineDied: {
+      context: string;
+      title: string;
+      headline(code: string | null): string;
+      safe: string;
+      lost(seconds: string): string;
+      lostUnknown: string;
+      relaunch: string;
+      log: string;
+      error: string;
+    };
+    log: {
+      title: string;
+      empty: string;
+      close: string;
+    };
+    diskFull: {
+      context: string;
+      title: string;
+      headline(free: string, drive: string): string;
+      detail(count: number): string;
+      release(count: number): string;
+      choose: string;
+    };
+    otherModel: {
+      context: string;
+      title: string;
+      headline(saved: string, running: string): string;
+      detail: string;
+      back(model: string, seconds: string): string;
+      reread(seconds: string): string;
     };
   };
   newProject: {

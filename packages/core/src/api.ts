@@ -20,12 +20,14 @@ import {
   announceModelSwitch,
   announceParallelSlots,
   announceRestart,
+  suggestOffload,
   type Announcement,
   type EngineLoadAnnouncement,
   type ModelSwitchAnnouncement,
   type RestartAnnouncement,
 } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
+import { decideLoad } from './failures.js';
 import {
   readGpuMemoryBytes,
   readLlamaDeviceMemory,
@@ -324,7 +326,11 @@ export interface Core {
   engineState(): Promise<EngineState>;
   models(): Promise<ModelChoice[]>;
   /** Loads a model the core listed. The window says the cost before it asks. */
-  loadModel(path: string): Promise<EngineState>;
+  /**
+   * Loads a model. One too big for the card is refused before anything runs (`ModelTooBigError`, task 12.3), unless
+   * `offload`: the layers that fit go on the card, the rest on the processor — a launch setting, kept.
+   */
+  loadModel(path: string, options?: { offload?: boolean }): Promise<EngineState>;
   /**
    * What changing to the model at `path` costs (task 7.4), said before anything is paid: its load, the
    * conversation `conversationId` read again for it, the video memory now and after. Loads nothing.
@@ -1733,7 +1739,7 @@ export function createCore(deps: CoreDeps): Core {
     engineState,
     models,
 
-    async loadModel(path) {
+    async loadModel(path, options = {}) {
       if ((await mode()) !== 'managed')
         throw new Error(
           'The engine is a server that already runs: it loads no model.',
@@ -1745,6 +1751,23 @@ export function createCore(deps: CoreDeps): Core {
       const info = await readGgufInfo(listed.path);
       // Refused before anything is launched.
       const layer = layerForModel(info);
+      // Too big for the card: nothing launched before the person chooses (task 12.3).
+      const settings = await launchSettings();
+      const totalBytes = await gpuBytes();
+      const loadSeconds = supervisor.loadSeconds(listed.path);
+      const model = { info, fileBytes: listed.sizeBytes, ...(loadSeconds !== undefined ? { loadSeconds } : {}) };
+      const launch = { ...settings, slots: slotsFor(settings) };
+      const announced = announceLoad(model, launch, { totalBytes });
+      const decided = decideLoad({
+        verdict: announced.verdict,
+        vramBytes: announced.vramBytes,
+        gpuBytes: totalBytes,
+        gpuLayers: settings.gpuLayers,
+        suggestion: totalBytes === null ? null : (suggestOffload(model, launch, { totalBytes })?.gpuLayers ?? null),
+        offload: options.offload === true,
+      });
+      if (!decided.go) throw decided.error;
+      if (decided.gpuLayers !== undefined) await appSettings.setEngine({ gpuLayers: decided.gpuLayers });
       await configuredManaged(listed.path);
       if (!orphanChecked) {
         orphanChecked = true;

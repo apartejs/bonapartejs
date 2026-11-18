@@ -4249,3 +4249,43 @@ body {
   margin-block: 4px 8px;
   font-size: 10px;
 }
+
+/* When something breaks (task 12.3, board « Quand quelque chose casse »): one card per failure. */
+.failure-card__context {
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: 0.75em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.failure-card__headline {
+  margin: 4px 0 0;
+  font-weight: 600;
+}
+
+.failure-card__list {
+  margin: 6px 0 0;
+  padding-inline-start: 18px;
+}
+
+.failure-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.engine-log__lines {
+  max-height: 50vh;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--aparte-surface-1);
+  font-family: var(--aparte-code-font-family);
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

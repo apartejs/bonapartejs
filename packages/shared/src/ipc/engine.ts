@@ -61,14 +61,19 @@ export const modelChoiceSchema = z.object({
 
 export type ModelChoiceView = z.infer<typeof modelChoiceSchema>;
 
-export const loadErrorCodeSchema = z.enum(['not-listed', 'unsupported-family', 'no-chat-template', 'failed']);
+export const loadErrorCodeSchema = z.enum(['not-listed', 'unsupported-family', 'no-chat-template', 'too-big', 'failed']);
 
 export const engineLoadResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), state: engineStateSchema }),
   z.object({
     ok: z.literal(false),
     // `detail`: what the engine said, for whoever opens it — the window says the code in its own words.
-    error: z.object({ code: loadErrorCodeSchema, detail: z.string() }),
+    error: z.object({
+      code: loadErrorCodeSchema,
+      detail: z.string(),
+      // `too-big` (task 12.3): what the model needs, what the card has, the layers that would fit (null: none).
+      tooBig: z.object({ neededBytes: z.number(), gpuBytes: z.number(), gpuLayers: z.number().nullable() }).optional(),
+    }),
   }),
 ]);
 
@@ -80,7 +85,8 @@ export const engineModels = defineChannel('engine.models', z.void(), z.array(mod
 
 export const engineLoad = defineChannel(
   'engine.load',
-  z.object({ path: z.string().min(1).max(4096) }),
+  // `offload`: « Une partie sur le processeur » for a model too big for the card (task 12.3).
+  z.object({ path: z.string().min(1).max(4096), offload: z.boolean().optional() }),
   engineLoadResultSchema,
 );
 
