@@ -153,7 +153,10 @@ export class PermissionEngine {
 
   evaluate(query: PermissionQuery): Verdict {
     const declared = KNOWN.has(query.tool.effect);
-    const effect: KnownEffect = declared ? query.tool.effect : 'execute';
+    // A third party's plugin runs in a plain Node process: what it declares cannot be held to, so its tool is judged
+    // as a program it runs — the network still asked as the network (audit 13.4).
+    const untrusted = query.tool.source === 'extension' && query.tool.effect !== 'network';
+    const effect: KnownEffect = declared && !untrusted ? query.tool.effect : 'execute';
     let short = MATRIX[query.mode][effect];
     if (effect === 'network' && (this.deps.askBeforeNetwork?.() ?? true)) short = 'ask';
     if (short === 'deny') return { verdict: 'deny', reason: refusal(query.mode, effect) };

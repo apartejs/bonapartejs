@@ -11,6 +11,8 @@
 import { createAparteAgentHandler, type AparteTool } from '@aparte/core';
 import { createOpenAICompatProvider } from '@aparte/provider-openai-compat';
 import type { Verdict } from '@aparte/bonaparte-shared';
+import { EVERY_FAMILY } from '../families/index.js';
+import { neutralizeControlTokens } from '../families/control-tokens.js';
 import type { Provider } from '../providers/registry.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 
@@ -35,6 +37,17 @@ export type ServiceLine = { type: string; [key: string]: unknown };
  * Serves the turn the window posted (`raw`: its body, a resume included) on the service; `onLine` hears each
  * line of the stream as it goes to the window.
  */
+/** Text from outside, its control tokens disarmed for any family the service's model may be (security rule 5). */
+const disarm = (text: string): string => neutralizeControlTokens(text, EVERY_FAMILY);
+
+/** Every string of a JSON value, disarmed: an MCP server writes its tools' schemas. */
+function disarmDeep<T>(value: T): T {
+  if (typeof value === 'string') return disarm(value) as T;
+  if (Array.isArray(value)) return value.map((one: unknown) => disarmDeep(one)) as T;
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, one]) => [key, disarmDeep(one)])) as T;
+  return value;
+}
+
 export async function serveOnService(
   turn: ServiceTurn,
   raw: Record<string, unknown>,
@@ -58,12 +71,12 @@ export async function serveOnService(
     secret: turn.secret,
     resolveKey: () => turn.key,
     tools: turn.tools.map((def) => ({
-      tool: { name: def.name, description: def.description, inputSchema: def.inputSchema } satisfies AparteTool,
+      tool: { name: def.name, description: disarm(def.description), inputSchema: disarmDeep(def.inputSchema) } satisfies AparteTool,
       handler: async (call, signal) => {
         const result = await turn.run({ id: call.id, name: call.name, input: call.input }, signal);
         return {
           toolCallId: call.id,
-          content: result.content,
+          content: disarm(result.content),
           ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
         };
       },
@@ -79,7 +92,13 @@ export async function serveOnService(
     prepareRequest: (chat) => ({
       ...chat,
       modelId: turn.model,
-      messages: [{ role: 'system', content: turn.system }, ...chat.messages.filter((message) => message.role !== 'system')],
+      // The history comes back from the window at every turn: what was outside text then is disarmed again.
+      messages: [
+        { role: 'system', content: turn.system },
+        ...chat.messages
+          .filter((message) => message.role !== 'system')
+          .map((message) => (typeof message.content === 'string' ? { ...message, content: disarm(message.content) } : message)),
+      ],
     }),
     maxTurns: turn.maxTurns,
     // A write or a command never passes one that waits for the person (aparté 1.8).

@@ -40,6 +40,26 @@ function engine(overrides: Partial<PermissionEngineDeps> = {}): PermissionEngine
 
 const edit = (path: string, mode: PlayMode) => engine().evaluate({ tool: EDIT, input: { path, old_string: 'a', new_string: 'b' }, mode });
 
+describe('a tool of a plugin of a third party is judged as a program it runs (audit 13.4)', () => {
+  // Its Node half is a plain Node process: what it declares cannot be held to, so « read » is not believed.
+  const SCAN = { ...tool('plugin__x__scan', 'read'), source: 'extension' as const };
+  const FETCH = { ...tool('plugin__x__fetch', 'network'), source: 'extension' as const };
+
+  it('declared read, it is refused in Lecture, asked in Répétition and Plume', () => {
+    expect(engine().evaluate({ tool: SCAN, input: {}, mode: 'lecture' }).verdict).toBe('deny');
+    expect(engine().evaluate({ tool: SCAN, input: {}, mode: 'repetition' }).verdict).toBe('ask');
+    expect(engine().evaluate({ tool: SCAN, input: {}, mode: 'plume' }).verdict).toBe('ask');
+  });
+
+  it('declared network, it is still asked as the network is', () => {
+    expect(engine().evaluate({ tool: FETCH, input: {}, mode: 'impro' }).verdict).toBe('ask');
+  });
+
+  it('a built-in plugin’s read is believed: its code is the app’s', () => {
+    expect(engine().evaluate({ tool: { ...tool('browser_read', 'read'), source: 'plugin' }, input: {}, mode: 'lecture' }).verdict).toBe('allow');
+  });
+});
+
 describe('a file that runs later asks in every mode — and is refused in Lecture, like any write', () => {
   const ARMED = [
     'package.json',

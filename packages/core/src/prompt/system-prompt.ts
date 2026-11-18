@@ -17,6 +17,7 @@
  */
 
 import { neutralizeControlTokens } from '../families/control-tokens.js';
+import { EVERY_FAMILY } from '../families/index.js';
 import type { FamilyLayer } from '../families/types.js';
 import type { ToolDef } from '../tools/types.js';
 
@@ -109,6 +110,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
 export function buildServicePrompt(options: Omit<SystemPromptOptions, 'family' | 'tools'>): string {
   const blocks = [IDENTITY[options.kind], renderPerimeter(options.perimeter)];
   if (options.replyLanguage) blocks.push(`Write your replies to the person in ${options.replyLanguage}.`);
-  if (options.projectInstructions) blocks.push(`Project instructions:\n${options.projectInstructions}`);
+  // A file anyone who commits wrote: disarmed for any family the service may run (audit 13.4).
+  if (options.projectInstructions) blocks.push(`Project instructions:\n${neutralizeControlTokens(options.projectInstructions, EVERY_FAMILY)}`);
   return blocks.join('\n\n');
 }

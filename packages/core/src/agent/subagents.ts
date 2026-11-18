@@ -51,7 +51,8 @@ function toolsFor(registry: ToolSet, spec: SubagentSpec): ToolSet {
     def.name !== RUN_SUBAGENT &&
     // Making a plugin is the conversation's own, with the person (task 11.4).
     !(EXTENSION_TOOLS as readonly string[]).includes(def.name) &&
-    (spec.tools === 'all' || def.effect === 'read');
+    // Read only: a third party's plugin is not believed to only read (audit 13.4).
+    (spec.tools === 'all' || (def.effect === 'read' && def.source !== 'extension'));
   const get: ToolSet['get'] = (name) => {
     const tool = registry.get(name);
     return tool && allowed(tool.def) ? tool : undefined;

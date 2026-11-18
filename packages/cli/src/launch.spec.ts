@@ -52,7 +52,7 @@ function rig(over: Partial<LaunchDeps> = {}) {
       downloads += 1;
     },
     electronBinary: () => join('/e', 'electron', 'dist', 'electron.exe'),
-    env: { PATH: 'x', ELECTRON_RUN_AS_NODE: '1' },
+    env: { PATH: 'x', ELECTRON_RUN_AS_NODE: '1', ELECTRON_RENDERER_URL: 'http://localhost:5173', BONAPARTE_E2E: '1', BONAPARTE_E2E_UPDATE: '{}' },
     spawn: (command, args, options) => {
       launched.push({ command, args, env: options.env ?? {} });
       return {
@@ -71,7 +71,7 @@ function rig(over: Partial<LaunchDeps> = {}) {
 }
 
 describe('launchFromCli (task 13.3)', () => {
-  it('launches Electron on the app, without ELECTRON_RUN_AS_NODE, and lets the terminal go', async () => {
+  it('launches Electron on the app, without ELECTRON_RUN_AS_NODE nor a dev server or a test run said by the environment (audit 13.4), and lets the terminal go', async () => {
     const { deps, launched, appDir, said, unrefs } = rig();
     expect(await launchFromCli(deps)).toBe(0);
     expect(launched).toEqual([{ command: join('/e', 'electron', 'dist', 'electron.exe'), args: [appDir], env: { PATH: 'x' } }]);

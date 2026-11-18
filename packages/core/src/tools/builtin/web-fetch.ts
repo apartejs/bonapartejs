@@ -4,15 +4,16 @@
  * never a local, private or link-local address — the machine, the network it
  * sits in, a cloud's metadata service — unless a setting allows it; every
  * redirect is checked again before it is followed. A name is resolved, and
- * all its addresses checked, before anything is asked of it.
- *
- * Not covered (yet): a name that resolves to a public address when checked
- * and to a private one when fetched (DNS rebinding) — that needs the address
- * pinned for the connection.
+ * all its addresses checked, before anything is asked of it — and the
+ * connection is made through the same checked resolution: a name that answers
+ * a public address, then a private one (DNS rebinding), reaches nothing
+ * (audit 13.4).
  */
 
 import { lookup as dnsLookup } from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
 import { isIP } from 'node:net';
+import { Agent, fetch as undiciFetch } from 'undici';
 import type { ToolOutput } from '../types.js';
 import { describeError, refused, text, type BuiltinTool } from './common.js';
 
@@ -114,10 +115,35 @@ export interface WebFetchOptions {
   timeoutMs?: number;
 }
 
+/** The marker of a connection refused because its name resolved to a local or private address. */
+class PrivateAddressError extends Error {}
+
+const LOCAL_REFUSAL = (host: string) =>
+  `Refused: ${host} is a local or private address (this machine, or the network it is in). Only addresses of the internet are read.`;
+
 export function createWebFetch(options: WebFetchOptions = {}): BuiltinTool {
-  const fetchPage = options.fetch ?? globalThis.fetch;
   const resolveName = options.lookup ?? (async (host: string) => (await dnsLookup(host, { all: true })).map((found) => found.address));
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // The connection resolves the name through the same check: what it connects to is an address it judged.
+  const pinned = new Agent({
+    connect: {
+      lookup: (hostname: string, lookupOptions: { all?: boolean }, callback: (error: Error | null, address: string | LookupAddress[], family?: number) => void) => {
+        resolveName(hostname).then(
+          (addresses) => {
+            if (addresses.length === 0) return callback(new Error(`The address ${hostname} cannot be resolved.`), '', 4);
+            if (!options.allowPrivate?.() && addresses.some((address) => !isPublicAddress(address))) {
+              return callback(new PrivateAddressError(LOCAL_REFUSAL(hostname)), '', 4);
+            }
+            const found = addresses.map((address) => ({ address, family: isIP(address) === 6 ? 6 : 4 }));
+            if (lookupOptions.all) return callback(null, found);
+            return callback(null, found[0]!.address, found[0]!.family);
+          },
+          (error: unknown) => callback(error instanceof Error ? error : new Error(String(error)), '', 4),
+        );
+      },
+    } as never,
+  });
+  const fetchPage = options.fetch ?? ((input: string, init: RequestInit) => undiciFetch(input, { ...(init as object), dispatcher: pinned }) as unknown as Promise<Response>);
 
   /** Null when the host may be read; else why not, for the model. */
   async function refusalFor(url: URL): Promise<string | null> {
@@ -131,7 +157,7 @@ export function createWebFetch(options: WebFetchOptions = {}): BuiltinTool {
       return `The address ${host} cannot be resolved: ${describeError(error)}`;
     }
     if (addresses.length === 0 || addresses.some((address) => !isPublicAddress(address))) {
-      return `Refused: ${url.host} is a local or private address (this machine, or the network it is in). Only addresses of the internet are read.`;
+      return LOCAL_REFUSAL(url.host);
     }
     return null;
   }
@@ -179,6 +205,9 @@ export function createWebFetch(options: WebFetchOptions = {}): BuiltinTool {
         return refused(`Too many redirects from ${raw}.`);
       } catch (error) {
         if (ctx.signal.aborted) return refused('The page was not read: the turn was stopped.');
+        for (let cause: unknown = error; cause instanceof Error; cause = cause.cause) {
+          if (cause instanceof PrivateAddressError) return refused(cause.message);
+        }
         return refused(`The page could not be read: ${describeError(error)}`);
       }
     },

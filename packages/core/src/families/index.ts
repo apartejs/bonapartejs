@@ -19,6 +19,14 @@ const LAYERS: Partial<Record<FamilyId, FamilyLayer>> = {
   qwen: qwenLayer,
 };
 
+/**
+ * The control tokens of every family the app speaks: what a service's server may parse as special in the text it
+ * templates — tool results, descriptions, history — whatever model it runs (audit 13.4).
+ */
+export const EVERY_FAMILY: Pick<FamilyLayer, 'controlTokens'> = {
+  controlTokens: [...new Set(Object.values(LAYERS).flatMap((layer) => layer?.controlTokens ?? []))],
+};
+
 export function familyLayer(id: FamilyId): FamilyLayer {
   const layer = LAYERS[id];
   if (!layer) throw new UnsupportedFamilyError('unsupported-family', id);

@@ -72,9 +72,13 @@ export async function launchFromCli(deps: LaunchDeps): Promise<number> {
     deps.say(deps.words.downloadingElectron);
     await deps.installElectron(electronDir);
   }
-  // Inherited from an Electron that launched this command, it would make the app a plain Node with no window.
+  // Inherited from an Electron that launched this command, it would make the app a plain Node with no window. The app
+  // the command launches is not packaged: a dev server or a test run said by the environment would be believed by it
+  // — a local page given the bridge, a test's update (audit 13.4).
   const env = { ...deps.env };
-  delete env['ELECTRON_RUN_AS_NODE'];
+  for (const name of Object.keys(env)) {
+    if (name === 'ELECTRON_RUN_AS_NODE' || name === 'ELECTRON_RENDERER_URL' || name.startsWith('BONAPARTE_E2E')) delete env[name];
+  }
   const child = deps.spawn(deps.electronBinary(electronDir), [appDir], { env });
   child.unref();
   deps.say(deps.words.launched);

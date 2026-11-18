@@ -130,3 +130,42 @@ describe('web_fetch', () => {
     expect(await run(tool, 'https://example.com/img')).toMatchObject({ failed: true });
   });
 });
+
+describe('the address checked is the address connected to (audit 13.4: DNS rebinding)', () => {
+  async function local(body: string) {
+    const { createServer } = await import('node:http');
+    let hits = 0;
+    const server = createServer((_request, response) => {
+      hits += 1;
+      response.writeHead(200, { 'content-type': 'text/plain' });
+      response.end(body);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    return { port, hits: () => hits, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
+  }
+
+  it('connects to the address the name was resolved to when it was checked, not one resolved again', async () => {
+    const server = await local('pinned');
+    try {
+      const tool = createWebFetch({ lookup: async () => ['127.0.0.1'], allowPrivate: () => true });
+      const result = await run(tool, `http://pinned.invalid:${server.port}/`);
+      expect(result).toMatchObject({ content: expect.stringContaining('pinned') });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('a name that answers a public address, then a local one, never reaches the local one', async () => {
+    const server = await local('secret of the machine');
+    try {
+      let asked = 0;
+      const tool = createWebFetch({ lookup: async () => (asked++ === 0 ? ['93.184.216.34'] : ['127.0.0.1']) });
+      const result = await run(tool, `http://rebind.invalid:${server.port}/`);
+      expect(result).toMatchObject({ failed: true, content: expect.stringMatching(/local or private/) });
+      expect(server.hits()).toBe(0);
+    } finally {
+      await server.close();
+    }
+  });
+});

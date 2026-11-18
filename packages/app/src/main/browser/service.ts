@@ -33,6 +33,7 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
       return {
         setBounds: (rect) => view.setBounds(rect),
         webContents: {
+          id: contents.id,
           loadURL: (url) => contents.loadURL(url),
           getURL: () => contents.getURL(),
           getTitle: () => contents.getTitle(),
@@ -52,6 +53,20 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
     },
     host: windowHost(options.window as () => BrowserWindow | undefined),
     changed: options.changed,
+    // Chromium's own answers for a name, its cache read, stale ones included: what the page connected to.
+    pageLookup: async (host) =>
+      (await session.resolveHost(host, { cacheUsage: 'staleAllowed', source: 'any' })).endpoints.map((endpoint) => endpoint.address),
+  });
+  // Where Chromium really connected decides what the agent may read; a private address written as one is never asked
+  // by a page the agent opened (audit 13.4).
+  session.webRequest.onBeforeRequest((details, callback) => callback({ cancel: details.webContentsId !== undefined && views.blocked(details.webContentsId, details.url) }));
+  // The address a request was really sent to: Electron says it once the response is over, or at a redirect.
+  session.webRequest.onBeforeRedirect((details) => {
+    if (details.webContentsId !== undefined) views.responded(details.webContentsId, details.ip);
+  });
+  // Electron 45 does not type it here; where it gives it, it counts.
+  session.webRequest.onCompleted((details) => {
+    if (details.webContentsId !== undefined) views.responded(details.webContentsId, (details as { ip?: string }).ip);
   });
 
   const service: BrowserService = {

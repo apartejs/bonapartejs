@@ -15,7 +15,10 @@ interface FakeView extends PageView {
   prevented: string[];
 }
 
+let nextId = 1;
+
 function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; redirectTo?: string } = {}): FakeView {
+  const id = nextId++;
   const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
   let url = '';
   const view: FakeView = {
@@ -26,6 +29,7 @@ function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; re
     emit: (event, ...args) => listeners.get(event)?.forEach((listener) => listener(...args)),
     setBounds: (rect) => void (view.bounds = rect),
     webContents: {
+      id,
       loadURL: async (target) => {
         view.loaded.push(target);
         // A server that answers with a redirect: the page ends where it says.
@@ -305,5 +309,67 @@ describe('the network this machine is in, after a redirect (review of phase 10)'
     browser.openTab('t1');
     await browser.navigate('t1', 'http://192.168.1.1/');
     expect(await browser.agentRead()).toMatchObject({ text: 'status' });
+  });
+});
+
+describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS rebinding)', () => {
+  it('a page the agent opened that answered from the network this machine is in is never read, pictured nor acted on', async () => {
+    const views: FakeView[] = [];
+    const watched = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+    });
+    expect(await watched.agentOpen('http://rebind.example/')).toMatchObject({ url: 'http://rebind.example/' });
+    // The name answered a public address to Node, then a private one to Chromium.
+    watched.responded(views[0]!.webContents.id, '192.168.1.1');
+    await expect(watched.agentRead()).rejects.toThrow(/private/);
+    // A new page the agent opens starts clean.
+    expect(await watched.agentOpen('http://other.example/')).toMatchObject({ url: 'http://other.example/' });
+    watched.responded(views[0]!.webContents.id, '93.184.216.34');
+    await expect(watched.agentRead()).resolves.toMatchObject({ url: 'http://other.example/' });
+  });
+
+  it('a name Chromium resolved to a private address is refused, whatever Node answers', async () => {
+    const views: FakeView[] = [];
+    const browser = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+      pageLookup: async () => ['10.0.0.7'],
+    });
+    await browser.agentOpen('http://rebind.example/');
+    await expect(browser.agentRead()).rejects.toThrow(/private/);
+  });
+
+  it('a request of an agent’s page to a private address written as one is cancelled; a person’s page is theirs', async () => {
+    const views: FakeView[] = [];
+    const browser = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+    });
+    await browser.agentOpen('http://public.example/');
+    const id = views[0]!.webContents.id;
+    expect(browser.blocked(id, 'http://10.0.0.5/router.cgi')).toBe(true);
+    expect(browser.blocked(id, 'http://[fd00::1]/')).toBe(true);
+    expect(browser.blocked(id, 'http://127.0.0.1:5173/')).toBe(false);
+    expect(browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
+    expect(browser.blocked(9999, 'http://10.0.0.5/')).toBe(false);
   });
 });

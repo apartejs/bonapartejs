@@ -28,6 +28,8 @@ export interface Rect {
 export interface PageView {
   setBounds(rect: Rect): void;
   webContents: {
+    /** Electron's id of the page: what the session's requests name. */
+    readonly id: number;
     loadURL(url: string): Promise<void>;
     getURL(): string;
     getTitle(): string;
@@ -129,6 +131,11 @@ export interface BrowserViewsOptions {
   changed(): void;
   /** Tests only: how a host's addresses are found. */
   lookup?: (host: string) => Promise<string[]>;
+  /**
+   * How the pages' own network stack resolved a host — Chromium's cache, stale entries too: what the page really
+   * connected to, not a second answer of the name's server (audit 13.4).
+   */
+  pageLookup?: (host: string) => Promise<string[]>;
 }
 
 const PHONE_WIDTH = 360;
@@ -143,6 +150,8 @@ interface Tab {
   console: ConsoleLine[];
   /** Who loaded the page shown: the person may show the agent any page; the agent alone never the network it is in. */
   loadedBy?: 'person' | 'agent';
+  /** A page the agent opened answered from the network this machine is in, by Chromium's own resolution (audit 13.4). */
+  reachedPrivate?: boolean;
 }
 
 /** An address as a person types it: a scheme added when it has none; null for anything but http(s). */
@@ -287,7 +296,35 @@ export class BrowserViews {
     if (refused) return { error: refused };
     const tab = this.agentTab();
     tab.loadedBy = 'agent';
+    delete tab.reachedPrivate;
     return this.load(tab, url);
+  }
+
+  /**
+   * The session saw a response come from an address (task 10.1, audit 13.4): Chromium's own resolution, not Node's.
+   * A page the agent opened that answered from the network this machine is in — a name that rebinds, a link, a
+   * script — is never read, pictured nor acted on afterwards.
+   */
+  responded(webContentsId: number, ip: string | undefined): void {
+    const tab = this.tabOf(webContentsId);
+    if (!tab || tab.loadedBy !== 'agent' || !ip) return;
+    const bare = ip.replace(/^\[|\]$/g, '');
+    if (!isLoopback(bare) && !isPublicAddress(bare)) tab.reachedPrivate = true;
+  }
+
+  /** A request of a page the agent opened to an address of the network this machine is in, written as one: cancelled. */
+  blocked(webContentsId: number, url: string): boolean {
+    const tab = this.tabOf(webContentsId);
+    if (!tab || tab.loadedBy !== 'agent') return false;
+    try {
+      return privateLiteral(new URL(url).hostname);
+    } catch {
+      return false;
+    }
+  }
+
+  private tabOf(webContentsId: number): Tab | undefined {
+    return [...this.tabs.values()].find((tab) => tab.view.webContents.id === webContentsId);
   }
 
   async agentRead(): Promise<{ url: string; title: string; text: string; console: ConsoleLine[] } | null> {
@@ -397,8 +434,17 @@ export class BrowserViews {
    */
   private async mayReach(tab: Tab): Promise<void> {
     if (tab.loadedBy === 'person') return;
-    const refused = await this.refusedForAgent(new URL(tab.view.webContents.getURL()).hostname);
+    const answered = 'Refused: this page answered from a private address (the network this machine is in). The browser opens the internet and this machine\'s own pages.';
+    if (tab.reachedPrivate) throw new Error(answered);
+    const host = new URL(tab.view.webContents.getURL()).hostname;
+    const refused = await this.refusedForAgent(host);
     if (refused) throw new Error(refused);
+    // What the page's own resolver holds for the name: a name that answered Node one address and Chromium another.
+    const bare = host.replace(/^\[|\]$/g, '');
+    if (this.options.pageLookup && !isIP(bare) && bare !== 'localhost') {
+      const seen = await this.options.pageLookup(bare).catch(() => []);
+      if (seen.some((address) => !isLoopback(address) && !isPublicAddress(address))) throw new Error(answered);
+    }
   }
 
   /** This machine's own pages pass (a dev server); the network it is in does not. */
