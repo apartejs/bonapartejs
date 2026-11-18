@@ -31,6 +31,10 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') });
   registerConversationChannels(ipc, {
+    conversationSettings: {
+      get: async () => ({ temperature: null, thinking: null, contextCap: null, defaults: { temperature: 0.7, thinking: true } }),
+      set: async () => ({ temperature: null, thinking: null, contextCap: null, defaults: { temperature: 0.7, thinking: true } }),
+    },
     conversationStore: store,
     conversations: {
       open: open as never,

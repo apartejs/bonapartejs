@@ -12,10 +12,10 @@ import type { CatalogueEntry, CoreDeps } from '@aparte/bonaparte-core';
 export function e2eEngineDeps(
   env: Record<string, string | undefined>,
   e2e: boolean,
-): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'freeDiskBytes' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> {
+): Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'freeDiskBytes' | 'resourceProbes' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> {
   if (!e2e) return {};
   // GitHub's CLI: the test's fake one, or none — a test run never asks GitHub.
-  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'freeDiskBytes' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> = { gh: null };
+  const deps: Pick<CoreDeps, 'llamaCommand' | 'gpuMemory' | 'freeDiskBytes' | 'resourceProbes' | 'port' | 'llamaReleases' | 'home' | 'diskRoots' | 'gh' | 'modelHub' | 'modelCatalogue'> = { gh: null };
   try {
     const gh = JSON.parse(env['BONAPARTE_E2E_GH_COMMAND'] ?? 'null') as unknown;
     if (Array.isArray(gh) && gh.length > 0 && gh.every((part) => typeof part === 'string')) deps.gh = gh as string[];
@@ -35,6 +35,20 @@ export function e2eEngineDeps(
   }
   const gpu = Number(env['BONAPARTE_E2E_GPU_BYTES']);
   if (Number.isFinite(gpu) && gpu > 0) deps.gpuMemory = async () => gpu;
+  // The machine a test says it reads (task 12.4): never the PowerShell probe of the real card in a test run.
+  let readings: { cpu?: number | null; usedBytes?: number; totalBytes?: number; gpuUtilization?: number | null } = {};
+  try {
+    const parsed = JSON.parse(env['BONAPARTE_E2E_RESOURCES'] ?? '{}') as unknown;
+    if (parsed && typeof parsed === 'object') readings = parsed as typeof readings;
+  } catch {
+    /* not readings: the defaults */
+  }
+  deps.resourceProbes = {
+    intervalMs: 200,
+    system: async () => ({ cpu: readings.cpu ?? null, memory: { usedBytes: readings.usedBytes ?? 0, totalBytes: readings.totalBytes ?? 0 } }),
+    gpu: async () => (typeof readings.gpuUtilization === 'number' ? { dedicatedBytes: null, sharedBytes: null, utilization: readings.gpuUtilization } : null),
+    serverProcess: async () => null,
+  };
   // The free space a test says the disk has (task 12.3: the disk nearly full).
   const free = Number(env['BONAPARTE_E2E_FREE_BYTES']);
   if (Number.isFinite(free) && free >= 0 && env['BONAPARTE_E2E_FREE_BYTES'] !== undefined) deps.freeDiskBytes = async () => free;

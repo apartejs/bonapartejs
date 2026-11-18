@@ -38,6 +38,19 @@ export type MemoryOverviewView = z.infer<typeof memoryOverviewSchema>;
 export type MemoryRowView = z.infer<typeof memoryRowSchema>;
 
 export const engineMemory = defineChannel('engine.memory', z.void(), memoryOverviewSchema);
+
+/** « Moniteur de ressources » (task 12.4): a reading of the machine; a figure it does not report is null. */
+export const resourceSampleSchema = z.object({
+  at: z.number(),
+  cpu: z.number().nullable(),
+  memory: z.object({ usedBytes: z.number(), totalBytes: z.number() }),
+  gpu: z.object({ dedicatedBytes: z.number().nullable(), sharedBytes: z.number().nullable(), utilization: z.number().nullable() }).nullable(),
+  server: z.object({ pid: z.number(), workingSetBytes: z.number(), cpu: z.number().nullable() }).nullable(),
+  app: z.object({ workingSetBytes: z.number(), cpu: z.number().nullable() }).nullable(),
+});
+export type ResourceSampleView = z.infer<typeof resourceSampleSchema>;
+/** The last reading, while the monitor reads; null when it does not. */
+export const engineResources = defineChannel('engine.resources', z.void(), resourceSampleSchema.nullable());
 /** The disk nearly full, said before a conversation's memory is saved (task 12.3); null when it fits. */
 export const engineDiskCheck = defineChannel(
   'engine.diskCheck',

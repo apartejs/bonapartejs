@@ -4,6 +4,8 @@ import { useConversationManager, type AparteChatImperativeApi } from '@aparte/re
 import {
   conversationsMemory,
   engineDiskCheck,
+  engineResources,
+  type ResourceSampleView,
   engineLoad,
   engineReleaseMemory,
   engineModels,
@@ -107,6 +109,7 @@ import { useMascotState } from './logo/useMascotState';
 import { TooBigCard } from './failures/TooBigCard';
 import { EngineDiedCard } from './failures/EngineDied';
 import { DiskFullCard } from './failures/DiskFullCard';
+import { ConversationSettingsDialog } from './dialogs/ConversationSettings';
 import { TURN_ACTIVITY } from './aparte/runner';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
@@ -278,6 +281,21 @@ function Workspace({
       if (event.kind === 'plugins') read();
     });
   }, [pluginsProject]);
+  // The built-in entries of task 12.4: on for the app, or for the project shown.
+  const entryOn = (id: string): boolean => plugins.some((plugin) => plugin.id === id && plugin.enabled && plugin.active);
+  // « Moniteur de ressources » (task 12.4): the last reading, then each one the main process pushes.
+  const [resources, setResources] = useState<ResourceSampleView | null>(null);
+  useEffect(() => {
+    void bridge
+      .invoke(engineResources, undefined)
+      .then((sample) => setResources(sample))
+      .catch(() => undefined);
+    return bridge.on((event) => {
+      if (event.kind === 'resources') setResources(event.sample);
+    });
+  }, []);
+  // « Réglages de la conversation… » (task 12.4): the conversation its dialog is open on.
+  const [settingsOf, setSettingsOf] = useState<string | null>(null);
   const pluginPanes = useMemo(
     () =>
       plugins
@@ -1227,6 +1245,8 @@ function Workspace({
         <Sidebar
           messages={messages}
           mascot={mascot}
+          resources={entryOn('resource-monitor') ? resources : null}
+          locale={locale}
           engine={engine}
           conversations={activeConversations}
           activeId={conversationId ?? null}
@@ -1399,6 +1419,7 @@ function Workspace({
           goTo(null);
         }}
       />
+      <ConversationSettingsDialog messages={messages} locale={locale} conversationId={settingsOf} onClose={() => setSettingsOf(null)} />
       {inboxOpen ? (
         <InboxPage
           messages={messages}
@@ -1425,6 +1446,7 @@ function Workspace({
       <ConversationHeader
         hidden={inboxOpen}
         messages={messages}
+        {...(entryOn('conversation-settings') && conversationId ? { onSettings: () => setSettingsOf(conversationId) } : {})}
         conversationId={openConversation ? openConversation.id : null}
         title={openConversation?.title ?? ''}
         project={projects.find((candidate) => openConversation && candidate.id === projectOf(openConversation.id))?.name ?? null}

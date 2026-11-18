@@ -114,4 +114,6 @@ export type AppEvent =
   /** The built-in browser changed (a tab, its address, its console, the agent reading): the pane reads it again (task 10.1). */
   | { kind: 'browser' }
   /** A notification or the notification area's menu was clicked: the window shows that conversation (task 8.5). */
-  | { kind: 'open'; conversationId: string };
+  | { kind: 'open'; conversationId: string }
+  /** A reading of the machine (task 12.4, « Moniteur de ressources »). */
+  | { kind: 'resources'; sample: import('./memory.js').ResourceSampleView };

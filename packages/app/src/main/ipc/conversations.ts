@@ -36,6 +36,8 @@ import {
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  conversationsSettingsGet,
+  conversationsSettingsSet,
   conversationsAttachProject,
   type ConversationDocument,
   type ConversationMemoryView,
@@ -46,6 +48,7 @@ import type { IpcRegistry } from './register.js';
 const NEW_CONVERSATION = { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' } as const;
 
 interface ConversationCore {
+  conversationSettings: Core['conversationSettings'];
   conversationStore: Pick<
     Core['conversationStore'],
     'ensure' | 'get' | 'list' | 'loadDocument' | 'saveDocument' | 'mark' | 'rename' | 'loadDraft' | 'saveDraft'
@@ -158,6 +161,8 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   });
   // The core holds the engine while it reads.
   ipc.handle(conversationsReadAgain, ({ id }) => core.readAgain(id));
+  ipc.handle(conversationsSettingsGet, ({ id }) => core.conversationSettings.get(id));
+  ipc.handle(conversationsSettingsSet, ({ id, ...changes }) => core.conversationSettings.set(id, changes));
   ipc.handle(conversationsAttachProject, ({ id, projectId }) => core.attachProject(id, projectId));
   ipc.handle(conversationsStatus, async ({ ids }) => {
     const found = await Promise.all(

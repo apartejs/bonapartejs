@@ -29,6 +29,8 @@ export interface ConversationHeaderProps {
   onDelete(): void;
   /** A discussion (task 9.7): « Travailler dans un projet… ». */
   onAttach?(): void;
+  /** « Réglages de la conversation… » (task 12.4), while its entry is on. */
+  onSettings?(): void;
   /** The icons of the panes, at the end of the header. */
   panels?: ReactNode;
   /** « Brancher » (task 7.2): the conversation's branches. */
@@ -42,7 +44,7 @@ export interface ConversationHeaderProps {
   onOpenPr?(): void;
 }
 
-type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'attach' | 'delete';
+type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'attach' | 'settings' | 'delete';
 
 export function ConversationHeader(props: ConversationHeaderProps) {
   const words = props.messages.header;
@@ -62,6 +64,7 @@ export function ConversationHeader(props: ConversationHeaderProps) {
     else if (action === 'unpin') props.onUnpin();
     else if (action === 'archive') props.onArchive();
     else if (action === 'attach') props.onAttach?.();
+    else if (action === 'settings') props.onSettings?.();
     else setDeleting(true);
   };
   useEffect(() => {
@@ -178,6 +181,11 @@ export function ConversationHeader(props: ConversationHeaderProps) {
             {props.onAttach ? (
               <button type="button" className="aparte-menu__item" role="menuitem" data-action="attach">
                 {words.attach}
+              </button>
+            ) : null}
+            {props.onSettings ? (
+              <button type="button" className="aparte-menu__item" role="menuitem" data-action="settings">
+                {props.messages.conversationSettings.menu}
               </button>
             ) : null}
             <button type="button" className="aparte-menu__item" role="menuitem" data-action="archive">

@@ -131,6 +131,26 @@ export const conversationCardSchema = z.object({
 export type ConversationCard = z.infer<typeof conversationCardSchema>;
 
 export const conversationsLoadMeta = defineChannel('conversations.loadMeta', z.void(), z.array(conversationCardSchema));
+/** « Réglages de la conversation » (task 12.4): its own temperature, reasoning and context cap; null: the default. */
+export const conversationSettingsSchema = z.object({
+  temperature: z.number().nullable(),
+  thinking: z.boolean().nullable(),
+  contextCap: z.number().nullable(),
+  defaults: z.object({ temperature: z.number(), thinking: z.boolean() }),
+});
+export type ConversationSettingsView = z.infer<typeof conversationSettingsSchema>;
+export const conversationsSettingsGet = defineChannel('conversations.settings', z.object({ id: z.string().min(1).max(128) }), conversationSettingsSchema);
+export const conversationsSettingsSet = defineChannel(
+  'conversations.settings.set',
+  z.object({
+    id: z.string().min(1).max(128),
+    temperature: z.number().nullable().optional(),
+    thinking: z.boolean().nullable().optional(),
+    contextCap: z.number().nullable().optional(),
+  }),
+  conversationSettingsSchema,
+);
+
 export const conversationsRename = defineChannel('conversations.rename', z.object({ id: z.string().min(1).max(128), title: z.string().max(500) }), z.void());
 export const conversationsPin = defineChannel('conversations.pin', idInput, z.void());
 export const conversationsUnpin = defineChannel('conversations.unpin', idInput, z.void());

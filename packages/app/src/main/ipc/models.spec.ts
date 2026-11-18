@@ -36,6 +36,7 @@ describe('the memory channels', () => {
     const core: MemoryCore = {
       memory: async () => ({ engine: { running: false, since: null, model: null, busy: false, nCtx: 8192, cacheType: 'f16', slots: 1 }, budgetBytes: 1, usedBytes: 0, rows: [], seed: null }),
       releaseMemory: async (id) => void done.push(`release ${id}`),
+      resources: { start: () => undefined, last: () => null },
       diskCheck: async (id) => (id === 'full' ? { freeBytes: 1, drive: 'C:', needBytes: 2, release: ['old'], enough: true } : null),
       unloadModel: async () => void done.push('unload'),
       restartEngine: async () => void done.push('restart'),

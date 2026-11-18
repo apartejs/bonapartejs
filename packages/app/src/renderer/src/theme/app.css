@@ -4289,3 +4289,30 @@ body {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* « Moniteur de ressources » in the engine's card (task 12.4): each figure in words, its bar beside. */
+.engine-card__resources {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.engine-card__meter {
+  display: grid;
+  gap: 2px;
+}
+
+.engine-card__meter-text {
+  color: var(--aparte-text-muted);
+  font-size: 0.8em;
+}
+
+.engine-card__bar {
+  height: 4px;
+}
+
+.conversation-settings__body {
+  display: grid;
+  gap: 6px;
+  min-width: min(420px, 80vw);
+}

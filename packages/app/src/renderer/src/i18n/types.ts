@@ -145,6 +145,16 @@ export interface Messages {
     rereadProgressLabel: string;
   };
   engineCard: {
+    /** « Moniteur de ressources » (task 12.4): each figure in words, never by its bar alone. */
+    resources: {
+      label: string;
+      cpu: string;
+      memory: string;
+      gpu: string;
+      unknown: string;
+      percent(value: number): string;
+      of(used: string, total: string): string;
+    };
     ready: string;
     line(context: string, slots: number): string;
     /** A sub-agent works in the engine (task 8.2): the dot's name, and the line. */
@@ -1063,6 +1073,24 @@ export interface Messages {
       back(model: string, seconds: string): string;
       reread(seconds: string): string;
     };
+  };
+  /** « Réglages de la conversation » (task 12.4). */
+  conversationSettings: {
+    menu: string;
+    title: string;
+    hint: string;
+    temperature: string;
+    temperatureHint(value: string): string;
+    thinking: string;
+    thinkingDefault(on: boolean): string;
+    thinkingOn: string;
+    thinkingOff: string;
+    contextCap: string;
+    contextCapHint: string;
+    cancel: string;
+    save: string;
+    badTemperature: string;
+    badCap: string;
   };
   newProject: {
     open: string;

@@ -8,6 +8,7 @@ import {
   engineMemory,
   engineReleaseMemory,
   engineDiskCheck,
+  engineResources,
   engineRestart,
   engineUnload,
   modelsAddFolder,
@@ -20,7 +21,7 @@ import type { ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
 
 export type ModelsCore = Pick<Core, 'addModelFolder'> & { diskScan: Pick<Core['diskScan'], 'start' | 'state' | 'cancel'> };
-export type MemoryCore = Pick<Core, 'memory' | 'releaseMemory' | 'diskCheck' | 'unloadModel' | 'restartEngine'>;
+export type MemoryCore = Pick<Core, 'memory' | 'releaseMemory' | 'diskCheck' | 'unloadModel' | 'restartEngine' | 'resources'>;
 
 export function registerModelChannels(ipc: IpcRegistry, core: ModelsCore, chooseFolder: ChooseFolder): void {
   ipc.handle(modelsAddFolder, async () => {
@@ -43,6 +44,7 @@ export function registerMemoryChannels(ipc: IpcRegistry, core: MemoryCore): void
   ipc.handle(engineMemory, () => core.memory());
   ipc.handle(engineReleaseMemory, ({ id }) => core.releaseMemory(id));
   ipc.handle(engineDiskCheck, ({ id }) => core.diskCheck(id));
+  ipc.handle(engineResources, () => core.resources.last());
   ipc.handle(engineUnload, () => core.unloadModel());
   ipc.handle(engineRestart, () => core.restartEngine());
 }

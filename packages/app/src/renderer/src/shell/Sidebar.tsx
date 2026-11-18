@@ -12,7 +12,7 @@
  */
 
 import { AparteConversationList } from '@aparte/react';
-import type { EngineStateView, ProjectView } from '@aparte/bonaparte-shared';
+import type { EngineStateView, ProjectView, ResourceSampleView } from '@aparte/bonaparte-shared';
 import { useMemo, useState } from 'react';
 import { CHATS_TARGET } from '../chat/ChatDeck';
 import type { Messages } from '../i18n/index';
@@ -38,6 +38,9 @@ export interface SidebarProps {
   messages: Messages;
   /** The mascot's state (task 12.2). */
   mascot: MascotState;
+  /** « Moniteur de ressources » (task 12.4): the last reading while it is on. */
+  resources?: ResourceSampleView | null;
+  locale?: string;
   engine: EngineStateView;
   conversations: readonly ListedConversation[];
   activeId: string | null;
@@ -214,7 +217,7 @@ export function Sidebar(props: SidebarProps) {
           </>
         )}
       </div>
-      <EngineCard engine={props.engine} messages={messages} />
+      <EngineCard engine={props.engine} messages={messages} resources={props.resources ?? null} {...(props.locale ? { locale: props.locale } : {})} />
       <button type="button" className="bonaparte-settings-link" onClick={props.onSettings}>
         <Icon name="settings" />
         {messages.settings.open}

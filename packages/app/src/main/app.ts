@@ -285,6 +285,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     browser: builtinBrowser.service,
     pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
     commandOutput: (conversationId, output) => push({ kind: 'command', conversationId, output }),
+    resourcesChanged: (sample) => push({ kind: 'resources', sample }),
     engineChanged: () => {
       push({ kind: 'engine' });
       // The notification area says the engine's state too.
@@ -407,6 +408,8 @@ ${appTokens}`,
   });
 
   window = createMainWindow({ devServerUrl, e2e: options.e2e });
+  // « Moniteur de ressources » (task 12.4): read while its entry is on, once a window shows it.
+  core.resources.start();
 
   // Closing the window hides it while « close to the tray » says so: a reply goes on, the model stays.
   let closeToTray = await setting(core, 'closeToTray', true);
