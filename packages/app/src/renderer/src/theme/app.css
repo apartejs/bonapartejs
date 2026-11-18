@@ -42,7 +42,7 @@ body {
 }
 
 /*
- * Choosing a model (screens/EngineSetup.tsx). The card, the choices, the
+ * Choosing a model (screens/FirstRun.tsx). The card, the choices, the
  * badges and the alert are aparté's; this only places them on the page.
  */
 .engine-setup {
@@ -143,6 +143,313 @@ body {
   min-inline-size: 9rem;
 }
 
+
+/*
+ * The first launch (screens/FirstRun.tsx, board « Premier lancement »): two engines side by side, then the
+ * panel of the one chosen. The cards, choices, fields and alerts are aparté's; this places them, and draws
+ * the gauge — the model, its context, the margin — in three of the palette's tokens.
+ */
+.first-run__card {
+  max-width: 880px;
+}
+
+.first-run__brand {
+  margin: 0 0 var(--aparte-space-2);
+  font-size: var(--aparte-font-size-sm);
+  font-weight: var(--aparte-font-weight-semibold);
+  color: var(--aparte-text-muted);
+}
+
+.first-run__engines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-3);
+}
+
+.first-run__engine {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.first-run__engine-title {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-2);
+}
+
+.first-run__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-6);
+}
+
+.first-run__found {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-3);
+}
+
+.first-run__found > .first-run__status {
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.first-run__gpu {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-4);
+  padding: var(--aparte-space-4) var(--aparte-space-5);
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: var(--aparte-radius-lg);
+}
+
+.first-run__mark {
+  flex: none;
+  display: inline-flex;
+  color: var(--aparte-text-muted);
+}
+
+.first-run__mark--found {
+  color: var(--aparte-success);
+}
+
+.first-run__label {
+  margin: 0;
+  font-size: var(--aparte-font-size-sm);
+  font-weight: var(--aparte-font-weight-semibold);
+}
+
+/* The models: a file, then three figures in columns, as the board lays them. */
+.first-run__columns,
+.first-run__models .model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 6rem 7rem 11rem;
+  column-gap: var(--aparte-space-4);
+  align-items: center;
+}
+
+.first-run__columns {
+  padding-inline: calc(var(--aparte-space-5) + var(--aparte-icon-size) + var(--aparte-space-3)) var(--aparte-space-5);
+  font-size: var(--aparte-font-size-xs);
+  color: var(--aparte-text-muted);
+}
+
+.first-run__columns > span:not(:first-child),
+.model-row__figure {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.first-run__models .model-row {
+  grid-template-columns: auto minmax(0, 1fr) 6rem 7rem 11rem;
+}
+
+.model-row__figure {
+  font-size: var(--aparte-font-size-sm);
+}
+
+.first-run__verdict--fits {
+  color: var(--aparte-success-ink);
+}
+
+.first-run__verdict--tight {
+  color: var(--aparte-warning-ink);
+}
+
+.first-run__verdict--too-big {
+  color: var(--aparte-error-ink);
+}
+
+.first-run__where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-2);
+  margin: var(--aparte-space-2) 0 0;
+  font-size: var(--aparte-font-size-sm);
+  color: var(--aparte-text-muted);
+}
+
+.first-run__where code {
+  font-family: var(--aparte-code-font-family);
+  font-size: var(--aparte-font-size-xs);
+  overflow-wrap: anywhere;
+}
+
+.first-run__recommended {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-3);
+}
+
+.first-run__recommended > .aparte-field-hint {
+  margin: 0;
+}
+
+.recommended-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-3);
+  padding: var(--aparte-space-4) var(--aparte-space-5);
+  border: var(--aparte-border-width) solid var(--aparte-border);
+  border-radius: var(--aparte-radius-lg);
+}
+
+.recommended-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aparte-space-4);
+}
+
+.recommended-row__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The gauge: what loading takes of the card's memory. */
+.first-run__context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-3);
+}
+
+.first-run__gauge {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--aparte-radius-full);
+  background: var(--aparte-surface-2);
+}
+
+.first-run__gauge-model,
+.first-run__key--model::before {
+  background: var(--aparte-primary);
+}
+
+.first-run__gauge-context,
+.first-run__key--context::before {
+  background: var(--aparte-success);
+}
+
+.first-run__gauge-margin,
+.first-run__key--margin::before {
+  background: var(--aparte-text-muted);
+  opacity: 0.45;
+}
+
+.first-run__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-4);
+  margin: 0;
+  font-size: var(--aparte-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--aparte-text-muted);
+}
+
+.first-run__legend strong {
+  color: var(--aparte-text);
+}
+
+.first-run__key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--aparte-space-2);
+}
+
+.first-run__key::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--aparte-radius-full);
+}
+
+.first-run__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-4);
+  padding-top: var(--aparte-space-5);
+  border-top: var(--aparte-border-width) solid var(--aparte-border);
+}
+
+.first-run__footer[hidden] {
+  display: none;
+}
+
+.first-run__footer .aparte-btn {
+  min-inline-size: 9rem;
+}
+
+/* The service: its kind, its address and key, the test, what it lacks. */
+.first-run__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-2);
+  min-width: 0;
+}
+
+.first-run__kinds {
+  flex-wrap: wrap;
+}
+
+.first-run__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--aparte-space-4);
+}
+
+.first-run__field--address {
+  flex: 2 1 320px;
+}
+
+.first-run__field--key {
+  flex: 1 1 220px;
+}
+
+.first-run__test {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aparte-space-4);
+}
+
+.first-run__tested {
+  margin: 0;
+  font-size: var(--aparte-font-size-sm);
+  font-weight: var(--aparte-font-weight-medium);
+}
+
+.first-run__tested--ok {
+  color: var(--aparte-success-ink);
+}
+
+.first-run__tested--failed {
+  color: var(--aparte-error-ink);
+}
+
+.first-run__list {
+  margin: var(--aparte-space-2) 0;
+  padding-inline-start: var(--aparte-space-5);
+  font-size: var(--aparte-font-size-sm);
+}
+
+@media (max-width: 720px) {
+  .first-run__columns {
+    display: none;
+  }
+
+  .first-run__models .model-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .first-run__models .model-row__figure {
+    grid-column: 2;
+    text-align: start;
+  }
+}
 
 /* The llama.cpp a load runs, and keeping it up to date: a box like the choices below it. */
 .llama-status {

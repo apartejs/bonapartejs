@@ -45,8 +45,8 @@ export function e2eEngineDeps(
   // The models recommended: the test's hub (and its catalogue), never Hugging Face (task 9.5).
   const hub = env['BONAPARTE_E2E_MODEL_HUB'];
   deps.modelHub = hub && /^http:\/\/127\.0\.0\.1:\d+$/.test(hub) ? hub : null;
-  const catalogue = catalogueOf(env['BONAPARTE_E2E_MODEL_CATALOGUE']);
-  if (catalogue) deps.modelCatalogue = catalogue;
+  // Without the test's hub, nothing is recommended: no button may point at Hugging Face.
+  deps.modelCatalogue = (deps.modelHub ? catalogueOf(env['BONAPARTE_E2E_MODEL_CATALOGUE']) : undefined) ?? [];
   return deps;
 }
 

@@ -82,7 +82,7 @@ import { RewindDialog } from './dialogs/RewindDialog';
 import { OpenPr } from './dialogs/OpenPr';
 import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
-import { EngineSetup } from './screens/EngineSetup';
+import { FirstRun } from './screens/FirstRun';
 import { ConversationHeader } from './shell/ConversationHeader';
 import { Rail } from './shell/Rail';
 import { ENGINE_CHANGED } from './settings/EngineMemory';
@@ -118,7 +118,18 @@ function playModeOf(value: unknown): PlayMode | null {
 /** Under 1 100 px, the sidebar folds into icons (board « Fenêtre étroite »). */
 const NARROW = '(max-width: 1099px)';
 
-function Workspace({ messages, locale, engine }: { messages: Messages; locale: Locale; engine: EngineStateView }) {
+function Workspace({
+  messages,
+  locale,
+  engine,
+  startOn,
+}: {
+  messages: Messages;
+  locale: Locale;
+  engine: EngineStateView;
+  /** The service the first launch connected (task 9.6): the first conversation starts there. */
+  startOn: { provider: string; model: string } | null;
+}) {
   // One manager for every chat; its single `activeId` names whichever chat moved last, so the
   // conversation open is the shown chat's (aparté's « several live chats »).
   const conversationManager = useConversationManager();
@@ -320,7 +331,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   const bornIn = useRef(new Map<string, string | null>());
 
   // The service a new conversation starts on (task 9.3): what the picker shows, picked before its first message.
-  const chosenService = useRef<{ provider: string; model: string } | null>(null);
+  const chosenService = useRef<{ provider: string; model: string } | null>(startOn);
   const [, setServicePicked] = useState(0);
   const streamRunner = useMemo(
     () =>
@@ -776,6 +787,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
 
   // The services added (task 9.3): their models offered in the composer's picker, beside the engine's.
   const servicesKnown = useRef<ServiceCatalogue[]>([]);
+  const engineAtStart = useRef(engine);
+  // The service chosen for want of a model: once the built-in engine runs, a new conversation goes back to it.
+  const autoService = useRef<{ provider: string; model: string } | null>(null);
+  useEffect(() => {
+    if (engine.status !== 'ready' || !autoService.current) return;
+    if (chosenService.current === autoService.current) {
+      chosenService.current = null;
+      setServicePicked((count) => count + 1);
+    }
+    autoService.current = null;
+  }, [engine.status]);
   const serviceHosts = useRef(new Map<string, string>());
   // A service that did not answer a turn of the conversation shown (task 9.3): said until a turn starts again.
   const [serviceDown, setServiceDown] = useState<{ conversationId: string; service: string; host: string } | null>(null);
@@ -800,6 +822,13 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       servicesKnown.current = found;
       for (const provider of all) if (provider.url) serviceHosts.current.set(provider.id, hostOf(provider.url));
       showServices(found satisfies ServiceCatalogue[]);
+      // No model known to the built-in engine, a service known: a new conversation starts on the service (task 9.6).
+      const first = found.find((service) => service.models.length > 0);
+      if (engineAtStart.current.mode === 'managed' && !engineAtStart.current.model && !engineAtStart.current.resume && !chosenService.current && first) {
+        chosenService.current = { provider: first.id, model: first.models[0]! };
+        autoService.current = chosenService.current;
+        setServicePicked((count) => count + 1);
+      }
     })().catch(() => undefined);
     return () => {
       live = false;
@@ -838,7 +867,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // loading costs. A message sent meanwhile is held: aparté's `aparte-before-send`, cancelled, keeps it in the
   // composer, text and files, with nothing added to the thread (aparté 1.12, apartejs/aparte#245) — a message
   // queued during a reply too.
-  const engineDown = engine.mode === 'managed' && engine.status !== 'ready';
+  // A conversation on a service — or a new one that will start there — needs nothing of the built-in engine (task 9.6).
+  const onService = shownService !== null || (!shownBegun && chosenService.current !== null);
+  const engineDown = engine.mode === 'managed' && engine.status !== 'ready' && !onService;
   // The model a load brings back: the one unloaded (or known), else the one loading now.
   const toLoad = engine.resume ?? (engine.model ? { path: engine.model.path, name: engine.model.name } : undefined);
   const downRef = useRef(engineDown);
@@ -1445,12 +1476,22 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
  */
 export function App({ messages, locale }: { messages: Messages; locale: Locale }) {
   const [engine, setEngine] = useState<EngineStateView | null>(null);
+  // A service added (task 9.6): an engine is chosen, the first launch is not shown again.
+  const [serviceAdded, setServiceAdded] = useState<boolean | null>(null);
+  const [startOn, setStartOn] = useState<{ provider: string; model: string } | null>(null);
 
   useEffect(() => {
     let current = true;
     void bridge.invoke(engineState, undefined).then((state) => {
       if (current) setEngine(state);
     });
+    void bridge
+      .invoke(providersList, undefined)
+      .then((all) => all.some((provider) => provider.kind === 'openai-compat'))
+      .catch(() => false)
+      .then((added) => {
+        if (current) setServiceAdded(added);
+      });
     return () => {
       current = false;
     };
@@ -1482,15 +1523,24 @@ export function App({ messages, locale }: { messages: Messages; locale: Locale }
   // « Préparons le moteur » until a model is known; then the conversations stay, and a card offers to load
   // it again (task 7.4). Once shown, they stay: a load or a restart under way never takes them down.
   const shown = useRef(false);
-  const needsModel = !shown.current && engine?.mode === 'managed' && engine.status !== 'ready' && engine.resume === undefined;
-  if (engine !== null && !needsModel) shown.current = true;
+  const needsModel =
+    !shown.current && engine?.mode === 'managed' && engine.status !== 'ready' && engine.resume === undefined && !serviceAdded;
+  if (engine !== null && serviceAdded !== null && !needsModel) shown.current = true;
 
   return (
     <main className="bonaparte-window">
-      {engine === null ? null : needsModel ? (
-        <EngineSetup messages={messages} locale={locale} onReady={setEngine} />
+      {engine === null || serviceAdded === null ? null : needsModel ? (
+        <FirstRun
+          messages={messages}
+          locale={locale}
+          onReady={setEngine}
+          onService={(service) => {
+            setStartOn(service);
+            setServiceAdded(true);
+          }}
+        />
       ) : (
-        <Workspace messages={messages} locale={locale} engine={engine} />
+        <Workspace messages={messages} locale={locale} engine={engine} startOn={startOn} />
       )}
     </main>
   );

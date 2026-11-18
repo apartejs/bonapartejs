@@ -52,6 +52,52 @@ export interface Messages {
       reason: Record<'not-listed' | 'unsupported-family' | 'no-chat-template' | 'failed', string>;
     };
     /** The llama.cpp a load runs, and keeping it up to date. */
+    /** The first launch (task 9.6, board « Premier lancement »). */
+    brand: string;
+    engines: {
+      label: string;
+      builtin: string;
+      recommended: string;
+      builtinHint: string;
+      service: string;
+      serviceHint: string;
+    };
+    gpu: { title: string; found: string; memory(size: string): string; unknown: string };
+    columns: { file: string; size: string; perToken: string; vram(k: string): string };
+    foundIn: string;
+    addFolder: string;
+    recommended: {
+      title: string;
+      hint: string;
+      download(size: string): string;
+      progress(done: string, total: string): string;
+      progressLabel(name: string): string;
+      failed: { digest: string; failed: string };
+    };
+    context: {
+      label(k: string): string;
+      gauge(used: string, total: string): string;
+      total(used: string, total: string): string;
+      model(size: string): string;
+      kv(size: string): string;
+      margin(size: string): string;
+    };
+    service: {
+      which: string;
+      label: string;
+      kinds: Record<'llamacpp' | 'ollama' | 'lmstudio' | 'openai', string>;
+      address: string;
+      key: string;
+      keyPlaceholder: string;
+      test: string;
+      testing: string;
+      connected(models: number): string;
+      errors: Record<'invalid-address' | 'unreachable' | 'timeout' | 'refused-key' | 'not-a-service' | 'no-model' | 'failed', string>;
+      without: { title: string; items: readonly string[]; later: string };
+      connect: string;
+      connecting: string;
+      note: string;
+    };
     llama: {
       found(build: string): string;
       installed(build: string): string;

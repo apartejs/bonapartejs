@@ -8,6 +8,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 import { conversationList } from './fixtures/conversations.js';
+import { loadFirstModel } from './fixtures/engine.js';
 
 const MODELS = { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } };
 const picker = (page: Page) => page.getByRole('combobox', { name: 'Modèle' });
@@ -17,7 +18,8 @@ test('a model of a service picked before the first message: the conversation goe
     managed: { models: MODELS },
     service: { models: ['qwen3:8b'], responder: () => ({ text: 'Bonjour depuis Ollama.' }) },
   });
-  await page.getByRole('button', { name: 'Démarrer' }).click();
+  // A service known: the app opens on the conversations, and the engine is loaded as « Démarrer » would.
+  await loadFirstModel(page);
   const ui = chat(page);
   await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
 
@@ -43,7 +45,8 @@ test('between two turns: to a service, what it loses said first; back to the bui
     managed: { models: MODELS },
     service: { models: ['qwen3:8b'], responder: () => ({ text: 'Réponse du service.' }) },
   });
-  await page.getByRole('button', { name: 'Démarrer' }).click();
+  // A service known: the app opens on the conversations, and the engine is loaded as « Démarrer » would.
+  await loadFirstModel(page);
   const ui = chat(page);
   await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
   await ui.send('Première question');
@@ -81,7 +84,8 @@ test('the service stops answering: said, the message kept; « Passer au moteur i
     managed: { models: MODELS },
     service: { models: ['qwen3:8b'], responder: () => ({ text: 'Réponse du service.' }) },
   });
-  await page.getByRole('button', { name: 'Démarrer' }).click();
+  // A service known: the app opens on the conversations, and the engine is loaded as « Démarrer » would.
+  await loadFirstModel(page);
   const ui = chat(page);
   await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
   await picker(page).click();

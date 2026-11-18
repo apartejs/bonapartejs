@@ -38,8 +38,11 @@ describe('e2eEngineDeps', () => {
 
   it("recommends the test's catalogue when it gives one, read entry by entry", () => {
     const entry = { id: 'small', family: 'gemma', name: 'Small', repo: 'google/small', file: 'small.gguf', bytes: 10, sha256: 'a'.repeat(64), context: 8192, fromGiB: 0 };
-    expect(e2eEngineDeps({ BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify([entry, { id: 'broken' }]) }, true).modelCatalogue).toEqual([entry]);
-    expect(e2eEngineDeps({ BONAPARTE_E2E_MODEL_CATALOGUE: 'nope' }, true).modelCatalogue).toBeUndefined();
+    const hub = { BONAPARTE_E2E_MODEL_HUB: 'http://127.0.0.1:4001' };
+    expect(e2eEngineDeps({ ...hub, BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify([entry, { id: 'broken' }]) }, true).modelCatalogue).toEqual([entry]);
+    expect(e2eEngineDeps({ ...hub, BONAPARTE_E2E_MODEL_CATALOGUE: 'nope' }, true).modelCatalogue).toEqual([]);
+    // No hub of the test: nothing recommended — no button may point at Hugging Face.
+    expect(e2eEngineDeps({ BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify([entry]) }, true).modelCatalogue).toEqual([]);
   });
 
   it("gives the tools the test's home folder — an absolute path, in a test run only", () => {
@@ -55,8 +58,8 @@ describe('e2eEngineDeps', () => {
   it('ignores what it cannot read', () => {
     expect(
       e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: 'node fake.mjs', BONAPARTE_E2E_ENGINE_PORT: 'eighty' }, true),
-    ).toEqual({ gh: null, llamaReleases: null, modelHub: null });
-    expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ gh: null, llamaReleases: null, modelHub: null });
+    ).toEqual({ gh: null, llamaReleases: null, modelHub: null, modelCatalogue: [] });
+    expect(e2eEngineDeps({ BONAPARTE_E2E_LLAMA_COMMAND: JSON.stringify([]) }, true)).toEqual({ gh: null, llamaReleases: null, modelHub: null, modelCatalogue: [] });
   });
 });
 

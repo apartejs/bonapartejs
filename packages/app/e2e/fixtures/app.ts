@@ -13,6 +13,8 @@ import {
   startFakeLlamaReleases,
   startFakeLlamaServer,
   startFakeOpenAIServer,
+  startFakeModelHub,
+  type FakeModelHub,
   type FakeOpenAIServer,
   type FakeOpenAIServerOptions,
   writeFakeGguf,
@@ -27,6 +29,7 @@ import { createServer } from 'node:net';
 import { _electron as electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -86,6 +89,13 @@ export interface LaunchOptions {
    * `ollama`, no key): what it answers, its models.
    */
   service?: Omit<FakeOpenAIServerOptions, 'key'>;
+  /** `false`: the service runs, but the app does not know it yet — the person adds it (task 9.6). */
+  serviceAdded?: boolean;
+  /**
+   * The hub the recommended models are downloaded from (task 9.5), a local one, and the catalogue the app
+   * recommends: one small model per name, served by the hub. `paceMs`: a download that lasts.
+   */
+  hub?: { models: Record<string, { family: 'gemma' | 'qwen'; gguf?: FakeGgufOptions }>; paceMs?: number };
   /**
    * A project on the app's home folder, made before the launch (default): a new conversation works in it, as a
    * code conversation that may change files. `false`: no project — a new conversation is a discussion (task 9.7).
@@ -117,6 +127,8 @@ export interface LaunchedApp {
   releases?: FakeLlamaReleases;
   /** The service the test asked for: what it was sent. */
   service?: FakeOpenAIServer;
+  /** The hub the test asked for: how many files it served. */
+  hub?: FakeModelHub;
   /** What the managed engine was asked, in order: every completion it received. */
   engineRequests(): Promise<EngineRequest[]>;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
@@ -157,6 +169,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   let app: ElectronApplication | undefined;
   let releases: FakeLlamaReleases | undefined;
   let service: FakeOpenAIServer | undefined;
+  let hub: FakeModelHub | undefined;
 
   // Once: a test may close the app itself, and the fixture closes what is left after it.
   let closing: Promise<void> | undefined;
@@ -166,6 +179,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       await server.close();
       await releases?.close();
       await service?.close();
+      await hub?.close();
       if (!options.keepData && !options.dataDir) {
         await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
         await rm(home, { recursive: true, force: true }).catch(() => undefined);
@@ -234,8 +248,35 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
         JSON.stringify({ projects: [{ id: 'maison', name: 'maison', roots: [home], defaultMode: 'repetition', createdAt: now, updatedAt: now }] }),
       );
     }
+    if (options.hub) {
+      const files: Record<string, Uint8Array> = {};
+      const catalogue = [];
+      for (const [name, model] of Object.entries(options.hub.models)) {
+        const file = join(dataDir, `hub-${name}.gguf`);
+        await writeFakeGguf(file, model.gguf ?? { paddingBytes: 64 * 1024 });
+        const body = await readFile(file);
+        await rm(file, { force: true });
+        const repo = `${model.family === 'gemma' ? 'google' : 'Qwen'}/${name}-gguf`;
+        files[`${repo}/${name}.gguf`] = body;
+        catalogue.push({
+          id: name,
+          family: model.family,
+          name,
+          repo,
+          file: `${name}.gguf`,
+          bytes: body.length,
+          sha256: createHash('sha256').update(body).digest('hex'),
+          context: 32_768,
+          fromGiB: 0,
+        });
+      }
+      hub = await startFakeModelHub({ files, ...(options.hub.paceMs ? { paceMs: options.hub.paceMs } : {}) });
+      Object.assign(managedEnv, { BONAPARTE_E2E_MODEL_HUB: hub.url, BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify(catalogue) });
+    }
     if (options.service) {
       service = await startFakeOpenAIServer(options.service);
+    }
+    if (service && options.serviceAdded !== false) {
       await writeFile(
         join(dataDir, 'config', 'providers.json'),
         JSON.stringify({ providers: [{ id: 'ollama', kind: 'openai-compat', label: 'Ollama', url: `${service.url}/v1`, server: 'ollama' }] }),
@@ -320,6 +361,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       ...(enginePort !== undefined ? { enginePort } : {}),
       ...(releases ? { releases } : {}),
       ...(service ? { service } : {}),
+      ...(hub ? { hub } : {}),
       navigations,
       engineRequests,
       output,
