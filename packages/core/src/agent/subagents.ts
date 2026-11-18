@@ -10,6 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { EXTENSION_TOOLS } from '../tools/builtin/extensions.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import type { CallsAnswer, CallsSlot, ConversationEngine, ModelCall, TurnEvent, TurnResult } from '../conversation/engine.js';
 import type { Outcome, PendingCall, SubagentHold } from '../journal/types.js';
@@ -46,7 +47,11 @@ export function subagentId(conversationId: string, toolCallId: string): string {
 /** The tools a sub-agent may call: read and search only, or all the core's — never the window's, never another sub-agent. */
 function toolsFor(registry: ToolSet, spec: SubagentSpec): ToolSet {
   const allowed = (def: ToolDef): boolean =>
-    def.where === 'core' && def.name !== RUN_SUBAGENT && (spec.tools === 'all' || def.effect === 'read');
+    def.where === 'core' &&
+    def.name !== RUN_SUBAGENT &&
+    // Making a plugin is the conversation's own, with the person (task 11.4).
+    !(EXTENSION_TOOLS as readonly string[]).includes(def.name) &&
+    (spec.tools === 'all' || def.effect === 'read');
   const get: ToolSet['get'] = (name) => {
     const tool = registry.get(name);
     return tool && allowed(tool.def) ? tool : undefined;

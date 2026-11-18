@@ -10,7 +10,7 @@
  * joined instead, and spoken to in the family its template says.
  */
 
-import { access, mkdir, rm, statfs, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, statfs, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
@@ -126,6 +126,9 @@ import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { AddedPlugins } from './plugins/added.js';
 import { ENTRY_TOOLS } from './plugins/entries.js';
+import { EXTENSION_ENTRY, ExtensionStore } from './plugins/extensions.js';
+import { extensionTools } from './tools/builtin/extensions.js';
+import { unifiedDiff } from './tools/preview.js';
 
 /** The online search engines that need a key. */
 export type KeyedSearch = 'brave' | 'tavily' | 'serper';
@@ -1349,6 +1352,9 @@ export function createCore(deps: CoreDeps): Core {
     tavily: await vault.has('search-tavily'),
     serper: await vault.has('search-serper'),
   });
+  // The plugins made in a conversation (task 11.4): their revisions, kept apart from the plugins added.
+  const extensions = new ExtensionStore({ dataDir: deps.dataDir, env: () => withoutSecrets(process.env), ...(deps.spawn ? { spawn: deps.spawn } : {}) });
+  void extensions.load().catch(() => undefined);
   // The plugins the person adds (task 11.1): fetched and read in `<data>/plugins/`, each run in a process of its own.
   const addedPlugins = new AddedPlugins({
     host: plugins,
@@ -1358,6 +1364,8 @@ export function createCore(deps: CoreDeps): Core {
       return deps.pluginProcess(options);
     },
   });
+  // The tools that make a plugin in a conversation (task 11.4): the one registry, the one policy.
+  for (const tool of extensionTools({ store: extensions, added: addedPlugins, registry: tools })) tools.register(tool.def, tool.handler);
   // The tickets of paused turns, signed with this installation's secret (made at the first turn).
   let ticketsReady: Promise<Tickets> | undefined;
   const tickets = (): Promise<Tickets> =>
@@ -2116,6 +2124,15 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async previewCall(conversationId, call) {
+      // A plugin made here (task 11.4): the person reads its code before it runs.
+      if (call.name === 'extension_run') {
+        const id = typeof (call.input as { id?: unknown })?.id === 'string' ? (call.input as { id: string }).id : '';
+        const extension = extensions.get(conversationId, id);
+        if (!extension) return null;
+        const code = await readFile(join(extension.dir, EXTENSION_ENTRY), 'utf8').catch(() => '');
+        const shown = `${extension.id} · ${extension.rev} · ${EXTENSION_ENTRY}`;
+        return { kind: 'diff' as const, path: shown, before: null, after: code, diff: unifiedDiff(shown, null, code) };
+      }
       const { roots } = await rootsOf(conversationId);
       const preview = await previewToolCall(call, {
         resolve: (requested) => {
