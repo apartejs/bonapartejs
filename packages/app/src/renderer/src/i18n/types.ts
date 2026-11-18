@@ -574,6 +574,9 @@ export interface Messages {
     };
     console: {
       title: string;
+      /** A line's level, said in words: never by its colour alone. */
+      error: string;
+      warning: string;
       errors(count: number): string;
       warnings(count: number): string;
       empty: string;

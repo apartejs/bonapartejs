@@ -517,4 +517,25 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     await expect(pages.ctx!.browser!.open('http://x')).rejects.toThrow(/not active/);
     expect(opened).toEqual(['http://localhost:5173/']);
   });
+
+  it('reading the page needs read declared, acting on it execute: network alone only opens (review of phase 10)', async () => {
+    const browser = {
+      open: async (url: string) => ({ url, title: 'Page' }),
+      read: async () => ({ url: 'http://x/', title: 'x', text: 'secret', console: [] }),
+      screenshot: async () => null,
+      act: async () => ({ done: 'clicked' }),
+    };
+    const host = new PluginHost({ registry: new ToolRegistry(), browser });
+    host.add(manifest('opener', { effects: [{ effect: 'network', what: 'pages' }] }), { builtin: true });
+    host.add(manifest('reader', { effects: [{ effect: 'network', what: 'pages' }, { effect: 'read', what: 'pages' }] }), { builtin: true });
+    const opener = capture();
+    const reader = capture();
+    await host.activate('opener', opener);
+    await host.activate('reader', reader);
+    await expect(opener.ctx!.browser!.read()).rejects.toThrow(/read/);
+    await expect(opener.ctx!.browser!.screenshot()).rejects.toThrow(/read/);
+    await expect(opener.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
+    expect(await reader.ctx!.browser!.read()).toMatchObject({ text: 'secret' });
+    await expect(reader.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
+  });
 });

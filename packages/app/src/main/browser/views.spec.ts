@@ -4,8 +4,8 @@
  * sits above the window's page; only http(s) is ever loaded; the agent works on the tab shown.
  */
 
-import { describe, expect, it } from 'vitest';
-import { BrowserViews, type PageView } from './views.js';
+import { describe, expect, it, vi } from 'vitest';
+import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
 
 interface FakeView extends PageView {
   loaded: string[];
@@ -15,7 +15,7 @@ interface FakeView extends PageView {
   prevented: string[];
 }
 
-function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean } = {}): FakeView {
+function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; redirectTo?: string } = {}): FakeView {
   const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
   let url = '';
   const view: FakeView = {
@@ -28,7 +28,8 @@ function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean } =
     webContents: {
       loadURL: async (target) => {
         view.loaded.push(target);
-        url = target;
+        // A server that answers with a redirect: the page ends where it says.
+        url = page.redirectTo ?? target;
         if (page.failLoad) throw new Error('ERR_CONNECTION_REFUSED');
       },
       getURL: () => url,
@@ -190,7 +191,8 @@ describe('the person’s tools on a page (task 10.2)', () => {
     const tabId = browser.states()[0]!.tabId;
     await browser.pick(tabId, "red; } body { display: none } .x { color: red");
     expect(views[0]!.scripts.at(-1)).not.toContain('display: none');
-    await browser.pins(tabId, [{ n: 1, x: 10, y: 20 }], "red'); alert('x");
+    await browser.pins(tabId, [{ n: 1, x: 10, y: 20 }], "red'); alert('x", "#fff'); alert('y");
+    expect(views[0]!.scripts.at(-1)).not.toContain("alert('y");
     expect(views[0]!.scripts.at(-1)).not.toContain('alert');
   });
 
@@ -205,9 +207,103 @@ describe('the person’s tools on a page (task 10.2)', () => {
     const { browser, views } = rig({ read: true });
     await browser.agentOpen('http://localhost:5173/');
     const tabId = browser.states()[0]!.tabId;
-    await browser.pins(tabId, [{ n: 1, x: 10.4, y: 20.6 }, { n: 2, x: 300, y: 40 }], '#087ea4');
+    await browser.pins(tabId, [{ n: 1, x: 10.4, y: 20.6 }, { n: 2, x: 300, y: 40 }], '#087ea4', 'rgb(255, 255, 255)');
+    // Its ink is the one the window gives, never a colour written here.
+    expect(views[0]!.scripts.at(-1)).toContain('rgb(255, 255, 255)');
+    expect(views[0]!.scripts.at(-1)).not.toMatch(/'white'/);
     expect(views[0]!.scripts.at(-1)).toContain(JSON.stringify([{ n: 1, x: 10, y: 21 }, { n: 2, x: 300, y: 40 }]));
     await browser.cancelPick(tabId);
     expect(views[0]!.scripts.at(-1)).toContain('Escape');
+  });
+});
+
+describe('the browser and the main window (review of phase 10)', () => {
+  function window(destroyed: boolean) {
+    const added: unknown[] = [];
+    const removed: unknown[] = [];
+    const contentView = {
+      addChildView: (view: unknown) => {
+        if (destroyed) throw new Error('Object has been destroyed');
+        added.push(view);
+      },
+      removeChildView: (view: unknown) => {
+        if (destroyed) throw new Error('Object has been destroyed');
+        removed.push(view);
+      },
+    };
+    return { win: { isDestroyed: () => destroyed, contentView }, added, removed };
+  }
+
+  it('places a page on the window, and takes it off', () => {
+    const { win, added, removed } = window(false);
+    const host = windowHost(() => win);
+    const page = { native: 'view' } as unknown as PageView;
+    host.attach(page);
+    host.detach(page);
+    expect(added).toEqual(['view']);
+    expect(removed).toEqual(['view']);
+  });
+
+  it('a window already destroyed (the app quitting) is left alone: nothing throws', () => {
+    const { win } = window(true);
+    const host = windowHost(() => win);
+    const page = { native: 'view' } as unknown as PageView;
+    expect(() => host.detach(page)).not.toThrow();
+    expect(() => host.attach(page)).not.toThrow();
+  });
+});
+
+describe('« L’agent lit la page » (review of phase 10)', () => {
+  it('is shown while the agent reads, and for a moment after, so that the person sees it', async () => {
+    vi.useFakeTimers();
+    try {
+      const changes: number[] = [];
+      const reading = readingSignal(() => changes.push(1), 1500);
+      expect(reading.on()).toBe(false);
+      const read = reading.during(async () => 'text');
+      expect(reading.on()).toBe(true);
+      expect(await read).toBe('text');
+      // A read takes milliseconds: the indicator stays a moment longer.
+      expect(reading.on()).toBe(true);
+      vi.advanceTimersByTime(1499);
+      expect(reading.on()).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(reading.on()).toBe(false);
+      expect(changes.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('the network this machine is in, after a redirect (review of phase 10)', () => {
+  it('a page the agent opened that ends on a private address is neither read, nor pictured, nor acted on', async () => {
+    const { browser } = rig({ redirectTo: 'http://192.168.1.1/admin', read: { title: 'Routeur', text: 'admin password' } });
+    expect(await browser.agentOpen('http://93.184.216.34/')).toMatchObject({ url: 'http://192.168.1.1/admin' });
+    await expect(browser.agentRead()).rejects.toThrow(/private address/);
+    await expect(browser.agentScreenshot()).rejects.toThrow(/private address/);
+    expect(await browser.agentAct({ kind: 'click', selector: 'button' })).toMatchObject({ error: expect.stringMatching(/private address/) });
+  });
+
+  it('a page the agent opened is not redirected into that network; the person’s page may go there', async () => {
+    const { browser, views } = rig();
+    await browser.agentOpen('http://93.184.216.34/');
+    const redirect = (to: string): boolean => {
+      let prevented = false;
+      views[0]!.emit('will-redirect', { preventDefault: () => (prevented = true) }, to);
+      return prevented;
+    };
+    expect(redirect('http://10.0.0.1/')).toBe(true);
+    expect(redirect('http://127.0.0.1:5173/')).toBe(false);
+    expect(redirect('https://93.184.216.35/')).toBe(false);
+    await browser.navigate(browser.states()[0]!.tabId, 'http://93.184.216.34/');
+    expect(redirect('http://10.0.0.1/')).toBe(false);
+  });
+
+  it('a page the person opened there is theirs to show the agent', async () => {
+    const { browser } = rig({ read: { title: 'Routeur', text: 'status' } });
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://192.168.1.1/');
+    expect(await browser.agentRead()).toMatchObject({ text: 'status' });
   });
 });

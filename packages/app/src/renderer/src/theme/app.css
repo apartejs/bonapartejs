@@ -1670,6 +1670,17 @@ body {
   transform: translateX(-50%);
 }
 
+/* At a pane's edge: from the button's start, or from its end, so that the name stays inside the pane. */
+.bonaparte-tip[data-side='bottom-start'] > .aparte-tooltip {
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 0;
+}
+
+.bonaparte-tip[data-side='bottom-end'] > .aparte-tooltip {
+  inset-block-start: calc(100% + 6px);
+  inset-inline-end: 0;
+}
+
 .bonaparte-tip[data-side='end'] > .aparte-tooltip {
   inset-block-start: 50%;
   inset-inline-start: calc(100% + 8px);
@@ -3837,5 +3848,11 @@ body {
 .browser-console__attach {
   align-self: flex-start;
   margin-top: var(--aparte-space-2);
-  font-family: inherit;
+  font-family: var(--aparte-font-family);
+}
+
+.browser-console__level {
+  margin-inline-end: var(--aparte-space-2);
+  font-family: var(--aparte-font-family);
+  font-weight: var(--aparte-font-weight-semibold);
 }

@@ -22,15 +22,33 @@ export interface PageComment {
   text: string;
 }
 
-/** The accent as the page can draw it: the token, resolved to a colour by the window's own style. */
-function accentNow(): string {
+/**
+ * The window's colours as the page can draw them: the accent, and the ink the kit puts on it — read on a solid
+ * badge of the kit, resolved by the window's own style (a token may be a `color-mix`).
+ */
+function coloursNow(): { accent: string; ink: string } {
   const probe = document.createElement('span');
-  probe.style.color = 'var(--aparte-primary)';
-  probe.hidden = true;
+  probe.className = 'aparte-badge aparte-badge--primary aparte-badge--solid';
+  probe.style.position = 'absolute';
+  probe.style.visibility = 'hidden';
   document.body.appendChild(probe);
-  const colour = getComputedStyle(probe).color;
+  const seen = getComputedStyle(probe);
+  const colours = { accent: asRgb(seen.backgroundColor), ink: asRgb(seen.color) };
   probe.remove();
-  return colour;
+  return colours;
+}
+
+/** A colour as `rgb(…)`, whatever space the style computed it in (`oklch`, `color(srgb …)`): one pixel painted. */
+function asRgb(colour: string): string {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const context = canvas.getContext('2d');
+  if (!context) return colour;
+  context.fillStyle = colour;
+  context.fillRect(0, 0, 1, 1);
+  const [red, green, blue] = context.getImageData(0, 0, 1, 1).data;
+  return `rgb(${red}, ${green}, ${blue})`;
 }
 
 /** What the element card says of an element, as the person reads it and as the message carries it. */
@@ -61,7 +79,7 @@ export function usePageTools(tabId: string | null, url: string | undefined, load
     let live = true;
     const loop = async (): Promise<void> => {
       while (live) {
-        const element = await bridge.invoke(browserPick, { tabId, accent: accentNow() }).catch(() => null);
+        const element = await bridge.invoke(browserPick, { tabId, accent: coloursNow().accent }).catch(() => null);
         if (!live) return;
         if (!element) {
           setTool('none');
@@ -92,7 +110,7 @@ export function usePageTools(tabId: string | null, url: string | undefined, load
   // The pins follow the comments, and come back when the page is drawn again.
   useEffect(() => {
     if (!tabId || !url || loading) return;
-    void bridge.invoke(browserPins, { tabId, accent: accentNow(), pins: comments.map(({ n, x, y }) => ({ n, x, y })) });
+    void bridge.invoke(browserPins, { tabId, ...coloursNow(), pins: comments.map(({ n, x, y }) => ({ n, x, y })) });
   }, [comments, tabId, url, loading]);
 
   const choose = (next: Exclude<PageTool, 'none'>): void => setTool((was) => (was === next ? 'none' : next));

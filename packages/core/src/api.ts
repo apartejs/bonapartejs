@@ -1279,6 +1279,8 @@ export function createCore(deps: CoreDeps): Core {
     registry: tools,
     env: () => withoutSecrets(process.env),
     log,
+    // A server's keys: the system's vault, else the server is refused rather than written in clear.
+    secrets: vault,
     ...(deps.spawn ? { spawn: deps.spawn } : {}),
   });
   // What a project runs (task 10.3): launched on a click, their output to the conversation's terminal.

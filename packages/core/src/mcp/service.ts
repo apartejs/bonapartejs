@@ -12,7 +12,9 @@
 
 import { join } from 'node:path';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
+import { holdsSecret } from '../process/env.js';
 import type { SpawnFn } from '../process/spawn.js';
+import type { SecretStore } from '../providers/secrets.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolDef } from '../tools/types.js';
 import { mcpServerFromForm, parseMcpConfig, type McpConfigError, type McpServerConfig } from './config.js';
@@ -42,7 +44,14 @@ export interface McpServiceOptions {
   clientVersion?: string;
   /** Tests only: what launches a stdio server. */
   spawn?: SpawnFn;
+  /** The system's vault: a server's headers and the secrets of its environment live there, never in the file. */
+  secrets?: SecretStore;
 }
+
+/** What stands in the file for a value kept in the system's vault. */
+export const IN_THE_VAULT = '(kept in the system vault)';
+const vaultName = (id: string): string => `mcp-${id}`;
+type VaultedKeys = { headers?: Record<string, string>; env?: Record<string, string> };
 
 export class McpFileUnreadableError extends Error {
   constructor(file: string, cause: unknown) {
@@ -93,10 +102,19 @@ export class McpService {
       .catch((error: unknown) => this.options.log(`[bonaparte] the MCP servers did not start: ${String(error)}`));
   }
 
+  /**
+   * « Démarrer », « Reconnecter », « Redémarrer »: a server stopped or failed starts; one connected goes down,
+   * then starts again — a new process, its tools read again (review of phase 10).
+   */
   async start(id: string): Promise<void> {
     await this.queue.run('apply', async () => {
+      const read = await this.read();
+      if (this.manager.status().find((status) => status.id === id)?.state === 'connected') {
+        this.wanted.delete(id);
+        await this.applyFrom(read);
+      }
       this.wanted.add(id);
-      await this.applyFrom(await this.read());
+      await this.applyFrom(read);
     });
   }
 
@@ -111,6 +129,7 @@ export class McpService {
     await this.change((raw) => {
       delete raw[id];
     });
+    await this.options.secrets?.delete(vaultName(id));
     await this.stop(id);
   }
 
@@ -205,9 +224,10 @@ export class McpService {
       if (typeof project === 'string' && project) projects.set(id, project);
       bare[id] = rest;
     }
-    const { servers, errors } = parseMcpConfig({ mcpServers: bare });
+    const parsed = parseMcpConfig({ mcpServers: bare });
+    const servers = await Promise.all(parsed.servers.map((server) => this.unvaulted(server)));
     if (this.projects.size === 0) this.projects = projects;
-    return { raw, servers, errors, projects };
+    return { raw, servers, errors: parsed.errors, projects };
   }
 
   /** One change to the file: read, changed, written whole — never over a file that does not read. */
@@ -216,8 +236,51 @@ export class McpService {
       const { raw } = await this.read();
       const next = { ...raw };
       apply(next);
+      for (const [id, entry] of Object.entries(next)) next[id] = await this.vaulted(id, entry);
       await writeJsonFile(this.file, { mcpServers: next });
     });
+  }
+
+  /**
+   * A server's keys leave the file for the vault (security rule 10, review of phase 10): every header of an HTTP
+   * server, and every variable of a stdio server's environment whose name or value says it is a secret. Without
+   * a vault, the server is refused rather than written in clear.
+   */
+  private async vaulted(id: string, entry: Record<string, unknown>): Promise<Record<string, unknown>> {
+    // Splits a map of values: those `secret` names go to the vault, a stand-in left in their place.
+    const split = (from: unknown, secret: (name: string, value: string) => boolean): { left?: Record<string, unknown>; taken?: Record<string, string> } => {
+      if (!isRecord(from)) return {};
+      const left: Record<string, unknown> = { ...from };
+      const taken: Record<string, string> = {};
+      for (const [name, value] of Object.entries(from)) {
+        if (typeof value !== 'string' || value === IN_THE_VAULT || !secret(name, value)) continue;
+        taken[name] = value;
+        left[name] = IN_THE_VAULT;
+      }
+      return Object.keys(taken).length > 0 ? { left, taken } : {};
+    };
+    const headers = split(entry['headers'], () => true);
+    const env = split(entry['env'], holdsSecret);
+    const found: VaultedKeys = { ...(headers.taken ? { headers: headers.taken } : {}), ...(env.taken ? { env: env.taken } : {}) };
+    if (!found.headers && !found.env) return entry;
+    const vault = this.options.secrets;
+    if (!vault) throw new Error(`No vault on this machine: the keys of the MCP server « ${id} » cannot be kept, and are never written in clear.`);
+    const before = JSON.parse((await vault.get(vaultName(id))) ?? '{}') as VaultedKeys;
+    await vault.set(
+      vaultName(id),
+      JSON.stringify({ headers: { ...before.headers, ...found.headers }, env: { ...before.env, ...found.env } }),
+    );
+    return { ...entry, ...(headers.left ? { headers: headers.left } : {}), ...(env.left ? { env: env.left } : {}) };
+  }
+
+  /** A server as it starts: its keys back from the vault. */
+  private async unvaulted(server: McpServerConfig): Promise<McpServerConfig> {
+    const values = server.transport === 'http' ? server.headers : server.env;
+    if (!values || !Object.values(values).includes(IN_THE_VAULT)) return server;
+    const kept = JSON.parse((await this.options.secrets?.get(vaultName(server.id)).catch(() => undefined)) ?? '{}') as VaultedKeys;
+    const from = server.transport === 'http' ? kept.headers : kept.env;
+    const filled = Object.fromEntries(Object.entries(values).map(([name, value]) => [name, value === IN_THE_VAULT ? (from?.[name] ?? '') : value]));
+    return server.transport === 'http' ? { ...server, headers: filled } : { ...server, env: filled };
   }
 }
 

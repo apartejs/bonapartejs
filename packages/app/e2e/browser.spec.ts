@@ -29,6 +29,8 @@ test('the pane opens a page of this machine in its tab, placed over it; « Tél�
   await address.press('Enter');
   await expect(page.getByRole('tab', { name: /Récap hebdo/ })).toBeVisible({ timeout: 15_000 });
   await expect.poll(() => placement(app)).not.toBeNull();
+  // Nothing of the pane runs past its edge (a name shown on hover included): no sideways scrollbar.
+  expect(await page.evaluate(() => [...document.querySelectorAll('.bonaparte-pane__body')].map((body) => body.scrollWidth - body.clientWidth))).toEqual([0]);
   const desktop = (await placement(app))!.bounds.width;
   expect(desktop).toBeGreaterThan(360);
 
@@ -38,6 +40,25 @@ test('the pane opens a page of this machine in its tab, placed over it; « Tél�
   // A page over the conversation takes it off: a native view would cover it.
   await page.keyboard.press('Control+j');
   await expect.poll(() => placement(app)).toBeNull();
+});
+
+test('an address typed without its scheme opens; « Page précédente » goes back, « Recharger » reloads, Ctrl T opens a tab (review of phase 10)', async ({ launch }) => {
+  const { page, pages } = await launch({ engine: { responder: () => 'ok' }, pages: { '/rapport': RAPPORT, '/escape': '<!doctype html><title>Autre page</title><p>autre</p>' } });
+  await openPane(page);
+  const address = page.getByRole('textbox', { name: 'Adresse' });
+  // As a person types it: no « http:// ».
+  await address.fill(`${pages!.url.replace(/^http:\/\//, '')}/rapport`);
+  await address.press('Enter');
+  await expect(page.getByRole('tab', { name: /Récap hebdo/ })).toBeVisible({ timeout: 15_000 });
+  await address.fill(`${pages!.url}/escape`);
+  await address.press('Enter');
+  await expect(page.getByRole('tab', { name: /Autre page/ })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Page précédente', exact: true }).click();
+  await expect(page.getByRole('tab', { name: /Récap hebdo/ })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Recharger', exact: true }).click();
+  await expect(page.getByRole('tab', { name: /Récap hebdo/ })).toBeVisible({ timeout: 15_000 });
+  await page.keyboard.press('Control+t');
+  await expect(page.getByRole('tab')).toHaveCount(2);
 });
 
 test('a new tab with « + », and closing the last tab opens a fresh one', async ({ launch }) => {
@@ -86,11 +107,14 @@ test('the agent opens a page — asked, it reaches the network — then reads it
   pagesUrl = launched.pages!.url;
   const { page } = launched;
   const ui = chat(page);
+  // The pane open, the person sees the agent read: « L'agent lit la page ».
+  await openPane(page);
   await ui.send('Regarde le récap');
   const card = page.getByRole('region', { name: 'Demande d’accord' });
   await expect(card).toBeVisible({ timeout: 15_000 });
   await expect(card).toContainText(`${pagesUrl}/rapport`);
   await card.getByRole('button', { name: 'Autoriser', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'L’agent peut lire cette page' })).toContainText('L’agent lit la page', { timeout: 20_000 });
   await expect(ui.replyText).toHaveText('Lu.', { timeout: 20_000 });
   const read = prompts.findLast((prompt) => prompt.includes('Total 7 h 15')) ?? '';
   expect(read).toContain('Récap hebdo');

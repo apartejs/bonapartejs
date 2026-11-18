@@ -122,3 +122,23 @@ describe('an address cut by the pipe (review of the screen, task 10.3)', () => {
     await vi.waitFor(async () => expect((await runner.list(root)).runs[0]).toMatchObject({ url: 'http://127.0.0.1:5173/' }), { timeout: 5_000 });
   });
 });
+
+describe('a server that says « localhost » (review of phase 10)', () => {
+  it('is ready when it answers on ::1 only, as Node and Vite listen on Windows', async () => {
+    const server = createServer((socket) => socket.end());
+    servers.push(server);
+    const listening = await new Promise<boolean>((resolve) => {
+      server.once('error', () => resolve(false));
+      server.listen(0, '::1', () => resolve(true));
+    });
+    if (!listening) return; // No IPv6 on this machine: nothing to prove.
+    const port = (server.address() as { port: number }).port;
+    const root = await project({ dev: 'vite' });
+    const spawn: SpawnFn = (_command, _args, options) =>
+      spawnHidden(process.execPath, ['-e', `console.log("Local: http://localhost:${port}/"); setTimeout(() => {}, 10000)`], options as never);
+    const runner = new ProjectRuns({ env: () => ({}), spawn, platform: 'linux' });
+    runs.push(runner);
+    await runner.start(root, 'script', 'dev');
+    await vi.waitFor(async () => expect((await runner.list(root)).runs[0]).toMatchObject({ url: `http://localhost:${port}/`, ready: true }), { timeout: 10_000 });
+  });
+});

@@ -17,7 +17,7 @@ const NOT_SECRET = /^(?:OLD)?PWD$/i;
 /** A value that carries a credential, whatever its name: `scheme://user:password@`, `AccountKey=`. */
 const SECRET_VALUE = /:\/\/[^/@\s:]+:[^/@\s]+@|AccountKey=/i;
 
-function holdsSecret(name: string, value: string): boolean {
+export function holdsSecret(name: string, value: string): boolean {
   if (SECRET_VALUE.test(value)) return true;
   if (NOT_SECRET.test(name)) return false;
   return SECRET_WORD.test(name) || SECRET_PART.test(name);

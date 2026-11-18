@@ -129,7 +129,21 @@ the built-in engine — llama.cpp, the card, the models found, the models
 recommended for the card (Google's Gemma 4 and Qwen's Qwen 3, downloaded on a
 click and verified), the context and its gauge — or a service, tested then
 connected. `bonaparte doctor` says what the machine has for the built-in
-engine. A section below that names something not built yet says so.
+engine. Phase 10 is done (its real smoke waits for Paul): the browser, the
+web search and MCP. A pane « Navigateur » shows pages in native views of
+the main process — tabs, the address, « Ordinateur » or « Téléphone » —
+and the agent opens, reads, screenshots and acts on the tab the person
+sees, judged like every tool. The person shows an element of the page
+(« Sélectionner un élément ») and joins it to the message as a pill, pins
+numbered comments that leave together (« Commenter la page »), and joins
+the console's errors. The new tab lists what the project runs (its
+package.json's servers, its compose services), launched on a click,
+hidden, their page opened once it answers. `web_search` searches a public
+engine in a hidden page, or an online provider whose key stays in the
+vault, asked before it goes out. MCP servers (stdio, launched hidden
+without a shell, their tree stopped; or HTTP) are kept for the app or a
+project in « Serveurs MCP », started by the first turn, their tools in the
+one registry. A section below that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -419,8 +433,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   as they come), and **1.12.2** says `picked` for a model chosen through
   `/model` (apartejs/aparte#255). **aparté 1.13.0** (2026-11-17) gives a
   message its author, a notice (`kind: 'notice'`), a note under a message
-  and `setAutoReply`; bonaparte runs on it and uses none of them yet. No
-  issue of bonaparte's is open on aparté.
+  and `setAutoReply`; bonaparte runs on it and uses none of them yet.
+  **aparté 1.13.1** (2026-11-18) only wraps long notices. One issue of
+  bonaparte's is open on aparté: apartejs/aparte#259 (a pill added from
+  outside the composer, task 10.2).
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -539,8 +555,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   when its elements arrive).
 - **The panes** (`renderer/src/panels/`): a column of ours beside the
   conversation (`PanelDock`, as the board draws it), its icons in the header
-  (`PanelToggles`, four: Fichiers, Changements, Sous-agents, the terminal —
-  the browser's comes with its pane); under 1 100 px the pane opened goes
+  (`PanelToggles`, five: Fichiers, Changements, Sous-agents, Navigateur, the
+  terminal); under 1 100 px the pane opened goes
   over the conversation, alone. A page over the conversation (« À traiter »)
   hides them, mounted (a terminal keeps its view). Fichiers reads
   the core's `files.list`/`files.read` (`core/src/files/browse.ts`, always
@@ -655,6 +671,55 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   checked. A test run never asks Hugging Face (`modelHub: null`; the e2e
   fixture's `hub` is a local one, `testing/fake-model-hub.ts`). `core.doctor()`
   (`core/src/doctor/`) is what `bonaparte doctor` prints.
+- **The built-in browser** (task 10.1, `main/browser/views.ts`,
+  `main/browser/service.ts`, `plugins/browser`, `panels/BrowserPanel.tsx`):
+  one `WebContentsView` a tab, in its own session (`bonaparte-browser`),
+  http(s) only, never `bonaparte://`. The pane keeps a slot and says where it
+  is (`browser.place`, measured on resize and every 300 ms); the page is
+  taken off whenever anything covers it — a dialog, a page over the
+  conversation, the pane hidden — since a native view sits above the
+  window's page. The agent's `browser_open` (network: loopback and public
+  addresses, never a private one), `browser_read` and `browser_screenshot`
+  (read) and `browser_act` (execute) work on the tab the person sees,
+  through `BrowserService`, given by the host only to a plugin that declares
+  the network. `__bonaparteBrowser` is the end-to-end tests' handle: a test
+  clicks in a page with `agentAct`, since Playwright drives the window, not
+  the native view.
+- **The person's tools on a page** (task 10.2, `views.pick`/`cancelPick`/
+  `pins`, `panels/PageTools.tsx`, `panels/BrowserConsole.tsx`): an injected
+  script outlines what the pointer is over, in the accent the window resolves
+  (`browser.pick` accepts only a colour), and gives back the element clicked;
+  Escape leaves. What is joined is an aparté pill (`attachToken` in
+  `aparte/composer.ts`: the label shown, the full description in the
+  message), put through the composer's inner editor
+  (apartejs/aparte#259); the comments leave as one message in the person's
+  name. Electron's own « Electron Security Warning » lines are no page's:
+  the console drops them.
+- **What a project runs** (task 10.3, `core/src/project/runs.ts`,
+  `panels/NewTab.tsx`): the scripts of its package.json whose name says
+  they serve a page, and its compose services, launched as
+  `[manager, 'run', name]` or `docker compose up <name>` through
+  `spawnTree` (a script name is checked first: `dev & calc` launches
+  nothing), the app's environment minus its secrets; their output in the
+  conversation's terminal tab; the address read from whole lines, then
+  waited for until its port answers. `alreadyRunning` probes the usual
+  ports. The window names a conversation or a project, never a folder.
+- **The web search** (task 10.4, `core/src/search/`, `plugins/web-search`,
+  `main/search/hidden-page.ts`): `web_search` (network) searches the public
+  engine in a hidden page of its own session that reaches the engine's host
+  only, or an online provider whose key is in the vault (`search-<provider>`);
+  `webSearchProvider`, `webSearchUrl`. A test run's engine is a local page
+  (`BONAPARTE_E2E_SEARCH_ENGINE`, 127.0.0.1 only).
+- **MCP servers** (task 10.5, `core/src/mcp/`, `settings/McpServers.tsx`):
+  `config/mcp-servers.json`, an entry's `project` its scope; a stdio server
+  through our `HiddenStdioTransport` (`spawnTree`, no shell, its whole tree
+  stopped), `npx`/`npm` through node and npm's own script, an npm shim
+  `.cmd` read for its script, any other `.cmd`/`.bat` refused; HTTP servers
+  through the SDK. Tools `mcp__<server>__<tool>`: `readOnlyHint` makes one
+  network (it still leaves the machine), the rest execute. Started in the
+  background by a conversation's first turn, or « Démarrer »; a file that
+  cannot be read is never written over. Tests use
+  `testing/fake-mcp-server.mjs`.
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
   mounted and hidden (a reply goes on). The app's settings live in the
   core's `SettingsStore` (`config/global.json`, under `settings`), checked
@@ -837,6 +902,17 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   label instead.
 - **A test that relaunches on the same data folder** must keep what the app
   wrote there: the fixture merges the settings it finds.
+- **A native view is absent from a picture of the window**: `page.screenshot`
+  draws the window's page only. The screens of the browser lay the view's
+  own picture (`capturePage`) where it sits.
+- **A test that a process tree dies proves nothing on Windows** unless the
+  child is spawned `detached`: the job object kills the grandchild anyway.
+  And npm runs a script through cmd: a test's script is a file, never
+  `node -e` with quotes.
+- **A dev server's address can arrive cut across two chunks**
+  (« http://127.0.0.1: », then its port): read it in whole lines.
+- **The tool inventory weighs some 3,200 tokens of the fake engine**: the
+  e2e fixture's engine has a context of 16 k by default.
 
 - **llama.cpp resumes a sliding-window model from a checkpoint** (b11558,
   read in its source and checked by two readers): a shorter prefix, and the

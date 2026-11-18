@@ -209,12 +209,16 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
             );
           })}
         </div>
-        <TipButton label={words.newTab} tip={words.newTabTip} icon="plus" onClick={() => void openTab()} />
+        <TipButton label={words.newTab} tip={words.newTabTip} icon="plus" side="bottom-end" onClick={() => void openTab()} />
       </div>
 
       <div className="browser-pane__toolbar">
-        <TipButton label={words.back} tip={words.backTip} icon="back" disabled={!shown?.canGoBack} onClick={() => active && void bridge.invoke(browserBack, { tabId: active })} />
-        <TipButton label={words.reload} tip={words.reloadTip} icon="reload" disabled={!shown?.url} onClick={() => active && void bridge.invoke(browserReload, { tabId: active })} />
+        <TipButton label={words.back} tip={words.backTip} icon="back" side="bottom-start" disabled={!shown?.canGoBack} onClick={() => active && void bridge.invoke(browserBack, { tabId: active })} />
+        <TipButton label={words.reload} tip={words.reloadTip} icon="reload" side="bottom-start" disabled={!shown?.url} onClick={() => active && void bridge.invoke(browserReload, { tabId: active })} />
+        <div role="group" aria-label={toolWords.group} className="browser-pane__tools">
+          <TipButton label={words.select} icon="pick" side="bottom-start" pressed={tools.tool === 'select'} disabled={!shown?.url} onClick={() => tools.choose('select')} />
+          <TipButton label={words.comment} tip={words.commentTip} icon="comment" side="bottom-start" pressed={tools.tool === 'comment'} disabled={!shown?.url} onClick={() => tools.choose('comment')} />
+        </div>
         <form
           className="browser-pane__address"
           onSubmit={(event) => {
@@ -223,7 +227,11 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
           }}
         >
           <input
-            type="url"
+            // Text, not `url`: the form's own validation would refuse an address without its scheme.
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
             data-browser-address=""
             className="aparte-field"
             aria-label={words.address}
@@ -238,10 +246,6 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
               {words[one]}
             </button>
           ))}
-        </div>
-        <div role="group" aria-label={toolWords.group} className="browser-pane__tools">
-          <TipButton label={words.select} icon="pick" pressed={tools.tool === 'select'} disabled={!shown?.url} onClick={() => tools.choose('select')} />
-          <TipButton label={words.comment} tip={words.commentTip} icon="comment" pressed={tools.tool === 'comment'} disabled={!shown?.url} onClick={() => tools.choose('comment')} />
         </div>
         {reading ? (
           <span className="browser-pane__reading" role="img" aria-label={words.readingLabel}>

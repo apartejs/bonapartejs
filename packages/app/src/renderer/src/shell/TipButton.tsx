@@ -12,8 +12,8 @@ export interface TipButtonProps {
   /** The words shown on hover, when they say more than the name (a shortcut). */
   tip?: string;
   icon: IconName;
-  /** Where the tooltip shows: beside the button (the folded sidebar), or under it. */
-  side?: 'end' | 'bottom';
+  /** Where the tooltip shows: beside the button (the folded sidebar), or under it — centred, or from its start or its end at a pane's edge. */
+  side?: 'end' | 'bottom' | 'bottom-start' | 'bottom-end';
   className?: string;
   /** A mark on the button's corner (a conversation that waits). */
   badge?: ReactNode;

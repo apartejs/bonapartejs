@@ -135,17 +135,17 @@ export function createHiddenSearch(options: HiddenSearchOptions): HiddenSearch {
         touch();
         const url = `${engine}${encodeURIComponent(query)}`;
         let timer: ReturnType<typeof setTimeout> | undefined;
+        let onAbort: (() => void) | undefined;
         const stopped = new Promise<never>((_resolve, reject) => {
           timer = setTimeout(() => reject(new Error(`The search engine did not answer in ${LOAD_TIMEOUT_MS / 1000} s.`)), LOAD_TIMEOUT_MS);
-          signal?.addEventListener(
-            'abort',
-            () => {
-              page.webContents.stop();
-              reject(new Error('The search was stopped.'));
-            },
-            { once: true },
-          );
+          onAbort = () => {
+            if (!page.isDestroyed()) page.webContents.stop();
+            reject(new Error('The search was stopped.'));
+          };
+          signal?.addEventListener('abort', onAbort, { once: true });
         });
+        // A race lost leaves this promise rejected later, with nobody listening: that is expected.
+        stopped.catch(() => undefined);
         try {
           await Promise.race([page.webContents.loadURL(url), stopped]);
           const read = (await Promise.race([page.webContents.executeJavaScript(EXTRACT_RESULTS, true), stopped])) as {
@@ -160,6 +160,8 @@ export function createHiddenSearch(options: HiddenSearchOptions): HiddenSearch {
           return read.results;
         } finally {
           clearTimeout(timer);
+          // The search has ended: its turn's signal no longer reaches the page, which may be gone by then.
+          if (onAbort) signal?.removeEventListener('abort', onAbort);
         }
       });
       // The queue survives a failure: the next search runs after it.

@@ -59,6 +59,7 @@ export function BrowserConsole({ messages, tab, onAttach }: BrowserConsoleProps)
           {shown.length === 0 ? <p className="browser-console__empty">{words.empty}</p> : null}
           {shown.map((line, index) => (
             <div key={index} className={`browser-console__line browser-console__line--${line.level}`} data-console-level={line.level}>
+              <span className="browser-console__level">{line.level === 'error' ? words.error : words.warning}</span>
               {lineOf(line)}
             </div>
           ))}

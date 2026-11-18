@@ -151,7 +151,9 @@ export class ProjectRuns {
       }),
     );
     const ports = (this.options.ports ?? USUAL_PORTS).filter((port) => !ours.has(port));
-    const answered = await Promise.all(ports.map(async (port) => ((await answers('127.0.0.1', port, 300)) ? port : null)));
+    const answered = await Promise.all(
+      ports.map(async (port) => ((await answers('127.0.0.1', port, 300)) || (await answers('::1', port, 300)) ? port : null)),
+    );
     return answered.filter((port): port is number => port !== null).map((port) => `http://localhost:${port}/`);
   }
 
@@ -174,10 +176,11 @@ export class ProjectRuns {
     if (!run.url) return;
     const url = new URL(run.url);
     const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
-    const host = url.hostname === 'localhost' ? '127.0.0.1' : url.hostname.replace(/^\[|\]$/g, '');
+    // « localhost » may be either: Node and Vite listen on ::1 alone on Windows.
+    const hosts = url.hostname === 'localhost' ? ['127.0.0.1', '::1'] : [url.hostname.replace(/^\[|\]$/g, '')];
     const deadline = Date.now() + READY_TIMEOUT_MS;
     while (!run.exited && Date.now() < deadline) {
-      if (await answers(host, port, 500)) {
+      if ((await Promise.all(hosts.map((host) => answers(host, port, 500)))).some(Boolean)) {
         run.ready = true;
         return;
       }

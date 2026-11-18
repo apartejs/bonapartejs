@@ -48,6 +48,59 @@ export interface BrowserHostWindow {
   detach(view: PageView): void;
 }
 
+/** The main window as the browser needs it: where its native views go. */
+export interface MainWindowLike {
+  isDestroyed(): boolean;
+  contentView: { addChildView(view: unknown): void; removeChildView(view: unknown): void };
+}
+
+/**
+ * The pages go on the main window's content view — never on one already destroyed: at `will-quit` the window is
+ * gone, and Electron throws on it (review of phase 10).
+ */
+export function windowHost(window: () => MainWindowLike | undefined): BrowserHostWindow {
+  const alive = (): MainWindowLike | undefined => {
+    const win = window();
+    return win && !win.isDestroyed() ? win : undefined;
+  };
+  const nativeOf = (view: PageView): unknown => (view as unknown as { native: unknown }).native;
+  return {
+    attach: (view) => alive()?.contentView.addChildView(nativeOf(view)),
+    detach: (view) => alive()?.contentView.removeChildView(nativeOf(view)),
+  };
+}
+
+/**
+ * « L'agent lit la page »: on while the agent reads, and for `holdMs` after — a read takes milliseconds, and an
+ * indicator that lasts that long is never seen (review of phase 10).
+ */
+export function readingSignal(changed: () => void, holdMs: number): { on(): boolean; during<T>(read: () => Promise<T>): Promise<T> } {
+  let reads = 0;
+  let held: ReturnType<typeof setTimeout> | null = null;
+  return {
+    on: () => reads > 0 || held !== null,
+    async during(read) {
+      const was = reads > 0 || held !== null;
+      reads += 1;
+      if (held) clearTimeout(held);
+      held = null;
+      if (!was) changed();
+      try {
+        return await read();
+      } finally {
+        reads -= 1;
+        if (reads === 0) {
+          held = setTimeout(() => {
+            held = null;
+            if (reads === 0) changed();
+          }, holdMs);
+          held.unref?.();
+        }
+      }
+    },
+  };
+}
+
 export type Device = 'desktop' | 'phone';
 
 export interface ConsoleLine {
@@ -88,6 +141,8 @@ interface Tab {
   loading: boolean;
   error?: string;
   console: ConsoleLine[];
+  /** Who loaded the page shown: the person may show the agent any page; the agent alone never the network it is in. */
+  loadedBy?: 'person' | 'agent';
 }
 
 /** An address as a person types it: a scheme added when it has none; null for anything but http(s). */
@@ -104,6 +159,12 @@ export function pageUrl(typed: string): string | null {
 }
 
 const isLoopback = (address: string): boolean => /^127\./.test(address) || address === '::1' || address === '0:0:0:0:0:0:0:1';
+
+/** An address written as one, neither this machine nor the internet: the network this machine is in. */
+const privateLiteral = (host: string): boolean => {
+  const bare = host.replace(/^\[|\]$/g, '');
+  return isIP(bare) !== 0 && !isLoopback(bare) && !isPublicAddress(bare);
+};
 
 const READ_PAGE = `(() => {
   const root = document.querySelector('article, main, [role="main"]') || document.body;
@@ -129,6 +190,8 @@ export class BrowserViews {
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     const guard = (event: unknown, url: unknown): void => {
       if (typeof url !== 'string' || pageUrl(url) === null || !/^https?:/i.test(url)) (event as { preventDefault(): void }).preventDefault();
+      // A page the agent opened does not take it into the network this machine is in (a redirect, a script).
+      else if (tab.loadedBy === 'agent' && privateLiteral(new URL(url).hostname)) (event as { preventDefault(): void }).preventDefault();
     };
     view.webContents.on('will-navigate', guard);
     view.webContents.on('will-redirect', guard);
@@ -185,6 +248,7 @@ export class BrowserViews {
     if (!tab) return { error: 'There is no such tab.' };
     const url = pageUrl(typed);
     if (!url) return { error: 'Only http and https addresses are opened.' };
+    tab.loadedBy = 'person';
     return this.load(tab, url);
   }
 
@@ -221,12 +285,15 @@ export class BrowserViews {
     if (!url) return { error: 'Only http and https addresses are opened.' };
     const refused = await this.refusedForAgent(new URL(url).hostname);
     if (refused) return { error: refused };
-    return this.load(this.agentTab(), url);
+    const tab = this.agentTab();
+    tab.loadedBy = 'agent';
+    return this.load(tab, url);
   }
 
   async agentRead(): Promise<{ url: string; title: string; text: string; console: ConsoleLine[] } | null> {
     const tab = this.shownTab();
     if (!tab || !tab.view.webContents.getURL()) return null;
+    await this.mayReach(tab);
     const read = (await tab.view.webContents.executeJavaScript(READ_PAGE, true)) as { title: string; text: string };
     return { url: tab.view.webContents.getURL(), title: read.title, text: read.text, console: [...tab.console] };
   }
@@ -234,6 +301,7 @@ export class BrowserViews {
   async agentScreenshot(): Promise<{ url: string; png: Uint8Array; width: number; height: number } | null> {
     const tab = this.shownTab();
     if (!tab || !tab.view.webContents.getURL()) return null;
+    await this.mayReach(tab);
     const image = await tab.view.webContents.capturePage();
     const size = image.getSize();
     return { url: tab.view.webContents.getURL(), png: image.toPNG(), width: size.width, height: size.height };
@@ -242,6 +310,11 @@ export class BrowserViews {
   async agentAct(action: AgentAction): Promise<{ done: string } | { error: string }> {
     const tab = this.shownTab();
     if (!tab || !tab.view.webContents.getURL()) return { error: 'No page is open in the browser.' };
+    try {
+      await this.mayReach(tab);
+    } catch (error) {
+      return { error: (error as Error).message };
+    }
     // Selectors and text reach the page as JSON: a quote cannot close the script's string.
     const script =
       action.kind === 'scroll'
@@ -276,10 +349,10 @@ export class BrowserViews {
   }
 
   /** The comments' pins, numbered, where they were placed; none: the pins taken off. */
-  async pins(tabId: string, pins: readonly { n: number; x: number; y: number }[], accent: string): Promise<void> {
+  async pins(tabId: string, pins: readonly { n: number; x: number; y: number }[], accent: string, ink = 'currentColor'): Promise<void> {
     const tab = this.tabs.get(tabId);
     if (!tab || !tab.view.webContents.getURL()) return;
-    await tab.view.webContents.executeJavaScript(pinsScript(pins, accent), true);
+    await tab.view.webContents.executeJavaScript(pinsScript(pins, accent, ink), true);
   }
 
   dispose(): void {
@@ -315,6 +388,17 @@ export class BrowserViews {
       tab.loading = false;
       this.options.changed();
     }
+  }
+
+  /**
+   * Where a page the agent opened has ended — after a redirect, a script, a link — is checked again before the
+   * agent reads, pictures or acts on it: the first address was only where it started (review of phase 10). A page
+   * the person loaded is theirs to show.
+   */
+  private async mayReach(tab: Tab): Promise<void> {
+    if (tab.loadedBy === 'person') return;
+    const refused = await this.refusedForAgent(new URL(tab.view.webContents.getURL()).hostname);
+    if (refused) throw new Error(refused);
   }
 
   /** This machine's own pages pass (a dev server); the network it is in does not. */
@@ -421,7 +505,8 @@ function pickScript(accent: string): string {
 })`;
 }
 
-function pinsScript(pins: readonly { n: number; x: number; y: number }[], accent: string): string {
+/** The pins in the window's colours: its accent, and the ink the kit puts on it — never a colour of ours. */
+function pinsScript(pins: readonly { n: number; x: number; y: number }[], accent: string, ink: string): string {
   const shown = pins.map((pin) => ({ n: Math.round(pin.n), x: Math.round(pin.x), y: Math.round(pin.y) }));
   return `(() => {
   document.querySelectorAll('.__bonaparte-pin').forEach((pin) => pin.remove());
@@ -430,7 +515,7 @@ function pinsScript(pins: readonly { n: number; x: number; y: number }[], accent
     mark.className = '__bonaparte-pin';
     mark.textContent = String(pin.n);
     mark.setAttribute('aria-label', 'Commentaire ' + pin.n);
-    Object.assign(mark.style, { position: 'absolute', left: (pin.x - 11) + 'px', top: (pin.y - 11) + 'px', width: '22px', height: '22px', borderRadius: '11px', background: ${JSON.stringify(colourOf(accent))}, color: 'white', border: '2px solid white', font: '600 12px/18px sans-serif', textAlign: 'center', zIndex: '2147483647', pointerEvents: 'none' });
+    Object.assign(mark.style, { position: 'absolute', left: (pin.x - 11) + 'px', top: (pin.y - 11) + 'px', width: '22px', height: '22px', borderRadius: '11px', background: ${JSON.stringify(colourOf(accent))}, color: ${JSON.stringify(colourOf(ink))}, border: '2px solid ' + ${JSON.stringify(colourOf(ink))}, font: '600 12px/18px sans-serif', textAlign: 'center', zIndex: '2147483647', pointerEvents: 'none' });
     document.body.appendChild(mark);
   }
   return true;

@@ -392,11 +392,15 @@ export class PluginHost {
         if (activation.closed) return Promise.reject(new Error(`The plugin ${id} is not active.`));
         return run();
       };
+      // Each power within what the plugin declares: opening is network; reading and picturing the page, read;
+      // clicking and typing in it, execute (review of phase 10).
+      const within = <T>(effect: 'read' | 'execute', what: string, run: () => Promise<T>): Promise<T> =>
+        declares.has(effect) ? live(run) : Promise.reject(new Error(`The plugin ${id} does not declare ${effect}: it cannot ${what}.`));
       context.browser = {
         open: (url) => live(() => browser.open(url)),
-        read: () => live(() => browser.read()),
-        screenshot: () => live(() => browser.screenshot()),
-        act: (action) => live(() => browser.act(action)),
+        read: () => within('read', 'read the page', () => browser.read()),
+        screenshot: () => within('read', 'picture the page', () => browser.screenshot()),
+        act: (action) => within('execute', 'act in the page', () => browser.act(action)),
       };
     }
     return context;

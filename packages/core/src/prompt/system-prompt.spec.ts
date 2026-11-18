@@ -86,6 +86,12 @@ describe('buildSystemPrompt', () => {
     expect(toolsFor('code', TOOLS)).toHaveLength(TOOLS.length);
   });
 
+  it('a discussion is given no MCP tool, even one its server says only reads: it reads files on this machine (review of phase 10)', () => {
+    const mcpRead = { ...tool('mcp__files__read_file', 'network'), source: 'mcp' as const };
+    expect(toolsFor('discussion', [...TOOLS, mcpRead]).map((one) => one.name)).toEqual(['web_fetch']);
+    expect(toolsFor('code', [...TOOLS, mcpRead]).map((one) => one.name)).toContain('mcp__files__read_file');
+  });
+
   it('writes English only: no French word in what it says itself', () => {
     const { stable, project } = buildSystemPrompt(options({ projectInstructions: undefined, replyLanguage: 'French' }));
     for (const kind of ['code', 'discussion'] as const) {

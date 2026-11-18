@@ -68,6 +68,6 @@ export const browserCancelPick = defineChannel('browser.cancelPick', z.object({ 
 /** The comments' pins on the page, numbered; an empty list takes them off. */
 export const browserPins = defineChannel(
   'browser.pins',
-  z.object({ tabId, accent, pins: z.array(z.object({ n: z.number().int().min(1).max(999), x: z.number(), y: z.number() })).max(100) }),
+  z.object({ tabId, accent, ink: accent, pins: z.array(z.object({ n: z.number().int().min(1).max(999), x: z.number(), y: z.number() })).max(100) }),
   z.void(),
 );

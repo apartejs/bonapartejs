@@ -839,6 +839,8 @@ export const en: Messages = {
     },
     console: {
       title: 'Console',
+      error: 'Error',
+      warning: 'Warning',
       errors: (count) => (count === 1 ? '1 error' : `${count} errors`),
       warnings: (count) => (count === 1 ? '1 warning' : `${count} warnings`),
       empty: 'Nothing in this page’s console.',

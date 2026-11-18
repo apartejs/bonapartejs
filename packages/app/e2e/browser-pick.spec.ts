@@ -129,6 +129,9 @@ test('the console counts its errors and warnings; « Joindre les erreurs à la c
   await toggle.click();
   await expect(console.locator('[data-console-level="error"]')).toContainText('TypeError: minutes');
   await expect(console.locator('[data-console-level="warning"]')).toContainText('Image sans alt');
+  // A level is said in words, never by its colour alone.
+  await expect(console.locator('[data-console-level="error"]')).toContainText('Erreur');
+  await expect(console.locator('[data-console-level="warning"]')).toContainText('Avertissement');
   await console.getByRole('button', { name: 'Joindre les erreurs à la conversation' }).click();
   await expect(chat(page).editor.locator('[data-kind="console-errors"]')).toContainText('1 erreur');
 });

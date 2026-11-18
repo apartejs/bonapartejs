@@ -58,7 +58,8 @@ const AMENDMENT =
  * other assistants (task 9.7); its questions are the window's. A code conversation has every tool.
  */
 export function toolsFor(kind: ConversationKind, tools: readonly ToolDef[]): ToolDef[] {
-  return kind === 'code' ? [...tools] : tools.filter((tool) => tool.effect === 'network');
+  // An MCP tool is never a discussion's, whatever its effect: a server's « read-only » tool reads this machine's files.
+  return kind === 'code' ? [...tools] : tools.filter((tool) => tool.effect === 'network' && tool.source !== 'mcp');
 }
 
 /**

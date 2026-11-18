@@ -9,7 +9,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BrowserService } from '@aparte/bonaparte-shared';
 import { session as sessions, WebContentsView, type BrowserWindow } from 'electron';
-import { BrowserViews, type PageView } from './views.js';
+import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
 
 export interface BuiltinBrowser {
   views: BrowserViews;
@@ -23,7 +23,8 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
   const session = sessions.fromPartition('bonaparte-browser');
   session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.on('will-download', (event) => event.preventDefault());
-  let reading = false;
+  // « L'agent lit la page » shows for 1.5 s at least: a read is over in milliseconds.
+  const reading = readingSignal(options.changed, 1500);
 
   const views = new BrowserViews({
     create: (): PageView => {
@@ -49,25 +50,13 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
         ...({ native: view } as object),
       } as PageView;
     },
-    host: {
-      attach: (view) => options.window()?.contentView.addChildView((view as unknown as { native: WebContentsView }).native),
-      detach: (view) => options.window()?.contentView.removeChildView((view as unknown as { native: WebContentsView }).native),
-    },
+    host: windowHost(options.window as () => BrowserWindow | undefined),
     changed: options.changed,
   });
 
   const service: BrowserService = {
     open: (url) => views.agentOpen(url),
-    async read() {
-      reading = true;
-      options.changed();
-      try {
-        return await views.agentRead();
-      } finally {
-        reading = false;
-        options.changed();
-      }
-    },
+    read: () => reading.during(() => views.agentRead()),
     async screenshot() {
       const shot = await views.agentScreenshot();
       if (!shot) return null;
@@ -80,5 +69,5 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
     act: (action) => views.agentAct(action),
   };
 
-  return { views, service, reading: () => reading, dispose: () => views.dispose() };
+  return { views, service, reading: () => reading.on(), dispose: () => views.dispose() };
 }

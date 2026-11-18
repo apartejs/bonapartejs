@@ -8,7 +8,8 @@
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { FAKE_QWEN_TEMPLATE, tempRepo } from '@aparte/bonaparte-core/testing';
-import { expect, test } from './fixtures/app.js';
+import type { ElectronApplication, Page } from '@playwright/test';
+import { expect, FAKE_MCP_SERVER, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 import { diffView } from './fixtures/diff.js';
 
@@ -930,6 +931,161 @@ for (const locale of ['fr', 'en'] as const) {
       await expect(second.page.getByRole('dialog')).toBeVisible();
       await second.page.waitForTimeout(300);
       await second.page.screenshot({ path: join(into, `attach-project-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}
+
+// Phase 10: the built-in browser and the person's tools on a page, the new tab, the MCP servers.
+const RECAP = [
+  '<!doctype html><html><head><title>Récap hebdo</title><style>',
+  'body { font: 15px system-ui, sans-serif; margin: 32px; color: #1F2A3C; }',
+  'table { border-collapse: collapse; width: 100%; max-width: 560px; }',
+  'td, th { padding: 10px; border-bottom: 1px solid #EEF0F4; text-align: left; }',
+  'button { margin-top: 16px; padding: 8px 14px; border: 0; border-radius: 8px; background: #1F2A3C; color: white; }',
+  '</style></head><body><h1>Récap de la semaine</h1>',
+  '<table><thead><tr><th>Jour</th><th>Heures</th><th>Décimal</th></tr></thead><tbody>',
+  '<tr><td>Lundi</td><td>1 h 30</td><td class="hours" style="font-weight: 700">1,3 h</td></tr>',
+  '<tr><td>Mardi</td><td>2 h 15</td><td>2,15 h</td></tr><tr><td>Total</td><td>7 h 15</td><td>6,75 h</td></tr>',
+  '</tbody></table><button class="export">Exporter</button>',
+  `<script>console.error("TypeError: Cannot read properties of undefined (reading 'minutes')"); console.warn("Image sans attribut alt : logo.svg")</script>`,
+  '</body></html>',
+].join('');
+
+/** The page of the browser is a native view, absent from a picture of the window: its own picture is laid where it sits. */
+async function layBrowserPage(app: ElectronApplication, page: Page): Promise<void> {
+  const shot = await app.evaluate(async () => {
+    const browser = (
+      globalThis as unknown as {
+        __bonaparteBrowser: {
+          placement(): { bounds: { x: number; y: number; width: number; height: number } } | null;
+          agentScreenshot(): Promise<{ png: Uint8Array } | null>;
+        };
+      }
+    ).__bonaparteBrowser;
+    const placed = browser.placement();
+    const picture = await browser.agentScreenshot();
+    return placed && picture ? { bounds: placed.bounds, png: Buffer.from(picture.png).toString('base64') } : null;
+  });
+  await page.evaluate((laid) => {
+    document.getElementById('bonaparte-screens-page')?.remove();
+    if (!laid) return;
+    const picture = document.createElement('img');
+    picture.id = 'bonaparte-screens-page';
+    picture.src = `data:image/png;base64,${laid.png}`;
+    Object.assign(picture.style, {
+      position: 'fixed',
+      left: `${laid.bounds.x}px`,
+      top: `${laid.bounds.y}px`,
+      width: `${laid.bounds.width}px`,
+      height: `${laid.bounds.height}px`,
+      zIndex: '2147483647',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(picture);
+  }, shot);
+  await page.waitForTimeout(300);
+}
+
+const clickInPage = (app: ElectronApplication, selector: string) =>
+  app.evaluate(
+    (_electron, target) =>
+      (globalThis as unknown as { __bonaparteBrowser: { agentAct(action: { kind: 'click'; selector: string }): Promise<unknown> } }).__bonaparteBrowser.agentAct({
+        kind: 'click',
+        selector: target,
+      }),
+    selector,
+  );
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the browser and its tools, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words =
+        locale === 'fr'
+          ? {
+              group: 'Volets',
+              browser: 'Navigateur',
+              address: 'Adresse',
+              tools: 'Outils de la page',
+              select: 'Sélectionner un élément',
+              commentThis: 'Commenter',
+              field: 'Commentaire',
+              console: 'Console',
+              settings: 'Réglages',
+              mcp: 'Serveurs MCP',
+              start: 'Démarrer',
+              expand: 'Déplier fake',
+              first: 'Ça devrait afficher 1,5 h.',
+              second: 'Sur téléphone, le bouton déborde de l’écran.',
+            }
+          : {
+              group: 'Panes',
+              browser: 'Browser',
+              address: 'Address',
+              tools: 'Page tools',
+              select: 'Select an element',
+              commentThis: 'Comment',
+              field: 'Comment',
+              console: 'Console',
+              settings: 'Settings',
+              mcp: 'MCP servers',
+              start: 'Start',
+              expand: 'Expand fake',
+              first: 'This should show 1.5 h.',
+              second: 'On a phone, the button runs off the screen.',
+            };
+      const { app, page, pages, home } = await launch({
+        locale,
+        engine: { responder: () => 'ok' },
+        pages: { '/rapport': RECAP },
+        mcp: { fake: { command: process.execPath, args: [FAKE_MCP_SERVER] } },
+      });
+      await writeFile(join(home, 'package.json'), JSON.stringify({ name: 'spanwise', scripts: { dev: 'vite', storybook: 'storybook dev', test: 'vitest' } }));
+      await page.emulateMedia({ colorScheme: scheme });
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await expect(chat(page).editor).toBeVisible();
+      await page.getByRole('group', { name: words.group }).getByRole('button', { name: words.browser }).click();
+      // The new tab first: what the project runs.
+      await expect(page.locator('[data-run="dev"]')).toBeVisible({ timeout: 10_000 });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `browser-new-tab-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      const address = page.getByRole('textbox', { name: words.address });
+      await address.fill(`${pages!.url}/rapport`);
+      await address.press('Enter');
+      await expect(page.getByRole('tab', { name: /Récap hebdo/ })).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('group', { name: words.tools }).getByRole('button', { name: words.select }).click();
+      const card = page.getByRole('region', { name: 'td.hours' });
+      await expect(async () => {
+        await clickInPage(app, 'td.hours');
+        await expect(card).toBeVisible({ timeout: 1_000 });
+      }).toPass({ timeout: 15_000 });
+      await page.mouse.move(1, 1);
+      await layBrowserPage(app, page);
+      await page.screenshot({ path: join(into, `browser-select-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      await card.getByRole('button', { name: words.commentThis, exact: true }).click();
+      await page.getByRole('textbox', { name: `${words.field} 1` }).fill(words.first);
+      await expect(async () => {
+        await clickInPage(app, 'button.export');
+        await expect(page.getByRole('textbox', { name: `${words.field} 2` })).toBeVisible({ timeout: 1_000 });
+      }).toPass({ timeout: 15_000 });
+      await page.getByRole('textbox', { name: `${words.field} 2` }).fill(words.second);
+      await page.getByRole('region', { name: words.console }).getByRole('button', { name: new RegExp(words.console) }).click();
+      await page.waitForTimeout(500);
+      await layBrowserPage(app, page);
+      await page.screenshot({ path: join(into, `browser-comment-console-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      await page.getByRole('button', { name: words.settings, exact: true }).click();
+      await page.getByRole('navigation', { name: words.settings }).getByRole('link', { name: words.mcp }).click();
+      const fake = page.getByRole('list', { name: words.mcp }).getByRole('listitem').filter({ hasText: 'fake' });
+      await fake.getByRole('button', { name: words.start }).click();
+      await expect(fake).toContainText(/\d+ (outils|tools)/, { timeout: 15_000 });
+      await fake.getByRole('button', { name: words.expand }).click();
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(into, `mcp-servers-${locale}-${scheme}.png`), animations: 'disabled' });
     });
   }
 }

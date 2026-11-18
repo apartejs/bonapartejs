@@ -80,6 +80,16 @@ describe('the hidden page of the web search (task 10.4)', () => {
     expect(stopped()).toBe(1);
   });
 
+  it('a search that has ended no longer hears its turn: stopped later, it touches no page (review of phase 10)', async () => {
+    const { hidden, stopped } = rig({ results: [] });
+    const controller = new AbortController();
+    await hidden.search('x', 1, controller.signal);
+    // The page may be gone by then (idle, or the app quitting): Electron throws on a destroyed one.
+    hidden.dispose();
+    controller.abort();
+    expect(stopped()).toBe(0);
+  });
+
   it('goes when the app goes', async () => {
     const { hidden, destroyed } = rig({ results: [] });
     await hidden.search('x', 1);
