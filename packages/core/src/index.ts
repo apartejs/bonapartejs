@@ -39,3 +39,7 @@ export type { DoctorCheck, DoctorEnv, DoctorReport, DoctorStatus } from './docto
 export { isPublicAddress } from './tools/builtin/web-fetch.js';
 export type { RunScope } from './api.js';
 export type { RunView } from './project/runs.js';
+// The plugins the person adds (task 11.1): their process's messages, and what adding one reads first.
+export type { FromPluginProcess, PluginChildPort, PluginPort, ToPluginProcess } from './plugins/remote.js';
+export type { PluginAddRequest, PluginPreview, PreviewResult } from './plugins/install.js';
+export type { AddedPlugins } from './plugins/added.js';

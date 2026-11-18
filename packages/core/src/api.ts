@@ -124,7 +124,10 @@ import { listEntries, readText, type FileEntry, type FileText } from './files/br
 import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, type BranchStatus } from './git/worktrees.js';
 import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
+import { AddedPlugins } from './plugins/added.js';
 import { PluginHost } from './plugins/host.js';
+import { PluginInstaller } from './plugins/install.js';
+import type { PluginPort } from './plugins/remote.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { CommandOutputEvent, ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
@@ -164,6 +167,11 @@ export interface CoreDeps {
   gh?: readonly string[] | null;
   /** Terminals for the plugins: the app finds the shells and runs them in a process of its own. None without it. */
   terminals?: TerminalService;
+  /**
+   * A process of its own for a plugin of a third party (task 11.1): the app's end of an Electron utility process.
+   * Without it, such a plugin is kept but cannot run — it says so.
+   */
+  pluginProcess?: (options: { pluginId: string; dir: string }) => PluginPort;
   /** An event of a plugin for one of its views (a terminal's tab), pushed to the window. */
   pluginEvent?: (pluginId: string, instanceId: string, event: string, payload: unknown) => void;
   /** What a command of the agent prints, as it prints it: the terminal's agent tab. */
@@ -353,6 +361,8 @@ export interface Core {
   readonly permissions: PermissionEngine;
   /** The plugins: their tools join the registry, what they reach is judged by the same policy. */
   readonly plugins: PluginHost;
+  /** The plugins the person adds (task 11.1): read first, then each run in a process of its own. */
+  readonly addedPlugins: AddedPlugins;
   /** The MCP servers (task 10.5): their tools join the registry at the first turn, judged by the same policy. */
   readonly mcp: McpService;
   /**
@@ -1322,6 +1332,15 @@ export function createCore(deps: CoreDeps): Core {
       return permissions.evaluate({ tool, input, mode, ...(projectId ? { projectId } : {}) });
     },
   });
+  // The plugins the person adds (task 11.1): fetched and read in `<data>/plugins/`, each run in a process of its own.
+  const addedPlugins = new AddedPlugins({
+    host: plugins,
+    installer: new PluginInstaller({ dataDir: deps.dataDir, env: () => withoutSecrets(process.env), ...(deps.spawn ? { spawn: deps.spawn } : {}) }),
+    start: (options) => {
+      if (!deps.pluginProcess) throw new Error('This app has no process to run a plugin of a third party in.');
+      return deps.pluginProcess(options);
+    },
+  });
   // The tickets of paused turns, signed with this installation's secret (made at the first turn).
   let ticketsReady: Promise<Tickets> | undefined;
   const tickets = (): Promise<Tickets> =>
@@ -1813,6 +1832,7 @@ export function createCore(deps: CoreDeps): Core {
     tools,
     permissions,
     plugins,
+    addedPlugins,
     mcp,
     runs: {
       async list(scope) {

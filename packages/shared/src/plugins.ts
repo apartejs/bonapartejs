@@ -162,6 +162,10 @@ export interface PluginStatus {
   panes: PluginPaneContribution[];
   /** The names its tools have in the registry. */
   tools: string[];
+  /** Where a plugin added came from (task 11.1); none for a built-in. */
+  source?: PluginSource;
+  /** A newer version found where it came from: proposed, never made in silence. */
+  update?: string;
 }
 
 // ——— The context of the Node half ———

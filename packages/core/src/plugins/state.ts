@@ -5,6 +5,8 @@
  * projet ») is switched off here too, under its id. A file that cannot be read is said, and never written over.
  */
 
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { pluginSourceSchema, type PluginSource } from '@aparte/bonaparte-shared';
 import { z } from 'zod';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
@@ -110,7 +112,10 @@ export class PluginState {
       if (this.error) throw new Error(this.error);
       const next: PluginsFile = structuredClone(this.data);
       apply(next);
-      if (this.file) await writeJsonFile(this.file, next);
+      if (this.file) {
+        await mkdir(dirname(this.file), { recursive: true });
+        await writeJsonFile(this.file, next);
+      }
       this.data = next;
     });
   }

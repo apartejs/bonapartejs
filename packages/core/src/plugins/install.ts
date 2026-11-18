@@ -90,6 +90,11 @@ export class PluginInstaller {
     return { id: staged.manifest.id, source: staged.source, dir: target, manifest: staged.manifest };
   }
 
+  /** The manifest of a plugin staged: what « Ajouter » will put in place. */
+  stagedManifest(stagingId: string): PluginManifest | undefined {
+    return this.staged.get(stagingId)?.manifest;
+  }
+
   async discard(stagingId: string): Promise<void> {
     const staged = this.staged.get(stagingId);
     this.staged.delete(stagingId);

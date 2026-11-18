@@ -141,6 +141,11 @@ export class PluginHost {
     this.state = options.state ?? null;
   }
 
+  /** What is kept of the plugins: opened at the first need. */
+  async keptState(): Promise<PluginState> {
+    return this.stateOf();
+  }
+
   private async stateOf(): Promise<PluginState> {
     this.state ??= await PluginState.open(this.options.stateFile ?? null);
     if (this.state.error) this.log(this.state.error);
@@ -257,6 +262,13 @@ export class PluginHost {
     await this.teardown(id);
   }
 
+  /** A plugin removed, or about to be replaced by a newer one: torn down, then forgotten. */
+  async forget(id: string): Promise<void> {
+    await this.teardown(id);
+    this.plugins.delete(id);
+    this.modules.delete(id);
+  }
+
   async deactivateAll(): Promise<void> {
     for (const id of [...this.activations.keys()]) await this.teardown(id);
   }
@@ -324,6 +336,7 @@ export class PluginHost {
 
   private statusOf(plugin: DiscoveredPlugin, projectId?: string): PluginStatus {
     const manifest = plugin.manifest;
+    const added = plugin.builtin ? undefined : this.state?.get(plugin.id);
     return {
       id: plugin.id,
       name: manifest?.name ?? plugin.id,
@@ -336,6 +349,8 @@ export class PluginHost {
       ...(plugin.error ? { error: plugin.error } : {}),
       panes: plugin.active ? (manifest?.contributes.panes ?? []) : [],
       tools: [...(this.activations.get(plugin.id)?.tools ?? [])],
+      ...(added?.source ? { source: added.source } : {}),
+      ...(added?.update ? { update: added.update } : {}),
     };
   }
 

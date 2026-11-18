@@ -43,6 +43,8 @@ import { createAttention, type Attention, type AttentionView } from './attention
 import { trayMenu, type EngineRow, type TrayActions, type TrayIcon, type Waiting } from './tray.js';
 // The terminals' own process: built apart by electron-vite, its path given here.
 import ptyProcessPath from './terminals/pty-process?modulePath';
+import pluginProcessPath from './plugin-host/plugin-process?modulePath';
+import { pluginProcessStarter, type UtilityProcessLike } from './plugin-host/process-host.js';
 import { createTerminalService } from './terminals/pty-host.js';
 import { findShells } from './terminals/shells.js';
 import { createMainWindow } from './windows.js';
@@ -267,6 +269,12 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     // The answers are written in the language of the interface.
     replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
     terminals,
+    // A plugin of a third party runs in a utility process of its own, kept to its own folder (task 11.1).
+    pluginProcess: pluginProcessStarter({
+      fork: (modulePath, args, forkOptions) => utilityProcess.fork(modulePath, args, forkOptions) as unknown as UtilityProcessLike,
+      modulePath: pluginProcessPath,
+      env: () => withoutSecrets(process.env),
+    }),
     ...(hiddenSearch ? { webSearch: (query: string, max: number, signal?: AbortSignal) => hiddenSearch.search(query, max, signal) } : {}),
     browser: builtinBrowser.service,
     pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
@@ -281,14 +289,17 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   // The built-in plugins, built with the app.
   core.plugins.add(terminalManifest, { builtin: true });
   const activated = await core.plugins.activate('terminal', terminal);
-  if (!activated.active) console.error(`[bonaparte] the terminal did not start: ${activated.error ?? 'unknown'}`);
+  // Switched off by the person, a plugin does not start: only an error is said.
+  if (activated.error) console.error(`[bonaparte] the terminal did not start: ${activated.error}`);
   // The web search (task 10.4): on by default, nothing leaving without asking.
   core.plugins.add(webSearchManifest, { builtin: true });
   const searching = await core.plugins.activate('web-search', webSearch);
-  if (!searching.active) console.error(`[bonaparte] the web search did not start: ${searching.error ?? 'unknown'}`);
+  if (searching.error) console.error(`[bonaparte] the web search did not start: ${searching.error}`);
   core.plugins.add(browserManifest, { builtin: true });
   const browsing = await core.plugins.activate('browser', browser);
-  if (!browsing.active) console.error(`[bonaparte] the browser did not start: ${browsing.error ?? 'unknown'}`);
+  if (browsing.error) console.error(`[bonaparte] the browser did not start: ${browsing.error}`);
+  // The plugins the person added, each in its own process: those switched off stay so.
+  await core.addedPlugins.start().catch((error: unknown) => console.error(`[bonaparte] the added plugins did not start: ${String(error)}`));
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),

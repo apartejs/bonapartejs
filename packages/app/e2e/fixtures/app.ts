@@ -83,6 +83,8 @@ export interface LaunchOptions {
   dataDir?: string;
   /** Keep the data folder when this launch closes, for a later one (the fixture removes it at the end of the test). */
   keepData?: boolean;
+  /** Plugins of a third party already added (task 11.1): their folders under `<data>/plugins/<id>/`, file by file. */
+  plugins?: Record<string, Record<string, string>>;
   /** The app's settings as the person would have left them (`settings` in the configuration file). */
   settings?: Record<string, unknown>;
   /** GitHub's CLI, a fake one: its pull request (as `gh pr view --json` says it), or none. Without it, the app has no CLI. */
@@ -296,6 +298,10 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       Object.assign(managedEnv, { BONAPARTE_E2E_MODEL_HUB: hub.url, BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify(catalogue) });
     }
     if (options.pages) pageServer = await startPageServer(options.pages);
+    for (const [id, files] of Object.entries(options.plugins ?? {})) {
+      await mkdir(join(dataDir, 'plugins', id), { recursive: true });
+      for (const [name, text] of Object.entries(files)) await writeFile(join(dataDir, 'plugins', id, name), text);
+    }
     if (options.mcp) {
       await writeFile(join(dataDir, 'config', 'mcp-servers.json'), JSON.stringify({ mcpServers: options.mcp }));
     }

@@ -30,6 +30,10 @@
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
+    },
+    "./plugin-child": {
+      "types": "./dist/plugin-child.d.ts",
+      "import": "./dist/plugin-child.js"
     }
   },
   "files": [
