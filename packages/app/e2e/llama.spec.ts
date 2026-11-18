@@ -5,6 +5,9 @@
  * releases are a local server of the test: a test run never asks GitHub.
  */
 
+import { writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 
 const MODELS = { 'gemma-4-e2e': { paddingBytes: 1024 * 1024 } };
@@ -31,11 +34,27 @@ test('« Télécharger » downloads the build, verified, and the screen says it 
   expect(releases!.downloads).toBe(1);
 });
 
-test('no llama.cpp on the machine: « Démarrer » waits, and the download is offered', async ({ launch }) => {
+test('no llama.cpp on the machine: « Démarrer » waits, and the board’s card offers its three ways (task 12.3)', async ({ launch }) => {
   const { page } = await launch({ managed: { models: MODELS, releases: true, llama: 'missing' } });
-  await expect(page.locator('.llama-status')).toContainText('llama.cpp n’est pas sur cette machine.');
-  await expect(page.getByRole('button', { name: /^Télécharger la b12383/ })).toBeVisible();
+  const card = page.getByRole('alert').filter({ hasText: 'llama.cpp introuvable' });
+  await expect(card).toContainText('Au premier lancement');
+  await expect(card).toContainText('Ni llama-server ni llama dans ton PATH');
+  await expect(card.getByRole('button', { name: /^Télécharger la b12383/ })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Choisir un fichier…' })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Brancher un service existant' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Démarrer' })).toBeDisabled();
+});
+
+test('llama.cpp missing: a file that is no llama.cpp is refused, said; « Brancher un service existant » goes to the services', async ({ launch }) => {
+  const notLlama = join(tmpdir(), `bp-not-llama-${process.pid}.txt`);
+  await writeFile(notLlama, 'not a program');
+  const { page } = await launch({ managed: { models: MODELS, releases: true, llama: 'missing' }, env: { BONAPARTE_E2E_PICK_FILE: notLlama } });
+  const card = page.getByRole('alert').filter({ hasText: 'llama.cpp introuvable' });
+  await card.getByRole('button', { name: 'Choisir un fichier…' }).click();
+  await expect(card).toContainText('Ce fichier n’est pas un llama.cpp qui répond');
+  await expect(page.getByRole('button', { name: 'Démarrer' })).toBeDisabled();
+  await card.getByRole('button', { name: 'Brancher un service existant' }).click();
+  await expect(page.getByRole('radio', { name: /Un service existant/ })).toBeChecked();
 });
 
 test('GitHub out of reach: the screen says it could not check, never « à jour »', async ({ launch }) => {

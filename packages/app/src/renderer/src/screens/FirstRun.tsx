@@ -13,6 +13,7 @@
 import {
   engineLlama,
   engineLlamaInstall,
+  engineLlamaPick,
   engineLoad,
   engineModelDownload,
   engineModels,
@@ -35,6 +36,7 @@ import {
 import { useEffect, useId, useState } from 'react';
 import { Glyph } from '../shell/icons';
 import { TooBigCard } from '../failures/TooBigCard';
+import { FailureCard } from '../failures/FailureCard';
 import { bridge } from '../bridge';
 import { formatBytes, formatSeconds, type NumberStyle } from '../format';
 import type { Messages } from '../i18n/index';
@@ -56,6 +58,14 @@ interface LlamaStatusProps {
   busy: boolean;
   failure: InstallFailure | null;
   onDownload(): void;
+  /** llama.cpp missing (task 12.3): the board's card, its three ways — download, a file of the person's, a service. */
+  missing: {
+    words: Messages['failures']['llamaMissing'];
+    refused: string | null;
+    picking: boolean;
+    onPick(): void;
+    onService(): void;
+  };
 }
 
 /** A download's bar: its share done, or moving when its size is not known. */
@@ -79,8 +89,32 @@ function Progress({ done, total, label }: { done: number; total: number | null; 
  * The llama.cpp a load runs, and keeping it up to date: the build there is, the one published and its
  * size — said before the click — the download's progress, and why it failed.
  */
-function LlamaStatus({ llama, text, style, downloading, busy, failure, onDownload }: LlamaStatusProps) {
+function LlamaStatus({ llama, text, style, downloading, busy, failure, onDownload, missing }: LlamaStatusProps) {
   const { current, latest } = llama;
+  if (!current && !downloading) {
+    const words = missing.words;
+    const offered = llama.updateAvailable && latest ? latest : null;
+    return (
+      <FailureCard
+        tone="neutral"
+        context={words.context}
+        title={words.title}
+        headline={words.headline}
+        detail={missing.refused ? `${words.detail} ${words.pickFailed(missing.refused)}` : words.detail}
+        actions={[
+          ...(offered ? [{ label: words.download(offered.build, formatBytes(offered.bytes, style)), run: onDownload, disabled: busy, weight: 'primary' as const }] : []),
+          { label: words.pick, run: missing.onPick, busy: missing.picking, weight: offered ? ('secondary' as const) : ('primary' as const) },
+          { label: words.service, run: missing.onService, weight: 'tertiary' as const },
+        ]}
+      >
+        {failure ? (
+          <p className="aparte-field-warning" role="status">
+            {failure.code === 'digest' ? text.failed.digest : text.failed.failed}
+          </p>
+        ) : null}
+      </FailureCard>
+    );
+  }
   const build = current?.build ?? '';
   const line = !current
     ? text.none
@@ -403,6 +437,20 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  // « Choisir un fichier… » (task 12.3): the system's dialog, the file kept only when it answers as llama.cpp does.
+  const [picking, setPicking] = useState(false);
+  const [pickRefused, setPickRefused] = useState<string | null>(null);
+  async function pickLlama(): Promise<void> {
+    setPicking(true);
+    setPickRefused(null);
+    try {
+      const picked = await bridge.invoke(engineLlamaPick, undefined);
+      if (picked.ok) setLlama(picked.state);
+      else if (picked.error.code === 'refused') setPickRefused(picked.error.detail);
+    } finally {
+      setPicking(false);
+    }
+  }
   const [llama, setLlama] = useState<LlamaCppStateView | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [installFailure, setInstallFailure] = useState<InstallFailure | null>(null);
@@ -582,6 +630,13 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                     busy={loading}
                     failure={installFailure}
                     onDownload={() => void download()}
+                    missing={{
+                      words: messages.failures.llamaMissing,
+                      refused: pickRefused,
+                      picking,
+                      onPick: () => void pickLlama(),
+                      onService: () => setEngineChoice('service'),
+                    }}
                   />
                 ) : null}
                 <div className="first-run__status first-run__gpu">

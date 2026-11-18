@@ -117,6 +117,19 @@ export const llamaInstallResultSchema = z.discriminatedUnion('ok', [
 
 export type LlamaInstallResult = z.infer<typeof llamaInstallResultSchema>;
 
+/**
+ * « Choisir un fichier… » (task 12.3): the main process opens the system's dialog — the window never names an
+ * executable (security rule 1) — and the core keeps the file only when it answers as llama.cpp does.
+ */
+export const engineLlamaPick = defineChannel(
+  'engine.llama.pick',
+  z.void(),
+  z.discriminatedUnion('ok', [
+    z.object({ ok: z.literal(true), state: llamaCppStateSchema }),
+    z.object({ ok: z.literal(false), error: z.object({ code: z.enum(['cancelled', 'refused']), detail: z.string() }) }),
+  ]),
+);
+
 /** `checkLatest`: ask GitHub what is published (the setup screen does, when it opens). */
 export const engineLlama = defineChannel(
   'engine.llama',

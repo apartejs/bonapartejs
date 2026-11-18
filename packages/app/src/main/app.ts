@@ -23,7 +23,7 @@ import {
 } from 'electron';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore, withoutSecrets, type Core } from '@aparte/bonaparte-core';
 import { terminal, terminalManifest } from '@aparte/bonaparte-plugin-terminal';
 import { webSearch, webSearchManifest } from '@aparte/bonaparte-plugin-web-search';
@@ -351,6 +351,18 @@ ${appTokens}`,
     pluginsChanged: () => push({ kind: 'plugins' }),
     version: () => __BONAPARTE_VERSION__,
     locale: interfaceLocale,
+    // The system's dialog for a program (task 12.3) — or the test's file in a test run.
+    chooseFile: async () => {
+      if (options.e2e) {
+        const picked = process.env['BONAPARTE_E2E_PICK_FILE'];
+        return picked && isAbsolute(picked) ? picked : null;
+      }
+      const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+      const properties: ('openFile')[] = ['openFile'];
+      const filters = process.platform === 'win32' ? [{ name: 'llama.cpp', extensions: ['exe'] }] : [];
+      const result = window ? await dialog.showOpenDialog(window, { properties, filters }) : await dialog.showOpenDialog({ properties, filters });
+      return result.canceled ? null : (result.filePaths[0] ?? null);
+    },
     // The system's folder dialog, over the window — or the test's folder in a test run.
     chooseFolder: async () => {
       const picked = e2ePickedFolder(process.env, options.e2e);

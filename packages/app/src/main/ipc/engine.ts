@@ -16,6 +16,7 @@ import {
 import {
   engineLlama,
   engineLlamaInstall,
+  engineLlamaPick,
   engineModelDownload,
   engineRecommended,
   engineLoad,
@@ -49,8 +50,10 @@ export function registerEngineChannels(
   ipc: IpcRegistry,
   core: Pick<
     Core,
-    'engineState' | 'engineLog' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'recommendedModels' | 'downloadModel' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
+    'engineState' | 'engineLog' | 'useLlamaBinary' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'recommendedModels' | 'downloadModel' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
   >,
+  /** The system's dialog for a file (task 12.3): the window never names one. */
+  chooseFile?: () => Promise<string | null>,
 ): void {
   ipc.handle(engineState, () => core.engineState());
   ipc.handle(engineLog, () => core.engineLog());
@@ -76,6 +79,15 @@ export function registerEngineChannels(
   ipc.handle(engineRestartCost, (changes) => core.restartCost(changes));
   ipc.handle(engineApplySettings, ({ changes, restart }) => core.applyEngineSettings(changes, { restart }));
   ipc.handle(engineLlama, ({ checkLatest }) => core.llamaCpp({ checkLatest: checkLatest === true }));
+  ipc.handle(engineLlamaPick, async () => {
+    const path = await (chooseFile?.() ?? Promise.resolve(null));
+    if (!path) return { ok: false as const, error: { code: 'cancelled' as const, detail: '' } };
+    try {
+      return { ok: true as const, state: await core.useLlamaBinary(path) };
+    } catch (error) {
+      return { ok: false as const, error: { code: 'refused' as const, detail: error instanceof Error ? error.message : String(error) } };
+    }
+  });
   ipc.handle(engineLlamaInstall, async (): Promise<LlamaInstallResult> => {
     try {
       return { ok: true, state: await core.installLlamaCpp() };

@@ -10,8 +10,8 @@
  * joined instead, and spoken to in the family its template says.
  */
 
-import { access, mkdir, readFile, rm, statfs, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { access, mkdir, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
@@ -360,6 +360,11 @@ export interface Core {
   stop(): Promise<void>;
   /** The llama.cpp a load runs, and — when asked — whether a newer build is published (GitHub). */
   llamaCpp(options?: { checkLatest?: boolean }): Promise<LlamaCppState>;
+  /**
+   * The llama.cpp the person chose, by a dialog of the main process (task 12.3): kept only when it answers
+   * `--version` as llama.cpp does; then the one a load runs.
+   */
+  useLlamaBinary(path: string): Promise<LlamaCppState>;
   /** Downloads the newest build, verifies it, and keeps it. Only when the person asks. */
   installLlamaCpp(): Promise<LlamaCppState>;
   /** The models bonaparte recommends for this machine's memory (task 9.5): asks nothing of the hub. */
@@ -1770,7 +1775,11 @@ export function createCore(deps: CoreDeps): Core {
         offload: options.offload === true,
       });
       if (!decided.go) throw decided.error;
-      if (decided.gpuLayers !== undefined) await appSettings.setEngine({ gpuLayers: decided.gpuLayers });
+      if (decided.gpuLayers !== undefined) {
+        await appSettings.setEngine({ gpuLayers: decided.gpuLayers });
+        // Read again: the launch below takes the layers just kept.
+        config = undefined;
+      }
       await configuredManaged(listed.path);
       if (!orphanChecked) {
         orphanChecked = true;
@@ -2272,6 +2281,18 @@ export function createCore(deps: CoreDeps): Core {
       );
     },
     llamaCpp,
+    async useLlamaBinary(path) {
+      if (!isAbsolute(path)) throw new Error('The path of llama.cpp must be absolute.');
+      const file = await stat(path).catch(() => null);
+      if (!file?.isFile()) throw new Error(`${basename(path)} is not a file.`);
+      // A program that prints something to --version is not enough: llama.cpp says its build.
+      const build = await buildOf([path]);
+      if (!build || !/^b\d+$/.test(build)) throw new Error(`${basename(path)} does not answer as llama.cpp does (--version).`);
+      await appSettings.setBackend({ mode: 'managed', binPath: path });
+      config = undefined;
+      found = undefined;
+      return llamaCpp();
+    },
     installLlamaCpp,
     recommendedModels: recommended,
     downloadModel,

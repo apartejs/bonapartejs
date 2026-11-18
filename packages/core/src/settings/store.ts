@@ -65,6 +65,15 @@ export class SettingsStore {
     });
   }
 
+  /** The llama.cpp the person chose (task 12.3), under `backend`: the file's other keys kept. */
+  async setBackend(backend: { mode: 'managed'; binPath: string }): Promise<void> {
+    await this.writes.run('file', async () => {
+      const content = await this.read();
+      await mkdir(dirname(this.file), { recursive: true });
+      await writeJsonFile(this.file, { ...content, backend });
+    });
+  }
+
   onChange(listener: Listener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);

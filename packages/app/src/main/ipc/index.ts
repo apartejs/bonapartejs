@@ -28,6 +28,8 @@ export interface AppFacts {
   locale(): Locale;
   /** The system's folder dialog (or a test's folder). */
   chooseFolder: ChooseFolder;
+  /** The system's dialog for one program (task 12.3: the person's llama.cpp). */
+  chooseFile?: () => Promise<string | null>;
   /** Opens the data folder in the system's file manager (in a test run, only notes it). */
   openDataFolder(): Promise<void>;
   /** Opens a folder the core named (a conversation's worktree) in the system's file manager. */
@@ -44,7 +46,7 @@ export interface AppFacts {
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
   ipc.handle(appInfo, () => ({ version: facts.version(), locale: facts.locale() }));
-  registerEngineChannels(ipc, core);
+  registerEngineChannels(ipc, core, facts.chooseFile);
   registerMcpChannels(ipc, core);
   registerRunChannels(ipc, core);
   if (facts.browser) registerBrowserChannels(ipc, facts.browser);
