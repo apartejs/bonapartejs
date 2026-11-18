@@ -652,6 +652,49 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     expect(uncached).toBeLessThan(600);
   }, TIMEOUT);
 
+  // Phase 10: a real MCP server — the official filesystem server, through npx, launched hidden and without a shell.
+  it('a real MCP server: its tool, asked as the network, approved, reads a file — the model answers from it', async () => {
+    await writeFile(join(home, 'mcp-notes.txt'), 'The code word is MARJORAM.\n');
+    await writeFile(
+      join(dataDir, 'config', 'mcp-servers.json'),
+      JSON.stringify({ mcpServers: { files: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', home] } } }),
+    );
+    const started = Date.now();
+    await core.mcp.start('files');
+    const [server] = await core.mcp.overview();
+    console.log(`[smoke] mcp: ${server?.state} in ${((Date.now() - started) / 1000).toFixed(1)} s, ${server?.tools.length} tools: ${server?.tools.map((tool) => tool.name).join(', ')}`);
+    expect(server).toMatchObject({ id: 'files', state: 'connected' });
+    // The server names its reading tool read_text_file since 2025 (read_file before).
+    const reader = server!.tools.find((tool) => tool.name === 'read_text_file') ?? server!.tools.find((tool) => tool.name === 'read_file');
+    expect(reader?.readOnly).toBe(true);
+    const name = `mcp__files__${reader!.name}`;
+    const path = join(home, 'mcp-notes.txt');
+
+    await core.conversationStore.ensure('smoke-mcp', { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    const runner = runnerFor('smoke-mcp');
+    const ask = `Use the ${name} tool to read the file ${path}, then reply with the code word it contains and nothing else.`;
+    const first: StreamRunEvent[] = [];
+    await runner(turnOf('m-mcp', ask, first));
+    const call = first.find((event) => event.type === 'tool-start');
+    const last = first.at(-1) as Extract<StreamRunEvent, { type: 'run-suspended' }> & { ticket?: string };
+    console.log(`[smoke] mcp call: ${call?.type === 'tool-start' ? `${call.name} ${JSON.stringify(call.input)}` : 'no call'} → ${last.type}`);
+    expect(call).toMatchObject({ type: 'tool-start', name });
+    // A read-only hint leaves the machine still: the call is asked as the network.
+    expect(last.type).toBe('run-suspended');
+    expect(last.pending).toMatchObject([{ name, reason: 'approval' }]);
+
+    const second: StreamRunEvent[] = [];
+    const outcomes = { [last.pending[0]!.toolCallId]: { kind: 'decision', approved: true } };
+    const usage = (await runner({ ...turnOf('m-mcp', ask, second), deferral: { token: last.ticket, outcomes } } as unknown as RunnerOptions)) as StreamUsage | undefined;
+    const answer = textOf(second).trim();
+    console.log(
+      `[smoke] mcp resumed: ${second.map((event) => event.type).join(', ')} → « ${answer.slice(-60)} »; last round ${usage?.cacheReadTokens} of ${usage?.inputTokens} tokens served by the cache`,
+    );
+    expect(second.map((event) => event.type)).toEqual(expect.arrayContaining(['tool-approved', 'tool-resolved', 'run-done']));
+    expect(answer.toUpperCase()).toContain('MARJORAM');
+    await core.mcp.stop('files');
+  }, TIMEOUT);
+
   it.skipIf(!MODEL2)('a change of model: said first, then the conversation rendered again in the new family and answered there', async () => {
     const id = 'smoke-switch';
     await turnIn(id, 'Remember this code word: SAFFRON. Reply with OK and nothing else.');

@@ -1006,6 +1006,20 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
 
+- **2026-11-18, phase 10 — the MCP case green** (run alone, twice: the
+  second time to read its figures). Gemma 4 26B-A4B-it UD-Q4_K_XL,
+  llama.cpp b12383 Vulkan, Radeon 8060S, `-c 8192`, K/V f16, one slot,
+  aparté 1.13.0, loaded in 14 s (35.6 GiB of RAM free). The official
+  filesystem MCP server, through `npx -y @modelcontextprotocol/server-filesystem`
+  (resolved to node and npm's own script, launched hidden, no shell),
+  connected in 5.9 s with its 16 tools; its `read_text_file` says it only
+  reads (`readOnlyHint`), so it is asked as the network: the real model
+  called `mcp__files__read_text_file` with the file's path, the turn paused
+  for approval, and once approved the tool read the file and the model
+  answered « MARJORAM ». The last round: 4,539 of 4,568 tokens served by
+  the cache — the MCP tools told as a delta of the inventory, the frozen
+  prompt untouched. A real web search was not run (it leaves the machine:
+  optional, not asked).
 - **2026-11-18, phase 8 — 17/17 green** (the change of model skipped: no
   second model given). Gemma 4 26B-A4B-it UD-Q4_K_XL, llama.cpp b12383
   Vulkan, Radeon 8060S, `-c 8192`, K/V f16, `--cache-ram 0`, aparté 1.13.0,
