@@ -289,6 +289,8 @@ describe('the agent handler, streaming a turn', () => {
     expect(joined(lines, 'text-delta')).toBe('un deux ');
     expect(lines.at(-1)!.type).toBe('run-error');
     expect(lines.at(-1)!['message']).toContain('failed to decode');
+    // Its code, for the window to say it (task 12.3): never « unknown ».
+    expect(lines.at(-1)!['code']).toBe('engine-died');
     const types = lines.map((line) => line.type);
     expect(types).not.toContain('run-done');
     // A failure is not a stop: the window must not show it as one.

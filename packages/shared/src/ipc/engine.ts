@@ -81,6 +81,9 @@ export type EngineLoadResult = z.infer<typeof engineLoadResultSchema>;
 
 export const engineState = defineChannel('engine.state', z.void(), engineStateSchema);
 
+/** What llama-server last wrote, and its exit code when it left (task 12.3, « Voir le journal du moteur »). */
+export const engineLog = defineChannel('engine.log', z.void(), z.object({ lines: z.string(), exitCode: z.number().nullable(), exited: z.boolean() }));
+
 export const engineModels = defineChannel('engine.models', z.void(), z.array(modelChoiceSchema));
 
 export const engineLoad = defineChannel(

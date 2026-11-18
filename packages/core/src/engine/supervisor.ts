@@ -134,6 +134,11 @@ export class EngineSupervisor {
     return this.config;
   }
 
+  /** What llama-server last wrote, and its exit code when it left (task 12.3, « Voir le journal du moteur »). */
+  engineLog(): { lines: string; exitCode: number | null; exited: boolean } {
+    return this.managed?.engineLog() ?? { lines: '', exitCode: null, exited: false };
+  }
+
   /** The pid of the managed server, while it runs — for whoever watches its footprint. */
   get serverPid(): number | null {
     return this.managed?.pid ?? null;

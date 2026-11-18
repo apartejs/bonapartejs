@@ -103,6 +103,7 @@ import { useShortcut, useShortcutKeys } from './shortcuts/useShortcuts';
 import type { EngineLike } from './logo/mascot-state';
 import { useMascotState } from './logo/useMascotState';
 import { TooBigCard } from './failures/TooBigCard';
+import { EngineDiedCard } from './failures/EngineDied';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -861,6 +862,9 @@ function Workspace({
   const serviceHosts = useRef(new Map<string, string>());
   // A service that did not answer a turn of the conversation shown (task 9.3): said until a turn starts again.
   const [serviceDown, setServiceDown] = useState<{ conversationId: string; service: string; host: string } | null>(null);
+  // The engine stopped during a reply (task 12.3): the conversation, and the memory it has to read again.
+  const [engineDied, setEngineDied] = useState<{ conversationId: string; rereadSeconds: number | null } | null>(null);
+  const [relaunching, setRelaunching] = useState(false);
   // Going to a service between two turns: what it loses said first, in a dialog.
   const [toService, setToService] = useState<(ServiceSwitchAsking & { conversationId: string; provider: string; revert: () => void }) | null>(null);
   const [toServiceBusy, setToServiceBusy] = useState(false);
@@ -902,11 +906,30 @@ function Workspace({
   }, []);
   const downOn = useRef<{ conversationId: string | null; service: { id: string; label: string } | null }>({ conversationId: null, service: null });
   useEffect(() => {
-    const failed = (): void => {
+    const failed = (event: Event): void => {
+      const detail = (event as CustomEvent<{ targetId?: string; error?: { data?: Record<string, unknown> } }>).detail;
+      // The engine stopped mid-answer: its card, with what it costs to read the memory again (task 12.3).
+      if (detail?.error?.data?.['code'] === 'engine-died') {
+        const died = (detail.targetId ? handles.get(detail.targetId)?.getConversationId() : null) ?? downOn.current.conversationId;
+        if (died) {
+          setEngineDied({ conversationId: died, rereadSeconds: null });
+          void bridge
+            .invoke(conversationsMemory, { id: died })
+            .then((view) => {
+              const seconds = view.announcement?.kind === 'reread' ? view.announcement.seconds : null;
+              setEngineDied((was) => (was && was.conversationId === died ? { ...was, rereadSeconds: seconds } : was));
+            })
+            .catch(() => undefined);
+        }
+        return;
+      }
       const { conversationId: id, service } = downOn.current;
       if (id && service) setServiceDown({ conversationId: id, service: service.label, host: serviceHosts.current.get(service.id) ?? service.label });
     };
-    const started = (): void => setServiceDown(null);
+    const started = (): void => {
+      setServiceDown(null);
+      setEngineDied(null);
+    };
     window.addEventListener('aparte-message-error', failed);
     window.addEventListener('aparte-message-start', started);
     return () => {
@@ -1467,7 +1490,26 @@ function Workspace({
         aboveComposer={
           // The engine down comes first (review of phase 7): a send is held, an approval would resume into
           // nothing — loading it is what everything else waits for.
-          engineDown && toLoad && tooBig ? (
+          engineDied && engineDied.conversationId === conversationId ? (
+            <EngineDiedCard
+              messages={messages}
+              locale={locale}
+              rereadSeconds={engineDied.rereadSeconds}
+              busy={relaunching}
+              onRelaunch={() => {
+                const id = engineDied.conversationId;
+                setRelaunching(true);
+                void (async () => {
+                  // The engine first, if it did not come back by itself; then the memory read again.
+                  const path = engine.model?.path ?? toLoad?.path;
+                  if (engine.mode === 'managed' && engine.status !== 'ready' && path) await bridge.invoke(engineLoad, { path }).catch(() => null);
+                  await bridge.invoke(conversationsReadAgain, { id }).catch(() => undefined);
+                  setEngineDied(null);
+                  setAsked((count) => count + 1);
+                })().finally(() => setRelaunching(false));
+              }}
+            />
+          ) : engineDown && toLoad && tooBig ? (
             <TooBigCard
               messages={messages}
               style={style}

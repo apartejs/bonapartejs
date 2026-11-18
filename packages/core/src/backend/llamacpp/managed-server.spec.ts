@@ -200,6 +200,10 @@ describe('ManagedServer', () => {
     globalThis.process.kill(server.pid!);
     await waitFor(() => server.status() === 'crashed');
     expect(launches.launches).toHaveLength(3);
+    // What it wrote before it left stays to be read (task 12.3, « Voir le journal du moteur »), with when it left.
+    const log = server.engineLog();
+    expect(log.exited).toBe(true);
+    expect(typeof log.lines).toBe('string');
   });
 
   it('stops: the port is free, and nothing relaunches', async () => {

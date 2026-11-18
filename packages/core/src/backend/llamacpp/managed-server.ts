@@ -180,8 +180,18 @@ export class ManagedServer {
     this.setStatus('crashed');
   }
 
+  /** The last lines llama-server wrote — the running one's, else those of the one that left — and its exit code. */
+  engineLog(): { lines: string; exitCode: number | null; exited: boolean } {
+    if (this.process) return { lines: this.process.lastLines(), exitCode: this.lastExit?.code ?? null, exited: this.lastExit !== null };
+    return { lines: this.lastExit?.lines ?? '', exitCode: this.lastExit?.code ?? null, exited: this.lastExit !== null };
+  }
+
+  private lastExit: { code: number | null; lines: string } | null = null;
+
   private onProcessExit(running: ServerProcess, code: number | null): void {
     if (this.process !== running) return; // a process from a previous life
+    // What it said before it left, kept for « Voir le journal du moteur » (task 12.3).
+    if (!this.intentionalStop) this.lastExit = { code, lines: running.lastLines() };
     // Before it was ready, a launch that fails is the launch's to report.
     if (this.currentStatus !== 'ready') return;
     this.process = null;

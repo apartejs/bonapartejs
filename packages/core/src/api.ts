@@ -324,6 +324,8 @@ export interface Core {
   /** The engine a turn runs on; undefined when no model is loaded. Never loads one. */
   engine(): Promise<Engine | undefined>;
   engineState(): Promise<EngineState>;
+  /** What llama-server last wrote, and its exit code when it left (task 12.3). */
+  engineLog(): { lines: string; exitCode: number | null; exited: boolean };
   models(): Promise<ModelChoice[]>;
   /** Loads a model the core listed. The window says the cost before it asks. */
   /**
@@ -1737,6 +1739,7 @@ export function createCore(deps: CoreDeps): Core {
     // The engine a new turn may run on: none while an unload is under way (its memory being saved first).
     engine: async () => (unloading ? undefined : currentEngine()),
     engineState,
+    engineLog: () => supervisor.engineLog(),
     models,
 
     async loadModel(path, options = {}) {

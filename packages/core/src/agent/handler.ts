@@ -251,7 +251,8 @@ function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Respo
             return;
           }
           const reason = error instanceof EngineFailedError ? error.message : `The engine failed: ${error instanceof Error ? error.message : String(error)}`;
-          write({ type: 'run-error', message: reason.slice(0, 400) });
+          // Its code, for the window to say it in the person's words (task 12.3): the engine stopped mid-answer.
+          write({ type: 'run-error', message: reason.slice(0, 400), ...(error instanceof EngineFailedError ? { code: 'engine-died' } : {}) });
         })
         .finally(() => {
           release();

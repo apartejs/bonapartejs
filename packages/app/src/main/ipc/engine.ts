@@ -19,6 +19,7 @@ import {
   engineModelDownload,
   engineRecommended,
   engineLoad,
+  engineLog,
   engineModels,
   engineState,
   engineSwitch,
@@ -48,10 +49,11 @@ export function registerEngineChannels(
   ipc: IpcRegistry,
   core: Pick<
     Core,
-    'engineState' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'recommendedModels' | 'downloadModel' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
+    'engineState' | 'engineLog' | 'models' | 'loadModel' | 'llamaCpp' | 'installLlamaCpp' | 'recommendedModels' | 'downloadModel' | 'modelSwitch' | 'switchModel' | 'engineSettings' | 'restartCost' | 'applyEngineSettings'
   >,
 ): void {
   ipc.handle(engineState, () => core.engineState());
+  ipc.handle(engineLog, () => core.engineLog());
   ipc.handle(engineModels, () => core.models());
   ipc.handle(engineLoad, async ({ path, offload }) => {
     try {

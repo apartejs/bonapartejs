@@ -107,6 +107,7 @@ export {
   engineSwitchResultSchema,
   modelSwitchViewSchema,
   engineSettingsGet,
+  engineLog,
   engineRestartCost,
   engineApplySettings,
   engineLaunchSettingsSchema,
