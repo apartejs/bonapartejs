@@ -85,12 +85,24 @@ describe('the command', () => {
     expect(await main(['--version'], { ...version.io, locale: 'en', version: '0.1.0', doctor: async () => GOOD })).toBe(0);
     expect(version.out).toEqual(['0.1.0']);
     const help = output();
-    expect(await main([], { ...help.io, locale: 'en', version: '0.1.0', doctor: async () => GOOD })).toBe(0);
+    expect(await main(['--help'], { ...help.io, locale: 'en', version: '0.1.0', doctor: async () => GOOD })).toBe(0);
     expect(help.out.join('\n')).toContain('bonaparte doctor');
+    expect(help.out.join('\n')).toContain('launches the app');
     const unknown = output();
     expect(await main(['fly'], { ...unknown.io, locale: 'fr', version: '0.1.0', doctor: async () => GOOD })).toBe(1);
     expect(unknown.err).toEqual(['Commande inconnue : fly']);
     expect(unknown.out.join('\n')).toContain('Utilisation');
+  });
+
+  it('with no argument launches the app (task 13.3)', async () => {
+    const io = output();
+    let launched = 0;
+    const launch = async () => {
+      launched += 1;
+      return 0;
+    };
+    expect(await main([], { ...io.io, locale: 'en', version: '0.1.0', doctor: async () => GOOD, launch })).toBe(0);
+    expect(launched).toBe(1);
   });
 
   it('speaks the language of the environment: BONAPARTE_LANG, then LC_ALL, then LANG — English otherwise', () => {

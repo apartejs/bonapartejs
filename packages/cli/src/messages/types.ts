@@ -3,6 +3,13 @@ export interface CliMessages {
   units: { mb: string; gb: string };
   help(version: string): string;
   unknownCommand(command: string): string;
+  /** `npx @aparte/bonaparte` (task 13.3): what launching the app says. */
+  launch: {
+    appNotBuilt: string;
+    electronMissing: string;
+    downloadingElectron: string;
+    launched: string;
+  };
   doctor: {
     title: string;
     node(version: string, min: number): string;

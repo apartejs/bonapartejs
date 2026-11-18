@@ -1,7 +1,7 @@
 {
   "name": "@aparte/bonaparte",
   "version": "0.1.0",
-  "description": "bonaparte — the command line: `bonaparte doctor` says what the machine has for the built-in engine",
+  "description": "bonaparte — `npx @aparte/bonaparte` launches the app; `bonaparte doctor` says what the machine has for the built-in engine",
   "license": "MIT",
   "author": "Paul Richez",
   "repository": {
@@ -24,7 +24,8 @@
     "bonaparte": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "app"
   ],
   "publishConfig": {
     "access": "public"
@@ -32,13 +33,36 @@
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepack": "node scripts/assemble-app.mjs",
+    "postpack": "node scripts/assemble-app.mjs --clean"
   },
   "dependencies": {
-    "@aparte/bonaparte-core": "workspace:*",
-    "@aparte/bonaparte-shared": "workspace:*"
+    "@aparte/core": "1.13.0",
+    "@aparte/locales": "1.13.0",
+    "@aparte/plugin-approval": "1.13.0",
+    "@aparte/plugin-ask-user": "1.13.0",
+    "@aparte/plugin-cards": "1.13.0",
+    "@aparte/plugin-diff": "1.13.0",
+    "@aparte/plugin-model-selector": "1.13.0",
+    "@aparte/plugin-shiki": "1.13.0",
+    "@aparte/plugin-streaming-markdown": "1.13.0",
+    "@aparte/plugin-subagents": "1.13.0",
+    "@aparte/plugin-triggers": "1.13.0",
+    "@aparte/react": "1.13.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "^45.3.2",
+    "electron-updater": "6.8.11",
+    "node-pty": "1.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "shiki": "^4.0.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
+    "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-shared": "workspace:*",
     "@types/node": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",

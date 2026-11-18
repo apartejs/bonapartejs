@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { spawnHidden, type SpawnFn } from './spawn.js';
+import { spawnHidden, spawnWindowed, type SpawnFn } from './spawn.js';
 
 function recorder() {
   const calls: { command: string; args: readonly string[]; options: Record<string, unknown> }[] = [];
@@ -51,5 +51,23 @@ describe('spawnHidden', () => {
     const code = await new Promise((resolve) => child.on('exit', resolve));
     expect(code).toBe(0);
     expect(output).toBe('ok');
+  });
+});
+
+describe('spawnWindowed (task 13.3)', () => {
+  it('launches a program with a window of its own: no shell, its window shown, detached from the command that launched it', () => {
+    const { calls, spawn } = recorder();
+    spawnWindowed('/opt/electron/electron', ['/opt/app'], { spawn, env: { A: '1' } });
+    expect(calls[0]!.command).toBe('/opt/electron/electron');
+    expect(calls[0]!.args).toEqual(['/opt/app']);
+    expect(calls[0]!.options).toMatchObject({ shell: false, windowsHide: false, detached: true, stdio: 'ignore', env: { A: '1' } });
+  });
+
+  it('refuses a batch file or a console script: those are run by a shell, in a console', () => {
+    const { calls, spawn } = recorder();
+    for (const program of ['/x/electron.cmd', '/x/run.BAT', '/x/a.ps1']) {
+      expect(() => spawnWindowed(program, [], { spawn })).toThrow(/window/);
+    }
+    expect(calls).toHaveLength(0);
   });
 });

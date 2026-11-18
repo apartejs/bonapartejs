@@ -2,7 +2,7 @@
  * @aparte/bonaparte-core — the core of bonaparte: pure Node, never Electron.
  */
 
-export { spawnHidden } from './process/spawn.js';
+export { spawnHidden, spawnWindowed } from './process/spawn.js';
 export { withoutSecrets } from './process/env.js';
 export type { SpawnFn, SpawnHiddenOptions, SpawnedProcess } from './process/spawn.js';
 export { KeyedQueue, readJsonFile, writeJsonFile } from './fs/json-file.js';

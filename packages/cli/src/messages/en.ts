@@ -9,11 +9,18 @@ export const en: CliMessages = {
       `('.') bonaparte ${version}`,
       '',
       'Usage:',
+      '  bonaparte            launches the app',
       '  bonaparte doctor     says what the machine has for the built-in engine',
       '  bonaparte --version  the version',
       '  bonaparte --help     this help',
     ].join('\n'),
   unknownCommand: (command) => `Unknown command: ${command}`,
+  launch: {
+    appNotBuilt: 'The app is not built here: run `pnpm build` in the repository, or install the published package.',
+    electronMissing: 'Electron is not installed with this package: install it again (`npm install -g @aparte/bonaparte`).',
+    downloadingElectron: 'First launch: downloading Electron, about 110 MB, once…',
+    launched: 'bonaparte is starting.',
+  },
   doctor: {
     title: 'bonaparte doctor',
     node: (version) => `Node ${version}`,

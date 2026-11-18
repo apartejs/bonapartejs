@@ -1,6 +1,6 @@
 /**
- * What `bonaparte` does with its arguments: `doctor`, `--version`, `--help`. Launching the app from the
- * command line comes with the distribution (plan, task 13.3); until then, no argument prints the help.
+ * What `bonaparte` does with its arguments: nothing launches the app (task 13.3); `doctor`, `--version`,
+ * `--help`.
  * Everything it touches comes in by `CliDeps`, so it is tested without a terminal or a machine.
  */
 
@@ -17,6 +17,8 @@ export interface CliDeps {
   locale: CliLocale;
   version: string;
   doctor(): Promise<DoctorReport>;
+  /** No argument: the app, launched with a window of its own (task 13.3). Without it, the help. */
+  launch?(): Promise<number>;
   /** The output is a terminal: the marks are coloured. */
   color?: boolean;
 }
@@ -34,6 +36,7 @@ export async function main(args: readonly string[], deps: CliDeps): Promise<numb
     deps.stdout(deps.version);
     return 0;
   }
+  if (command === undefined && deps.launch) return deps.launch();
   if (command === undefined || command === '--help' || command === '-h') {
     deps.stdout(words.help(deps.version));
     return 0;

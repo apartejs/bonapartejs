@@ -168,13 +168,76 @@ importers:
 
   packages/cli:
     dependencies:
+      '@aparte/core':
+        specifier: 1.13.0
+        version: 1.13.0
+      '@aparte/locales':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-approval':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-ask-user':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-cards':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-diff':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-model-selector':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)(react@19.3.1)
+      '@aparte/plugin-shiki':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)(shiki@4.6.0)
+      '@aparte/plugin-streaming-markdown':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-subagents':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/plugin-triggers':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
+      '@aparte/react':
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@xterm/addon-fit':
+        specifier: 0.11.0
+        version: 0.11.0
+      '@xterm/xterm':
+        specifier: 6.0.0
+        version: 6.0.0
+      electron:
+        specifier: ^45.3.2
+        version: 45.3.2
+      electron-updater:
+        specifier: 6.8.11
+        version: 6.8.11
+      node-pty:
+        specifier: 1.1.0
+        version: 1.1.0
+      react:
+        specifier: ^19.3.1
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.3.1
+        version: 19.3.1(react@19.3.1)
+      shiki:
+        specifier: ^4.0.0
+        version: 4.6.0
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
       '@aparte/bonaparte-core':
         specifier: workspace:*
         version: link:../core
       '@aparte/bonaparte-shared':
         specifier: workspace:*
         version: link:../shared
-    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
