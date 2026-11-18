@@ -26,6 +26,12 @@ describe('a stdio server’s command, on Windows (task 10.5)', () => {
     expect(resolveCommand('npm', ['exec', 'x'], { env, platform: 'win32', exists }).args[0]).toBe(win32.join(NODE_DIR, 'node_modules', 'npm', 'bin', 'npm-cli.js'));
   });
 
+  it('a relative entry of the PATH is not the PATH: it would be the folder the server runs in (audit 13.4)', () => {
+    const planted = new Set([...files, '.\\uvx.exe', 'tools\\uvx.exe']);
+    const resolved = resolveCommand('uvx', [], { env: { ...env, PATH: `.;tools;${env.PATH}` }, platform: 'win32', exists: (path) => planted.has(path.toLowerCase()) });
+    expect(resolved.command).toBe('C:\\Users\\me\\.local\\bin\\uvx.exe');
+  });
+
   it('a program found on the PATH runs by its full path', () => {
     expect(resolveCommand('uvx', ['mcp-server-git'], { env, platform: 'win32', exists })).toEqual({
       command: 'C:\\Users\\me\\.local\\bin\\uvx.exe',

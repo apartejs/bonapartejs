@@ -51,8 +51,9 @@ describe('a tool of a plugin of a third party is judged as a program it runs (au
     expect(engine().evaluate({ tool: SCAN, input: {}, mode: 'plume' }).verdict).toBe('ask');
   });
 
-  it('declared network, it is still asked as the network is', () => {
+  it('declared network, it is still asked as the network is — and refused in Lecture, like any program', () => {
     expect(engine().evaluate({ tool: FETCH, input: {}, mode: 'impro' }).verdict).toBe('ask');
+    expect(engine().evaluate({ tool: FETCH, input: {}, mode: 'lecture' }).verdict).toBe('deny');
   });
 
   it('a built-in plugin’s read is believed: its code is the app’s', () => {
@@ -92,6 +93,16 @@ describe('a file that runs later asks in every mode — and is refused in Lectur
     '.lintstagedrc.json',
     '.simple-git-hooks.json',
     '.envrc',
+    // The second pass of the audit: a Dockerfile under another name, git hooks kept in a folder of the repository's.
+    'docker/api.Dockerfile',
+    'Containerfile',
+    '.githooks/pre-commit',
+    'scripts/git-hooks/post-checkout',
+    '.huskyrc',
+    '.huskyrc.json',
+    'lefthook.jsonc',
+    '.overcommit.yml',
+    'simple-git-hooks.cjs',
   ];
   for (const path of ARMED) {
     it(path, () => {
@@ -220,6 +231,10 @@ describe('after a restart', () => {
     const refused = judge(join(project, 'src', 'a.ts'), 'impro');
     expect(refused.verdict).toBe('deny');
     expect(refused.verdict === 'deny' && refused.reason).toContain(worktree);
+    // A file that runs later in the project's own checkout is refused too, never offered (audit 13.4).
+    for (const name of ['package.json', 'Dockerfile', 'compose.yaml', '.envrc']) {
+      expect(judge(join(project, name), 'impro').verdict).toBe('deny');
+    }
     // Out of both: asked, as anywhere outside.
     expect(judge(join(tmpdir(), 'elsewhere.txt'), 'impro')).toEqual({ verdict: 'ask', why: 'outside-project' });
   });
@@ -227,5 +242,22 @@ describe('after a restart', () => {
   it('Impro is not kept without a new confirmation; the other modes are', () => {
     expect(modeAfterRestart('impro')).toBe('plume');
     for (const mode of ['lecture', 'repetition', 'plume'] as const) expect(modeAfterRestart(mode)).toBe(mode);
+  });
+});
+
+describe('a link named as a place whose files run later (audit 13.4)', () => {
+  it('is asked, even when it leads to an ordinary folder', async () => {
+    const plain = join(project, 'tools-plain');
+    const link = join(project, '.githooks');
+    await mkdir(plain, { recursive: true });
+    await symlink(plain, link, process.platform === 'win32' ? 'junction' : 'dir');
+    try {
+      expect(edit('.githooks/pre-commit', 'plume')).toEqual({ verdict: 'ask', why: 'armed-path' });
+      // Through the plain folder's own name, an ordinary write.
+      expect(edit('tools-plain/notes.txt', 'plume')).toEqual({ verdict: 'allow' });
+    } finally {
+      await rm(link, { recursive: true, force: true });
+      await rm(plain, { recursive: true, force: true });
+    }
   });
 });

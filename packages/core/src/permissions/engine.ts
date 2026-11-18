@@ -76,11 +76,17 @@ const ARMED: RegExp[] = [
   // What « what the project runs » launches, its overrides, and what docker builds (audit 13.4).
   /(^|\/)(docker-)?compose(\.override)?\.ya?ml$/,
   /(^|\/)dockerfile(\.[^/]*)?$/,
+  /(^|\/)[^/]+\.dockerfile$/,
+  /(^|\/)containerfile(\.[^/]*)?$/,
   // What git's hooks run through their managers, and what direnv runs on entering a folder (audit 13.4).
   /(^|\/)\.pre-commit-config\.ya?ml$/,
-  /(^|\/)\.?lefthook(-local)?\.(ya?ml|json|toml)$/,
+  /(^|\/)\.?lefthook(-local)?\.(ya?ml|jsonc?|toml)$/,
   /(^|\/)\.lintstagedrc(\.[^/]*)?$/,
-  /(^|\/)\.simple-git-hooks(\.[^/]*)?$/,
+  /(^|\/)\.?simple-git-hooks(\.[^/]*)?$/,
+  /(^|\/)\.huskyrc(\.[^/]*)?$/,
+  /(^|\/)\.overcommit\.ya?ml$/,
+  // A folder of hooks the repository keeps and names in core.hooksPath: its usual names.
+  /(^|\/)\.?git-?hooks\//,
   /(^|\/)\.envrc$/,
   // Beyond a project, within the home folder: what the system runs at login,
   // what a shell runs when it starts, who may log in by key.
@@ -159,6 +165,8 @@ export class PermissionEngine {
     const effect: KnownEffect = declared && !untrusted ? query.tool.effect : 'execute';
     let short = MATRIX[query.mode][effect];
     if (effect === 'network' && (this.deps.askBeforeNetwork?.() ?? true)) short = 'ask';
+    // Lecture runs nothing: a third party's code included, whatever it says it does.
+    if (query.tool.source === 'extension' && query.mode === 'lecture') short = 'deny';
     if (short === 'deny') return { verdict: 'deny', reason: refusal(query.mode, effect) };
 
     // A write: where it really lands decides — a file that runs later, outside the project, the network.
@@ -180,15 +188,19 @@ export class PermissionEngine {
         }
         // Outside too, where it really lands decides: a link into .ssh is armed.
         const real = inside ? permissionPath(roots, requested, home) : realLocation(resolve(roots[0] ?? home, requested));
-        if (isArmedPath(real, this.deps.dataDir, this.deps.alwaysAsk?.(query.projectId) ?? [])) {
-          return { verdict: 'ask', why: 'armed-path' };
-        }
-        // On its own branch, the project's own folder is another checkout: never written from here.
+        // On its own branch, the project's own folder is another checkout: never written from here — refused before
+        // anything is offered, a file that runs later included (audit 13.4).
         if (!inside && (query.barred ?? []).some((root) => contains(root, real))) {
           return {
             verdict: 'deny',
             reason: `This conversation works on its own branch, in ${roots[0] ?? ''}: write its files there, never in the project's own folder.`,
           };
+        }
+        // Where it really lands, and the name it was asked under: a link named `.githooks` is armed wherever it leads.
+        const alwaysAsk = this.deps.alwaysAsk?.(query.projectId) ?? [];
+        const spelled = resolve(roots[0] ?? home, requested);
+        if (isArmedPath(real, this.deps.dataDir, alwaysAsk) || isArmedPath(spelled, this.deps.dataDir, alwaysAsk)) {
+          return { verdict: 'ask', why: 'armed-path' };
         }
         if (!inside) return { verdict: 'ask', why: 'outside-project' };
       }

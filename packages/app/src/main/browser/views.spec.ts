@@ -335,6 +335,45 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     await expect(watched.agentRead()).resolves.toMatchObject({ url: 'http://other.example/' });
   });
 
+  it('a request of an agent’s page to a NAME of the network this machine is in is cancelled too (audit 13.4, second pass)', async () => {
+    const views: FakeView[] = [];
+    const browser = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+      pageLookup: async (host) => (host === 'router.lan' ? ['192.168.1.1'] : host === 'dev.local' ? ['127.0.0.1'] : ['93.184.216.34']),
+    });
+    await browser.agentOpen('http://public.example/');
+    const id = views[0]!.webContents.id;
+    expect(await browser.blocked(id, 'http://router.lan/apply.cgi')).toBe(true);
+    expect(await browser.blocked(id, 'ws://router.lan:8123/api/websocket')).toBe(true);
+    expect(await browser.blocked(id, 'http://dev.local:3000/')).toBe(false);
+    expect(await browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
+  });
+
+  it('a page the person loaded becomes the agent’s once the agent acts on it: where it then goes is checked', async () => {
+    const views: FakeView[] = [];
+    const browser = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+    });
+    browser.openTab('t1');
+    await browser.navigate('t1', 'https://forum.example/');
+    await browser.agentAct({ kind: 'click', selector: 'a' });
+    expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.1/')).toBe(true);
+  });
+
   it('a name Chromium resolved to a private address is refused, whatever Node answers', async () => {
     const views: FakeView[] = [];
     const browser = new BrowserViews({
@@ -366,10 +405,10 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     });
     await browser.agentOpen('http://public.example/');
     const id = views[0]!.webContents.id;
-    expect(browser.blocked(id, 'http://10.0.0.5/router.cgi')).toBe(true);
-    expect(browser.blocked(id, 'http://[fd00::1]/')).toBe(true);
-    expect(browser.blocked(id, 'http://127.0.0.1:5173/')).toBe(false);
-    expect(browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
-    expect(browser.blocked(9999, 'http://10.0.0.5/')).toBe(false);
+    expect(await browser.blocked(id, 'http://10.0.0.5/router.cgi')).toBe(true);
+    expect(await browser.blocked(id, 'http://[fd00::1]/')).toBe(true);
+    expect(await browser.blocked(id, 'http://127.0.0.1:5173/')).toBe(false);
+    expect(await browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
+    expect(await browser.blocked(9999, 'http://10.0.0.5/')).toBe(false);
   });
 });

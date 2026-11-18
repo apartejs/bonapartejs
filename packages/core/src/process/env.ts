@@ -12,8 +12,11 @@ const SECRET_WORD = /KEY|TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|CREDENTIAL|PWD|
  * Playwright's `PW_*` settings.
  */
 const SECRET_PART = /(?:^|_)(?:PAT|PASS|DSN|AUTH)(?:_|$)|_PW$/i;
-/** The shell's working folders: `PWD` names a place, not a password. */
-const NOT_SECRET = /^(?:OLD)?PWD$/i;
+/**
+ * The shell's working folders: `PWD` names a place, not a password. `SSH_AUTH_SOCK` names the ssh-agent's socket,
+ * not a key: without it a push over SSH cannot sign (audit 13.4).
+ */
+const NOT_SECRET = /^(?:(?:OLD)?PWD|SSH_AUTH_SOCK)$/i;
 /** A value that carries a credential, whatever its name: `scheme://user:password@`, `AccountKey=`. */
 const SECRET_VALUE = /:\/\/[^/@\s:]+:[^/@\s]+@|AccountKey=/i;
 

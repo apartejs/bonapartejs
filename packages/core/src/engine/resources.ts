@@ -11,6 +11,7 @@
  * Every probe is injectable; the specs run with fakes.
  */
 
+import { withoutSecrets } from '../process/env.js';
 import { createInterface } from 'node:readline';
 import { cpus, freemem, totalmem } from 'node:os';
 import { spawnHidden, type SpawnedProcess, type SpawnFn } from '../process/spawn.js';
@@ -290,6 +291,8 @@ export function createWindowsProbes(options: WindowsProbesOptions): WindowsProbe
     try {
       child = spawnHidden('powershell', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
         stdio: ['ignore', 'pipe', 'ignore'],
+        // A probe gets none of the app's secrets (audit 13.4).
+        env: withoutSecrets(process.env),
         ...(options.spawn ? { spawn: options.spawn } : {}),
       });
     } catch {

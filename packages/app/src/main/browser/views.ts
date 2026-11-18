@@ -312,15 +312,24 @@ export class BrowserViews {
     if (!isLoopback(bare) && !isPublicAddress(bare)) tab.reachedPrivate = true;
   }
 
-  /** A request of a page the agent opened to an address of the network this machine is in, written as one: cancelled. */
-  blocked(webContentsId: number, url: string): boolean {
+  /**
+   * A request of a page the agent opened to an address of the network this machine is in: cancelled — written as
+   * one, or a name the pages' own resolver gives such an address (a link, an image, a websocket, a rebinding name).
+   */
+  async blocked(webContentsId: number, url: string): Promise<boolean> {
     const tab = this.tabOf(webContentsId);
     if (!tab || tab.loadedBy !== 'agent') return false;
+    let host: string;
     try {
-      return privateLiteral(new URL(url).hostname);
+      host = new URL(url).hostname;
     } catch {
       return false;
     }
+    if (privateLiteral(host)) return true;
+    const bare = host.replace(/^\[|\]$/g, '');
+    if (isIP(bare) || bare === 'localhost' || !this.options.pageLookup) return false;
+    const seen = await this.options.pageLookup(bare).catch(() => []);
+    return seen.some((address) => !isLoopback(address) && !isPublicAddress(address));
   }
 
   private tabOf(webContentsId: number): Tab | undefined {
@@ -352,6 +361,8 @@ export class BrowserViews {
     } catch (error) {
       return { error: (error as Error).message };
     }
+    // From the agent's first act on it, the page goes where the agent takes it: checked as one it opened (audit 13.4).
+    tab.loadedBy = 'agent';
     // Selectors and text reach the page as JSON: a quote cannot close the script's string.
     const script =
       action.kind === 'scroll'

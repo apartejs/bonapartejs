@@ -32,8 +32,9 @@ export type SpawnHiddenOptions = Omit<SpawnOptions, 'shell' | 'windowsHide'> & {
 /**
  * On Windows a bare program name is looked for in the folder it runs in before the PATH: a `git.exe` a
  * repository carries would run in place of git (audit 13.4). A bare name is therefore resolved on the PATH
- * alone; one the PATH does not hold runs from the runtime's own folder, where it is not either — and fails as
- * Node says a missing program fails.
+ * alone — its absolute entries, quotes taken off as Windows writes them, the name as it is then with `.com` and
+ * `.exe` as Windows completes it. One the PATH does not hold is not launched at all: it fails as a missing
+ * program fails, from a folder that does not exist.
  */
 function onPathOnly(
   command: string,
@@ -41,18 +42,23 @@ function onPathOnly(
   platform: NodeJS.Platform,
   exists: (path: string) => boolean,
 ): { command: string; cwd?: string | URL } {
-  if (platform !== 'win32' || /[\\/]/.test(command)) return { command, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) };
+  const asked = options.cwd !== undefined ? { cwd: options.cwd } : {};
+  if (platform !== 'win32' || /[\\/]/.test(command)) return { command, ...asked };
   const env = options.env ?? process.env;
   const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH');
-  const dirs = (pathKey ? (env[pathKey] ?? '') : '').split(';').filter(Boolean);
+  const dirs = (pathKey ? (env[pathKey] ?? '') : '')
+    .split(';')
+    .map((dir) => dir.trim().replace(/^"(.*)"$/, '$1'))
+    // Only a full path: `.`, `bin` or `C:foo` would be the folder the program runs in again.
+    .filter((dir) => /^[a-z]:[\\/]/i.test(dir) || /^\\\\[^\\]/.test(dir));
   const own = win32.extname(command) !== '';
   for (const dir of dirs) {
     const base = win32.join(dir, command);
-    for (const candidate of own ? [base] : [`${base}.com`, `${base}.exe`]) {
-      if (exists(candidate)) return { command: candidate, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) };
+    for (const candidate of own ? [base, `${base}.com`, `${base}.exe`] : [`${base}.com`, `${base}.exe`]) {
+      if (exists(candidate)) return { command: candidate, ...asked };
     }
   }
-  return { command, cwd: dirname(process.execPath) };
+  return { command: win32.join(dirname(process.execPath), 'bonaparte-not-on-path', own ? command : `${command}.exe`), ...asked };
 }
 
 export function spawnHidden(

@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte-plugin-sdk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "bonaparte — what a plugin author imports: the manifest, the context of its Node half, definePlugin",
   "license": "MIT",
   "author": "Paul Richez",

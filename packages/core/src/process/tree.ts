@@ -5,6 +5,7 @@
  * signalled.
  */
 
+import { withoutSecrets } from './env.js';
 import { spawnHidden, type SpawnedProcess, type SpawnFn, type SpawnHiddenOptions } from './spawn.js';
 
 const STOP_TIMEOUT_MS = 3_000;
@@ -50,6 +51,7 @@ export async function stopProcessTree(
     try {
       const killer = spawnHidden('taskkill', ['/pid', String(pid), '/T', '/F'], {
         stdio: 'ignore',
+        env: withoutSecrets(process.env),
         ...(options.spawn ? { spawn: options.spawn } : {}),
       });
       killer.on('error', () => child.kill());

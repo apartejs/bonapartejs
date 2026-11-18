@@ -59,15 +59,28 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
   });
   // Where Chromium really connected decides what the agent may read; a private address written as one is never asked
   // by a page the agent opened (audit 13.4).
-  session.webRequest.onBeforeRequest((details, callback) => callback({ cancel: details.webContentsId !== undefined && views.blocked(details.webContentsId, details.url) }));
+  session.webRequest.onBeforeRequest((details, callback) => {
+    if (details.webContentsId === undefined) return callback({});
+    views.blocked(details.webContentsId, details.url).then(
+      (cancel) => callback({ cancel }),
+      () => callback({}),
+    );
+  });
+  // Behind a proxy, the address Electron gives is the proxy's: only a direct connection says where the page is.
+  const responded = (details: { url: string; webContentsId?: number; ip?: string }): void => {
+    const { webContentsId, ip } = details;
+    if (webContentsId === undefined || !ip) return;
+    void session.resolveProxy(details.url).then(
+      (proxy) => {
+        if (proxy.trim().toUpperCase() === 'DIRECT') views.responded(webContentsId, ip);
+      },
+      () => undefined,
+    );
+  };
   // The address a request was really sent to: Electron says it once the response is over, or at a redirect.
-  session.webRequest.onBeforeRedirect((details) => {
-    if (details.webContentsId !== undefined) views.responded(details.webContentsId, details.ip);
-  });
+  session.webRequest.onBeforeRedirect((details) => responded(details));
   // Electron 45 does not type it here; where it gives it, it counts.
-  session.webRequest.onCompleted((details) => {
-    if (details.webContentsId !== undefined) views.responded(details.webContentsId, (details as { ip?: string }).ip);
-  });
+  session.webRequest.onCompleted((details) => responded(details as typeof details & { ip?: string }));
 
   const service: BrowserService = {
     open: (url) => views.agentOpen(url),

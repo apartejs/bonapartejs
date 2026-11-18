@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { git } from '../git/git.js';
 import { ghEnvironment } from '../git/pr.js';
 import { runShort } from '../engine/process-probe.js';
+import { readGpuMemoryBytes } from '../engine/gpu-memory.js';
 import type { SpawnFn } from './spawn.js';
 
 const dirs: string[] = [];
@@ -47,5 +48,17 @@ describe('the secrets of what bonaparte launches (audit 13.4)', () => {
     expect(given).toBeDefined();
     expect(given).not.toHaveProperty('BP_AUDIT_TOKEN');
     expect(given?.['PATH'] ?? given?.['Path']).toBeDefined();
+  });
+
+  it('the PowerShell probe of the card is given no secret either', async () => {
+    process.env['BP_AUDIT_TOKEN'] = 'sk-leaked';
+    let given: NodeJS.ProcessEnv | undefined;
+    const spawn: SpawnFn = (_command, _args, options) => {
+      given = options.env;
+      throw new Error('stop: only the environment is looked at');
+    };
+    await readGpuMemoryBytes({ spawn, platform: 'win32' }).catch(() => null);
+    expect(given).toBeDefined();
+    expect(given).not.toHaveProperty('BP_AUDIT_TOKEN');
   });
 });

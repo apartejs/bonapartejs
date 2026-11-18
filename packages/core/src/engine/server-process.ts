@@ -101,6 +101,7 @@ export function launchServer(command: string, args: readonly string[], options: 
       try {
         spawnHidden('taskkill', ['/pid', String(pid), '/T', '/F'], {
           stdio: 'ignore',
+          env: withoutSecrets(process.env),
           ...(options.spawn ? { spawn: options.spawn } : {}),
         });
       } catch {

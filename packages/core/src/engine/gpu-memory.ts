@@ -9,6 +9,7 @@
  * resource monitor's.
  */
 
+import { withoutSecrets } from '../process/env.js';
 import { spawnHidden, type SpawnFn } from '../process/spawn.js';
 import { runShort } from './process-probe.js';
 
@@ -33,6 +34,8 @@ export async function readGpuMemoryBytes(options: GpuMemoryOptions = {}): Promis
     try {
       child = spawnHidden('powershell', ['-NoProfile', '-NonInteractive', '-Command', SCRIPT], {
         stdio: ['ignore', 'pipe', 'ignore'],
+        // A probe gets none of the app's secrets (audit 13.4).
+        env: withoutSecrets(process.env),
         ...(options.spawn ? { spawn: options.spawn } : {}),
       });
     } catch {

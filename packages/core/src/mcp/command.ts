@@ -61,7 +61,13 @@ export function resolveCommand(command: string, args: readonly string[], options
 /** The file a command names: itself when it has a path, else the first of the PATH, with each PATHEXT tried. */
 function find(command: string, path: string, extensions: readonly string[], exists: (path: string) => boolean): string | null {
   const named = /[\\/]/.test(command);
-  const dirs = named ? [''] : path.split(';').filter(Boolean);
+  // Only the PATH's full entries, quotes taken off: a relative one is the folder it runs in again (audit 13.4).
+  const dirs = named
+    ? ['']
+    : path
+        .split(';')
+        .map((dir) => dir.trim().replace(/^"(.*)"$/, '$1'))
+        .filter((dir) => /^[a-z]:[\\/]/i.test(dir) || /^\\\\[^\\]/.test(dir));
   const own = win32.extname(command) !== '';
   for (const dir of dirs) {
     const base = dir ? win32.join(dir, command) : command;

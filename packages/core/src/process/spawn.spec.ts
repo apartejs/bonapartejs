@@ -52,11 +52,25 @@ describe('spawnHidden', () => {
     expect(calls[0]!.options).not.toHaveProperty('exists');
   });
 
-  it('on Windows, a bare name the PATH does not hold is not looked for in the folder it would run in', () => {
+  it('on Windows, a bare name the PATH does not hold is launched from nowhere: it fails, never found in its folder', () => {
     const { calls, spawn } = recorder();
     spawnHidden('git', ['status'], { spawn, cwd: 'C:\\proj', env: { PATH: 'C:\\Windows' }, platform: 'win32', exists: (path) => path === 'C:\\proj\\git.exe' });
-    expect(calls[0]!.command).toBe('git');
-    expect(calls[0]!.options['cwd']).not.toBe('C:\\proj');
+    expect(calls[0]!.command).toMatch(/bonaparte-not-on-path\\git\.exe$/);
+    expect(calls[0]!.options).toMatchObject({ cwd: 'C:\\proj' });
+  });
+
+  it('on Windows, only the PATH’s full entries count — a relative one is the folder it runs in again; quotes are Windows’ own', () => {
+    const { calls, spawn } = recorder();
+    const files = new Set(['.\\git.exe', 'bin\\git.exe', 'C:\\Program Files\\Git\\cmd\\git.exe']);
+    spawnHidden('git', [], { spawn, cwd: 'C:\\proj', env: { PATH: '.;bin;C:relative;"C:\\Program Files\\Git\\cmd"' }, platform: 'win32', exists: (path) => files.has(path) });
+    expect(calls[0]!.command).toBe('C:\\Program Files\\Git\\cmd\\git.exe');
+  });
+
+  it('on Windows, a name with a dot is also tried with .exe, as Windows completes it', () => {
+    const { calls, spawn } = recorder();
+    const files = new Set(['C:\\Apps\\python3.12.exe']);
+    spawnHidden('python3.12', ['x.py'], { spawn, env: { PATH: 'C:\\Apps' }, platform: 'win32', exists: (path) => files.has(path) });
+    expect(calls[0]!.command).toBe('C:\\Apps\\python3.12.exe');
   });
 
   it('leaves a path as it is, and a bare name elsewhere than on Windows', () => {

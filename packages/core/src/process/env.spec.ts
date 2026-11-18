@@ -39,6 +39,7 @@ describe('withoutSecrets', () => {
       PATHEXT: '.EXE',
       PWD: '/home/someone/project',
       OLDPWD: '/home/someone',
+      SSH_AUTH_SOCK: '/run/user/1000/ssh-agent.socket',
       HOME: '/home/someone',
       USERPROFILE: 'C:\Users\someone',
       TEMP: 'C:\Temp',
