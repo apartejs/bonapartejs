@@ -21,7 +21,7 @@ export interface ServiceDownCardProps {
 export function ServiceDownCard({ messages, service, host, onService, onRetry, onBuiltin }: ServiceDownCardProps) {
   const words = messages.serviceDown;
   return (
-    <div className="aparte-alert aparte-alert--error service-down" role="alert">
+    <div className="aparte-alert aparte-alert--danger service-down" role="alert">
       <Icon name="engine" />
       <div className="aparte-alert__body">
         <p className="service-down__kind">{words.kind}</p>

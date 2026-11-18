@@ -4316,3 +4316,11 @@ body {
   gap: 6px;
   min-width: min(420px, 80vw);
 }
+
+/* A failure above the composer stands where the other cards of the composer stand: its width, centred. */
+.failure-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--aparte-message-max-width, 800px);
+  margin: 0 auto var(--aparte-space-4);
+}

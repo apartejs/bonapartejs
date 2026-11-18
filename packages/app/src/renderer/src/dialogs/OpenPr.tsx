@@ -36,7 +36,7 @@ export function OpenPr({ messages, asking, busy, onCancel, onOpen }: OpenPrProps
       <div className="aparte-dialog__body">
         <p>{asking ? words.openWhat(asking.branch, asking.base) : ''}</p>
         {asking?.failed ? (
-          <p className="aparte-alert aparte-alert--error" role="alert">
+          <p className="aparte-alert aparte-alert--danger" role="alert">
             {words.openFailed}
           </p>
         ) : null}

@@ -1132,7 +1132,13 @@ export type AparteWord =
   | 'questionDeclined'
   | 'conversationWaiting'
   // The question before a conversation is deleted: what goes with it (task 5.9).
-  | 'deleteConversationConfirm';
+  | 'deleteConversationConfirm'
+  // A reply that failed, said in the thread (task 12.3): with « tu », as everything bonaparte says.
+  | 'errorUnreachable'
+  | 'errorTimeout'
+  | 'errorRateLimited'
+  | 'errorTooLong'
+  | 'errorFailed';
 
 /** The tools of the core whose calls have a line of their own. */
 export type ToolLineName = 'read_file' | 'list_files' | 'search' | 'edit_file' | 'write_file' | 'run_command' | 'web_fetch';

@@ -39,7 +39,8 @@ const WEIGHT = {
 } as const;
 
 export function FailureCard(props: FailureCardProps) {
-  const tone = props.tone === 'neutral' ? '' : props.tone === 'error' ? ' aparte-alert--error' : ' aparte-alert--warning';
+  // The kit's tones: danger, warning, neutral (it has no « error »).
+  const tone = props.tone === 'neutral' ? ' aparte-alert--neutral' : props.tone === 'error' ? ' aparte-alert--danger' : ' aparte-alert--warning';
   return (
     <div className={`aparte-alert${tone} failure-card${props.className ? ` ${props.className}` : ''}`} role="alert" data-failure={props.title}>
       <div className="aparte-alert__body">

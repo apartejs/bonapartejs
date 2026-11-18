@@ -1173,3 +1173,109 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+const shot = (page: Page, into: string, name: string) => page.screenshot({ path: join(into, name), animations: 'disabled' });
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the finishing of phase 12: shortcuts, the mascot, the failures, a conversation's settings, the monitor, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const fr = locale === 'fr';
+      const words = fr
+        ? { settings: 'Réglages', shortcuts: 'Raccourcis', mode: /^Changer de mode/, more: 'Plus d’actions', convSettings: 'Réglages de la conversation…', start: 'Démarrer', composer: 'Réponds, ou demande autre chose…', ask: 'Raconte' }
+        : { settings: 'Settings', shortcuts: 'Shortcuts', mode: /^Change mode/, more: 'More actions', convSettings: 'Conversation settings…', start: 'Start', composer: 'Reply, or ask something else…', ask: 'Tell me' };
+
+      // A conversation at work, the engine's card with its readings, the mascot writing; then at 820 px.
+      const { app, page } = await launch({
+        locale,
+        managed: { models: { 'gemma-4-e2e': { paddingBytes: 1024 * 1024 } } },
+        env: {
+          FAKE_LLAMA_ANSWER: Array.from({ length: 80 }, (_, index) => `mot${index}`).join(' '),
+          FAKE_LLAMA_PACE_MS: '60',
+          BONAPARTE_E2E_RESOURCES: JSON.stringify({ cpu: 34, usedBytes: 21 * 1024 ** 3, totalBytes: 64 * 1024 ** 3, gpuUtilization: 61 }),
+        },
+      });
+      await page.emulateMedia({ colorScheme: scheme });
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await page.getByRole('button', { name: words.start }).click();
+      const ui = chat(page);
+      await expect(ui.composer(words.composer)).toBeVisible({ timeout: 20_000 });
+      await ui.send(words.ask);
+      await expect(page.locator('.bonaparte-sidebar .mascot')).toHaveAttribute('data-state', 'talking', { timeout: 15_000 });
+      await expect(page.locator('.engine-card__resources')).toBeVisible({ timeout: 10_000 });
+      await shot(page, into, `at-work-${locale}-${scheme}.png`);
+      await expect(ui.streamingReplies).toHaveCount(0, { timeout: 30_000 });
+
+      await page.getByRole('button', { name: words.more }).click();
+      await page.getByRole('menuitem', { name: words.convSettings }).click();
+      await page.waitForTimeout(300);
+      await shot(page, into, `conversation-settings-${locale}-${scheme}.png`);
+      await page.keyboard.press('Escape');
+
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(820, 1000));
+      await page.waitForTimeout(400);
+      await shot(page, into, `narrow-conversation-${locale}-${scheme}.png`);
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await page.waitForTimeout(300);
+
+      // Réglages · Raccourcis, a row waiting for its keys.
+      await page.getByRole('button', { name: words.settings, exact: true }).click();
+      await page.getByRole('navigation', { name: words.settings }).getByRole('link', { name: words.shortcuts }).click();
+      await page.getByRole('button', { name: words.mode }).click();
+      await page.waitForTimeout(200);
+      await shot(page, into, `shortcuts-${locale}-${scheme}.png`);
+      await page.keyboard.press('Escape');
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(820, 1000));
+      await page.waitForTimeout(400);
+      await shot(page, into, `narrow-shortcuts-${locale}-${scheme}.png`);
+    });
+
+    test(`the failures of phase 12, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const fr = locale === 'fr';
+      const start = fr ? 'Démarrer' : 'Start';
+
+      // A model too big for the card.
+      const big = await launch({ locale, managed: { models: { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } }, gpuBytes: 64 * 1024 * 1024 } });
+      await big.page.emulateMedia({ colorScheme: scheme });
+      await big.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await big.page.getByRole('button', { name: start }).click();
+      await expect(big.page.locator('.failure-card')).toBeVisible({ timeout: 15_000 });
+      await big.page.locator('.failure-card').scrollIntoViewIfNeeded();
+      await shot(big.page, into, `failure-too-big-${locale}-${scheme}.png`);
+      await big.close();
+
+      // llama.cpp missing.
+      const missing = await launch({ locale, managed: { models: { 'gemma-4-e2e': { paddingBytes: 1024 * 1024 } }, releases: true, llama: 'missing' } });
+      await missing.page.emulateMedia({ colorScheme: scheme });
+      await missing.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await expect(missing.page.locator('.failure-card')).toBeVisible({ timeout: 15_000 });
+      await shot(missing.page, into, `failure-llama-missing-${locale}-${scheme}.png`);
+      await missing.close();
+
+      // The engine stops during a reply.
+      const died = await launch({ locale, engine: { responder: () => 'un deux trois quatre cinq', failAfter: 2 } });
+      await died.page.emulateMedia({ colorScheme: scheme });
+      await died.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await chat(died.page).send(fr ? 'Compte' : 'Count');
+      await expect(died.page.locator('.failure-card')).toBeVisible({ timeout: 15_000 });
+      await shot(died.page, into, `failure-engine-died-${locale}-${scheme}.png`);
+      await died.close();
+
+      // The disk nearly full.
+      const disk = await launch({ locale, managed: { models: { 'gemma-4-e2e': { paddingBytes: 1024 * 1024 } } }, env: { BONAPARTE_E2E_FREE_BYTES: String(300 * 1024 * 1024) } });
+      await disk.page.emulateMedia({ colorScheme: scheme });
+      await disk.app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await disk.page.getByRole('button', { name: start }).click();
+      await expect(chat(disk.page).composer(fr ? 'Réponds, ou demande autre chose…' : 'Reply, or ask something else…')).toBeVisible({ timeout: 20_000 });
+      await chat(disk.page).send(fr ? 'Bonjour' : 'Hello');
+      await expect(disk.page.locator('.failure-card')).toBeVisible({ timeout: 15_000 });
+      await shot(disk.page, into, `failure-disk-full-${locale}-${scheme}.png`);
+      await disk.close();
+    });
+  }
+}
