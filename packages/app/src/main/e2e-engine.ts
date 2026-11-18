@@ -84,3 +84,14 @@ export function e2ePickedFolder(env: Record<string, string | undefined>, e2e: bo
   return folder && (win32.isAbsolute(folder) || posix.isAbsolute(folder)) ? folder : null;
 }
 
+
+/**
+ * The search engine the hidden page reads (task 10.4): outside a test run, the public one (`undefined`); in a
+ * test run, only a local engine of the test (`BONAPARTE_E2E_SEARCH_ENGINE`), else none (`null`) — a test run
+ * never asks the internet.
+ */
+export function e2eSearchEngine(env: Record<string, string | undefined>, e2e: boolean): string | null | undefined {
+  if (!e2e) return undefined;
+  const engine = env['BONAPARTE_E2E_SEARCH_ENGINE'];
+  return engine && /^http:\/\/127\.0\.0\.1:\d+\//.test(engine) ? engine : null;
+}

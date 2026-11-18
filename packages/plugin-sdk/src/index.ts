@@ -38,6 +38,8 @@ export type {
   PluginToolInvocation,
   PluginToolResult,
   PluginToolUse,
+  WebSearchResult,
+  WebSearchService,
   TerminalService,
 } from '@aparte/bonaparte-shared';
 

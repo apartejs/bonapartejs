@@ -67,6 +67,10 @@ export const APP_SETTINGS: SettingField[] = [
   { key: 'subagentsOnBuiltin', type: 'select', scopes: GLOBAL, default: 'sequential', options: ['sequential', 'parallel'], requiresRestart: true },
   // The conversation's own engine, or a provider's id (task 9.2).
   { key: 'subagentsEngine', type: 'string', scopes: GLOBAL, default: 'conversation' },
+  // The web search (task 10.4): the public engine read in a hidden page, or an online provider whose key is in
+  // the vault; a SearXNG's address.
+  { key: 'webSearchProvider', type: 'select', scopes: GLOBAL, default: 'embedded', options: ['embedded', 'brave', 'tavily', 'serper', 'searxng'] },
+  { key: 'webSearchUrl', type: 'string', scopes: GLOBAL, default: '' },
   { key: 'askBeforeNetwork', type: 'boolean', scopes: BY_PROJECT, default: true },
   // The files the person adds to « toujours demandé » (Settings, Permissions): asked in every mode.
   { key: 'alwaysAsk', type: 'list', scopes: BY_PROJECT, default: [] },

@@ -13,6 +13,7 @@ const bundledWorkspace = [
   '@aparte/bonaparte-shared',
   '@aparte/bonaparte-plugin-sdk',
   '@aparte/bonaparte-plugin-terminal',
+  '@aparte/bonaparte-plugin-web-search',
 ];
 
 /**

@@ -13,6 +13,7 @@ import {
   nativeImage,
   Notification,
   safeStorage,
+  session,
   shell,
   Tray,
   utilityProcess,
@@ -24,10 +25,12 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore, withoutSecrets, type Core } from '@aparte/bonaparte-core';
 import { terminal, terminalManifest } from '@aparte/bonaparte-plugin-terminal';
+import { webSearch, webSearchManifest } from '@aparte/bonaparte-plugin-web-search';
 import { APP_EVENT, type AppEvent, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
 import { createVault } from './secrets.js';
-import { e2eEngineDeps, e2ePickedFolder } from './e2e-engine.js';
+import { e2eEngineDeps, e2ePickedFolder, e2eSearchEngine } from './e2e-engine.js';
+import { createHiddenSearch, type SearchSession } from './search/hidden-page.js';
 import { mainWords, type MainWords } from './i18n/index.js';
 import { registerAllChannels } from './ipc/index.js';
 import { createIpcRegistry } from './ipc/register.js';
@@ -224,6 +227,33 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     log: (message) => console.log(message),
   });
   if (options.e2e) (globalThis as { __bonaparteTerminals?: unknown }).__bonaparteTerminals = terminals;
+  // The web search without a key (task 10.4): a hidden page of its own session, never shown. A test run reads
+  // only a local engine of the test, or none.
+  const engine = e2eSearchEngine(process.env, options.e2e);
+  const hiddenSearch =
+    engine === null
+      ? null
+      : createHiddenSearch({
+          ...(engine ? { engine } : {}),
+          session: () => session.fromPartition('bonaparte-search') as unknown as SearchSession,
+          window: (own) =>
+            new BrowserWindow({
+              show: false,
+              skipTaskbar: true,
+              focusable: false,
+              width: 1024,
+              height: 768,
+              webPreferences: {
+                session: own as unknown as Electron.Session,
+                sandbox: true,
+                contextIsolation: true,
+                nodeIntegration: false,
+                images: false,
+                backgroundThrottling: false,
+              },
+            }),
+        });
+  if (hiddenSearch) app.once('will-quit', () => hiddenSearch.dispose());
   const core = createCore({
     dataDir,
     // The services' keys (task 9.1): encrypted by the system, in one file of the data folder.
@@ -231,6 +261,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     // The answers are written in the language of the interface.
     replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
     terminals,
+    ...(hiddenSearch ? { webSearch: (query: string, max: number, signal?: AbortSignal) => hiddenSearch.search(query, max, signal) } : {}),
     pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
     commandOutput: (conversationId, output) => push({ kind: 'command', conversationId, output }),
     engineChanged: () => {
@@ -244,6 +275,10 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   core.plugins.add(terminalManifest, { builtin: true });
   const activated = await core.plugins.activate('terminal', terminal);
   if (!activated.active) console.error(`[bonaparte] the terminal did not start: ${activated.error ?? 'unknown'}`);
+  // The web search (task 10.4): on by default, nothing leaving without asking.
+  core.plugins.add(webSearchManifest, { builtin: true });
+  const searching = await core.plugins.activate('web-search', webSearch);
+  if (!searching.active) console.error(`[bonaparte] the web search did not start: ${searching.error ?? 'unknown'}`);
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),

@@ -467,3 +467,27 @@ describe('PluginHost — terminals', () => {
     expect(shell.ctx!.terminals).toBeUndefined();
   });
 });
+
+describe('PluginHost — the web search (task 10.4)', () => {
+  it('a plugin that declares network may search the web, until it goes; one that does not, may not', async () => {
+    const asked: string[] = [];
+    const webSearch = {
+      search: async (query: string) => {
+        asked.push(query);
+        return { provider: 'embedded', results: [{ title: 'A', url: 'https://a.example', snippet: 'a' }] };
+      },
+    };
+    const host = new PluginHost({ registry: new ToolRegistry(), webSearch });
+    host.add(manifest('searcher', { effects: [{ effect: 'network', what: 'the web' }] }), { builtin: true });
+    host.add(manifest('reader', { effects: [{ effect: 'read', what: 'files' }] }), { builtin: true });
+    const searcher = capture();
+    const reader = capture();
+    await host.activate('searcher', searcher);
+    await host.activate('reader', reader);
+    expect(reader.ctx!.search).toBeUndefined();
+    expect(await searcher.ctx!.search!('kv cache', 3)).toMatchObject({ provider: 'embedded', results: [{ url: 'https://a.example' }] });
+    expect(asked).toEqual(['kv cache']);
+    await host.deactivate('searcher');
+    await expect(searcher.ctx!.search!('again', 3)).rejects.toThrow(/not active/);
+  });
+});

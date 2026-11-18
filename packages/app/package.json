@@ -18,6 +18,7 @@
     "@aparte/bonaparte-core": "workspace:*",
     "@aparte/bonaparte-plugin-sdk": "workspace:*",
     "@aparte/bonaparte-plugin-terminal": "workspace:*",
+    "@aparte/bonaparte-plugin-web-search": "workspace:*",
     "@aparte/bonaparte-shared": "workspace:*",
     "@aparte/core": "1.13.0",
     "@aparte/locales": "1.13.0",

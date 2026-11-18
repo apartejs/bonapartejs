@@ -72,6 +72,8 @@ import { DiskScan, diskRoots } from './models/disk-scan.js';
 import { CATALOGUE, modelUrl, recommendedModels, type CatalogueEntry } from './models/catalogue.js';
 import { downloadFile } from './models/download.js';
 import { runDoctor, type DoctorReport } from './doctor/doctor.js';
+import { createWebSearch, type EmbeddedSearch } from './search/service.js';
+import type { OnlineProvider, SearchProvider } from './search/online.js';
 import { compareWithJournal } from './agent/divergence.js';
 import type { AgentMessage } from './agent/body.js';
 import type { Outcome, PendingCall, Usage } from './journal/types.js';
@@ -175,6 +177,10 @@ export interface CoreDeps {
   modelHub?: string | null;
   /** Tests only: the models recommended, instead of the product's catalogue. */
   modelCatalogue?: readonly CatalogueEntry[];
+  /** The hidden page of the main process that reads the public search engine (task 10.4); none: no search without a key. */
+  webSearch?: EmbeddedSearch;
+  /** Tests only: what an online search provider is asked with. */
+  fetch?: typeof globalThis.fetch;
 }
 
 /** A model bonaparte recommends for this machine (task 9.5), and where it stands on it. */
@@ -1236,9 +1242,19 @@ export function createCore(deps: CoreDeps): Core {
   }
   // The plugins (task 6.1): their tools join the one registry; each core tool one of them uses is
   // judged by the one policy, in its conversation's mode and perimeter. A project may turn one off.
+  // The web search a network plugin asks (task 10.4): the provider the person chose, the public engine by
+  // default; an online provider's key read from the vault, never from a setting.
+  const webSearch = createWebSearch({
+    ...(deps.webSearch ? { embedded: deps.webSearch } : {}),
+    provider: async () => (await appSettings.get('webSearchProvider').catch(() => 'embedded')) as SearchProvider,
+    key: async (provider: OnlineProvider) => (await deps.secrets?.get(`search-${provider}`)) ?? undefined,
+    searxngUrl: async () => String(await appSettings.get('webSearchUrl').catch(() => '')),
+    ...(deps.fetch ? { fetch: deps.fetch } : {}),
+  });
   const plugins = new PluginHost({
     registry: tools,
     log,
+    webSearch,
     ...(deps.terminals ? { terminals: deps.terminals } : {}),
     ...(deps.pluginEvent ? { emit: deps.pluginEvent } : {}),
     judge: async ({ conversationId, tool, input }) => {

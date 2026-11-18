@@ -1,0 +1,36 @@
+{
+  "name": "@aparte/bonaparte-plugin-web-search",
+  "version": "0.1.0",
+  "private": true,
+  "description": "bonaparte — the built-in web search: web_search, the public engine without a key or an online provider",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aparte/bonaparte-plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "tags": [
+      "scope:plugin"
+    ]
+  }
+}

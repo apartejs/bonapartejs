@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { e2eEngineDeps, e2ePickedFolder } from './e2e-engine.js';
+import { e2eEngineDeps, e2ePickedFolder, e2eSearchEngine } from './e2e-engine.js';
 
 describe('e2eEngineDeps', () => {
   const env = {
@@ -83,5 +83,15 @@ describe('GitHub in a test run', () => {
     expect(e2eEngineDeps({ BONAPARTE_E2E_GH_COMMAND: JSON.stringify(['node', 'fake-gh.mjs']) }, true).gh).toEqual(['node', 'fake-gh.mjs']);
     expect(e2eEngineDeps({ BONAPARTE_E2E_GH_COMMAND: '{"not": "a command"}' }, true).gh).toBeNull();
     expect(e2eEngineDeps({ BONAPARTE_E2E_GH_COMMAND: JSON.stringify(['node']) }, false).gh).toBeUndefined();
+  });
+});
+
+describe('e2eSearchEngine (task 10.4)', () => {
+  it('outside a test run, the public engine; in a test run, only a local engine of the test — never the internet', () => {
+    expect(e2eSearchEngine({}, false)).toBeUndefined();
+    expect(e2eSearchEngine({}, true)).toBeNull();
+    expect(e2eSearchEngine({ BONAPARTE_E2E_SEARCH_ENGINE: 'http://127.0.0.1:4100/html/?q=' }, true)).toBe('http://127.0.0.1:4100/html/?q=');
+    expect(e2eSearchEngine({ BONAPARTE_E2E_SEARCH_ENGINE: 'https://html.duckduckgo.com/html/?q=' }, true)).toBeNull();
+    expect(e2eSearchEngine({ BONAPARTE_E2E_SEARCH_ENGINE: 'http://127.0.0.1:4100/html/?q=' }, false)).toBeUndefined();
   });
 });

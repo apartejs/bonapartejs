@@ -216,6 +216,21 @@ export interface PluginShell {
  * default first), and a pseudo-terminal opened on one of them — run in a
  * process of the app's own, never with its secrets.
  */
+/** A page of results of a web search (task 10.4). */
+export interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+/**
+ * Searching the web, as the app does it: the public engine read in a hidden page, or an online provider
+ * whose key the app keeps — the app's choice, never the plugin's; no key ever reaches a plugin.
+ */
+export interface WebSearchService {
+  search(query: string, max: number, signal?: PluginSignal): Promise<{ provider: string; results: WebSearchResult[] }>;
+}
+
 export interface TerminalService {
   shells(): readonly PluginShell[];
   open(shellId: string, options: PluginPtyOptions): PluginPty;
@@ -259,6 +274,11 @@ export interface PluginNodeContext {
    * a terminal is killed when the plugin goes.
    */
   terminals?: TerminalService;
+  /**
+   * Searching the web (task 10.4). Only for a plugin that declares `network`, and only where the app can
+   * search; refused once the plugin is gone.
+   */
+  search?: WebSearchService['search'];
 }
 
 export interface PluginNodeModule {

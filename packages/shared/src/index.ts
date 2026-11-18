@@ -22,6 +22,8 @@ export type {
   PluginPtyOptions,
   PluginShell,
   TerminalService,
+  WebSearchResult,
+  WebSearchService,
   PluginSettingField,
   PluginSignal,
   PluginStatus,

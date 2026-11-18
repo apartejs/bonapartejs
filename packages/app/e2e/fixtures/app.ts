@@ -26,6 +26,7 @@ import {
 import { spawnHidden } from '@aparte/bonaparte-core';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
 import { _electron as electron, test as base, type ElectronApplication, type Page } from '@playwright/test';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -97,6 +98,11 @@ export interface LaunchOptions {
    */
   hub?: { models: Record<string, { family: 'gemma' | 'qwen'; gguf?: FakeGgufOptions }>; paceMs?: number };
   /**
+   * The public search engine the hidden page reads (task 10.4), a local one shaped as DuckDuckGo's HTML page:
+   * its results, or a verification page. Without it, a test run searches nothing.
+   */
+  search?: { results?: { title: string; href: string; snippet: string }[]; blocked?: boolean };
+  /**
    * A project on the app's home folder, made before the launch (default): a new conversation works in it, as a
    * code conversation that may change files. `false`: no project — a new conversation is a discussion (task 9.7).
    */
@@ -129,6 +135,8 @@ export interface LaunchedApp {
   service?: FakeOpenAIServer;
   /** The hub the test asked for: how many files it served. */
   hub?: FakeModelHub;
+  /** The search engine the test asked for: the queries it was asked. */
+  search?: { queries: string[] };
   /** What the managed engine was asked, in order: every completion it received. */
   engineRequests(): Promise<EngineRequest[]>;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
@@ -170,6 +178,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   let releases: FakeLlamaReleases | undefined;
   let service: FakeOpenAIServer | undefined;
   let hub: FakeModelHub | undefined;
+  let searchEngine: { url: string; queries: string[]; close(): Promise<void> } | undefined;
 
   // Once: a test may close the app itself, and the fixture closes what is left after it.
   let closing: Promise<void> | undefined;
@@ -180,6 +189,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       await releases?.close();
       await service?.close();
       await hub?.close();
+      await searchEngine?.close();
       if (!options.keepData && !options.dataDir) {
         await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
         await rm(home, { recursive: true, force: true }).catch(() => undefined);
@@ -273,6 +283,10 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       hub = await startFakeModelHub({ files, ...(options.hub.paceMs ? { paceMs: options.hub.paceMs } : {}) });
       Object.assign(managedEnv, { BONAPARTE_E2E_MODEL_HUB: hub.url, BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify(catalogue) });
     }
+    if (options.search) {
+      searchEngine = await startFakeSearchEngine(options.search);
+      Object.assign(managedEnv, { BONAPARTE_E2E_SEARCH_ENGINE: `${searchEngine.url}/html/?q=` });
+    }
     if (options.service) {
       service = await startFakeOpenAIServer(options.service);
     }
@@ -362,6 +376,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       ...(releases ? { releases } : {}),
       ...(service ? { service } : {}),
       ...(hub ? { hub } : {}),
+      ...(searchEngine ? { search: { queries: searchEngine.queries } } : {}),
       navigations,
       engineRequests,
       output,
@@ -405,3 +420,39 @@ export const test = base.extend<{ launch: (options?: LaunchOptions) => Promise<L
 });
 
 export { expect } from '@playwright/test';
+
+/** A search engine shaped as DuckDuckGo's HTML page (task 10.4), on this machine: what it was asked. */
+async function startFakeSearchEngine(options: NonNullable<LaunchOptions['search']>): Promise<{ url: string; queries: string[]; close(): Promise<void> }> {
+  const queries: string[] = [];
+  const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const server = createHttpServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (url.pathname !== '/html/') {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    queries.push(url.searchParams.get('q') ?? '');
+    const body = options.blocked
+      ? '<form id="challenge-form"></form>'
+      : (options.results ?? [])
+          .map(
+            (result) =>
+              `<div class="result"><a class="result__a" href="${escape(result.href)}">${escape(result.title)}</a><a class="result__snippet">${escape(result.snippet)}</a></div>`,
+          )
+          .join('');
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(`<!doctype html><html><body>${body}</body></html>`);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as { port: number }).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
+    queries,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}

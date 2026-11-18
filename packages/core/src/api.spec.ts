@@ -453,6 +453,49 @@ describe('createCore — the llama.cpp it runs', () => {
   });
 });
 
+describe('createCore — the web search (task 10.4)', () => {
+  const searcher = {
+    id: 'searcher',
+    name: { en: 'Searcher', fr: 'Chercheur' },
+    version: '1.0.0',
+    description: { en: 'Searches.', fr: 'Cherche.' },
+    effects: [{ effect: 'network' as const, what: { en: 'the web', fr: 'le web' } }],
+  };
+
+  it('a plugin that declares network searches through the hidden page the app gives — the public engine by default', async () => {
+    const asked: string[] = [];
+    const { core } = await setup({
+      webSearch: async (query) => {
+        asked.push(query);
+        return [{ title: 'KV', href: 'https://example.com/kv', snippet: 'kept' }];
+      },
+    });
+    let search: ((query: string, max: number) => Promise<unknown>) | undefined;
+    core.plugins.add(searcher, { builtin: true });
+    await core.plugins.activate('searcher', { activate: (ctx) => void (search = ctx.search) });
+    expect(await search!('kv cache', 3)).toEqual({ provider: 'embedded', results: [{ title: 'KV', url: 'https://example.com/kv', snippet: 'kept' }] });
+    expect(asked).toEqual(['kv cache']);
+  });
+
+  it('an online provider chosen in the settings: its key comes from the vault, never from a setting', async () => {
+    const held = new Map<string, string>([['search-brave', 'brave-key']]);
+    const sent: Record<string, string>[] = [];
+    const { core } = await setup({
+      secrets: { get: async (name) => held.get(name), set: async () => undefined, delete: async () => undefined, has: async (name) => held.has(name) },
+      fetch: async (_input, init) => {
+        sent.push((init?.headers ?? {}) as Record<string, string>);
+        return new Response(JSON.stringify({ web: { results: [] } }), { status: 200 });
+      },
+    });
+    await core.settings.set('webSearchProvider', 'brave');
+    let search: ((query: string, max: number) => Promise<unknown>) | undefined;
+    core.plugins.add(searcher, { builtin: true });
+    await core.plugins.activate('searcher', { activate: (ctx) => void (search = ctx.search) });
+    expect(await search!('kv cache', 3)).toEqual({ provider: 'brave', results: [] });
+    expect(sent[0]?.['X-Subscription-Token']).toBe('brave-key');
+  });
+});
+
 describe('createCore — bonaparte doctor (task 9.6)', () => {
   it('says what the machine has for the built-in engine — llama.cpp found as a load would find it, the card — running nothing else', async () => {
     const { core, dir } = await setup();
