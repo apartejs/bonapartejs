@@ -421,6 +421,12 @@ export interface Core {
    * begun keeps its own. False when the provider is not a service the core knows.
    */
   startOnService(conversationId: string, providerId: string, model: string): Promise<boolean>;
+  /**
+   * A conversation goes to a service between two turns (task 9.3): it leaves without its memory — the built-in
+   * engine's stays saved —, and the journal says from where (an `engine` entry, no family). Back to the built-in
+   * engine is `switchModel`, which renders it again for its model.
+   */
+  switchProvider(conversationId: string, providerId: string, model: string): Promise<void>;
   /** A turn of a conversation on a service: aparté's own loop, the core's tools and policy (task 9.2). */
   turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response>;
   /**
@@ -1316,7 +1322,22 @@ export function createCore(deps: CoreDeps): Core {
     const meta = await conversationStore.ensure(conversationId, { kind: 'code', engineId: provider.id, modelId: model, mode: 'repetition' });
     if ((await openJournal(conversationStore.dir, conversationId, meta.branchId)).entries().length > 0) return false;
     await conversationStore.update(conversationId, { engineId: provider.id, modelId: model });
+    // From its first entry, the journal says it runs on the service: back on the built-in engine, it is rendered
+    // again for its model (task 9.3).
+    await (await openJournal(conversationStore.dir, conversationId, meta.branchId)).append({ kind: 'engine', engineId: provider.id, modelId: model });
     return true;
+  }
+
+  async function switchProvider(conversationId: string, providerId: string, model: string): Promise<void> {
+    const provider = await providerRegistry.get(providerId);
+    if (provider?.kind !== 'openai-compat') throw new Error(`Not a service: ${providerId}.`);
+    if (!model) throw new Error('A service is asked a model.');
+    if (supervisor.held) throw new EngineBusyError();
+    const meta = await conversationStore.get(conversationId);
+    if (!meta) throw new Error(`No conversation ${conversationId}.`);
+    if (meta.engineId === provider.id && meta.modelId === model) return;
+    await (await openJournal(conversationStore.dir, conversationId, meta.branchId)).append({ kind: 'engine', engineId: provider.id, modelId: model });
+    await conversationStore.update(conversationId, { engineId: provider.id, modelId: model });
   }
 
   async function turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
@@ -1502,6 +1523,11 @@ export function createCore(deps: CoreDeps): Core {
       if (supervisor.held) throw new EngineBusyError();
       // Loaded first — the failure-prone step: a copy is made only for a model that runs.
       const state = await this.loadModel(path);
+      // A conversation on a service comes back to the built-in engine (task 9.3): its next turn renders it again.
+      if (options.as !== 'copy' && options.conversationId) {
+        const meta = await conversationStore.get(options.conversationId);
+        if (meta && meta.engineId !== BUILTIN_PROVIDER.id) await conversationStore.update(options.conversationId, { engineId: BUILTIN_PROVIDER.id, modelId: path });
+      }
       if (options.as === 'copy' && options.conversationId && loaded) {
         const copy = await conversations.copy(options.conversationId, { family: loaded.layer, modelPath: loaded.path });
         return { state, conversationId: copy.id };
@@ -1800,6 +1826,7 @@ export function createCore(deps: CoreDeps): Core {
     agentTurn,
     serviceOf,
     startOnService,
+    switchProvider,
     turnOnService,
     modeOf,
 

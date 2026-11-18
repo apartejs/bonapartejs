@@ -62,7 +62,8 @@ export function writersOf(entries: readonly JournalEntry[], fallback: FamilyLaye
     if (item === first && item.kind === 'system') {
       const family = item.family ?? familyOfPrompt(item.rendered ?? '');
       if (family) writer = familyLayer(family);
-    } else if (item.kind === 'engine') {
+    } else if (item.kind === 'engine' && item.family) {
+      // A service names no family: what it wrote is plain text, read by the family before it.
       writer = familyLayer(item.family);
     }
     writers.set(item.id, writer);

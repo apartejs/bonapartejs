@@ -112,7 +112,7 @@ export type JournalBody =
    * A change of model (task 7.4): the prompt starts again from here, the conversation rendered again by the
    * new model's `family` (its `rendered`). `modelId`: the model file's path.
    */
-  | ({ kind: 'engine'; engineId: string; modelId: string; family: FamilyId } & Refrozen)
+  | ({ kind: 'engine'; engineId: string; modelId: string; family?: FamilyId } & Refrozen)
   /**
    * Going back before the person's message `toEntryId` (task 7.1). `note`: what the model is told at its
    * next turn (English); `undo`: the going back was undone before that turn — nothing is told.
