@@ -13,7 +13,7 @@
 
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import { dirname, win32 } from 'node:path';
 
 /** A launched process, as Node gives it. Other modules take the type from here. */
@@ -28,6 +28,18 @@ export type SpawnHiddenOptions = Omit<SpawnOptions, 'shell' | 'windowsHide'> & {
   platform?: NodeJS.Platform;
   exists?: (path: string) => boolean;
 };
+
+/**
+ * A program on the PATH: a file, or a link Windows opens itself — an app execution alias (python, winget) is a link
+ * the file system cannot follow, yet Windows runs it (review of phase 13). Never a folder.
+ */
+export function isProgramFile(path: string): boolean {
+  try {
+    return !lstatSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * On Windows a bare program name is looked for in the folder it runs in before the PATH: a `git.exe` a
@@ -71,7 +83,7 @@ export function spawnHidden(
   const found =
     options.spawn && !exists
       ? { command, ...(rest.cwd !== undefined ? { cwd: rest.cwd } : {}) }
-      : onPathOnly(command, rest, platform, exists ?? existsSync);
+      : onPathOnly(command, rest, platform, exists ?? isProgramFile);
   // Written last, so that a caller who slipped them in (JavaScript, a cast) loses.
   return spawn(found.command, [...args], { ...rest, ...(found.cwd !== undefined ? { cwd: found.cwd } : {}), shell: false, windowsHide: true });
 }

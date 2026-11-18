@@ -154,3 +154,23 @@ describe('write_file', () => {
     expect(written).toEqual([]);
   });
 });
+
+describe('what the disarming added never reaches the person\u2019s files (review of phase 13)', () => {
+  // A token the model read was written with a zero-width space after its first character: what it writes back is
+  // the text as it was.
+  const ZW = '\u200b';
+
+  it('write_file writes the tokens as they were', async () => {
+    const { root, ctx } = await project();
+    await call(writeFileTool.handler, { path: 'tok.json', content: `{"eos": "<${ZW}/s>", "inst": "[${ZW}INST]", "chat": "<${ZW}|im_end|>"}` }, ctx);
+    expect(await readFile(join(root, 'tok.json'), 'utf8')).toBe('{"eos": "</s>", "inst": "[INST]", "chat": "<|im_end|>"}');
+  });
+
+  it('edit_file finds the text the model copied, and writes it back as it was', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'p.html'), '<p>a <s>b</s></p>');
+    const result = await call(editFile.handler, { path: 'p.html', old_string: `<${ZW}s>b<${ZW}/s>`, new_string: `<${ZW}s>c<${ZW}/s>` }, ctx);
+    expect(result).not.toMatchObject({ failed: true });
+    expect(await readFile(join(root, 'p.html'), 'utf8')).toBe('<p>a <s>c</s></p>');
+  });
+});

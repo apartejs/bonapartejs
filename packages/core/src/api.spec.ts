@@ -1071,8 +1071,9 @@ describe('createCore — the updates (task 13.1)', () => {
     expect((await readdir(join(dir, 'models')))).toContain('gemma-4-test.gguf');
     expect((await core.updates()).models).toEqual([]);
     expect(gemma).not.toBe(kept);
-    // A load brings the new one back from now on.
+    // A load brings the new one back from now on — the card of the unloaded engine too (review of phase 13).
     expect(await core.settings.get('defaultModel')).toBe(kept);
+    expect((await core.engineState()).resume?.path).toBe(kept);
   }, 20_000);
 
   it('with the old version running, the new one takes its place once downloaded', async () => {
@@ -1130,6 +1131,40 @@ describe('createCore — the updates (task 13.1)', () => {
     expect(await core.engineState()).toMatchObject({ status: 'ready', model: { path: gemma } });
     expect((await core.updates()).llama).toBeNull();
   }, 30_000);
+
+  it('the model update never loads the new version under a reply that began as the last one ended (review of phase 13)', async () => {
+    const { core, gemma, dir } = await withMemory();
+    await core.loadModel(gemma);
+    const first = core.hold();
+    const updating = core.updateModel('gemma-4-test');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    // The reply ends, and the next one (a message that waited) begins in the same moment.
+    first();
+    const second = core.hold();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect((await core.engineState()).model?.path).toBe(gemma);
+    second();
+    await updating;
+    expect((await core.engineState()).model?.path).toBe(join(dir, 'data', 'models', 'gemma-4-test-v2.gguf'));
+  }, 30_000);
+
+  it('a llama.cpp update that fails loads the model it unloaded again (review of phase 13)', async () => {
+    const { core, gemma } = await setup({ llamaReleases: 'http://127.0.0.1:9/releases' });
+    await core.loadModel(gemma);
+    await expect(core.updateLlamaCpp()).rejects.toThrow();
+    expect(await core.engineState()).toMatchObject({ status: 'ready', model: { path: gemma } });
+  }, 30_000);
+
+  it('a conversation whose turn holds the slot is in the engine, as the turn ends (gate of phase 13)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c5', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    let during: Promise<string | undefined> | undefined;
+    await core.conversations.turn('c5', { text: 'Bonjour' }, () => {
+      during ??= core.memory().then((overview) => overview.rows.find((row) => row.id === 'c5')?.state);
+    });
+    expect(await during).toBe('engine');
+  }, 20_000);
 
   it('whenIdle waits for the reply that holds the engine', async () => {
     const { core } = await setup();

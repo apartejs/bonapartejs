@@ -361,8 +361,10 @@ export class BrowserViews {
     } catch (error) {
       return { error: (error as Error).message };
     }
-    // From the agent's first act on it, the page goes where the agent takes it: checked as one it opened (audit 13.4).
-    tab.loadedBy = 'agent';
+    // From the agent's first act on it, a page of the internet or of this machine goes where the agent takes it:
+    // checked as one it opened (audit 13.4). A page of the network this machine is in that the person showed stays
+    // theirs: they use it still (review of phase 13).
+    if (tab.loadedBy !== 'agent' && (await this.refusedForAgent(new URL(tab.view.webContents.getURL()).hostname)) === null) tab.loadedBy = 'agent';
     // Selectors and text reach the page as JSON: a quote cannot close the script's string.
     const script =
       action.kind === 'scroll'

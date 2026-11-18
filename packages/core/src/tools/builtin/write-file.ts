@@ -1,8 +1,11 @@
+import { restoreDisarmed } from '../../families/control-tokens.js';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { displayInPerimeter } from '../../project/paths.js';
 import { unifiedDiff } from '../preview.js';
 import { describeError, inPerimeter, refused, text, type BuiltinTool } from './common.js';
+
+const restoreOrKeep = (value: string | undefined): string | undefined => (value === undefined ? value : restoreDisarmed(value));
 
 export const writeFileTool: BuiltinTool = {
   def: {
@@ -22,7 +25,7 @@ export const writeFileTool: BuiltinTool = {
   },
   handler: async (call, ctx) => {
     const requested = text(call.input, 'path');
-    const content = text(call.input, 'content');
+    const content = restoreOrKeep(text(call.input, 'content'));
     if (!requested) return refused('Missing argument: path.');
     if (content === undefined) return refused('Missing argument: content (a string).');
     const resolved = inPerimeter(ctx, requested);

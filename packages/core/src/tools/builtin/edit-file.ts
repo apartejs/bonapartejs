@@ -1,7 +1,10 @@
+import { restoreDisarmed } from '../../families/control-tokens.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { displayInPerimeter } from '../../project/paths.js';
 import { unifiedDiff } from '../preview.js';
 import { describeError, inPerimeter, refused, text, type BuiltinTool } from './common.js';
+
+const restoreOrKeep = (value: string | undefined): string | undefined => (value === undefined ? value : restoreDisarmed(value));
 
 export const editFile: BuiltinTool = {
   def: {
@@ -23,8 +26,9 @@ export const editFile: BuiltinTool = {
   },
   handler: async (call, ctx) => {
     const requested = text(call.input, 'path');
-    const oldString = text(call.input, 'old_string');
-    const newString = text(call.input, 'new_string');
+    // What the disarming added to the text the model read is not in the file (review of phase 13).
+    const oldString = restoreOrKeep(text(call.input, 'old_string'));
+    const newString = restoreOrKeep(text(call.input, 'new_string'));
     if (!requested) return refused('Missing argument: path.');
     if (oldString === undefined || newString === undefined) return refused('The arguments old_string and new_string are required.');
     if (oldString === '') return refused('old_string is empty: give the text to replace.');

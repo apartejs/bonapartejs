@@ -5,7 +5,8 @@
  * is refused: running it would hand its arguments to `cmd.exe`, a command line. Elsewhere, nothing changes.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { isProgramFile } from '../process/spawn.js';
 import { win32 } from 'node:path';
 
 export interface ResolveOptions {
@@ -28,7 +29,8 @@ const NPM_SCRIPTS: Record<string, string> = { npx: 'npx-cli.js', npm: 'npm-cli.j
 
 export function resolveCommand(command: string, args: readonly string[], options: ResolveOptions): { command: string; args: string[] } {
   if ((options.platform ?? process.platform) !== 'win32') return { command, args: [...args] };
-  const exists = options.exists ?? existsSync;
+  // An app execution alias is a link the file system cannot follow: still a program (review of phase 13).
+  const exists = options.exists ?? isProgramFile;
   const path = Object.entries(options.env).find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? '';
   const extensions = (Object.entries(options.env).find(([key]) => key.toUpperCase() === 'PATHEXT')?.[1] ?? '.COM;.EXE;.BAT;.CMD')
     .split(';')

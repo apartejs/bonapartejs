@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { spawnHidden, spawnWindowed, type SpawnFn } from './spawn.js';
+import { isProgramFile, spawnHidden, spawnWindowed, type SpawnFn } from './spawn.js';
 
 function recorder() {
   const calls: { command: string; args: readonly string[]; options: Record<string, unknown> }[] = [];
@@ -108,5 +108,34 @@ describe('spawnWindowed (task 13.3)', () => {
       expect(() => spawnWindowed(program, [], { spawn })).toThrow(/window/);
     }
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('what counts as a program on the PATH (review of phase 13)', () => {
+  it('a file, or a link Windows resolves itself (an app execution alias), never a folder', async () => {
+    const { mkdtemp, mkdir: makeDir, writeFile: write, symlink: link, rm: remove } = await import('node:fs/promises');
+    const { tmpdir: temp } = await import('node:os');
+    const { join: joinPath } = await import('node:path');
+    const dir = await mkdtemp(joinPath(temp(), 'bp-prog-'));
+    try {
+      await write(joinPath(dir, 'tool.exe'), 'x');
+      await makeDir(joinPath(dir, 'folder.exe'));
+      // An alias is a link whose target the file system cannot open: it is still a program for Windows.
+      await link(joinPath(dir, 'nowhere.exe'), joinPath(dir, 'alias.exe'), 'file').catch(() => undefined);
+      expect(isProgramFile(joinPath(dir, 'tool.exe'))).toBe(true);
+      expect(isProgramFile(joinPath(dir, 'folder.exe'))).toBe(false);
+      expect(isProgramFile(joinPath(dir, 'missing.exe'))).toBe(false);
+      const { lstatSync } = await import('node:fs');
+      const made = (() => {
+        try {
+          return lstatSync(joinPath(dir, 'alias.exe')).isSymbolicLink();
+        } catch {
+          return false;
+        }
+      })();
+      if (made) expect(isProgramFile(joinPath(dir, 'alias.exe'))).toBe(true);
+    } finally {
+      await remove(dir, { recursive: true, force: true });
+    }
   });
 });

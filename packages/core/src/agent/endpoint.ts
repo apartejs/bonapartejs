@@ -11,9 +11,7 @@
 import { createAparteAgentHandler, type AparteTool } from '@aparte/core';
 import { createOpenAICompatProvider } from '@aparte/provider-openai-compat';
 import type { Verdict } from '@aparte/bonaparte-shared';
-import { EVERY_FAMILY } from '../families/index.js';
-import type { FamilyLayer } from '../families/types.js';
-import { neutralizeControlTokens } from '../families/control-tokens.js';
+import { disarmForService } from '../families/service-tokens.js';
 import type { Provider } from '../providers/registry.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 
@@ -38,35 +36,8 @@ export type ServiceLine = { type: string; [key: string]: unknown };
  * Serves the turn the window posted (`raw`: its body, a resume included) on the service; `onLine` hears each
  * line of the stream as it goes to the window.
  */
-/**
- * What a service's server may parse as special, whatever model it runs: the families the app speaks, Mistral's
- * bracketed tokens, Llama 2's and DeepSeek's (audit 13.4, second pass). A model of yet another family keeps the
- * generic `<|name|>` shape `neutralizeControlTokens` always breaks.
- */
-const SERVICE_TOKENS: Pick<FamilyLayer, 'controlTokens'> = {
-  controlTokens: [
-    ...EVERY_FAMILY.controlTokens,
-    '[INST]',
-    '[/INST]',
-    '[SYSTEM_PROMPT]',
-    '[/SYSTEM_PROMPT]',
-    '[AVAILABLE_TOOLS]',
-    '[/AVAILABLE_TOOLS]',
-    '[TOOL_CALLS]',
-    '[TOOL_RESULTS]',
-    '[/TOOL_RESULTS]',
-    '[THINK]',
-    '[/THINK]',
-    '<s>',
-    '</s>',
-  ],
-};
-
-/** A DeepSeek token: `<｜User｜>`, `<｜end▁of▁sentence｜>` — a full-width bar after the bracket. */
-const FULL_WIDTH_TOKEN = /<(?=｜)/g;
-
-/** Text from outside, its control tokens disarmed for any family the service's model may be (security rule 5). */
-export const disarm = (text: string): string => neutralizeControlTokens(text, SERVICE_TOKENS).replace(FULL_WIDTH_TOKEN, '<​');
+/** Text from outside, its control tokens disarmed for any family a service's model may be (security rule 5). */
+export const disarm = disarmForService;
 
 /** Every string of a JSON value, disarmed: an MCP server writes its tools' schemas. */
 export function disarmDeep<T>(value: T): T {

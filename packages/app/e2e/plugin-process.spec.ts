@@ -36,6 +36,8 @@ test('a plugin added runs in its own process: its tool answers the model from th
   };
   const { app, page } = await launch({ engine: { responder }, plugins: { bonjour: PLUGIN }, env: { BONAPARTE_TEST_TOKEN: 'sesame' } });
   await chat(page).send('Salue-moi');
+  // A third party's tool runs a program of its own: it is asked, whatever it declares (audit 13.4).
+  await page.getByRole('region', { name: 'Demande d’accord' }).getByRole('button', { name: 'Autoriser', exact: true }).click({ timeout: 20_000 });
   await expect(chat(page).replyText).toHaveText('Fini.', { timeout: 30_000 });
   const answered = prompts.findLast((prompt) => prompt.includes('bonjour from')) ?? '';
   const pid = Number(/bonjour from (\d+)/.exec(answered)?.[1]);

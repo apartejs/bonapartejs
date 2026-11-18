@@ -28,3 +28,12 @@ export function neutralizeControlTokens(text: string, family?: Pick<FamilyLayer,
   }
   return safe;
 }
+
+/**
+ * What the model writes back, as the text was before it was disarmed (review of phase 13): a token it read had a
+ * zero-width space after its first character, always `<` or `[`; a file it writes, or the text it looks for in one,
+ * has them as they were.
+ */
+export function restoreDisarmed(text: string): string {
+  return text.replace(/([<[])​/g, '$1');
+}

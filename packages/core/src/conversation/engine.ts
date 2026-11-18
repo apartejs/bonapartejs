@@ -600,7 +600,10 @@ export class ConversationEngine {
       const owner = this.ownerOf(meta);
       const manifest = await this.deps.kv.manifest(ownerKey(owner));
       const base = { id: meta.id, title: meta.title, projectId: meta.projectId ?? null, otherModel: false, rereadSeconds: null };
-      if (this.scheduler.isResident(owner)) {
+      // In the engine: kept there, or its turn holds the slot right now — as a turn ends, before the slot is let go
+      // (gate of phase 13: the disk check, asked at that moment, missed it).
+      const working = this.scheduler.busy.some((one) => one.kind === 'conversation' && one.conversationId === meta.id);
+      if (working || this.scheduler.isResident(owner)) {
         rows.push({ ...base, state: 'engine', tokens: estimateTokens(frozenPrompt(entries)), bytes: manifest?.slotFileBytes ?? null, at: meta.updatedAt });
       } else if (manifest) {
         const verdict = canRestore(manifest, engine.live);

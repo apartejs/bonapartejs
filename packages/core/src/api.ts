@@ -1124,8 +1124,15 @@ export function createCore(deps: CoreDeps): Core {
     // The new version is the one a load brings back from now on: chosen as the default in place of the old one.
     const chosen = await appSettings.get('defaultModel').catch(() => '');
     if (typeof chosen !== 'string' || !chosen || samePath(chosen, offer.replaces)) await appSettings.set('defaultModel', fresh.path);
+    // The engine unloaded from the old one: its card brings back the new one (review of phase 13).
+    if (unloaded && samePath(unloaded.path, offer.replaces)) unloaded = { ...unloaded, path: fresh.path };
     // The old one runs: the new one takes its place — its memory saved first, each conversation read again when opened.
-    if (loaded && samePath(loaded.path, offer.replaces)) await core.loadModel(fresh.path);
+    // Never under a reply: one that began as the last one ended is waited for too (review of phase 13).
+    if (loaded && samePath(loaded.path, offer.replaces)) {
+      do await supervisor.whenFree();
+      while (supervisor.held);
+      await core.loadModel(fresh.path);
+    }
   }
 
   async function keepModel(id: string): Promise<void> {
@@ -2531,9 +2538,13 @@ export function createCore(deps: CoreDeps): Core {
           if (!supervisor.held) throw error;
         }
       }
-      await installLlamaCpp();
-      // The same model again: its conversations' memory stays valid, the model did not change.
-      if (was) await this.loadModel(was);
+      try {
+        await installLlamaCpp();
+      } finally {
+        // The same model again — on the new build, or on the old one when the install failed (review of phase 13):
+        // its conversations' memory stays valid, the model did not change.
+        if (was) await this.loadModel(was);
+      }
       return llamaCpp();
     },
     updateModel,

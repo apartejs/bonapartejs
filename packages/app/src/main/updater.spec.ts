@@ -109,3 +109,42 @@ describe('the app updates itself (task 13.1)', () => {
     expect((fake as unknown as { restarted: number }).restarted).toBe(1);
   });
 });
+
+describe('the app’s update, review of phase 13', () => {
+  it('a background download that fails is logged — never a rejection left unhandled, which would close the app', async () => {
+    const updater = new Updater({ version: '1.1.0' });
+    const failing = Promise.reject(new Error('network gone'));
+    updater.checkForUpdates = async () => ({ updateInfo: { version: '1.1.0', files: [] }, downloadPromise: failing }) as never;
+    const unhandled: unknown[] = [];
+    const listen = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', listen);
+    try {
+      await createAppUpdates(deps(updater)).check();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', listen);
+    }
+  });
+
+  it('« Redémarrer » downloads first, then waits for the end of the reply, saves the memory, and only then installs', async () => {
+    const order: string[] = [];
+    const updater = new Updater({ version: '1.1.0' });
+    updater.downloadUpdate = async () => {
+      order.push('download');
+      updater.emit('update-downloaded', {});
+      return [];
+    };
+    updater.quitAndInstall = () => void order.push('install');
+    const updates = createAppUpdates(
+      deps(updater, {
+        auto: async () => false,
+        whenIdle: async () => void order.push('idle'),
+        beforeInstall: async () => void order.push('save'),
+      }),
+    );
+    await updates.check();
+    await updates.restart();
+    expect(order).toEqual(['download', 'idle', 'save', 'install']);
+  });
+});

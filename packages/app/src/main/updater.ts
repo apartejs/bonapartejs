@@ -14,7 +14,11 @@ import type { AppUpdateView } from '@aparte/bonaparte-shared';
 export interface UpdaterLike {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
-  checkForUpdates(): Promise<{ updateInfo: { version: string; releaseNotes?: unknown; files?: readonly { size?: number }[] } } | null>;
+  checkForUpdates(): Promise<{
+    updateInfo: { version: string; releaseNotes?: unknown; files?: readonly { size?: number }[] };
+    /** The background download, when `autoDownload` started one: it rejects when it fails. */
+    downloadPromise?: Promise<unknown> | null;
+  } | null>;
   downloadUpdate(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
   on(event: 'download-progress', listener: (progress: { transferred: number; total: number }) => void): unknown;
@@ -29,6 +33,11 @@ export interface AppUpdatesDeps {
   auto(): Promise<boolean>;
   /** Resolves once no reply holds the engine. */
   whenIdle(): Promise<void>;
+  /**
+   * Saves the memory and stops the engine before the installer starts: it does not wait for the app — it kills it
+   * within seconds (review of phase 13).
+   */
+  beforeInstall?(): Promise<void>;
   log(line: string): void;
 }
 
@@ -90,6 +99,9 @@ export function createAppUpdates(deps: AppUpdatesDeps): AppUpdates {
       updater.autoInstallOnAppQuit = auto;
       try {
         const found = await updater.checkForUpdates();
+        // A download in the background that fails is said by the updater's 'error': never a rejection left unhandled,
+        // which would close the app without saving its memory (review of phase 13).
+        void found?.downloadPromise?.catch(() => undefined);
         const info = found?.updateInfo;
         if (!info || !newer(info.version, deps.current)) {
           offer = null;
@@ -109,10 +121,12 @@ export function createAppUpdates(deps: AppUpdatesDeps): AppUpdates {
     restart() {
       if (!updater || !offer) return Promise.resolve();
       restarting ??= (async () => {
+        // Downloaded first: a reply sent meanwhile is waited for after, never cut by the restart (review of phase 13).
+        if (offer && offer.state !== 'ready') await updater.downloadUpdate();
         offer = offer ? { ...offer, waiting: true } : offer;
         await deps.whenIdle();
-        if (offer && offer.state !== 'ready') await updater.downloadUpdate();
-        // Quitting saves the memory and stops the engine (main/quit.ts); the installer waits for the app to end.
+        // The memory saved and the engine stopped now: the installer kills the app within seconds of its start.
+        await deps.beforeInstall?.();
         updater.quitAndInstall(true, true);
       })().finally(() => {
         restarting = undefined;

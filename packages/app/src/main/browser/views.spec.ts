@@ -374,6 +374,24 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.1/')).toBe(true);
   });
 
+  it('a page of the network this machine is in that the person showed stays theirs when the agent acts on it (review of phase 13)', async () => {
+    const views: FakeView[] = [];
+    const browser = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+    });
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://192.168.1.50/admin');
+    await browser.agentAct({ kind: 'click', selector: 'button' });
+    expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.50/api/save')).toBe(false);
+  });
+
   it('a name Chromium resolved to a private address is refused, whatever Node answers', async () => {
     const views: FakeView[] = [];
     const browser = new BrowserViews({

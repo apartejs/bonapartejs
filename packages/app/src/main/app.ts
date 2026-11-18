@@ -35,6 +35,7 @@ import { createVault } from './secrets.js';
 import { e2eEngineDeps, e2ePickedFolder, e2eSearchEngine } from './e2e-engine.js';
 import { createHiddenSearch, type SearchSession } from './search/hidden-page.js';
 import { mainWords, type MainWords } from './i18n/index.js';
+import { APP_ID } from './app-id.js';
 import { registerAllChannels } from './ipc/index.js';
 import { readUpdates } from './ipc/updates.js';
 import { createAppUpdates, fakeUpdater, type UpdaterLike } from './updater.js';
@@ -356,6 +357,7 @@ ${appTokens}`,
     current: __BONAPARTE_VERSION__,
     auto: () => setting(core, 'autoUpdateApp', true),
     whenIdle: () => core.whenIdle(),
+    beforeInstall: () => core.stop(),
     log: (line) => console.error(line),
   });
 
@@ -453,7 +455,7 @@ ${appTokens}`,
   app.on('window-all-closed', () => app.quit());
   stopEngineBeforeQuit(app, core);
   // Windows shows the banners of an app that has a name of its own.
-  if (process.platform === 'win32' && !options.e2e) app.setAppUserModelId(app.isPackaged ? 'dev.aparte.bonaparte' : process.execPath);
+  if (process.platform === 'win32' && !options.e2e) app.setAppUserModelId(app.isPackaged ? APP_ID : process.execPath);
   // A banner, or the menu of the icon, opens its conversation in the window — nothing more.
   const openConversation = (conversationId: string): void => {
     reveal();
