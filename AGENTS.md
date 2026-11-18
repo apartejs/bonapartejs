@@ -221,6 +221,10 @@ An issue can stay open after its fix has shipped.
   eviction, a restart, a download.
 - **Never a shell string, never a visible console.** Every child process goes
   through `spawnHidden` (argument array, `shell: false`, `windowsHide: true`).
+  One named exception: `spawnWindowed`, for a program that shows a window of
+  its own (the app, launched by `npx @aparte/bonaparte`) — still an argument
+  array and no shell, a script refused, but not hidden: Windows would hide the
+  first window it shows.
 - **A plugin never undoes its registrations by hand**; its context is torn down
   as one. A third-party view runs in a sandboxed frame, never with more rights
   than the conversation.
@@ -351,6 +355,9 @@ pnpm --filter @aparte/bonaparte-app test:e2e   # end-to-end (Playwright); it bui
 pnpm dev                                       # the app, with reload — this one opens a window
 node --test ".claude/hooks/*.test.mjs"         # the guard hooks and the agent and skill definitions
 node packages/cli/dist/cli.js doctor           # what the machine has for the built-in engine (after pnpm build)
+pnpm --filter @aparte/bonaparte-app dist:dir   # the app packed by electron-builder, unpacked (after pnpm build)
+pnpm --filter @aparte/bonaparte-app dist       # the per-user installer (NSIS on Windows)
+pnpm --filter @aparte/bonaparte pack           # the npm package, the built app assembled inside
 ```
 
 One file at a time:
@@ -829,6 +836,24 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   conversation's next turn; the cap is `contextCap`. The monitor samples
   only while a window wants it (`resources.start`), pushed as `AppEvent`
   `resources`; a test run's readings are fixed (`BONAPARTE_E2E_RESOURCES`).
+- **The updates** (task 13.1, `core/src/updates/check.ts`, `main/updater.ts`,
+  `main/ipc/updates.ts`, `dialogs/Updates.tsx`): `core.updates()` gives
+  llama.cpp's build and the models' new versions (a catalogue entry that
+  `replaces` a file on the disk), each with its cost — the conversations whose
+  memory is for the old file, read again one by one; the main process adds the
+  app's own (electron-updater, in a packaged app only; a test run's from
+  `BONAPARTE_E2E_UPDATE`, `__bonaparteUpdater`). Nothing installs under a
+  reply (`core.whenIdle()`, the supervisor's `whenFree`). `autoUpdateApp`:
+  downloaded in the background, installed at the next quit. The entry is in
+  the sidebar and the rail, only when one is ready.
+- **The installer and the command** (tasks 13.2 and 13.3,
+  `packages/app/electron-builder.yml`, `.github/workflows/release.yml`,
+  `packages/cli/src/launch.ts`, `scripts/assemble-app.mjs`): the workspace is
+  bundled into `out/` (the app's devDependencies), only the third-party
+  dependencies ship; node-pty is out of the archive. A tag publishes a draft
+  release. The npm package carries the built app (`app/`, assembled on
+  `prepack`, removed on `postpack`), core and shared bundled, and the app's
+  run-time dependencies at the same versions (a test pins it).
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
   mounted and hidden (a reply goes on). The app's settings live in the
   core's `SettingsStore` (`config/global.json`, under `settings`), checked

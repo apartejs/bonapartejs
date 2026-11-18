@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte-plugin-browser",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "bonaparte — the built-in browser: pages the agent opens, reads, pictures and acts on",
   "license": "MIT",

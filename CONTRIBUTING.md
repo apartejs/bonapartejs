@@ -1,7 +1,8 @@
 # Contributing to bonaparte
 
 Thanks for your interest! bonaparte restarted from zero in November 2026 and
-is pre-alpha: the surface moves fast. This guide covers how work lands. The
+reached its first version that month: the surface still moves fast. This guide
+covers how work lands. The
 rules themselves, with their reasons, are in [AGENTS.md](./AGENTS.md).
 
 ## Principles
@@ -52,6 +53,19 @@ reads, is in [AGENTS.md](./AGENTS.md#commands). The end-to-end tests build
 the app, then launch Electron on it with its window kept off your screen; they
 never run on an app that is not built. CI runs the same commands on Ubuntu and
 on Windows.
+
+## Packaging
+
+```sh
+pnpm build
+pnpm --filter @aparte/bonaparte-app dist:dir   # the app packed, unpacked in packages/app/dist
+pnpm --filter @aparte/bonaparte-app dist       # the installer, in packages/app/dist
+pnpm --filter @aparte/bonaparte pack           # the npm package, the app assembled inside
+```
+
+`e2e/packaged.spec.ts` runs the packed app when `dist:dir` has made one. A tag
+`v<version>` builds the installers in CI and publishes them as a draft release;
+the maintainer publishes it, and only then does the app offer it as an update.
 
 ## The invariants
 

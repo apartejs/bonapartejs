@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte-plugin-terminal",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "bonaparte — the built-in terminal: a pseudo-terminal per tab, the agent's commands in their own tab",
   "license": "MIT",

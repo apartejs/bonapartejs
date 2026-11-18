@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte-plugin-web-search",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "bonaparte — the built-in web search: web_search, the public engine without a key or an online provider",
   "license": "MIT",
