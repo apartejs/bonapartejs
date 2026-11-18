@@ -534,6 +534,13 @@ export const en: Messages = {
     },
   },
   modelSwitch: {
+    toService: {
+      title: (model, service) => `Switch to ${model} (${service})?`,
+      lost: 'The conversation leaves without its memory: at every turn, the service receives it whole.',
+      costs: 'Costs will no longer be announced precisely: neither the time nor the video memory.',
+      kept: (name) => `Its memory stays saved for ${name}, should you come back.`,
+      failed: 'The switch could not be made.',
+    },
     picker: 'Model',
     provider: 'On this machine',
     line: (size, vram) => `${size} · ${vram} of video memory`,

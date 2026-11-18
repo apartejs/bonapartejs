@@ -536,6 +536,13 @@ export const fr: Messages = {
     },
   },
   modelSwitch: {
+    toService: {
+      title: (model, service) => `Passer à ${model} (${service}) ?`,
+      lost: 'La conversation part sans sa mémoire : à chaque tour, le service la reçoit en entier.',
+      costs: 'Les coûts ne seront plus annoncés précisément : ni la durée, ni la mémoire vidéo.',
+      kept: (name) => `Sa mémoire reste sauvée pour ${name}, si tu y reviens.`,
+      failed: 'Le changement n’a pas pu se faire.',
+    },
     picker: 'Modèle',
     provider: 'Sur cette machine',
     line: (size, vram) => `${size} · ${vram} de mémoire vidéo`,

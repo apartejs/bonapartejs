@@ -532,6 +532,14 @@ export interface Messages {
   /** A branch's pull request, and archiving a conversation on its branch (task 6.8). */
   /** Changing model (task 7.4; board « Coûts annoncés », 3): the composer's picker and its dialog. */
   modelSwitch: {
+    /** Going to a service between two turns (task 9.3): its title, what it loses, what stays. */
+    toService: {
+      title(model: string, service: string): string;
+      lost: string;
+      costs: string;
+      kept(name: string): string;
+      failed: string;
+    };
     /** The picker's name. */
     picker: string;
     /** The group the models are listed under. */

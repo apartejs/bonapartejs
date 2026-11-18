@@ -31,6 +31,7 @@ import {
   conversationsReadAgain,
   providersList,
   providersModels,
+  providersSwitch,
   type InboxView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -64,6 +65,7 @@ import { ContextBanner } from './chat/ContextBanner';
 import { useCompaction } from './chat/useCompaction';
 import { useModelSwitch } from './chat/useModelSwitch';
 import { catalogueOf, showCatalogue, showServices, type ServiceCatalogue } from './aparte/model-catalogue';
+import { ServiceSwitchDialog, type ServiceSwitchAsking } from './dialogs/ServiceSwitchDialog';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
 import { STOP_REPLIES } from './settings/LaunchSettings';
@@ -726,6 +728,11 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, [runningModel, engine.mode, messages, locale]);
 
   // The services added (task 9.3): their models offered in the composer's picker, beside the engine's.
+  const servicesKnown = useRef<ServiceCatalogue[]>([]);
+  // Going to a service between two turns: what it loses said first, in a dialog.
+  const [toService, setToService] = useState<(ServiceSwitchAsking & { conversationId: string; provider: string; revert: () => void }) | null>(null);
+  const [toServiceBusy, setToServiceBusy] = useState(false);
+  const [toServiceFailed, setToServiceFailed] = useState(false);
   useEffect(() => {
     let live = true;
     void (async () => {
@@ -739,7 +746,9 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             models: await bridge.invoke(providersModels, { id: provider.id }).catch(() => [] as string[]),
           })),
       );
-      if (live) showServices(found satisfies ServiceCatalogue[]);
+      if (!live) return;
+      servicesKnown.current = found;
+      showServices(found satisfies ServiceCatalogue[]);
     })().catch(() => undefined);
     return () => {
       live = false;
@@ -957,6 +966,29 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         busy={rewinding.busy}
         onCancel={rewinding.cancel}
         onRewind={rewinding.rewind}
+      />
+      <ServiceSwitchDialog
+        messages={messages}
+        asking={toService}
+        busy={toServiceBusy}
+        failed={toServiceFailed}
+        onCancel={() => {
+          if (toServiceBusy) return;
+          toService?.revert();
+          setToService(null);
+        }}
+        onSwitch={() => {
+          if (!toService) return;
+          setToServiceBusy(true);
+          void bridge
+            .invoke(providersSwitch, { conversationId: toService.conversationId, id: toService.provider, model: toService.model })
+            .then(() => {
+              setToService(null);
+              setAsked((count) => count + 1);
+            })
+            .catch(() => setToServiceFailed(true))
+            .finally(() => setToServiceBusy(false));
+        }}
       />
       <ModelSwitchDialog
         messages={messages}
@@ -1197,8 +1229,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
                 setServicePicked((count) => count + 1);
                 return;
               }
-              // Once it has begun, it changes provider between two turns — said first (next).
-              revert();
+              // Once it has begun, it changes provider between two turns, what it costs said first.
+              if (!conversationId) return revert();
+              if (provider) {
+                const label = servicesKnown.current.find((known) => known.id === provider)?.label ?? provider;
+                setToServiceFailed(false);
+                setToService({ conversationId, provider, model, service: label, keptFor: shownService ? null : (engine.model?.name ?? null), revert });
+                return;
+              }
+              // Back to the built-in engine's model: its re-reading said, as for any change of model.
+              if (shownService && engine.model) modelSwitch.ask(engine.model.path, engine.model.name, revert);
+              else revert();
             }}
           />
         }

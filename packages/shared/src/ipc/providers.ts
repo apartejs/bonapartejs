@@ -54,3 +54,10 @@ export const providersRemove = defineChannel('providers.remove', z.object({ id: 
 
 /** The models a service offers now (the composer's picker); empty when it does not answer. */
 export const providersModels = defineChannel('providers.models', z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/) }), z.array(z.string()));
+
+/** A conversation goes to a service between two turns (task 9.3), what it loses said first. */
+export const providersSwitch = defineChannel(
+  'providers.switch',
+  z.object({ conversationId: z.string().min(1).max(128), id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/), model: z.string().min(1).max(512) }),
+  z.void(),
+);

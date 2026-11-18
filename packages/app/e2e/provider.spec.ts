@@ -37,3 +37,41 @@ test('a model of a service picked before the first message: the conversation goe
   await expect(row).toBeVisible();
   await expect(row.locator('.conv-memory[data-memory]')).toHaveCount(0);
 });
+
+test('between two turns: to a service, what it loses said first; back to the built-in engine, its re-reading said (task 9.3)', async ({ launch }) => {
+  const { page, service } = await launch({
+    managed: { models: MODELS },
+    service: { models: ['qwen3:8b'], responder: () => ({ text: 'Réponse du service.' }) },
+  });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ui.send('Première question');
+  await expect(ui.replies).toHaveCount(1, { timeout: 15_000 });
+  await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+
+  await picker(page).click();
+  await page.getByText(/^Ollama$/i).click();
+  await page.getByRole('option', { name: /qwen3:8b/ }).click();
+  const toService = page.getByRole('dialog', { name: 'Passer à qwen3:8b (Ollama) ?' });
+  await expect(toService).toContainText('La conversation part sans sa mémoire');
+  await toService.getByRole('button', { name: 'Changer' }).click();
+  await expect(toService).toBeHidden();
+  await ui.send('Deuxième question');
+  await expect(ui.replyText).toHaveText('Réponse du service.', { timeout: 15_000 });
+  expect(service!.requests).toHaveLength(1);
+  // The window knows it is on the service now: no gauge.
+  await expect(page.locator('aparte-context')).toHaveCount(0);
+
+  await picker(page).click();
+  await page.getByText(/^Sur cette machine$/i).click();
+  await page.getByRole('option', { name: /gemma-4-e2e/ }).click();
+  const back = page.getByRole('dialog', { name: 'Passer à gemma-4-e2e ?' });
+  await expect(back).toContainText(/Relire [\d\s  ]+ jetons/);
+  await back.getByRole('button', { name: 'Changer' }).click();
+  await expect(back).toBeHidden({ timeout: 15_000 });
+  await ui.send('Troisième question');
+  await expect(ui.replies).toHaveCount(3, { timeout: 15_000 });
+  await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+  expect(service!.requests).toHaveLength(1);
+});
