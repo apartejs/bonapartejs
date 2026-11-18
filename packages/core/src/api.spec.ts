@@ -453,6 +453,30 @@ describe('createCore — the llama.cpp it runs', () => {
   });
 });
 
+describe('createCore — bonaparte doctor (task 9.6)', () => {
+  it('says what the machine has for the built-in engine — llama.cpp found as a load would find it, the card — running nothing else', async () => {
+    const { core, dir } = await setup();
+    const report = await core.doctor();
+    expect(report.checks.map((check) => [check.id, check.status])).toEqual([
+      ['node', 'ok'],
+      ['llama', 'ok'],
+      ['slots', 'ok'],
+      ['gpu', 'ok'],
+    ]);
+    expect(report.checks[1]).toMatchObject({ source: 'path', build: 'b9999' });
+    expect(report.checks[2]).toMatchObject({ dir: join(dir, 'data', 'kv-slots') });
+    expect(report.checks[3]).toMatchObject({ bytes: 24 * GiB });
+    expect(await core.engineState()).toMatchObject({ status: 'stopped' });
+  });
+
+  it('a llama.cpp configured that does not answer fails — no other one is looked for', async () => {
+    const { core } = await setup({ env: { BONAPARTE_LLAMA_BIN: join(tmpdir(), 'bp-nowhere', 'llama-server.exe') } });
+    const report = await core.doctor();
+    expect(report.checks[1]).toMatchObject({ status: 'fail', source: 'configured', build: null });
+    expect(report.ok).toBe(false);
+  });
+});
+
 describe('createCore — the models it recommends (task 9.5)', () => {
   let hubs: FakeModelHub[] = [];
   afterEach(async () => {

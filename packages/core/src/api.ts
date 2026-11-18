@@ -10,7 +10,7 @@
  * joined instead, and spoken to in the family its template says.
  */
 
-import { access, mkdir, statfs } from 'node:fs/promises';
+import { access, mkdir, rm, statfs, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
@@ -71,6 +71,7 @@ import { createRewind, type RewindPreview, type RewindResult, type RewindTarget,
 import { DiskScan, diskRoots } from './models/disk-scan.js';
 import { CATALOGUE, modelUrl, recommendedModels, type CatalogueEntry } from './models/catalogue.js';
 import { downloadFile } from './models/download.js';
+import { runDoctor, type DoctorReport } from './doctor/doctor.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
@@ -322,6 +323,8 @@ export interface Core {
   recommendedModels(): Promise<RecommendedModel[]>;
   /** Downloads one of them, verifies it, keeps it in `<data>/models`: only when the person asks. */
   downloadModel(id: string): Promise<RecommendedModel>;
+  /** `bonaparte doctor` (task 9.6): Node, llama.cpp as a load would find it, the memories' folder, the card. Loads nothing. */
+  doctor(): Promise<DoctorReport>;
   /** The conversations: their cards, their journals, their turns on the engine. */
   readonly conversations: ConversationEngine;
   readonly conversationStore: ConversationStore;
@@ -2024,6 +2027,32 @@ export function createCore(deps: CoreDeps): Core {
     installLlamaCpp,
     recommendedModels: recommended,
     downloadModel,
+    doctor: () =>
+      runDoctor({
+        nodeVersion: process.version,
+        llama: async () => {
+          const llama = await llamaFound();
+          return llama ? { source: llama.source, command: llama.path, build: llama.build } : null;
+        },
+        slotsDir: kvDir,
+        canWrite: async (dir) => {
+          try {
+            await mkdir(dir, { recursive: true });
+            const probe = join(dir, `.bp-write-probe-${process.pid}`);
+            await writeFile(probe, '');
+            await rm(probe, { force: true });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        freeDiskBytes: async (dir) =>
+          statfs(dir).then(
+            (disk) => disk.bavail * disk.bsize,
+            () => null,
+          ),
+        gpuBytes,
+      }),
   };
   return core;
 }
