@@ -47,6 +47,7 @@ import { spawnTree, stopProcessTree } from '../process/tree.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../tools/types.js';
 import { PluginState } from './state.js';
+import { remoteModule, type PluginPort } from './remote.js';
 
 export const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
@@ -197,6 +198,31 @@ export class PluginHost {
   }
 
   /** Runs a plugin's Node half; a failure is kept in its status, and leaves nothing behind. */
+  /**
+   * A plugin of a third party, in a process of its own (task 11.1): `start` gives the app's end of that process,
+   * where its Node half is loaded. A plugin with no Node half (a view only) starts nothing. Its process gone, the
+   * plugin goes with all it added, and says why: switched on again, it starts again.
+   */
+  async activateRemote(id: string, start: () => PluginPort): Promise<PluginStatus> {
+    const plugin = this.plugins.get(id);
+    if (!plugin) throw new Error(`There is no plugin ${id}.`);
+    const manifest = plugin.manifest;
+    const file = manifest?.entry.node && plugin.dir ? join(plugin.dir, manifest.entry.node) : null;
+    const module: PluginNodeModule = file
+      ? remoteModule({
+          start,
+          file,
+          settings: manifest!.contributes.settings.map((setting) => setting.key),
+          onCrash: (code) => {
+            plugin.error = `Its process stopped${code === null ? '' : ` (code ${code})`}: switch it on again to restart it.`;
+            this.log(`[plugin ${id}] ${plugin.error}`);
+            void this.teardown(id);
+          },
+        })
+      : { activate: () => undefined };
+    return this.activate(id, module);
+  }
+
   async activate(id: string, module: PluginNodeModule): Promise<PluginStatus> {
     const plugin = this.plugins.get(id);
     if (!plugin) throw new Error(`There is no plugin ${id}.`);
