@@ -37,6 +37,7 @@ import {
   type PluginToolHandler,
   type TerminalService,
   type WebSearchService,
+  type BrowserService,
   type Verdict,
 } from '@aparte/bonaparte-shared';
 import { readdir, readFile } from 'node:fs/promises';
@@ -69,6 +70,8 @@ export interface PluginHostOptions {
   terminals?: TerminalService;
   /** The web search the app gives (task 10.4); none without it. */
   webSearch?: WebSearchService;
+  /** The built-in browser the app gives (task 10.1); none without it. */
+  browser?: BrowserService;
 }
 
 export interface DiscoveredPlugin {
@@ -381,6 +384,19 @@ export class PluginHost {
           else one.addEventListener('abort', () => stop.abort());
         }
         return searching.search(query, max, stop.signal);
+      };
+    }
+    const browser = this.options.browser;
+    if (declares.has('network') && browser) {
+      const live = <T>(run: () => Promise<T>): Promise<T> => {
+        if (activation.closed) return Promise.reject(new Error(`The plugin ${id} is not active.`));
+        return run();
+      };
+      context.browser = {
+        open: (url) => live(() => browser.open(url)),
+        read: () => live(() => browser.read()),
+        screenshot: () => live(() => browser.screenshot()),
+        act: (action) => live(() => browser.act(action)),
       };
     }
     return context;

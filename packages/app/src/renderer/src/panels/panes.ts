@@ -4,7 +4,7 @@
  * window a pane goes over the conversation, one at a time: the last opened.
  */
 
-export const PANES = ['files', 'changes', 'subagents', 'terminal'] as const;
+export const PANES = ['files', 'changes', 'subagents', 'browser', 'terminal'] as const;
 export type PaneName = (typeof PANES)[number];
 
 /** The panes open, in the order they were opened (the last opened last). */

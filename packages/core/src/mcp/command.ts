@@ -5,13 +5,23 @@
  * is refused: running it would hand its arguments to `cmd.exe`, a command line. Elsewhere, nothing changes.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { win32 } from 'node:path';
 
 export interface ResolveOptions {
   env: Record<string, string | undefined>;
   platform?: NodeJS.Platform;
   exists?: (path: string) => boolean;
+  /** A file's text, or null: how a `.cmd` shim is read. */
+  read?: (path: string) => string | null;
+}
+
+function readText(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 const NPM_SCRIPTS: Record<string, string> = { npx: 'npx-cli.js', npm: 'npm-cli.js' };
@@ -35,6 +45,13 @@ export function resolveCommand(command: string, args: readonly string[], options
     const node = win32.join(dir, 'node.exe');
     const cli = win32.join(dir, 'node_modules', 'npm', 'bin', script);
     if (exists(node) && exists(cli)) return { command: node, args: [cli, ...args] };
+  }
+  // A shim npm wrote for a global package (pnpm, yarn…): the script it names, run by node.
+  const named = /"%dp0%\\([^"]+\.(?:c|m)?js)"/i.exec((options.read ?? readText)(found) ?? '')?.[1];
+  if (named) {
+    const target = win32.join(dir, named);
+    const node = [win32.join(dir, 'node.exe'), find('node', path, extensions, exists)].find((one): one is string => !!one && exists(one));
+    if (node && exists(target)) return { command: node, args: [target, ...args] };
   }
   throw new Error(
     `${command} is a Windows batch file (${win32.basename(found)}): it would run through a shell, which bonaparte never does. Give the program itself (node, python, an .exe).`,

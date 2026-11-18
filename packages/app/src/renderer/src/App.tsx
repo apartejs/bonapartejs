@@ -37,7 +37,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
-import { ENGINE_READY, focusComposer, prefill, sendWhenFree, speakingForThePerson, type Composer } from './aparte/composer';
+import { attachToken, ENGINE_READY, focusComposer, prefill, sendWhenFree, shownComposer, speakingForThePerson, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
 import { createConversationRunner } from './aparte/runner';
@@ -57,6 +57,7 @@ import { createAgentOutput } from './panels/agent-output';
 import { TerminalPanel } from './panels/TerminalPanel';
 import { NO_TABS, openTab, withAgentTab, type TerminalTabs } from './panels/terminal-tabs';
 import { PanelDock } from './panels/PanelDock';
+import { BrowserPanel } from './panels/BrowserPanel';
 import { PanelToggles } from './panels/PanelToggles';
 import { close as closePane, opened, opensByItself, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
@@ -1454,6 +1455,21 @@ function Workspace({
         shown={shownPanes(panes, narrow)}
         narrow={narrow}
         content={{
+          // The built-in browser (task 10.1): its page taken off whenever a page goes over the conversation.
+          browser: {
+            body: (
+              <BrowserPanel
+                messages={messages}
+                hidden={inboxOpen || settingsPage !== null}
+                scope={{ ...(conversationId ? { conversationId } : {}), ...(activeProject ? { projectId: activeProject.id } : {}) }}
+                onAttach={(token) => attachToken(token)}
+                onSend={(text) => {
+                  const id = conversationId ?? null;
+                  sendWhenFree(text, () => (id ? composerOf(id) : shownComposer()));
+                }}
+              />
+            ),
+          },
           subagents: {
             body: (
               <SubagentsPanel

@@ -491,3 +491,30 @@ describe('PluginHost — the web search (task 10.4)', () => {
     await expect(searcher.ctx!.search!('again', 3)).rejects.toThrow(/not active/);
   });
 });
+
+describe('PluginHost — the built-in browser (task 10.1)', () => {
+  it('a plugin that declares network gets the browser, until it goes; one that does not, gets none', async () => {
+    const opened: string[] = [];
+    const browser = {
+      open: async (url: string) => {
+        opened.push(url);
+        return { url, title: 'Page' };
+      },
+      read: async () => null,
+      screenshot: async () => null,
+      act: async () => ({ done: 'clicked' }),
+    };
+    const host = new PluginHost({ registry: new ToolRegistry(), browser });
+    host.add(manifest('pages', { effects: [{ effect: 'network', what: 'pages' }] }), { builtin: true });
+    host.add(manifest('reader', { effects: [{ effect: 'read', what: 'files' }] }), { builtin: true });
+    const pages = capture();
+    const reader = capture();
+    await host.activate('pages', pages);
+    await host.activate('reader', reader);
+    expect(reader.ctx!.browser).toBeUndefined();
+    expect(await pages.ctx!.browser!.open('http://localhost:5173/')).toEqual({ url: 'http://localhost:5173/', title: 'Page' });
+    await host.deactivate('pages');
+    await expect(pages.ctx!.browser!.open('http://x')).rejects.toThrow(/not active/);
+    expect(opened).toEqual(['http://localhost:5173/']);
+  });
+});

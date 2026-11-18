@@ -37,5 +37,7 @@ export type AppEvent =
   | { kind: 'command'; conversationId: string; output: CommandOutputView }
   /** The engine changed (started, ready, stopped, unloaded for want of work): the window reads it again. */
   | { kind: 'engine' }
+  /** The built-in browser changed (a tab, its address, its console, the agent reading): the pane reads it again (task 10.1). */
+  | { kind: 'browser' }
   /** A notification or the notification area's menu was clicked: the window shows that conversation (task 8.5). */
   | { kind: 'open'; conversationId: string };

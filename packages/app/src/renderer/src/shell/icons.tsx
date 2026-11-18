@@ -6,8 +6,15 @@
 
 import {
   botIcon,
+  chevronLeftIcon,
+  codeIcon,
+  eyeIcon,
+  globeIcon,
+  imageIcon,
+  retryIcon,
   chevronDownIcon,
   chevronRightIcon,
+  chevronUpIcon,
   closeIcon,
   cpuIcon,
   editIcon,
@@ -48,6 +55,14 @@ const ICONS = {
   edit: editIcon,
   terminal: terminalIcon,
   subagents: botIcon,
+  globe: globeIcon,
+  back: chevronLeftIcon,
+  reload: retryIcon,
+  eye: eyeIcon,
+  pick: codeIcon,
+  screenshot: imageIcon,
+  comment: messageSquareIcon,
+  chevronUp: chevronUpIcon,
 } as const;
 
 export type IconName = keyof typeof ICONS;

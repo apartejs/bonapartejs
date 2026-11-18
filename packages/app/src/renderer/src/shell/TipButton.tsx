@@ -20,10 +20,11 @@ export interface TipButtonProps {
   current?: boolean;
   /** A toggle: whether what it opens is open. */
   pressed?: boolean;
+  disabled?: boolean;
   onClick(): void;
 }
 
-export function TipButton({ label, tip, icon, side = 'bottom', className, badge, current, pressed, onClick }: TipButtonProps) {
+export function TipButton({ label, tip, icon, side = 'bottom', className, badge, current, pressed, disabled, onClick }: TipButtonProps) {
   return (
     <span className="aparte-tooltip-anchor aparte-tooltip-anchor--hover bonaparte-tip" data-side={side}>
       <button
@@ -32,6 +33,7 @@ export function TipButton({ label, tip, icon, side = 'bottom', className, badge,
         aria-label={label}
         {...(current ? { 'aria-current': 'page' as const } : {})}
         {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
+        {...(disabled ? { disabled: true } : {})}
         onClick={onClick}
       >
         <Icon name={icon} />

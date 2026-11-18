@@ -53,6 +53,9 @@ importers:
       '@aparte/bonaparte-core':
         specifier: workspace:*
         version: link:../core
+      '@aparte/bonaparte-plugin-browser':
+        specifier: workspace:*
+        version: link:../../plugins/browser
       '@aparte/bonaparte-plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
@@ -243,6 +246,22 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.6.7
+    devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 9.0.0(postcss@8.5.33)(typescript@6.0.3)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.1.0(@types/node@24.19.2)(vite@8.3.8(@types/node@24.19.2)(esbuild@0.28.2)(yaml@2.9.0))
+
+  plugins/browser:
+    dependencies:
+      '@aparte/bonaparte-plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
     devDependencies:
       tsup:
         specifier: 'catalog:'

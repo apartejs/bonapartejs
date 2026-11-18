@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@aparte/bonaparte-core": "workspace:*",
+    "@aparte/bonaparte-plugin-browser": "workspace:*",
     "@aparte/bonaparte-plugin-sdk": "workspace:*",
     "@aparte/bonaparte-plugin-terminal": "workspace:*",
     "@aparte/bonaparte-plugin-web-search": "workspace:*",

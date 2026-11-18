@@ -231,6 +231,29 @@ export interface WebSearchService {
   search(query: string, max: number, signal?: PluginSignal): Promise<{ provider: string; results: WebSearchResult[] }>;
 }
 
+/** A line of a page's console (task 10.1). */
+export interface BrowserConsoleLine {
+  level: 'error' | 'warning' | 'info' | 'debug';
+  text: string;
+  source: string;
+}
+
+/** What the agent does in the built-in browser (task 10.1): on the tab the person sees, or one opened for it. */
+export type BrowserAction = { kind: 'click'; selector: string } | { kind: 'type'; selector: string; text: string } | { kind: 'scroll'; by: number };
+
+/**
+ * The built-in browser, as the app gives it to a plugin that declares `network`: its pages live in the main
+ * process, never with Node nor the window's bridge; this machine's own pages open, the network it is in does not.
+ */
+export interface BrowserService {
+  open(url: string): Promise<{ url: string; title: string } | { error: string }>;
+  /** The text of the page shown, and its console; null with no page open. The pane says « L'agent lit la page ». */
+  read(): Promise<{ url: string; title: string; text: string; console: BrowserConsoleLine[] } | null>;
+  /** A picture of the page shown, kept in the app's data folder (`saved`); null with no page open. */
+  screenshot(): Promise<{ url: string; width: number; height: number; saved: string } | null>;
+  act(action: BrowserAction): Promise<{ done: string } | { error: string }>;
+}
+
 export interface TerminalService {
   shells(): readonly PluginShell[];
   open(shellId: string, options: PluginPtyOptions): PluginPty;
@@ -279,6 +302,8 @@ export interface PluginNodeContext {
    * search; refused once the plugin is gone.
    */
   search?: WebSearchService['search'];
+  /** The built-in browser (task 10.1). Only for a plugin that declares `network`, and only where the app has one. */
+  browser?: BrowserService;
 }
 
 export interface PluginNodeModule {

@@ -74,6 +74,7 @@ import { downloadFile } from './models/download.js';
 import { runDoctor, type DoctorReport } from './doctor/doctor.js';
 import { createWebSearch, type EmbeddedSearch } from './search/service.js';
 import { McpService } from './mcp/service.js';
+import { ProjectRuns, type RunView } from './project/runs.js';
 import { withoutSecrets } from './process/env.js';
 import type { OnlineProvider, SearchProvider } from './search/online.js';
 import { compareWithJournal } from './agent/divergence.js';
@@ -99,7 +100,7 @@ import {
   type TurnInput,
   type TurnResult,
 } from './conversation/engine.js';
-import type { PlayMode, TerminalService } from '@aparte/bonaparte-shared';
+import type { BrowserService, PlayMode, TerminalService } from '@aparte/bonaparte-shared';
 import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
@@ -183,6 +184,14 @@ export interface CoreDeps {
   webSearch?: EmbeddedSearch;
   /** Tests only: what an online search provider is asked with. */
   fetch?: typeof globalThis.fetch;
+  /** The built-in browser of the main process (task 10.1); none: no browser tool works. */
+  browser?: BrowserService;
+}
+
+/** Whose project's runs (task 10.3): a conversation's, or a project named — never a folder of the window's. */
+export interface RunScope {
+  conversationId?: string;
+  projectId?: string;
 }
 
 /** A model bonaparte recommends for this machine (task 9.5), and where it stands on it. */
@@ -346,6 +355,15 @@ export interface Core {
   readonly plugins: PluginHost;
   /** The MCP servers (task 10.5): their tools join the registry at the first turn, judged by the same policy. */
   readonly mcp: McpService;
+  /**
+   * What a project runs (task 10.3): its scripts and services, for the browser's new tab — the project's of a
+   * conversation, or a project named; a launch's output goes to that conversation's terminal.
+   */
+  readonly runs: {
+    list(scope: RunScope): Promise<{ projectName: string | null; runs: RunView[]; alreadyRunning: string[] }>;
+    start(scope: RunScope, kind: RunView['kind'], name: string): Promise<void>;
+    stop(scope: RunScope, name: string): Promise<void>;
+  };
   /** What each turn wrote, its originals kept: « Revenir » (6.4) and the rewind (7.1) take it back. */
   readonly checkpoints: CheckpointStore;
   /** The « Fichiers » pane: a perimeter listed and read — a conversation's, a project's, or the home folder. */
@@ -1263,6 +1281,24 @@ export function createCore(deps: CoreDeps): Core {
     log,
     ...(deps.spawn ? { spawn: deps.spawn } : {}),
   });
+  // What a project runs (task 10.3): launched on a click, their output to the conversation's terminal.
+  const projectRuns = new ProjectRuns({
+    env: () => withoutSecrets(process.env),
+    output: (event, conversationId) => {
+      if (conversationId) deps.commandOutput?.(conversationId, event);
+    },
+    ...(deps.spawn ? { spawn: deps.spawn } : {}),
+  });
+  /** The folder a scope's project runs in: the conversation's (its worktree included), else the project's first. */
+  async function runRoot(scope: RunScope): Promise<{ root: string; name: string } | null> {
+    if (scope.conversationId && (await conversationStore.get(scope.conversationId))) {
+      const place = await rootsOf(scope.conversationId);
+      const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
+      return project && place.roots[0] ? { root: place.roots[0], name: project.name } : null;
+    }
+    const project = scope.projectId ? await projectStore.get(scope.projectId) : undefined;
+    return project?.roots[0] ? { root: project.roots[0], name: project.name } : null;
+  }
   // What a conversation of a project sees: the plugins it keeps, the MCP servers of the app and its own.
   const visibleTo = (projectId: string | undefined) => {
     const byPlugins = plugins.visibleTo(projectId);
@@ -1273,6 +1309,7 @@ export function createCore(deps: CoreDeps): Core {
     registry: tools,
     log,
     webSearch,
+    ...(deps.browser ? { browser: deps.browser } : {}),
     ...(deps.terminals ? { terminals: deps.terminals } : {}),
     ...(deps.pluginEvent ? { emit: deps.pluginEvent } : {}),
     judge: async ({ conversationId, tool, input }) => {
@@ -1762,8 +1799,9 @@ export function createCore(deps: CoreDeps): Core {
           log(`[bonaparte] a memory was not saved: ${String(error)}`),
         );
       await plugins.deactivateAll();
-      // Every MCP server's whole tree goes down with the app.
+      // Every MCP server's whole tree goes down with the app, and what the projects launched.
       await mcp.stopAll();
+      await projectRuns.stopAll();
       await supervisor.stop();
     },
     conversations,
@@ -1772,6 +1810,23 @@ export function createCore(deps: CoreDeps): Core {
     permissions,
     plugins,
     mcp,
+    runs: {
+      async list(scope) {
+        const place = await runRoot(scope);
+        const alreadyRunning = await projectRuns.alreadyRunning();
+        if (!place) return { projectName: null, runs: [], alreadyRunning };
+        return { projectName: place.name, runs: (await projectRuns.list(place.root)).runs, alreadyRunning };
+      },
+      async start(scope, kind, name) {
+        const place = await runRoot(scope);
+        if (!place) throw new Error('There is no project to run anything in.');
+        await projectRuns.start(place.root, kind, name, scope.conversationId);
+      },
+      async stop(scope, name) {
+        const place = await runRoot(scope);
+        if (place) await projectRuns.stop(place.root, name);
+      },
+    },
     checkpoints,
 
     files: {

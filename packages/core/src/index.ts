@@ -36,3 +36,6 @@ export { ConversationEngine, ContextFullError, EngineFailedError, NoEngineError 
 export { runDoctor, MIN_NODE_MAJOR, LOW_DISK_BYTES } from './doctor/doctor.js';
 export type { McpServerView } from './mcp/service.js';
 export type { DoctorCheck, DoctorEnv, DoctorReport, DoctorStatus } from './doctor/doctor.js';
+export { isPublicAddress } from './tools/builtin/web-fetch.js';
+export type { RunScope } from './api.js';
+export type { RunView } from './project/runs.js';

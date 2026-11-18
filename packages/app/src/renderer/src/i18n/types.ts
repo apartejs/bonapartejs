@@ -525,6 +525,79 @@ export interface Messages {
     confirmDelete: string;
   };
   /** The panes beside the conversation (board « Conversation au travail »): their icons and frames. */
+  /** The built-in browser's pane (task 10.1, board « Le navigateur et ses outils »). */
+  browser: {
+    tabs: string;
+    newTab: string;
+    newTabTip: string;
+    closeTab(label: string): string;
+    back: string;
+    backTip: string;
+    reload: string;
+    reloadTip: string;
+    address: string;
+    placeholder: string;
+    device: string;
+    desktop: string;
+    phone: string;
+    select: string;
+    comment: string;
+    commentTip: string;
+    screenshot: string;
+    screenshotTip: string;
+    reading: string;
+    readingLabel: string;
+    failed(error: string): string;
+    emptyHint: string;
+    /** The person's tools on a page (task 10.2): an element shown, comments pinned, the console. */
+    tools: {
+      group: string;
+      selectHint: string;
+      commentHint: string;
+      comments(count: number): string;
+      send: string;
+      inPath(path: string): string;
+      text: string;
+      size: string;
+      font: string;
+      color: string;
+      attach: string;
+      commentThis: string;
+      commentField(n: number): string;
+      commentPlaceholder: string;
+      fontOf(size: number, bold: boolean): string;
+      removeComment(n: number): string;
+      /** What goes into the composer: the element, the comments, the console's errors. */
+      elementMessage(element: { selector: string; path: string; text: string; size: string; font: string; color: string }, url: string): string;
+      commentsMessage(url: string, comments: readonly { selector: string; text: string }[]): string;
+      consoleMessage(url: string, lines: readonly string[]): string;
+    };
+    console: {
+      title: string;
+      errors(count: number): string;
+      warnings(count: number): string;
+      empty: string;
+      attach: string;
+    };
+    /** The new tab: what the project runs (task 10.3). */
+    runs: {
+      intro(project: string): string;
+      noProject: string;
+      nothing: string;
+      runAll: string;
+      inProject: string;
+      running: string;
+      stopped: string;
+      exited: string;
+      starting: string;
+      launchOpen: string;
+      open: string;
+      stop: string;
+      elsewhere: string;
+      outside: string;
+      footnote: string;
+    };
+  };
   panels: {
     /** The group of the icons in the header. */
     group: string;
@@ -537,9 +610,11 @@ export interface Messages {
     terminal: string;
     /** The sub-agents of the conversation (task 8.2). */
     subagents: string;
+    /** The built-in browser (task 10.1). */
+    browser: string;
     /** A pane over the conversation, in a narrow window. */
     over(name: string): string;
-    close: { files: string; changes: string; subagents: string; terminal: string };
+    close: { files: string; changes: string; subagents: string; terminal: string; browser: string };
     closeTip: string;
   };
   /** A conversation on its own branch (board « Branches et conversations », task 6.7). */

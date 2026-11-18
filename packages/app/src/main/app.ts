@@ -26,6 +26,8 @@ import { join } from 'node:path';
 import { bonaparteDataDir, createAgentHandler, createCore, withoutSecrets, type Core } from '@aparte/bonaparte-core';
 import { terminal, terminalManifest } from '@aparte/bonaparte-plugin-terminal';
 import { webSearch, webSearchManifest } from '@aparte/bonaparte-plugin-web-search';
+import { browser, browserManifest } from '@aparte/bonaparte-plugin-browser';
+import { createBuiltinBrowser } from './browser/service.js';
 import { APP_EVENT, type AppEvent, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
 import { createVault } from './secrets.js';
@@ -254,6 +256,10 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
             }),
         });
   if (hiddenSearch) app.once('will-quit', () => hiddenSearch.dispose());
+  // The built-in browser (task 10.1): its pages in a session of their own, on the main window.
+  const builtinBrowser = createBuiltinBrowser({ window: () => window, dataDir, changed: () => push({ kind: 'browser' }) });
+  app.once('will-quit', () => builtinBrowser.dispose());
+  if (options.e2e) (globalThis as { __bonaparteBrowser?: unknown }).__bonaparteBrowser = builtinBrowser.views;
   const core = createCore({
     dataDir,
     // The services' keys (task 9.1): encrypted by the system, in one file of the data folder.
@@ -262,6 +268,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
     terminals,
     ...(hiddenSearch ? { webSearch: (query: string, max: number, signal?: AbortSignal) => hiddenSearch.search(query, max, signal) } : {}),
+    browser: builtinBrowser.service,
     pluginEvent: (pluginId, instanceId, event, payload) => push({ kind: 'plugin', pluginId, instanceId, event, payload }),
     commandOutput: (conversationId, output) => push({ kind: 'command', conversationId, output }),
     engineChanged: () => {
@@ -279,6 +286,9 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   core.plugins.add(webSearchManifest, { builtin: true });
   const searching = await core.plugins.activate('web-search', webSearch);
   if (!searching.active) console.error(`[bonaparte] the web search did not start: ${searching.error ?? 'unknown'}`);
+  core.plugins.add(browserManifest, { builtin: true });
+  const browsing = await core.plugins.activate('browser', browser);
+  if (!browsing.active) console.error(`[bonaparte] the browser did not start: ${browsing.error ?? 'unknown'}`);
   registerAppProtocol({
     handler: createAgentHandler(core),
     rendererDir: join(import.meta.dirname, '..', 'renderer'),
@@ -293,6 +303,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
 
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   registerAllChannels(ipc, core, {
+    browser: builtinBrowser,
     version: () => __BONAPARTE_VERSION__,
     locale: interfaceLocale,
     // The system's folder dialog, over the window — or the test's folder in a test run.

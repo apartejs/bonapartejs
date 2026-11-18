@@ -24,6 +24,9 @@ export type {
   TerminalService,
   WebSearchResult,
   WebSearchService,
+  BrowserService,
+  BrowserAction,
+  BrowserConsoleLine,
   PluginSettingField,
   PluginSignal,
   PluginStatus,
@@ -149,3 +152,7 @@ export { modesGet, modesSet, modeViewSchema, playModeSchema, toolPreviewSchema, 
 export type { ModeView, ToolPreviewView } from './ipc/modes.js';
 export { mcpAdd, mcpOverview, mcpPaste, mcpRemove, mcpServerViewSchema, mcpStart, mcpStop } from './ipc/mcp.js';
 export type { McpServerViewData } from './ipc/mcp.js';
+export { browserBack, browserCancelPick, browserCloseTab, browserConsole, browserConsoleLineSchema, browserHide, browserNavigate, browserOpenTab, browserPick, browserPins, browserPlace, browserReload, browserTabs, browserTabSchema, pickedElementSchema } from './ipc/browser.js';
+export type { BrowserTabView, PickedElement } from './ipc/browser.js';
+export { runsList, runsStart, runsStop, runViewSchema } from './ipc/runs.js';
+export type { RunViewData } from './ipc/runs.js';

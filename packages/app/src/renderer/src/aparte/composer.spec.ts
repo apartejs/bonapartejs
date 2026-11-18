@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ENGINE_READY, sendAsPerson, sendWhenFree, speakingForThePerson, type Composer } from './composer';
+import { attachToken, ENGINE_READY, sendAsPerson, sendWhenFree, speakingForThePerson, type Composer } from './composer';
 
 /** A composer as aparté's behaves: a send empties it; a send the page holds leaves it as it was. */
 function composer(initial: string) {
@@ -59,5 +59,31 @@ describe('a message sent in the person’s name', () => {
     await tick();
     expect(sent).toEqual(['Les commentaires']);
     expect(field.value).toBe('mon brouillon');
+  });
+});
+
+describe('something of the page attached to the message (task 10.2)', () => {
+  /** aparté's editor as it stands: a draft where each pill counts one character, a caret at the end once focused. */
+  function withEditor(draft: string) {
+    const inserted: { from: number; to: number; token: unknown }[] = [];
+    let focused = false;
+    const input = {
+      focusEnd: () => void (focused = true),
+      getCaret: () => (focused ? { text: draft, offset: draft.length } : null),
+      insertToken: (from: number, to: number, token: unknown) => void inserted.push({ from, to, token }),
+    };
+    const field = { querySelector: (selector: string) => (selector === 'aparte-composer-input' ? input : null) } as unknown as Composer;
+    return { field, inserted };
+  }
+
+  it('goes as a pill after what the person is writing, the message saying it in full', () => {
+    const { field, inserted } = withEditor('Regarde ça :');
+    const token = { label: 'td.hours', text: 'This element: `td.hours`', kind: 'page-element' };
+    expect(attachToken(token, field)).toBe(true);
+    expect(inserted).toEqual([{ from: 12, to: 12, token }]);
+  });
+
+  it('without a composer, nothing is attached', () => {
+    expect(attachToken({ label: 'x' }, null)).toBe(false);
   });
 });

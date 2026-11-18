@@ -106,6 +106,8 @@ export interface LaunchOptions {
   search?: { results?: { title: string; href: string; snippet: string }[]; blocked?: boolean };
   /** The MCP servers of the app (task 10.5), as `config/mcp-servers.json` holds them: `{ <name>: entry }`. */
   mcp?: Record<string, Record<string, unknown>>;
+  /** Pages served on this machine for the built-in browser (task 10.1), by path: `{ '/rapport': '<html>…' }`. */
+  pages?: Record<string, string>;
   /**
    * A project on the app's home folder, made before the launch (default): a new conversation works in it, as a
    * code conversation that may change files. `false`: no project — a new conversation is a discussion (task 9.7).
@@ -141,6 +143,8 @@ export interface LaunchedApp {
   hub?: FakeModelHub;
   /** The search engine the test asked for: the queries it was asked. */
   search?: { queries: string[] };
+  /** The pages the test serves: their address. */
+  pages?: { url: string };
   /** What the managed engine was asked, in order: every completion it received. */
   engineRequests(): Promise<EngineRequest[]>;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
@@ -172,7 +176,9 @@ async function closeApp(app: ElectronApplication): Promise<void> {
 export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedApp> {
   // Before anything is started: no build, no Electron.
   const entry = builtAppEntry(appRoot);
-  const server = await startFakeLlamaServer(options.engine);
+  // The inventory of tools weighs some 3,200 of the fake engine's tokens (four characters a token): a context of 16 k
+  // leaves the tests room for their turns, as a real model's 8 k does for its own count (phase 10).
+  const server = await startFakeLlamaServer({ nCtx: 16_384, ...options.engine });
   const dataDir = options.dataDir ?? (await mkdtemp(join(tmpdir(), 'bonaparte-e2e-')));
   const requestsFile = join(dataDir, 'engine-requests.jsonl');
   const home = `${dataDir}-home`;
@@ -183,6 +189,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   let service: FakeOpenAIServer | undefined;
   let hub: FakeModelHub | undefined;
   let searchEngine: { url: string; queries: string[]; close(): Promise<void> } | undefined;
+  let pageServer: { url: string; close(): Promise<void> } | undefined;
 
   // Once: a test may close the app itself, and the fixture closes what is left after it.
   let closing: Promise<void> | undefined;
@@ -194,6 +201,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       await service?.close();
       await hub?.close();
       await searchEngine?.close();
+      await pageServer?.close();
       if (!options.keepData && !options.dataDir) {
         await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
         await rm(home, { recursive: true, force: true }).catch(() => undefined);
@@ -287,6 +295,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       hub = await startFakeModelHub({ files, ...(options.hub.paceMs ? { paceMs: options.hub.paceMs } : {}) });
       Object.assign(managedEnv, { BONAPARTE_E2E_MODEL_HUB: hub.url, BONAPARTE_E2E_MODEL_CATALOGUE: JSON.stringify(catalogue) });
     }
+    if (options.pages) pageServer = await startPageServer(options.pages);
     if (options.mcp) {
       await writeFile(join(dataDir, 'config', 'mcp-servers.json'), JSON.stringify({ mcpServers: options.mcp }));
     }
@@ -384,6 +393,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       ...(service ? { service } : {}),
       ...(hub ? { hub } : {}),
       ...(searchEngine ? { search: { queries: searchEngine.queries } } : {}),
+      ...(pageServer ? { pages: { url: pageServer.url } } : {}),
       navigations,
       engineRequests,
       output,
@@ -456,6 +466,30 @@ async function startFakeSearchEngine(options: NonNullable<LaunchOptions['search'
   return {
     url: `http://127.0.0.1:${port}`,
     queries,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
+}
+
+/** Pages for the built-in browser (task 10.1), served on this machine as a dev server would. */
+async function startPageServer(pages: Record<string, string>): Promise<{ url: string; close(): Promise<void> }> {
+  const server = createHttpServer((req, res) => {
+    const page = pages[new URL(req.url ?? '/', 'http://127.0.0.1').pathname];
+    if (page === undefined) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    res.end(page);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = (server.address() as { port: number }).port;
+  return {
+    url: `http://127.0.0.1:${port}`,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

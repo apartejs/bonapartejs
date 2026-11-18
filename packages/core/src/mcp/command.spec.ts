@@ -33,6 +33,23 @@ describe('a stdio server’s command, on Windows (task 10.5)', () => {
     });
   });
 
+  it('a .cmd that npm wrote for a global package runs as node and the script it names — pnpm, say', () => {
+    const npmDir = win32.join('C:\\Users', 'me', 'AppData', 'Roaming', 'npm');
+    const shim = win32.join(npmDir, 'pnpm.cmd');
+    const script = win32.join(npmDir, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs');
+    const more = new Set([...files, shim.toLowerCase(), script.toLowerCase()]);
+    // What npm's cmd-shim writes for a global package (its last line).
+    const text = ['@ECHO off', 'SETLOCAL', `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%${win32.sep}node_modules${win32.sep}pnpm${win32.sep}bin${win32.sep}pnpm.cjs" %*`].join('\r\n');
+    expect(
+      resolveCommand('pnpm', ['run', 'dev'], {
+        env: { ...env, PATH: `${env.PATH};${npmDir}` },
+        platform: 'win32',
+        exists: (path) => more.has(path.toLowerCase()),
+        read: (path) => (path.toLowerCase() === shim.toLowerCase() ? text : null),
+      }),
+    ).toEqual({ command: win32.join(NODE_DIR, 'node.exe'), args: [script, 'run', 'dev'] });
+  });
+
   it('another .cmd or .bat would run through a shell: refused, the reason said', () => {
     expect(() => resolveCommand('server', [], { env, platform: 'win32', exists })).toThrow(/shell/);
     expect(() => resolveCommand('C:\\tools\\run.bat', [], { env, platform: 'win32', exists })).toThrow(/shell/);

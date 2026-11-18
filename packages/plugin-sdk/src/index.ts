@@ -40,6 +40,9 @@ export type {
   PluginToolUse,
   WebSearchResult,
   WebSearchService,
+  BrowserService,
+  BrowserAction,
+  BrowserConsoleLine,
   TerminalService,
 } from '@aparte/bonaparte-shared';
 

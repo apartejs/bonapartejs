@@ -6,6 +6,8 @@
  * page (task 5.5): the composer is the shown chat's, unless one is named.
  */
 
+import type { AparteComposerToken } from '@aparte/core';
+
 export type Composer = HTMLElement & {
   value: string;
   streaming: boolean;
@@ -53,6 +55,28 @@ export function prefill(text: string, field: Composer | null = shownComposer()):
   if (!field) return false;
   field.setValue(text);
   field.focus();
+  return true;
+}
+
+/** aparté's editor inside the composer: where a pill goes. */
+interface ComposerEditor {
+  focusEnd(): void;
+  getCaret(): { offset: number } | null;
+  insertToken(from: number, to: number, token: AparteComposerToken): void;
+}
+
+/**
+ * Something of the page attached to the message (task 10.2): a pill after what the person is writing — it shows
+ * its label, and the message says its `text` in its place. The composer has no method for it: the pill goes in
+ * through its editor, at a caret placed at the end (apartejs/aparte#259).
+ */
+export function attachToken(token: AparteComposerToken, field: Composer | null = shownComposer()): boolean {
+  const editor = field?.querySelector('aparte-composer-input') as unknown as ComposerEditor | null | undefined;
+  if (!editor) return false;
+  editor.focusEnd();
+  const at = editor.getCaret()?.offset;
+  if (at === undefined) return false;
+  editor.insertToken(at, at, token);
   return true;
 }
 
