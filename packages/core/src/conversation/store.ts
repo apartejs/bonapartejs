@@ -34,6 +34,9 @@ export interface ConversationMeta {
   worktree?: string;
   /** A context smaller than the engine's, for this conversation. */
   contextCap?: number;
+  /** « Réglages de conversation » (task 12.4): its temperature, and its reasoning switched off; none: the defaults. */
+  temperature?: number;
+  thinking?: boolean;
   /** The project's instructions as the model last read them: a change is appended as a note (task 4.7). */
   instructions?: string;
   /** Its last going back, while it can still be undone — until its next turn begins (task 7.1). */
@@ -155,6 +158,20 @@ export class ConversationStore {
   /** A change of what the conversation is: it counts as activity. */
   update(id: string, changes: Changes): Promise<ConversationMeta> {
     return this.change(id, (meta) => ({ ...meta, ...changes, updatedAt: new Date().toISOString() }));
+  }
+
+  /** Its own settings (task 12.4): `null` takes one away, the default back. Not activity: the list does not move. */
+  settle(id: string, settings: { temperature?: number | null; thinking?: boolean | null; contextCap?: number | null }): Promise<ConversationMeta> {
+    return this.change(id, (meta) => {
+      const next: ConversationMeta = { ...meta };
+      for (const key of ['temperature', 'thinking', 'contextCap'] as const) {
+        const value = settings[key];
+        if (value === undefined) continue;
+        if (value === null) delete next[key];
+        else (next as unknown as Record<string, unknown>)[key] = value;
+      }
+      return next;
+    });
   }
 
   /** Pinning, archiving or being seen is not activity: the order of the list does not move. */

@@ -28,6 +28,7 @@ import {
 } from './costs/announce.js';
 import { detectServeCommandPrefix } from './backend/llamacpp/serve-command.js';
 import { decideLoad, planDiskRoom } from './failures.js';
+import { createNodeSystemProbe, createWindowsProbes, ResourceMonitor, type GpuProbe, type ResourceSample, type ServerProbe, type SystemProbe } from './engine/resources.js';
 import {
   readGpuMemoryBytes,
   readLlamaDeviceMemory,
@@ -139,7 +140,7 @@ import { PluginInstaller } from './plugins/install.js';
 import type { PluginPort } from './plugins/remote.js';
 import { ToolRegistry } from './tools/registry.js';
 import type { CommandOutputEvent, ToolDef } from './tools/types.js';
-import { ConversationStore } from './conversation/store.js';
+import { ConversationStore, type ConversationMeta } from './conversation/store.js';
 import { KvStore, memoriesRefusedBy } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
 import { probeEndpoint, type ProbeResult } from './providers/probe.js';
@@ -167,6 +168,10 @@ export interface CoreDeps {
   diskRoots?: () => Promise<string[]>;
   /** The card's video memory (default: read on the machine; null when unknown). */
   gpuMemory?: () => Promise<number | null>;
+  /** « Moniteur de ressources » (task 12.4): told each reading. */
+  resourcesChanged?: (sample: ResourceSample) => void;
+  /** Tests only: what the monitor reads instead of the machine (no PowerShell launched). */
+  resourceProbes?: { system: SystemProbe; gpu?: GpuProbe; serverProcess?: ServerProbe; intervalMs?: number };
   /** The free space on the disk of a folder (task 12.3); null when the system does not say. Tests give their own. */
   freeDiskBytes?: (dir: string) => Promise<number | null>;
   /** Injected in tests: what spawnHidden launches with. */
@@ -383,6 +388,11 @@ export interface Core {
   readonly permissions: PermissionEngine;
   /** The plugins: their tools join the registry, what they reach is judged by the same policy. */
   readonly plugins: PluginHost;
+  /**
+   * « Moniteur de ressources » (task 12.4): the processor, the memory and the graphics card, read every few seconds
+   * once the app starts it, while its entry is on; nothing is read before, nor once it is switched off.
+   */
+  readonly resources: { start(): void; last(): ResourceSample | null };
   /** The plugins the person adds (task 11.1): read first, then each run in a process of its own. */
   readonly addedPlugins: AddedPlugins;
   /** The plugins made in a conversation (task 11.4): tried there, installed, their code read. */
@@ -491,6 +501,14 @@ export interface Core {
   addModelFolder(folder: string): Promise<string[]>;
   /** « Moteur et mémoire »: what runs, and what each conversation keeps on disk. */
   memory(): Promise<MemoryOverview>;
+  /**
+   * « Réglages de conversation » (task 12.4): a conversation's temperature, its reasoning and its context cap — none:
+   * the defaults. Read by its turns while the built-in entry `conversation-settings` is on.
+   */
+  readonly conversationSettings: {
+    get(conversationId: string): Promise<ConversationSettingsView>;
+    set(conversationId: string, changes: { temperature?: number | null; thinking?: boolean | null; contextCap?: number | null }): Promise<ConversationSettingsView>;
+  };
   /** « Libérer »: a saved memory let go; reopening its conversation will say what reading it again costs. */
   releaseMemory(id: string): Promise<void>;
   /**
@@ -634,6 +652,23 @@ const LLAMA_CANDIDATES = ['llama-server', 'llama'];
 const samePath = (a: string, b: string): boolean =>
   resolve(a).replace(/\\/g, '/').toLowerCase() ===
   resolve(b).replace(/\\/g, '/').toLowerCase();
+
+/** « Réglages de conversation » (task 12.4): what the conversation has of its own, and the defaults it falls back on. */
+export interface ConversationSettingsView {
+  temperature: number | null;
+  thinking: boolean | null;
+  contextCap: number | null;
+  defaults: { temperature: number; thinking: boolean };
+}
+
+function settingsView(meta: ConversationMeta): ConversationSettingsView {
+  return {
+    temperature: meta.temperature ?? null,
+    thinking: meta.thinking ?? null,
+    contextCap: meta.contextCap ?? null,
+    defaults: { temperature: settingDefault('temperature') as number, thinking: true },
+  };
+}
 
 export function createCore(deps: CoreDeps): Core {
   const env = deps.env ?? process.env;
@@ -1161,6 +1196,30 @@ export function createCore(deps: CoreDeps): Core {
     );
   }
 
+  // « Moniteur de ressources » (task 12.4): read only once the app asked, and while its entry is on.
+  let monitorWanted = false;
+  let monitor: { monitor: ResourceMonitor; dispose(): void } | null = null;
+  function followMonitor(): void {
+    const on = monitorWanted && plugins.get('resource-monitor') !== undefined && plugins.isEnabled('resource-monitor');
+    if (on && !monitor) {
+      const probes = deps.resourceProbes;
+      const windows = probes ? null : createWindowsProbes({ serverPid: () => supervisor.serverPid, ...(deps.spawn ? { spawn: deps.spawn } : {}) });
+      const created = new ResourceMonitor({
+        ...(probes?.intervalMs ? { intervalMs: probes.intervalMs } : {}),
+        system: probes?.system ?? createNodeSystemProbe(),
+        ...(probes?.gpu ? { gpu: probes.gpu } : windows ? { gpu: windows.gpu } : {}),
+        ...(probes?.serverProcess ? { serverProcess: probes.serverProcess } : windows ? { serverProcess: windows.serverProcess } : {}),
+      });
+      created.onSample((sample) => deps.resourcesChanged?.(sample));
+      created.start();
+      monitor = { monitor: created, dispose: () => windows?.dispose() };
+    } else if (!on && monitor) {
+      monitor.monitor.stop();
+      monitor.dispose();
+      monitor = null;
+    }
+  }
+
   // ── The conversations ──
   // The disk budget of the KV states: 20 GiB, never more than a quarter of the free space (read once).
   let kvBudget = defaultBudgetBytes(Number.MAX_SAFE_INTEGER);
@@ -1373,6 +1432,8 @@ export function createCore(deps: CoreDeps): Core {
       return permissions.evaluate({ tool, input, mode, ...(projectId ? { projectId } : {}) });
     },
   });
+  // The monitor follows its entry, switched on or off (task 12.4).
+  plugins.onChange(() => followMonitor());
   // The keys of the online search engines: said kept or not, never handed back (task 11.3).
   const searchKeysKept = async (): Promise<Record<KeyedSearch, boolean>> => ({
     brave: await vault.has('search-brave'),
@@ -1494,6 +1555,15 @@ export function createCore(deps: CoreDeps): Core {
   ): Promise<TurnResult> {
     // The first turn starts the MCP servers, in the background: their tools are told at the next turn (task 10.5).
     mcp.startAll();
+    // Its own settings, while « Réglages de conversation » is on (task 12.4): its temperature, its reasoning.
+    const own = await conversationStore.get(conversationId);
+    if (own && plugins.isEnabled('conversation-settings', own.projectId)) {
+      input = {
+        ...input,
+        ...(own.temperature !== undefined ? { temperature: own.temperature } : {}),
+        ...(own.thinking !== undefined && input.thinking === undefined ? { thinking: own.thinking } : {}),
+      };
+    }
     const windowTools: ToolDef[] = options.clientTools.map((tool) => ({
       name: tool.name,
       description: typeof tool.description === 'string' ? tool.description : '',
@@ -1890,6 +1960,8 @@ export function createCore(deps: CoreDeps): Core {
     },
     // The conversation in the slot is saved before the engine stops: its memory survives the restart.
     async stop() {
+      monitorWanted = false;
+      followMonitor();
       await conversations
         .flush()
         .catch((error: unknown) =>
@@ -1906,6 +1978,13 @@ export function createCore(deps: CoreDeps): Core {
     tools,
     permissions,
     plugins,
+    resources: {
+      start() {
+        monitorWanted = true;
+        followMonitor();
+      },
+      last: () => monitor?.monitor.last() ?? null,
+    },
     addedPlugins,
     extensions: {
       async try(conversationId, id, rev) {
@@ -2153,6 +2232,23 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     releaseMemory: (id) => conversations.release(id),
+
+    conversationSettings: {
+      async get(conversationId) {
+        const meta = await conversationStore.get(conversationId);
+        if (!meta) throw new Error(`There is no conversation ${conversationId}.`);
+        return settingsView(meta);
+      },
+      async set(conversationId, changes) {
+        if (changes.temperature !== undefined && changes.temperature !== null && !(changes.temperature >= 0 && changes.temperature <= 2)) {
+          throw new Error('The temperature goes from 0 to 2.');
+        }
+        if (changes.contextCap !== undefined && changes.contextCap !== null && !(Number.isInteger(changes.contextCap) && changes.contextCap >= 512)) {
+          throw new Error('The context cap is a whole number of tokens, 512 at least.');
+        }
+        return settingsView(await conversationStore.settle(conversationId, changes));
+      },
+    },
 
     async diskCheck(conversationId) {
       if (!loaded) return null;

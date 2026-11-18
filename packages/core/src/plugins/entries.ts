@@ -30,6 +30,26 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
     effects: [{ effect: 'execute', what: { en: 'the scripts of the project', fr: 'les scripts du projet' } }],
   },
   {
+    id: 'conversation-settings',
+    name: { en: 'Conversation settings', fr: 'Réglages de conversation' },
+    version: '1.0.0',
+    description: {
+      en: 'Temperature, reasoning and context cap, conversation by conversation.',
+      fr: 'Température, réflexion et plafond de contexte, conversation par conversation.',
+    },
+    effects: [],
+  },
+  {
+    id: 'resource-monitor',
+    name: { en: 'Resource monitor', fr: 'Moniteur de ressources' },
+    version: '1.0.0',
+    description: {
+      en: 'Processor, memory and graphics card, live.',
+      fr: 'Processeur, mémoire et carte graphique, en direct.',
+    },
+    effects: [],
+  },
+  {
     id: 'auto-titles',
     name: { en: 'Automatic titles', fr: 'Titres automatiques' },
     version: '1.0.0',

@@ -153,6 +153,8 @@ export interface SubagentTurnInput {
   resume?: true;
   tools: TurnTools;
   thinking?: boolean;
+  /** Its conversation's temperature (task 12.4). */
+  temperature?: number;
 }
 
 export interface TurnInput {
@@ -164,6 +166,8 @@ export interface TurnInput {
   resume?: true;
   messageId?: string;
   thinking?: boolean;
+  /** The conversation's own temperature (task 12.4); none: the engine's. */
+  temperature?: number;
   /**
    * A branch first, after this entry: the last answer asked again (`retry`),
    * or a message changed (`edit`). What followed stays in the branch it was in.
@@ -1065,6 +1069,7 @@ export class ConversationEngine {
         prompt: frozen + opening,
         opening,
         thinking: input.thinking ?? true,
+        ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
         tools: input.tools,
         sink,
         ...(signal ? { signal } : {}),
@@ -1457,6 +1462,7 @@ export class ConversationEngine {
             prompt: frozen + userRendered + opening,
             opening,
             thinking: input.thinking ?? true,
+            ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
             ...(input.tools ? { tools: input.tools } : {}),
             sink,
             ...(signal ? { signal } : {}),
@@ -1500,6 +1506,8 @@ export class ConversationEngine {
     prompt: string;
     opening: string;
     thinking: boolean;
+    /** The conversation's own temperature (task 12.4). */
+    temperature?: number;
     tools?: TurnTools;
     sink: (event: TurnEvent) => void;
     signal?: AbortSignal;
@@ -1540,7 +1548,7 @@ export class ConversationEngine {
           idSlot: slot.id,
           cachePrompt: true,
           returnProgress: true,
-          sampling: { stop: [...family.stop] },
+          sampling: { stop: [...family.stop], ...(run.temperature !== undefined ? { temperature: run.temperature } : {}) },
           ...(grammar ?? {}),
           ...(signal ? { signal } : {}),
         })) {
