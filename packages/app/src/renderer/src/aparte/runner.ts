@@ -23,6 +23,8 @@ export interface ConversationRunnerOptions {
   branch?: () => { branch: string; base: string } | null;
   /** A new conversation's service and model, picked before its first message (the core takes them at its first turn only). */
   service?: () => { provider: string; model: string } | null;
+  /** A new conversation without a project is a discussion (task 9.7; the core takes it at its first turn only). */
+  kind?: () => 'discussion' | null;
   /** Tests only. */
   fetch?: typeof globalThis.fetch;
 }
@@ -42,6 +44,7 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
         query.set('branch', branch.branch);
         query.set('base', branch.base);
       }
+      if (options.kind?.() === 'discussion') query.set('kind', 'discussion');
       const service = options.service?.();
       if (service) {
         query.set('provider', service.provider);

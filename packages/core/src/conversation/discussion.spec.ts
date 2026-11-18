@@ -64,6 +64,8 @@ describe('a discussion (task 9.7)', () => {
     const prompt = prompts.at(-1)!;
     expect(prompt).toContain('web_fetch');
     expect(prompt).not.toMatch(/read_file|list_files|edit_file|write_file|run_command|run_subagent/);
+    // No note of the code's modes either: a discussion has no plan to present nor change to ask.
+    expect(prompt).not.toMatch(/update_plan|\[mode\]/);
   });
 
   it('« Travailler dans un projet… »: the tools, the folders and the mode told after the frozen prompt, served by the cache', async () => {

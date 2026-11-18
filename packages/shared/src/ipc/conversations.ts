@@ -85,6 +85,8 @@ export const conversationStatusSchema = z.object({
   unread: z.boolean().optional(),
   /** On a service, not the built-in engine (task 9.3): which, and its model. */
   service: z.object({ id: z.string(), label: z.string(), model: z.string() }).optional(),
+  /** A discussion, or a code conversation (task 9.7). */
+  kind: z.enum(['code', 'discussion']).optional(),
 });
 export type ConversationStatusView = z.infer<typeof conversationStatusSchema>;
 
@@ -247,3 +249,11 @@ export type ContextFullView = z.infer<typeof contextFullSchema>;
 
 /** The context nearly full — from 90 % —, with what compacting would take; null below. */
 export const conversationsContext = defineChannel('conversations.context', z.object({ id: conversationId }), contextFullSchema.nullable());
+
+
+/** « Travailler dans un projet… » (task 9.7): a discussion becomes a code conversation of the project. */
+export const conversationsAttachProject = defineChannel(
+  'conversations.attachProject',
+  z.object({ id: z.string().min(1).max(128), projectId: z.string().min(1).max(128) }),
+  z.void(),
+);

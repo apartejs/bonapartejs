@@ -36,6 +36,7 @@ import {
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  conversationsAttachProject,
   type ConversationDocument,
   type ConversationMemoryView,
 } from '@aparte/bonaparte-shared';
@@ -53,6 +54,7 @@ interface ConversationCore {
   conversations: Pick<Core['conversations'], 'open' | 'status' | 'markSeen'>;
   readAgain: Core['readAgain'];
   serviceOf: Core['serviceOf'];
+  attachProject: Core['attachProject'];
   removeConversation: Core['removeConversation'];
   branchOf: Core['branchOf'];
   prOf: Core['prOf'];
@@ -156,6 +158,7 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   });
   // The core holds the engine while it reads.
   ipc.handle(conversationsReadAgain, ({ id }) => core.readAgain(id));
+  ipc.handle(conversationsAttachProject, ({ id, projectId }) => core.attachProject(id, projectId));
   ipc.handle(conversationsStatus, async ({ ids }) => {
     const found = await Promise.all(
       ids.map(async (id) => {
@@ -175,7 +178,7 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
         // On a service (task 9.3): which, and its model — the window shows no memory and no gauge for it.
         const service = await core.serviceOf(id).catch(() => undefined);
         const onService = service && meta ? { service: { id: service.id, label: service.label, model: meta.modelId } } : {};
-        return [id, { projectId: meta?.projectId ?? null, ...status, ...counted, ...onService }] as const;
+        return [id, { projectId: meta?.projectId ?? null, ...status, ...counted, ...onService, ...(meta ? { kind: meta.kind } : {}) }] as const;
       }),
     );
     return Object.fromEntries(found.filter((entry) => entry !== null));

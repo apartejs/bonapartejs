@@ -1370,7 +1370,8 @@ export class ConversationEngine {
       const delta = renderInventoryDelta(lastToldWindowTools(journal.entries()), windowTools);
       if (delta) await journal.append({ kind: 'delta', delta: { ...delta, windowTools }, rendered: family.renderSystemNote(delta.text) });
     }
-    if (!input.resume) {
+    // A discussion has no mode to be told (task 9.7): nothing to change, no plan to present.
+    if (!input.resume && meta.kind !== 'discussion') {
       // The mode the calls are decided in, told when it is not the one the model last read (Répétition until told).
       const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
       const told = lastToldMode(journal.entries());

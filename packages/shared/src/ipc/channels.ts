@@ -38,6 +38,7 @@ import {
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  conversationsAttachProject,
 } from './conversations.js';
 import {
   engineApplySettings,
@@ -86,6 +87,7 @@ export const CHANNELS = [
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  conversationsAttachProject,
   pluginsInvoke,
   pluginsAck,
   engineState,

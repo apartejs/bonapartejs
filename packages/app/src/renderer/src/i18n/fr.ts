@@ -240,6 +240,7 @@ export const fr: Messages = {
     expand: 'Déplier la barre latérale',
     expandTip: 'Déplier · Ctrl B',
     newConversation: 'Nouvelle conversation',
+    newDiscussion: 'Nouvelle discussion',
     search: 'Rechercher',
     searchLabel: 'Rechercher dans les conversations',
     searchTip: 'Rechercher · Ctrl K',
@@ -452,6 +453,7 @@ export const fr: Messages = {
     archive: 'Archiver',
     delete: 'Supprimer…',
     titleField: 'Titre de la conversation',
+    attach: 'Travailler dans un projet…',
     deleteQuestion: (title) => `Supprimer « ${title} » ?`,
     deleteWhat:
       'Ses messages, sa mémoire et les copies des fichiers gardées pour revenir en arrière partent avec elle. Les fichiers du projet restent tels qu’ils sont.',
@@ -685,6 +687,15 @@ export const fr: Messages = {
     hintOpen: 'Entrée pour ouvrir',
     hintClose: 'Échap pour fermer',
     scope: 'Cherche dans les titres, les messages et les fichiers',
+  },
+  attachProject: {
+    title: 'Travailler dans un projet',
+    lede: 'La discussion continue dans le projet : l’agent pourra lire et modifier ses fichiers, selon son mode. Rien n’est relu.',
+    none: 'Aucun projet pour l’instant : crée-en un.',
+    newProject: 'Nouveau projet…',
+    cancel: 'Annuler',
+    confirm: 'Travailler ici',
+    failed: 'La discussion n’a pas pu passer dans ce projet.',
   },
   newProject: {
     open: 'Nouveau projet',

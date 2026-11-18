@@ -32,9 +32,11 @@ test('the default mode, the files always asked and the network, kept by the core
   await page.getByRole('button', { name: 'Retirer Dockerfile' }).click();
   await expect.poll(() => settingsOf(dataDir)).toMatchObject({ alwaysAsk: [] });
 
-  // A new conversation without a project starts in the default mode.
+  // A new project starts in the default mode (a conversation without a project is a discussion, task 9.7).
   await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Conversations' }).click();
-  await expect(chat(page).modeShown).toHaveText('Plume');
+  await page.getByRole('button', { name: 'Nouveau projet' }).click();
+  const made = page.getByRole('dialog', { name: 'Nouveau projet' });
+  await expect(made.getByRole('radio', { name: /Plume/ })).toBeChecked();
 });
 
 test('a project opened from « Permissions »: its folders, its instructions, its own mode and list', async ({ launch }) => {

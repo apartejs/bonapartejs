@@ -132,6 +132,7 @@ export {
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  conversationsAttachProject,
   inboxSchema,
 } from './ipc/conversations.js';
 export type { ConversationCard } from './ipc/conversations.js';

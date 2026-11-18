@@ -26,6 +26,8 @@ export interface NewProjectProps {
   messages: Messages;
   onClose(): void;
   onCreated(project: ProjectView): void;
+  /** The mode it proposes: « Mode par défaut » of the settings. */
+  defaultMode?: PlayMode;
 }
 
 /** What the folder holds, in the person's words: one line per thing found. */
@@ -38,7 +40,7 @@ function foundLines(facts: ProjectFactsView, words: Messages['newProject']): str
   return lines;
 }
 
-export function NewProject({ open, messages, onClose, onCreated }: NewProjectProps) {
+export function NewProject({ open, messages, onClose, onCreated, defaultMode = 'repetition' }: NewProjectProps) {
   const words = messages.newProject;
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -58,12 +60,13 @@ export function NewProject({ open, messages, onClose, onCreated }: NewProjectPro
       setFacts(null);
       setName('');
       setOthers([]);
-      setMode('repetition');
+      // « Mode par défaut » (Réglages, Permissions) is the mode a new project starts with (task 9.7).
+      setMode(defaultMode);
       element.showModal();
     } else if (!open && element.open) {
       element.close();
     }
-  }, [open]);
+  }, [open, defaultMode]);
 
   const choose = async (): Promise<void> => {
     const chosen = await bridge.invoke(projectsChooseFolder, undefined);

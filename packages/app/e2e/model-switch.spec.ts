@@ -121,13 +121,15 @@ test('« Brancher sur ce modèle » goes on in a new conversation; the original 
 test('« Brancher sur ce modèle »: the original, opened again, says its re-reading for the model that runs (review of phase 7)', async ({ launch }) => {
   const { page } = await launch({ managed: { models: MODELS } });
   await started(page);
+  const rows = conversationList(page).list.locator('[data-conv-id]');
+  await expect(rows).toHaveCount(1);
+  const original = await rows.first().getAttribute('data-conv-id');
   await pick(page, 'qwen-e2e');
   await page.getByRole('dialog', { name: 'Passer à qwen-e2e ?' }).getByRole('button', { name: 'Brancher sur ce modèle' }).click();
   await expect.poll(() => loaded(page), { timeout: 20_000 }).toBe('qwen-e2e');
-  const rows = conversationList(page).list.locator('[data-conv-id]');
   await expect(rows).toHaveCount(2);
-  // The newest is the copy, shown; the original is the other one.
-  await rows.nth(1).click();
+  // The copy is shown; the original, opened again by its id (both say « Bonjour »), whatever the list's order.
+  await conversationList(page).list.locator(`[data-conv-id="${original}"]`).click();
   await expect(page.locator('.memory-banner')).toContainText('autre modèle', { timeout: 10_000 });
 });
 

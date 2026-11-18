@@ -86,6 +86,11 @@ export interface LaunchOptions {
    * `ollama`, no key): what it answers, its models.
    */
   service?: Omit<FakeOpenAIServerOptions, 'key'>;
+  /**
+   * A project on the app's home folder, made before the launch (default): a new conversation works in it, as a
+   * code conversation that may change files. `false`: no project — a new conversation is a discussion (task 9.7).
+   */
+  project?: boolean;
 }
 
 /** One completion the managed engine was asked for. */
@@ -216,6 +221,19 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       .catch(() => ({}));
     const merged = { ...written, ...options.settings };
     const settings = Object.keys(merged).length > 0 ? { settings: merged } : {};
+    // A code conversation needs a project (task 9.7): the home folder's, unless the test asks for none.
+    const projectsFile = join(dataDir, 'projects.json');
+    const projectsThere = await access(projectsFile).then(
+      () => true,
+      () => false,
+    );
+    if (options.project !== false && !projectsThere) {
+      const now = new Date().toISOString();
+      await writeFile(
+        projectsFile,
+        JSON.stringify({ projects: [{ id: 'maison', name: 'maison', roots: [home], defaultMode: 'repetition', createdAt: now, updatedAt: now }] }),
+      );
+    }
     if (options.service) {
       service = await startFakeOpenAIServer(options.service);
       await writeFile(

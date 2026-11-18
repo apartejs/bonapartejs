@@ -219,6 +219,8 @@ export interface Messages {
     expand: string;
     expandTip: string;
     newConversation: string;
+    /** « Nouvelle discussion » (task 9.7): a conversation without a project. */
+    newDiscussion: string;
     search: string;
     searchLabel: string;
     searchTip: string;
@@ -432,6 +434,8 @@ export interface Messages {
     archive: string;
     delete: string;
     titleField: string;
+    /** A discussion goes on in a project (task 9.7). */
+    attach: string;
     deleteQuestion(title: string): string;
     deleteWhat: string;
     cancel: string;
@@ -682,6 +686,16 @@ export interface Messages {
     scope: string;
   };
   /** The dialog « Nouveau projet » (board « Nouveau projet »), and its opener. */
+  /** « Travailler dans un projet » (task 9.7). */
+  attachProject: {
+    title: string;
+    lede: string;
+    none: string;
+    newProject: string;
+    cancel: string;
+    confirm: string;
+    failed: string;
+  };
   newProject: {
     open: string;
     /** The project new conversations start in. */

@@ -29,6 +29,7 @@ import {
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  conversationsAttachProject,
   providersList,
   providersModels,
   providersSwitch,
@@ -66,6 +67,7 @@ import { useCompaction } from './chat/useCompaction';
 import { useModelSwitch } from './chat/useModelSwitch';
 import { catalogueOf, showCatalogue, showServices, type ServiceCatalogue } from './aparte/model-catalogue';
 import { ServiceSwitchDialog, type ServiceSwitchAsking } from './dialogs/ServiceSwitchDialog';
+import { AttachProject } from './dialogs/AttachProject';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
 import { ServiceDownCard } from './chat/ServiceDownCard';
@@ -218,6 +220,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   }, []);
   // The mode a conversation without a project starts in (Settings, Permissions).
   const defaultMode = useRef<PlayMode>('repetition');
+  // The same, for the dialog of a new project, which proposes it (task 9.7).
+  const [defaultModeShown, setDefaultModeShown] = useState<PlayMode>('repetition');
   useEffect(() => {
     bridge
       .invoke(settingsGet, { key: 'defaultMode' })
@@ -225,6 +229,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         const parsed = playModeOf(value);
         if (!parsed) return;
         defaultMode.current = parsed;
+        setDefaultModeShown(parsed);
         // Read after the first conversation was set up: a new one, outside a project, takes it now.
         if (open.current === null && !project.current) {
           setMode(startingMode(parsed));
@@ -240,6 +245,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       if (key === 'sidebarGrouping') setGrouping(value === 'single' ? 'single' : 'project');
       if (key === 'defaultMode') {
         defaultMode.current = playModeOf(value) ?? defaultMode.current;
+        setDefaultModeShown(defaultMode.current);
         // A new conversation, nothing said yet, outside a project: it starts in the new default.
         if (open.current === null && !project.current) {
           setMode(startingMode(defaultMode.current));
@@ -320,6 +326,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     () =>
       createConversationRunner({
         service: () => chosenService.current,
+        // Without a project, a discussion (task 9.7).
+        kind: () => (project.current ? null : 'discussion'),
         mode: () => chosen.current,
         picked: () => picked.current,
         project: () => project.current?.id ?? null,
@@ -460,6 +468,36 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     [],
   );
   const newConversation = (): void => goTo(null);
+  // « Nouvelle discussion » (task 9.7): a new conversation outside every project.
+  const discussionAsked = useRef(false);
+  const newDiscussion = (): void => {
+    discussionAsked.current = true;
+    project.current = null;
+    setActiveProject(null);
+    goTo(null);
+  };
+  // « Travailler dans un projet… » (task 9.7): the discussion shown goes on in a project, nothing read again.
+  const [attaching, setAttaching] = useState(false);
+  const [attachBusy, setAttachBusy] = useState(false);
+  const [attachFailed, setAttachFailed] = useState(false);
+  const attachAfterCreate = useRef<string | null>(null);
+  const attachTo = (id: string, projectId: string): void => {
+    setAttachBusy(true);
+    setAttachFailed(false);
+    void bridge
+      .invoke(conversationsAttachProject, { id, projectId })
+      .then(async () => {
+        setAttaching(false);
+        bornIn.current.set(id, projectId);
+        setAsked((count) => count + 1);
+        readProjects();
+        // Its mode is the project's now: the switch shows it.
+        const now = await bridge.invoke(modesGet, { id }).catch(() => null);
+        if (now) setMode(now.mode);
+      })
+      .catch(() => setAttachFailed(true))
+      .finally(() => setAttachBusy(false));
+  };
   // The list drives the deck, not a chat: the page shows the chat of the conversation picked.
   useEffect(() => {
     const picked = (event: Event): void => {
@@ -548,8 +586,16 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
     if (!conversationId) {
       const fresh = projects.find((candidate) => candidate.id === project.current?.id);
       if (fresh) project.current = fresh;
+      // Nothing open (the launch, a conversation deleted): a new conversation starts in the project made last —
+      // unless the person asked for a discussion (task 9.7), or a project just made is not listed yet.
+      else if (!project.current && !discussionAsked.current && projects.length > 0) {
+        const last = [...projects].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]!;
+        project.current = last;
+        setActiveProject(last);
+      }
       return;
     }
+    discussionAsked.current = false;
     const id = statuses[conversationId]?.projectId ?? bornIn.current.get(conversationId) ?? null;
     const found = projects.find((candidate) => candidate.id === id) ?? null;
     project.current = found;
@@ -776,6 +822,10 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // The conversation shown on a service: the picker shows its model; a new conversation after it starts there too,
   // as the picker shows. One on the built-in engine brings the picker — and the next new one — back to the engine.
   const shownService = conversationId ? (statuses[conversationId]?.service ?? null) : null;
+  // A discussion (task 9.7): what the core says once it has begun; before, a new conversation without a project.
+  const shownBegun = conversationId ? (handles.get(deck.shown)?.getMessages().length ?? 0) > 0 : false;
+  const shownKind = conversationId ? statuses[conversationId]?.kind : undefined;
+  const discussion = shownBegun && shownKind ? shownKind === 'discussion' : !activeProject && !(conversationId && projectOf(conversationId));
   downOn.current = { conversationId, service: shownService };
   useEffect(() => {
     if (!conversationId) return;
@@ -946,6 +996,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           grouping={grouping}
           onCollapse={toggleSidebar}
           onNewConversation={newConversation}
+          onNewDiscussion={newDiscussion}
           onSearch={() => setSearching(true)}
           onNewProject={() => setCreatingProject(true)}
           inbox={{
@@ -986,6 +1037,22 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
         busy={rewinding.busy}
         onCancel={rewinding.cancel}
         onRewind={rewinding.rewind}
+      />
+      <AttachProject
+        open={attaching}
+        messages={messages}
+        projects={projects}
+        busy={attachBusy}
+        failed={attachFailed}
+        onCancel={() => {
+          if (!attachBusy) setAttaching(false);
+        }}
+        onAttach={(projectId) => conversationId && attachTo(conversationId, projectId)}
+        onNewProject={() => {
+          attachAfterCreate.current = conversationId;
+          setAttaching(false);
+          setCreatingProject(true);
+        }}
       />
       <ServiceSwitchDialog
         messages={messages}
@@ -1061,9 +1128,17 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       <NewProject
         open={creatingProject}
         messages={messages}
+        defaultMode={defaultModeShown}
         onClose={() => setCreatingProject(false)}
         onCreated={(made) => {
           setCreatingProject(false);
+          // Made from « Travailler dans un projet… »: the discussion goes on in it.
+          const waiting = attachAfterCreate.current;
+          attachAfterCreate.current = null;
+          if (waiting) {
+            attachTo(waiting, made.id);
+            return;
+          }
           readProjects();
           project.current = made;
           setActiveProject(made);
@@ -1116,6 +1191,14 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
           void remove(openConversation.id);
           setDeck((was) => forget(was, openConversation.id));
         }}
+        {...(discussion && openConversation
+          ? {
+              onAttach: () => {
+                setAttachFailed(false);
+                setAttaching(true);
+              },
+            }
+          : {})}
         counts={
           changeCards.length > 0 && changeCounts.added + changeCounts.removed > 0
             ? { ...changeCounts, onOpen: () => setPanes((was) => opened(was, 'changes')) }
@@ -1151,7 +1234,8 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             />
           ) : null
         }
-        panels={<PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
+        // A discussion has no code panes (task 9.7).
+        panels={discussion ? undefined : <PanelToggles messages={messages} open={panes} waiting={changesWaiting} onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))} />}
       />
       <div className="aparte-app-shell__main bonaparte-main">
       <div className="bonaparte-conversation" hidden={inboxOpen}>
@@ -1256,6 +1340,7 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             onPickModel={modelSwitch.ask}
             opener={pickerOpener}
             service={shownService ? { id: shownService.id, model: shownService.model } : chosenService.current ? { id: chosenService.current.provider, model: chosenService.current.model } : null}
+            discussion={discussion}
             onPickService={(provider, model, revert) => {
               const shown = handles.get(deck.shown);
               const begun = (shown?.getMessages().length ?? 0) > 0;

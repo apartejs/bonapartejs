@@ -45,6 +45,8 @@ export interface SidebarProps {
   onNewConversation(): void;
   onSearch(): void;
   onNewProject(): void;
+  /** « Nouvelle discussion » (task 9.7). */
+  onNewDiscussion?(): void;
   onSettings(): void;
   /** « À traiter » (task 8.4): what waits for the person, counted; the page open. */
   inbox: { count: number; open: boolean; onOpen(): void };
@@ -182,16 +184,16 @@ export function Sidebar(props: SidebarProps) {
                 />
               ))}
             </section>
-            {discussions.length > 0 ? (
-              <section role="group" aria-label={words.discussions} className="bonaparte-section">
-                <div className="bonaparte-section__head">
-                  <h2 className="bonaparte-section__title" aria-hidden="true">
-                    {words.discussions}
-                  </h2>
-                </div>
-                <List items={discussions} activeId={activeId} flat words={messages} />
-              </section>
-            ) : null}
+            <section role="group" aria-label={words.discussions} className="bonaparte-section">
+              <div className="bonaparte-section__head">
+                <h2 className="bonaparte-section__title" aria-hidden="true">
+                  {words.discussions}
+                </h2>
+                {/* A conversation without a project (task 9.7): the web and what it knows, no file. */}
+                {props.onNewDiscussion ? <TipButton label={words.newDiscussion} icon="plus" onClick={props.onNewDiscussion} /> : null}
+              </div>
+              {discussions.length > 0 ? <List items={discussions} activeId={activeId} flat words={messages} /> : null}
+            </section>
           </>
         )}
       </div>

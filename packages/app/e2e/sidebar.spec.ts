@@ -24,7 +24,7 @@ async function ask(page: Page, text: string): Promise<void> {
 test('the conversations sit under their project, the others under « Discussions »', async ({ launch }) => {
   const folder = await mkdtemp(join(tmpdir(), 'spanwise-'));
   try {
-    const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    const { page } = await launch({ project: false, engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
     await ask(page, 'Hors projet');
 
     const nav = page.getByRole('navigation', { name: 'Projets et conversations', exact: true });

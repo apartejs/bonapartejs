@@ -42,9 +42,11 @@ export interface ComposerToolbarProps {
   onPickService?(provider: string | null, model: string, revert: () => void): void;
   /** The conversation shown runs on a service: its model is the one shown, and no gauge is drawn. */
   service?: { id: string; model: string } | null;
+  /** A discussion (task 9.7): no mode to choose — it changes nothing. */
+  discussion?: boolean;
 }
 
-export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickModel, opener, onPickService, service }: ComposerToolbarProps) {
+export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickModel, opener, onPickService, service, discussion }: ComposerToolbarProps) {
   const where = useRef(scope);
   where.current = scope;
   const selector = useRef<HTMLElement>(null);
@@ -97,7 +99,7 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
   const elementProps = useMemo(() => ({ triggers }), [triggers]);
   return (
     <>
-      <ModeSwitch mode={mode} messages={messages} onChange={onMode} />
+      {discussion ? null : <ModeSwitch mode={mode} messages={messages} onChange={onMode} />}
       <AparteUi name="aparte-triggers" props={elementProps} />
       {engine.mode === 'remote' ? (
         // A server that already runs serves its own model: nothing to choose, its name said.
