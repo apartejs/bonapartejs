@@ -129,7 +129,7 @@ the built-in engine — llama.cpp, the card, the models found, the models
 recommended for the card (Google's Gemma 4 and Qwen's Qwen 3, downloaded on a
 click and verified), the context and its gauge — or a service, tested then
 connected. `bonaparte doctor` says what the machine has for the built-in
-engine. Phase 10 is done (its real smoke waits for Paul): the browser, the
+engine. Phase 10 is done, its MCP smoke green on a real model: the browser, the
 web search and MCP. A pane « Navigateur » shows pages in native views of
 the main process — tabs, the address, « Ordinateur » or « Téléphone » —
 and the agent opens, reads, screenshots and acts on the tab the person
