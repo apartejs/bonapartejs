@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import type { PluginStatus } from '@aparte/bonaparte-shared';
 import type { PluginHost } from './host.js';
 import type { PluginAddRequest, PluginInstaller, PreviewResult } from './install.js';
+import type { Extension } from './extensions.js';
 import type { PluginPort } from './remote.js';
 
 export interface AddedPluginsOptions {
@@ -73,6 +74,41 @@ export class AddedPlugins {
     await this.host.forget(id);
     await this.options.installer.remove(id);
     await (await this.host.keptState()).forget(id);
+  }
+
+  /**
+   * « Essayer dans cette conversation » or `extension_run` (task 11.4): a revision made in a conversation runs in
+   * its own process, its tools seen by that conversation only. A plugin added of the same id is not taken over.
+   */
+  async tryExtension(extension: Extension): Promise<PluginStatus> {
+    const known = this.host.get(extension.id);
+    if (known && (known.builtin || this.host.status().find((one) => one.id === extension.id)?.trial === undefined)) {
+      throw new Error(`A plugin ${extension.id} is already added: give this one another id to try it.`);
+    }
+    await this.host.forget(extension.id);
+    this.host.add(extension.manifest, { builtin: false, dir: extension.dir });
+    this.host.trialIn(extension.id, extension.conversationId);
+    return this.host.activateRemote(extension.id, () => this.options.start({ pluginId: extension.id, dir: extension.dir }));
+  }
+
+  /** The trial ends: all it added goes. */
+  async stopTrial(id: string): Promise<void> {
+    if (this.host.status().find((one) => one.id === id)?.trial === undefined) return;
+    await this.host.forget(id);
+  }
+
+  /** « Installer »: the revision becomes a plugin added like the others, said to come from its conversation. */
+  async installExtension(extension: Extension, title?: string): Promise<PluginStatus> {
+    await this.stopTrial(extension.id);
+    const read = await this.options.installer.preview({ kind: 'folder', path: extension.dir });
+    if (!read.ok) throw new Error(read.error);
+    await this.host.forget(extension.id);
+    const done = await this.options.installer.install(read.preview.stagingId);
+    const state = await this.host.keptState();
+    await state.record(done.id, { kind: 'conversation', conversationId: extension.conversationId, ...(title ? { title } : {}) }, (this.options.now?.() ?? new Date()).toISOString());
+    await state.setOff(done.id, false);
+    this.host.add(done.manifest, { builtin: false, dir: done.dir });
+    return this.activate(done.id);
   }
 
   /** Where each came from is asked for a newer version: found, it is proposed — nothing is changed. */

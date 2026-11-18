@@ -162,3 +162,50 @@ describe('the plugins the person adds (task 11.1)', () => {
     await expect(added.remove('revue-pr')).rejects.toThrow(/built-in/);
   });
 });
+
+describe('a plugin made in a conversation, tried and installed (task 11.4)', () => {
+  async function extensionOf(data: string) {
+    const { ExtensionStore } = await import('./extensions.js');
+    const store = new ExtensionStore({ dataDir: data, env: () => ({ ...process.env }) as Record<string, string> });
+    const defined = await store.define('c1', {
+      manifest: {
+        id: 'changelog',
+        name: 'Changelog',
+        version: '0.1.0',
+        effects: [{ effect: 'read', what: 'nothing' }],
+        contributes: { tools: [{ name: 'today', description: 'The commits of the day.', effect: 'read' }] },
+      },
+      code: "export default { activate(ctx) { ctx.registerToolHandler('today', async () => ({ content: '3 commits' })); } };\n",
+    });
+    if (!defined.ok) throw new Error(defined.error);
+    return defined.extension;
+  }
+
+  it('tried, its tools are seen by its conversation only; stopped, they go', async () => {
+    const data = await temp('bp-added-data-');
+    const { registry, host, added } = await rig(data);
+    const extension = await extensionOf(data);
+    expect(await added.tryExtension(extension)).toMatchObject({ id: 'changelog', active: true, trial: 'c1' });
+    const tool = registry.get('plugin__changelog__today')!.def;
+    expect(host.visibleTo(undefined, 'c1')(tool)).toBe(true);
+    expect(host.visibleTo(undefined, 'c2')(tool)).toBe(false);
+    await added.stopTrial('changelog');
+    expect(registry.get('plugin__changelog__today')).toBeUndefined();
+  });
+
+  it('installed, it is a plugin like the others — said to come from its conversation — and comes back after a restart', async () => {
+    const data = await temp('bp-added-data-');
+    const { added } = await rig(data);
+    const extension = await extensionOf(data);
+    await added.tryExtension(extension);
+    expect(await added.installExtension(extension, 'Une commande /changelog')).toMatchObject({
+      id: 'changelog',
+      active: true,
+      source: { kind: 'conversation', conversationId: 'c1', title: 'Une commande /changelog' },
+    });
+    expect(added.host.status().find((one) => one.id === 'changelog')?.trial).toBeUndefined();
+    const again = await rig(data);
+    await again.added.start();
+    expect(again.registry.get('plugin__changelog__today')).toBeDefined();
+  });
+});

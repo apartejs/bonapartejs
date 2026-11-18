@@ -133,6 +133,8 @@ export class PluginHost {
   private readonly modules = new Map<string, PluginNodeModule>();
   /** What is switched off, for the app or a project: kept in `config/plugins.json` when a state is given. */
   private state: PluginState | null;
+  /** A plugin made in a conversation, tried there and there only (task 11.4): that conversation. */
+  private readonly trials = new Map<string, string>();
   /** Which plugin owns a tool of the registry. */
   private readonly owners = new Map<string, string>();
   private readonly log: (message: string) => void;
@@ -276,6 +278,7 @@ export class PluginHost {
     await this.teardown(id);
     this.plugins.delete(id);
     this.modules.delete(id);
+    this.trials.delete(id);
   }
 
   async deactivateAll(): Promise<void> {
@@ -330,13 +333,25 @@ export class PluginHost {
     return !(this.state?.isOff(id, projectId) ?? false);
   }
 
-  /** Which tools a conversation of this project sees: a plugin its project turned off is not there. */
-  visibleTo(projectId: string | undefined): (def: ToolDef) => boolean {
+  /**
+   * Which tools a conversation sees: a plugin its project turned off is not there, nor one tried in another
+   * conversation (task 11.4).
+   */
+  visibleTo(projectId: string | undefined, conversationId?: string): (def: ToolDef) => boolean {
     return (def) => {
       if (def.source !== 'plugin' && def.source !== 'extension') return true;
       const owner = this.owners.get(def.name);
-      return owner === undefined || this.isEnabled(owner, projectId);
+      if (owner === undefined) return true;
+      const trial = this.trials.get(owner);
+      if (trial !== undefined && trial !== conversationId) return false;
+      return this.isEnabled(owner, projectId);
     };
+  }
+
+  /** A plugin made in a conversation is tried there only — or, null, no longer a trial (task 11.4). */
+  trialIn(id: string, conversationId: string | null): void {
+    if (conversationId) this.trials.set(id, conversationId);
+    else this.trials.delete(id);
   }
 
   status(projectId?: string): PluginStatus[] {
@@ -361,6 +376,7 @@ export class PluginHost {
       ...(added?.source ? { source: added.source } : {}),
       ...(added?.update ? { update: added.update } : {}),
       ...(!plugin.builtin && manifest?.entry.view ? { view: manifest.entry.view } : {}),
+      ...(this.trials.has(plugin.id) ? { trial: this.trials.get(plugin.id)! } : {}),
     };
   }
 

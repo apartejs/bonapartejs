@@ -1321,8 +1321,8 @@ export function createCore(deps: CoreDeps): Core {
     return project?.roots[0] ? { root: project.roots[0], name: project.name } : null;
   }
   // What a conversation of a project sees: the plugins it keeps, the MCP servers of the app and its own.
-  const visibleTo = (projectId: string | undefined) => {
-    const byPlugins = plugins.visibleTo(projectId);
+  const visibleTo = (projectId: string | undefined, conversationId?: string) => {
+    const byPlugins = plugins.visibleTo(projectId, conversationId);
     const byServers = mcp.visibleTo(projectId);
     // A built-in entry switched off takes its tool of the core out (« Sous-agents », task 11.3).
     const offTools = new Set(Object.entries(ENTRY_TOOLS).filter(([entry]) => !plugins.isEnabled(entry, projectId)).map(([, tool]) => tool));
@@ -1388,7 +1388,7 @@ export function createCore(deps: CoreDeps): Core {
     },
     prompt: (meta) => ({
       kind: meta.kind,
-      tools: toolsFor(meta.kind, tools.view(visibleTo(meta.projectId)).list()),
+      tools: toolsFor(meta.kind, tools.view(visibleTo(meta.projectId, meta.id)).list()),
       perimeter: !meta.projectId
         ? []
         : meta.worktree
@@ -1474,7 +1474,7 @@ export function createCore(deps: CoreDeps): Core {
     const { roots, projectId, barred } = await rootsOf(conversationId);
     // Only the tools its kind is told of: a discussion's call to a file tool finds none (task 9.7).
     const kind = (await conversationStore.get(conversationId))?.kind ?? 'code';
-    const visible = visibleTo(projectId);
+    const visible = visibleTo(projectId, conversationId);
     const told = new Set(toolsFor(kind, tools.view(visible).list()).map((tool) => tool.name));
     // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
     try {
@@ -1564,7 +1564,7 @@ export function createCore(deps: CoreDeps): Core {
     if (!meta || !provider) throw new Error(`The conversation ${conversationId} is not on a service.`);
     const place = await rootsOf(conversationId);
     const { mode } = await modeOf(conversationId);
-    const registry = tools.view(visibleTo(place.projectId));
+    const registry = tools.view(visibleTo(place.projectId, conversationId));
     const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
     const instructions = project ? ((await readProjectInstructions(project.roots))?.text ?? '') : '';
     const messageId = typeof raw['messageId'] === 'string' ? raw['messageId'] : 'turn';
@@ -2144,7 +2144,7 @@ export function createCore(deps: CoreDeps): Core {
         conversationId,
         mode: (await modeOf(conversationId)).mode,
         ...(place.projectId ? { projectId: place.projectId } : {}),
-        registry: tools.view(visibleTo(place.projectId)),
+        registry: tools.view(visibleTo(place.projectId, conversationId)),
         permissions,
         place: { roots: place.roots, ...(place.barred ? { barred: place.barred } : {}) },
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),

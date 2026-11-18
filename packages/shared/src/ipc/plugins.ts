@@ -37,6 +37,7 @@ export const pluginStatusSchema = z.object({
   update: z.string().optional(),
   /** A plugin of a third party's view, served in its own frame (task 11.2). */
   view: z.string().optional(),
+  trial: z.string().optional(),
 });
 
 /** The plugins, and whether each is on for a project. */
