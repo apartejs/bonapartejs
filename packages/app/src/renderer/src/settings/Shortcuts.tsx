@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Messages } from '../i18n/index';
-import { bindingsOf, comboOf, conflictOf, keysOf, SHORTCUTS, type ShortcutAction, type ShortcutGroup } from '../shortcuts/registry';
+import { bindingsOf, comboOf, conflictOf, keysOf, SHORTCUTS, usable, type ShortcutAction, type ShortcutGroup } from '../shortcuts/registry';
 import { CAPTURING } from '../shortcuts/useShortcuts';
 import { Section } from './controls';
 import type { PageProps } from './SettingsView';
@@ -35,7 +35,8 @@ export function ShortcutsPage({ messages, values, change }: PageProps) {
   const kept = keptOf(values['shortcuts']);
   const bindings = bindingsOf(kept);
   const [capturing, setCapturing] = useState<ShortcutAction | null>(null);
-  const [refused, setRefused] = useState<{ action: ShortcutAction; other: ShortcutAction } | null>(null);
+  // Refused: keys another action holds, or keys without Ctrl or Alt (review 12).
+  const [refused, setRefused] = useState<{ action: ShortcutAction; other: ShortcutAction | null } | null>(null);
   const [query, setQuery] = useState('');
 
   // While a row waits for keys, nothing else of the app runs on them.
@@ -51,6 +52,11 @@ export function ShortcutsPage({ messages, values, change }: PageProps) {
       }
       const combo = comboOf(event);
       if (!combo) return;
+      if (!usable(combo)) {
+        setCapturing(null);
+        setRefused({ action: capturing, other: null });
+        return;
+      }
       const other = conflictOf(bindings, capturing, combo);
       setCapturing(null);
       if (other) {
@@ -126,7 +132,7 @@ export function ShortcutsPage({ messages, values, change }: PageProps) {
                     </button>
                     {refused?.action === one.id ? (
                       <p className="aparte-field-warning shortcut-row__refused" role="status">
-                        {words.conflict(words.actions[refused.other])}
+                        {refused.other ? words.conflict(words.actions[refused.other]) : words.needsModifier}
                       </p>
                     ) : null}
                   </li>

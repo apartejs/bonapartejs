@@ -65,6 +65,25 @@ export class SettingsStore {
     });
   }
 
+  /**
+   * The layers of a model too big for the card that stay on it (task 12.3), and the model they were counted for:
+   * another model takes the whole card. `'all'` puts everything back on the card (review 12).
+   */
+  async setOffload(gpuLayers: number | 'all', modelPath?: string): Promise<void> {
+    validateSettingValue(ENGINE_SETTINGS, 'global', 'gpuLayers', gpuLayers);
+    await this.writes.run('file', async () => {
+      const content = await this.read();
+      const engine = content['engine'];
+      const { gpuLayersModel: _was, ...kept } =
+        engine && typeof engine === 'object' && !Array.isArray(engine) ? (engine as Record<string, unknown>) : {};
+      await mkdir(dirname(this.file), { recursive: true });
+      await writeJsonFile(this.file, {
+        ...content,
+        engine: { ...kept, gpuLayers, ...(gpuLayers !== 'all' && modelPath ? { gpuLayersModel: modelPath } : {}) },
+      });
+    });
+  }
+
   /** The llama.cpp the person chose (task 12.3), under `backend`: the file's other keys kept. */
   async setBackend(backend: { mode: 'managed'; binPath: string }): Promise<void> {
     await this.writes.run('file', async () => {

@@ -429,7 +429,7 @@ function Workspace({
   const approvals = useMemo(() => createApprovalsStore(), []);
   const open = useRef<string | null>(null);
   // What Échap needs to know to stop a reply: the chat shown, and whether a request waits there.
-  const stopRef = useRef<{ shown: string; waiting: boolean }>({ shown: '', waiting: false });
+  const stopRef = useRef<{ shown: string; waiting: boolean; away: boolean }>({ shown: '', waiting: false, away: false });
   open.current = conversationId;
   // A call paused before a reload is asked again as its conversation loads: aparté names its turn.
   const approvalResolver = useMemo(() => createApprovalResolver(approvals), [approvals]);
@@ -970,6 +970,8 @@ function Workspace({
     const started = (): void => {
       setServiceDown(null);
       setEngineDied(null);
+      // Checked again when the turn ends (review 12): a card left from the last one never hides what this one asks.
+      setDiskFull(null);
     };
     window.addEventListener('aparte-message-error', failed);
     window.addEventListener('aparte-message-start', started);
@@ -1189,6 +1191,9 @@ function Workspace({
       if (target && target.closest('input, textarea, select, [contenteditable="true"]') && !target.closest('aparte-composer')) return;
       const handle = handles.get(stopRef.current.shown);
       const composer = handle?.getComposer();
+      // A page over the conversation (the settings, « À traiter ») hides the reply: Échap never cuts what is not seen
+      // (review 12).
+      if (stopRef.current.away) return;
       if (!handle?.isStreaming() || !composer || (composer as unknown as Composer).panelActive || stopRef.current.waiting) return;
       event.preventDefault();
       composer.cancel();
@@ -1196,7 +1201,7 @@ function Workspace({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  stopRef.current = { shown: deck.shown, waiting: request !== undefined };
+  stopRef.current = { shown: deck.shown, waiting: request !== undefined, away: settingsPage !== null || inboxOpen };
 
   // The mascot says what the engine and the conversation shown are doing (task 12.2).
   const engineLike: EngineLike =
@@ -1535,24 +1540,7 @@ function Workspace({
         aboveComposer={
           // The engine down comes first (review of phase 7): a send is held, an approval would resume into
           // nothing — loading it is what everything else waits for.
-          diskFull && diskFull.conversationId === conversationId ? (
-            <DiskFullCard
-              messages={messages}
-              style={style}
-              check={diskFull.check}
-              busy={releasing}
-              onRelease={() => {
-                const { conversationId: id, check } = diskFull;
-                setReleasing(true);
-                void (async () => {
-                  for (const one of check.release) await bridge.invoke(engineReleaseMemory, { id: one }).catch(() => undefined);
-                  setAsked((count) => count + 1);
-                  checkDisk(id);
-                })().finally(() => setReleasing(false));
-              }}
-              onChoose={() => setSettingsPage('engine')}
-            />
-          ) : engineDied && engineDied.conversationId === conversationId ? (
+          engineDied && engineDied.conversationId === conversationId ? (
             <EngineDiedCard
               messages={messages}
               locale={locale}
@@ -1646,6 +1634,23 @@ function Workspace({
                   allow: () => approvals.answer(request.id, { approved: true }),
                 });
               }}
+            />
+          ) : diskFull && diskFull.conversationId === conversationId ? (
+            <DiskFullCard
+              messages={messages}
+              style={style}
+              check={diskFull.check}
+              busy={releasing}
+              onRelease={() => {
+                const { conversationId: id, check } = diskFull;
+                setReleasing(true);
+                void (async () => {
+                  for (const one of check.release) await bridge.invoke(engineReleaseMemory, { id: one }).catch(() => undefined);
+                  setAsked((count) => count + 1);
+                  checkDisk(id);
+                })().finally(() => setReleasing(false));
+              }}
+              onChoose={() => setSettingsPage('engine')}
             />
           ) : rewinding.rewound && rewinding.rewound.conversationId === conversationId ? (
             <RewindBanner rewound={rewinding.rewound} messages={messages} locale={locale} busy={rewinding.busy} onUndo={rewinding.undo} />

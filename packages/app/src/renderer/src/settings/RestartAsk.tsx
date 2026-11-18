@@ -19,7 +19,9 @@ export const STOP_REPLIES = 'bonaparte-stop-replies';
 export type LaunchChange =
   | { nCtx: number }
   | { cacheType: EngineLaunchSettingsView['cacheType'] }
-  | { subagents: EngineLaunchSettingsView['subagents'] };
+  | { subagents: EngineLaunchSettingsView['subagents'] }
+  // « Tout sur la carte » (review 12).
+  | { gpuLayers: 'all' };
 
 export interface Asking {
   change: LaunchChange;

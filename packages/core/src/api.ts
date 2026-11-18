@@ -312,7 +312,10 @@ export interface EngineLaunchSettings {
 }
 
 /** The launch settings a person changes in the window: each restarts the engine, its cost said first. */
-export type LaunchChange = Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType' | 'subagents'>>;
+export type LaunchChange = Partial<Pick<EngineLaunchSettings, 'nCtx' | 'cacheType' | 'subagents'>> & {
+  /** « Tout sur la carte »: the layers a too-big model put on the processor come back to the card (review 12). */
+  gpuLayers?: 'all';
+};
 
 /** Changing model, said before (task 7.4): to what, from what (null when none runs), and what it costs. */
 export interface ModelSwitchView {
@@ -628,6 +631,8 @@ const engineSettingsSchema = z
     nCtx: z.number().int().min(512).optional(),
     cacheType: z.enum(['f16', 'q8_0', 'q4_0']).optional(),
     gpuLayers: z.union([z.literal('all'), z.number().int().min(0)]).optional(),
+    /** The model the layers above were counted for (review 12). */
+    gpuLayersModel: z.string().optional(),
   })
   .optional();
 
@@ -776,15 +781,23 @@ export function createCore(deps: CoreDeps): Core {
       : undefined;
   }
 
-  async function launchSettings() {
+  /**
+   * What llama.cpp is launched with, for `forPath` (the model that runs when none is named). Layers put on the
+   * processor for a model too big (task 12.3) hold for that model only: another one takes the whole card again.
+   */
+  async function launchSettings(forPath?: string) {
     const read = await readConfig();
     const subagents = await appSettings.get('subagentsOnBuiltin').catch(() => 'sequential');
+    const kept = (read.engine?.gpuLayers ?? settingDefault('gpuLayers')) as number | 'all';
+    const layersFor = read.engine?.gpuLayersModel;
+    const model = forPath ?? loaded?.path;
+    const gpuLayers =
+      typeof kept === 'number' && typeof layersFor === 'string' && model !== undefined && !samePath(layersFor, model) ? 'all' : kept;
     return {
       nCtx: read.engine?.nCtx ?? (settingDefault('nCtx') as number),
       cacheType: (read.engine?.cacheType ??
         settingDefault('cacheType')) as KvCacheType,
-      gpuLayers: (read.engine?.gpuLayers ?? settingDefault('gpuLayers')) as
-        number | 'all',
+      gpuLayers,
       subagents: (subagents === 'parallel' ? 'parallel' : 'sequential') as EngineLaunchSettings['subagents'],
     };
   }
@@ -814,7 +827,7 @@ export function createCore(deps: CoreDeps): Core {
   async function configuredManaged(forPath?: string): Promise<EngineConfig> {
     const binPath = await llamaBinary();
     const current = supervisor.engine;
-    const launch = await launchSettings();
+    const launch = await launchSettings(forPath);
     // Settings kept since (task 7.4) or a build installed since: taken at the next load, never under a model
     // that runs.
     const same =
@@ -1837,7 +1850,7 @@ export function createCore(deps: CoreDeps): Core {
       // Refused before anything is launched.
       const layer = layerForModel(info);
       // Too big for the card: nothing launched before the person chooses (task 12.3).
-      const settings = await launchSettings();
+      const settings = await launchSettings(listed.path);
       const totalBytes = await gpuBytes();
       const loadSeconds = supervisor.loadSeconds(listed.path);
       const model = { info, fileBytes: listed.sizeBytes, ...(loadSeconds !== undefined ? { loadSeconds } : {}) };
@@ -1853,7 +1866,7 @@ export function createCore(deps: CoreDeps): Core {
       });
       if (!decided.go) throw decided.error;
       if (decided.gpuLayers !== undefined) {
-        await appSettings.setEngine({ gpuLayers: decided.gpuLayers });
+        await appSettings.setOffload(decided.gpuLayers, listed.path);
         // Read again: the launch below takes the layers just kept.
         config = undefined;
       }
@@ -1948,8 +1961,9 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async applyEngineSettings(changes, options) {
-      const { subagents, ...engine } = changes;
+      const { subagents, gpuLayers, ...engine } = changes;
       if (Object.keys(engine).length > 0) await appSettings.setEngine(engine);
+      if (gpuLayers === 'all') await appSettings.setOffload('all');
       // The sub-agents' setting is the app's (« Général »): it reaches the engine at its next launch (task 8.3).
       if (subagents !== undefined) await appSettings.set('subagentsOnBuiltin', subagents);
       // Read again at the next load: the file changed.
@@ -2258,7 +2272,17 @@ export function createCore(deps: CoreDeps): Core {
       const row = rows.find((one) => one.id === conversationId && one.state === 'engine');
       if (!row) return null;
       const launch = await launchSettings();
-      const needBytes = row.tokens * kvBytesPerToken(loaded.info, (supervisor.live?.cacheTypeK ?? launch.cacheType) as KvCacheType);
+      const estimate = row.tokens * kvBytesPerToken(loaded.info, (supervisor.live?.cacheTypeK ?? launch.cacheType) as KvCacheType);
+      // The full-attention layers alone are below what a state weighs: the sliding windows and llama.cpp's
+      // checkpoints are saved with it (review 12). What the states of this model weigh a token, measured on the
+      // disk, and this conversation's own last state, are taken when larger.
+      const measured = Math.max(
+        0,
+        ...rows
+          .filter((one) => one.bytes !== null && one.tokens > 0 && !one.otherModel && one.state !== 'released')
+          .map((one) => one.bytes! / one.tokens),
+      );
+      const needBytes = Math.ceil(Math.max(estimate, row.bytes ?? 0, measured * row.tokens));
       const saved = rows
         .filter((one) => one.state === 'saved' && one.id !== conversationId && one.bytes !== null)
         .map((one) => ({ id: one.id, bytes: one.bytes!, at: one.at }));
@@ -2414,6 +2438,8 @@ export function createCore(deps: CoreDeps): Core {
       await appSettings.setBackend({ mode: 'managed', binPath: path });
       config = undefined;
       found = undefined;
+      // What the card can hold is asked again, of this llama.cpp (the registry's figure was read without one).
+      gpu = undefined;
       return llamaCpp();
     },
     installLlamaCpp,

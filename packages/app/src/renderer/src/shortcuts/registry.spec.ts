@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { actionFor, bindingsOf, comboOf, conflictOf, keysOf, SHORTCUTS } from './registry';
+import { actionFor, bindingsOf, comboOf, conflictOf, keysOf, SHORTCUTS, usable } from './registry';
 
 const key = (init: Partial<KeyboardEventInit> & { key: string }) => ({ ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...init });
 
@@ -60,6 +60,11 @@ describe('the shortcuts', () => {
     expect(conflictOf(bindings, 'cycleMode', 'Ctrl+K')).toBe('search');
     expect(conflictOf(bindings, 'search', 'Ctrl+K')).toBeNull();
     expect(conflictOf(bindings, 'cycleMode', 'Ctrl+Alt+M')).toBeNull();
+  });
+
+  it('take only a combination with Ctrl or Alt: a key alone, or with Maj, is what the person types (review 12)', () => {
+    for (const combo of ['Ctrl+N', 'Alt+Z', 'Ctrl+Shift+M', 'Ctrl+`']) expect(usable(combo)).toBe(true);
+    for (const combo of ['N', 'Tab', 'Enter', 'Shift+Enter', 'Shift+A', 'F5']) expect(usable(combo)).toBe(false);
   });
 
   it('show a combination as its keys, in the person’s words', () => {

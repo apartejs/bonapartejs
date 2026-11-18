@@ -26,6 +26,22 @@ test('a model too big for the card: what it needs and what the card has, nothing
   expect(await engineRequests()).toEqual([]);
 });
 
+test('« Une partie sur le processeur » holds for that model, said in « Moteur et mémoire », where it goes back on the card (review 12)', async ({ launch }) => {
+  // Some 16 MiB a layer over a margin of 512 MiB: about eleven layers fit on 700 MiB.
+  const { page } = await launch({ managed: { models: MODELS, gpuBytes: 700 * MiB } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const card = page.getByRole('alert').filter({ hasText: 'Le modèle ne tient pas dans la carte' });
+  await card.getByRole('button', { name: /^Une partie sur le processeur/ }).click();
+  await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Moteur et mémoire' }).click();
+  const row = page.locator('.setting-row', { hasText: 'Sur la carte graphique' });
+  await expect(row).toContainText(/\d+ couches? du modèle sur la carte, le reste sur le processeur/);
+  await row.getByRole('button', { name: 'Tout sur la carte' }).click();
+  // Said before anything restarts, as any launch setting.
+  await expect(page.getByRole('button', { name: 'Redémarrer maintenant' })).toBeVisible();
+});
+
 test('the engine stops during a reply: what is safe, what is lost, its log, and « Relancer et relire »', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: () => 'un deux trois quatre cinq', failAfter: 2 } });
   await chat(page).send('Compte');
@@ -46,6 +62,25 @@ test('the engine stops during a reply: what is safe, what is lost, its log, and 
 
   await card.getByRole('button', { name: 'Relancer et relire' }).click();
   await expect(card).toBeHidden({ timeout: 15_000 });
+});
+
+test('the disk nearly full leaves the composer’s place to the next turn: it is checked again when that one ends (review 12)', async ({ launch }) => {
+  const { page } = await launch({
+    managed: { models: MODELS },
+    env: { BONAPARTE_E2E_FREE_BYTES: String(1024 * 1024), FAKE_LLAMA_ANSWER: 'un deux trois quatre cinq six sept huit', FAKE_LLAMA_PACE_MS: '150' },
+  });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ui.send('Bonjour');
+  const card = page.getByRole('alert').filter({ hasText: 'Le disque est presque plein' });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await ui.send('Encore');
+  // While the turn runs, what it may ask (an approval, a question) has the place: the card is gone.
+  await expect(ui.streamingReplies).toHaveCount(1);
+  await expect(card).toBeHidden();
+  await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+  await expect(card).toBeVisible({ timeout: 15_000 });
 });
 
 test('the disk nearly full, said as a turn ends: how much is free, and the oldest memory to let go', async ({ launch }) => {

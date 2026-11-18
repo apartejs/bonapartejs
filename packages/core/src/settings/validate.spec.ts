@@ -54,6 +54,10 @@ describe('the person’s shortcuts (task 12.1)', () => {
     expect(() => validateSettingValue(fields, 'global', 'shortcuts', { newConversation: 'Ctrl+N', cycleMode: 'Ctrl+Shift+M', terminal: 'Ctrl+`' })).not.toThrow();
     expect(() => validateSettingValue(fields, 'global', 'shortcuts', { changes: '' })).not.toThrow();
     expect(() => validateSettingValue(fields, 'global', 'shortcuts', ['Ctrl+N'])).toThrow(/key/i);
+    // A key without Ctrl or Alt would fire as the person types (review 12).
+    for (const bare of ['N', 'Tab', 'Shift+Enter', 'Shift+A']) {
+      expect(() => validateSettingValue(fields, 'global', 'shortcuts', { newConversation: bare })).toThrow(/key/i);
+    }
     expect(() => validateSettingValue(fields, 'global', 'shortcuts', { 'new conversation': 'Ctrl+N' })).toThrow(/key/i);
     expect(() => validateSettingValue(fields, 'global', 'shortcuts', { newConversation: 'Ctrl+N; rm -rf' })).toThrow(/key/i);
     expect(() => validateSettingValue(fields, 'global', 'shortcuts', Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`a${i}`, 'Ctrl+N'])))).toThrow(/key/i);

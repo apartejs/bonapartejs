@@ -71,6 +71,14 @@ export function comboOf(event: KeyLike): string | null {
   return parts.join('+');
 }
 
+/**
+ * Whether a combination can be a shortcut: with Ctrl or Alt. A key alone, or with Shift, is what the person types
+ * in a field — it would fire there, and swallow the letter (review 12).
+ */
+export function usable(combo: string): boolean {
+  return /(?:^|\+)(?:Ctrl|Alt)\+/.test(combo);
+}
+
 const known = new Set<string>(SHORTCUTS.map((one) => one.id));
 
 /** Each action's keys: the person's when they changed it, else its default. */

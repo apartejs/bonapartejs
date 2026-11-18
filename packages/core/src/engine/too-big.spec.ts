@@ -27,6 +27,9 @@ async function managed(gpuBytes: number) {
   await mkdir(models, { recursive: true });
   const model = join(models, 'gemma-4-test.gguf');
   await writeFakeGguf(model);
+  // A second model, bigger by its weights.
+  const big = join(models, 'gemma-4-big.gguf');
+  await writeFakeGguf(big, { paddingBytes: 256 * 1024 ** 2 });
   const probe = createServer();
   await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
   const port = (probe.address() as { port: number }).port;
@@ -42,7 +45,7 @@ async function managed(gpuBytes: number) {
     logger: () => undefined,
   });
   cores.push(core);
-  return { core, model };
+  return { core, model, big };
 }
 
 describe('a model too big for the card', () => {
@@ -53,6 +56,26 @@ describe('a model too big for the card', () => {
     expect(refused).toMatchObject({ gpuBytes: 1024 * 1024 });
     expect((refused as ModelTooBigError).neededBytes).toBeGreaterThan(1024 * 1024);
     expect((await core.engineState()).status).toBe('stopped');
+  });
+
+  it('« Une partie sur le processeur » holds for the model it was chosen for, and « Moteur et mémoire » puts it back on the card (review 12)', async () => {
+    const MiB = 1024 ** 2;
+    // A card that holds the small model, not the big one.
+    const { core, model, big } = await managed(1100 * MiB);
+    expect(await core.loadModel(big).catch((error: unknown) => error)).toBeInstanceOf(ModelTooBigError);
+    await core.loadModel(big, { offload: true });
+    const layers = (await core.engineSettings()).gpuLayers;
+    expect(typeof layers).toBe('number');
+    // Another model takes the whole card: the layers were counted for the big one.
+    await core.loadModel(model);
+    expect((await core.engineSettings()).gpuLayers).toBe('all');
+    // The big one again keeps the person's choice: no card asked again.
+    await core.loadModel(big);
+    expect((await core.engineSettings()).gpuLayers).toBe(layers);
+    // « Tout sur la carte »: kept, and the big one is refused again before anything is launched.
+    await core.applyEngineSettings({ gpuLayers: 'all' }, { restart: false });
+    await core.loadModel(model);
+    expect(await core.loadModel(big).catch((error: unknown) => error)).toBeInstanceOf(ModelTooBigError);
   });
 
   it('a model that fits loads as before', async () => {

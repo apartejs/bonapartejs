@@ -20,7 +20,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })));
 });
 
-async function rig() {
+async function rig(gpuMemory: () => Promise<number | null> = async () => 24 * 1024 ** 3) {
   const dataDir = await mkdtemp(join(tmpdir(), 'bp-llama-pick-'));
   dirs.push(dataDir);
   await mkdir(join(dataDir, 'bin'), { recursive: true });
@@ -33,7 +33,7 @@ async function rig() {
     command === llama
       ? spawnHidden(process.execPath, [BIN, ...args], options as SpawnHiddenOptions)
       : spawnHidden(command, args, options as SpawnHiddenOptions);
-  const core = createCore({ dataDir, env: {}, spawn, llamaReleases: null, logger: () => undefined, gpuMemory: async () => 24 * 1024 ** 3 });
+  const core = createCore({ dataDir, env: {}, spawn, llamaReleases: null, logger: () => undefined, gpuMemory });
   cores.push(core);
   return { core, dataDir, llama, notLlama };
 }
@@ -45,6 +45,20 @@ describe('a llama.cpp the person chooses', () => {
     expect(state.current).toMatchObject({ source: 'configured', build: 'b9999' });
     const config = JSON.parse(await readFile(join(dataDir, 'config', 'global.json'), 'utf8'));
     expect(config.backend).toEqual({ mode: 'managed', binPath: llama });
+  });
+
+  it('asks the card again: what the registry said before any llama.cpp is not what llama.cpp can use (review 12)', async () => {
+    // A unified-memory machine: the registry's carve-out first, then what llama.cpp lists.
+    const asked: number[] = [];
+    const { core, llama } = await rig(async () => {
+      asked.push(asked.length);
+      return asked.length === 1 ? 8 * 1024 ** 3 : 78 * 1024 ** 3;
+    });
+    await core.recommendedModels();
+    expect(asked).toHaveLength(1);
+    await core.useLlamaBinary(llama);
+    await core.recommendedModels();
+    expect(asked).toHaveLength(2);
   });
 
   it('is refused when it is no llama.cpp, nothing kept; a path that is not absolute too', async () => {

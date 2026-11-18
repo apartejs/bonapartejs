@@ -74,6 +74,22 @@ export function LaunchSettings({ messages, locale, idleMinutes, change, onKept }
           />
         }
       />
+      {typeof kept.gpuLayers === 'number' ? (
+        <Row
+          label={words.launchLayers}
+          hint={words.launchLayersHint(kept.gpuLayers)}
+          control={
+            <button
+              type="button"
+              className="aparte-btn aparte-btn--outline aparte-btn--sm"
+              disabled={asking !== null && 'gpuLayers' in asking.change}
+              onClick={() => restart.ask({ gpuLayers: 'all' })}
+            >
+              {words.launchLayersAll}
+            </button>
+          }
+        />
+      ) : null}
       <RestartCard messages={messages} locale={locale} {...restart} />
       <Row
         label={words.launchIdle}

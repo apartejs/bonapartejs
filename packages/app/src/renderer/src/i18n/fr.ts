@@ -385,6 +385,7 @@ export const fr: Messages = {
       fixedNote: 'Ne se change pas ici',
       capture: 'Appuie sur la nouvelle touche…',
       conflict: (other) => `Déjà pris par « ${other} » : rien n’a changé.`,
+      needsModifier: 'Un raccourci commence par Ctrl ou Alt : rien n’a changé.',
       none: 'Aucune touche',
       keys: { Ctrl: 'Ctrl', Alt: 'Alt', Shift: 'Maj', Meta: 'Win', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: 'Entrée', Escape: 'Échap', Plus: '+', Backspace: 'Retour', Delete: 'Suppr', Tab: 'Tab' },
       or: '·',
@@ -563,6 +564,10 @@ export const fr: Messages = {
       launchCache: 'Cache K/V',
       launchCacheHint: 'f16 est exact ; q8_0 et q4_0 prennent moins de mémoire vidéo, au prix d’un peu de précision.',
       launchCacheTypes: { f16: 'f16', q8_0: 'q8_0', q4_0: 'q4_0' },
+      launchLayers: 'Sur la carte graphique',
+      launchLayersHint: (layers) =>
+        `${layers} couche${layers > 1 ? 's' : ''} du modèle sur la carte, le reste sur le processeur : plus lent. Pour ce modèle seulement.`,
+      launchLayersAll: 'Tout sur la carte',
       launchIdle: 'Décharger après',
       launchIdleHint: 'Sans activité, le modèle rend la mémoire vidéo ; tes conversations restent, et il se recharge en un clic.',
       launchIdleMinutes: (minutes) => (minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`),

@@ -88,6 +88,8 @@ export class ManagedServer {
 
   async start(): Promise<void> {
     this.intentionalStop = false;
+    // A start asked for is a new life: the log of the one that died before it is not this one's.
+    this.lastExit = null;
     this.restartCount = 0;
     await this.spawnAndWait('starting');
   }
@@ -180,10 +182,13 @@ export class ManagedServer {
     this.setStatus('crashed');
   }
 
-  /** The last lines llama-server wrote — the running one's, else those of the one that left — and its exit code. */
+  /**
+   * The last lines llama-server wrote, and its exit code: those of the one that left — even once it was relaunched
+   * on its own, since why it died is what « Voir le journal du moteur » is for (review 12) —, else the running one's.
+   */
   engineLog(): { lines: string; exitCode: number | null; exited: boolean } {
-    if (this.process) return { lines: this.process.lastLines(), exitCode: this.lastExit?.code ?? null, exited: this.lastExit !== null };
-    return { lines: this.lastExit?.lines ?? '', exitCode: this.lastExit?.code ?? null, exited: this.lastExit !== null };
+    if (this.lastExit) return { lines: this.lastExit.lines, exitCode: this.lastExit.code, exited: true };
+    return { lines: this.process?.lastLines() ?? '', exitCode: null, exited: false };
   }
 
   private lastExit: { code: number | null; lines: string } | null = null;

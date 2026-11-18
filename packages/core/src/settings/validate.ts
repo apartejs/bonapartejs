@@ -50,7 +50,13 @@ export function validateSettingValue(fields: SettingField[], scope: SettingScope
       if (
         !entries ||
         entries.length > MAX_ITEMS ||
-        !entries.every(([action, combo]) => /^[a-zA-Z]{1,64}$/.test(action) && typeof combo === 'string' && (combo === '' || COMBO.test(combo)))
+        !entries.every(
+          ([action, combo]) =>
+            /^[a-zA-Z]{1,64}$/.test(action) &&
+            typeof combo === 'string' &&
+            // Ctrl or Alt in each: a key alone, or with Shift, is what the person types (review 12).
+            (combo === '' || (COMBO.test(combo) && /(?:^|\+)(?:Ctrl|Alt|Meta)\+/.test(combo))),
+        )
       ) {
         throw new Error(`Setting ${key} expects an action's key combination for each action`);
       }

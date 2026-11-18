@@ -206,6 +206,27 @@ describe('ManagedServer', () => {
     expect(typeof log.lines).toBe('string');
   });
 
+  it('« Voir le journal du moteur » shows what the server that died wrote, not its relaunch; a new start forgets it (review 12)', async () => {
+    let launch = 0;
+    // The first server says a line of its own; the one relaunched does not.
+    const spawn: SpawnFn = (command, args, options) => {
+      launch += 1;
+      const env = { ...(options as SpawnHiddenOptions).env, ...(launch === 1 ? { FAKE_LLAMA_ECHO: '1' } : {}) };
+      return spawnHidden(command, args, { ...(options as SpawnHiddenOptions), env });
+    };
+    const { server } = await managed({ spawn });
+    await server.start();
+    const pid = server.pid!;
+    globalThis.process.kill(pid);
+    await waitFor(() => server.status() === 'ready' && server.pid !== pid);
+    const log = server.engineLog();
+    expect(log.exited).toBe(true);
+    expect(log.lines).toContain('main: api key');
+    await server.stop();
+    await server.start();
+    expect(server.engineLog().exited).toBe(false);
+  });
+
   it('stops: the port is free, and nothing relaunches', async () => {
     const launches = recording();
     const { server, port, statuses } = await managed({ spawn: launches.spawn });

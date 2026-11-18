@@ -237,8 +237,12 @@ const launchChangeSchema = z
     nCtx: z.number().int().min(512).max(1_048_576).optional(),
     cacheType: z.enum(['f16', 'q8_0', 'q4_0']).optional(),
     subagents: z.enum(['sequential', 'parallel']).optional(),
+    /** « Tout sur la carte »: the layers a too-big model put on the processor come back (review 12). */
+    gpuLayers: z.literal('all').optional(),
   })
-  .refine((change) => change.nCtx !== undefined || change.cacheType !== undefined || change.subagents !== undefined);
+  .refine(
+    (change) => change.nCtx !== undefined || change.cacheType !== undefined || change.subagents !== undefined || change.gpuLayers !== undefined,
+  );
 
 /** What a setting that restarts the engine costs (board « Coûts annoncés », 6). */
 export const restartAnnouncementSchema = z.object({

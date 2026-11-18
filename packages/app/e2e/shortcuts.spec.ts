@@ -28,9 +28,11 @@ test('the conversations’ keys: Ctrl N starts one, Ctrl ↑ ↓ go from one to 
   // The title comes from the first message once the reply is kept: slower on a loaded machine.
   await expect(title(page)).toHaveText('Seconde question', { timeout: 15_000 });
   await expect(page.locator('.bonaparte-conversations [data-conv-id]')).toHaveCount(2, { timeout: 15_000 });
-  await page.keyboard.press('Control+ArrowDown');
+  // The rows' order is the list's (the one changed last first): a title kept late may move the first one up.
+  const secondFirst = ((await page.locator('.bonaparte-conversations [data-conv-id]').first().textContent()) ?? '').includes('Seconde');
+  await page.keyboard.press(secondFirst ? 'Control+ArrowDown' : 'Control+ArrowUp');
   await expect(title(page)).toHaveText('Première question');
-  await page.keyboard.press('Control+ArrowUp');
+  await page.keyboard.press(secondFirst ? 'Control+ArrowUp' : 'Control+ArrowDown');
   await expect(title(page)).toHaveText('Seconde question');
 });
 
@@ -49,6 +51,23 @@ test('the agent’s keys: Ctrl Maj M changes the mode, Échap stops a reply, Ctr
 
   await page.keyboard.press('Control+Alt+Z');
   await expect(page.getByRole('dialog', { name: 'Revenir avant « Raconte » ?' })).toBeVisible();
+});
+
+test('Échap on a page over the conversation never stops the reply it hides (review 12)', async ({ launch }) => {
+  const { page, server } = await launch({ engine: { responder: () => LONG_REPLY, paceMs: 50 } });
+  const ui = chat(page);
+  await ui.send('Raconte');
+  await expect.poll(async () => ((await ui.replyText.textContent()) ?? '').length).toBeGreaterThanOrEqual(12);
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  const nav = page.getByRole('navigation', { name: 'Réglages' });
+  await nav.getByRole('link', { name: 'Général' }).focus();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Control+J');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(500);
+  expect(server.aborted).toBe(0);
+  await page.keyboard.press('Control+J');
+  await expect(ui.streamingReplies).toHaveCount(1);
 });
 
 test('the panes’ keys: Ctrl Maj D, Ctrl ` and Ctrl Maj B open their pane', async ({ launch }) => {
@@ -76,6 +95,11 @@ test('the Raccourcis page: a click captures new keys, a conflict is said and ref
 
   await mode.click();
   await expect(mode).toContainText('Appuie sur la nouvelle touche…');
+  // A key without Ctrl or Alt would fire as the person types: refused, said (review 12).
+  await page.keyboard.press('n');
+  await expect(page.locator('.shortcut-row', { hasText: 'Changer de mode' })).toContainText('Un raccourci commence par Ctrl ou Alt');
+  await expect(mode).toContainText('Ctrl');
+  await mode.click();
   await page.keyboard.press('Control+K');
   await expect(page.locator('.shortcut-row', { hasText: 'Changer de mode' })).toContainText('Déjà pris par « Rechercher partout »');
   // Nothing ran while the key was captured: the search did not open.

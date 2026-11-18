@@ -385,6 +385,7 @@ export const en: Messages = {
       fixedNote: 'Not changed here',
       capture: 'Press the new keys…',
       conflict: (other) => `Already taken by “${other}”: nothing changed.`,
+      needsModifier: 'A shortcut starts with Ctrl or Alt: nothing changed.',
       none: 'No keys',
       keys: { Ctrl: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Meta: 'Win', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: 'Enter', Escape: 'Esc', Plus: '+', Backspace: 'Backspace', Delete: 'Del', Tab: 'Tab' },
       or: '·',
@@ -563,6 +564,10 @@ export const en: Messages = {
       launchCache: 'K/V cache',
       launchCacheHint: 'f16 is exact; q8_0 and q4_0 take less video memory, at the cost of some precision.',
       launchCacheTypes: { f16: 'f16', q8_0: 'q8_0', q4_0: 'q4_0' },
+      launchLayers: 'On the graphics card',
+      launchLayersHint: (layers) =>
+        `${layers} layer${layers === 1 ? '' : 's'} of the model on the card, the rest on the processor: slower. For this model only.`,
+      launchLayersAll: 'All on the card',
       launchIdle: 'Unload after',
       launchIdleHint: 'Without activity, the model gives the video memory back; your conversations stay, and it loads again in one click.',
       launchIdleMinutes: (minutes) => (minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`),

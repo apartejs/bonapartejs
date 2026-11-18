@@ -28,7 +28,7 @@ test('« Plus d’actions » opens on Enter, moves with the arrows, and Escape g
   const menu = page.getByRole('menu', { name: 'Plus d’actions' });
   await expect(menu).toBeVisible();
   const items = menu.getByRole('menuitem');
-  await expect(items).toHaveText(['Renommer', 'Épingler', 'Archiver', 'Supprimer…']);
+  await expect(items).toHaveText(['Renommer', 'Épingler', 'Réglages de la conversation…', 'Archiver', 'Supprimer…']);
   await expect(items.first()).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(items.nth(1)).toBeFocused();

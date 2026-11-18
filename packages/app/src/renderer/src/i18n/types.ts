@@ -329,6 +329,8 @@ export interface Messages {
       fixedNote: string;
       capture: string;
       conflict: (other: string) => string;
+      /** Keys without Ctrl or Alt, refused (review 12). */
+      needsModifier: string;
       none: string;
       /** Each key in the person's words; « or » between two choices. */
       keys: Record<string, string>;
@@ -478,6 +480,10 @@ export interface Messages {
       launchCache: string;
       launchCacheHint: string;
       launchCacheTypes: Record<'f16' | 'q8_0' | 'q4_0', string>;
+      /** Part of a model too big for the card on the processor (task 12.3), put back on the card (review 12). */
+      launchLayers: string;
+      launchLayersHint(layers: number): string;
+      launchLayersAll: string;
       launchIdle: string;
       launchIdleHint: string;
       launchIdleMinutes(minutes: number): string;
