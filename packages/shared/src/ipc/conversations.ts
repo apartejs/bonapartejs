@@ -83,6 +83,8 @@ export const conversationStatusSchema = z.object({
   pr: prSchema.optional(),
   /** A reply finished since the window last showed it (task 8.4): « Pas encore lu ». */
   unread: z.boolean().optional(),
+  /** On a service, not the built-in engine (task 9.3): which, and its model. */
+  service: z.object({ id: z.string(), label: z.string(), model: z.string() }).optional(),
 });
 export type ConversationStatusView = z.infer<typeof conversationStatusSchema>;
 

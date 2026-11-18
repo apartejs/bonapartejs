@@ -43,3 +43,39 @@ export function showCatalogue(models: AparteAIModel[], name: string, current: st
 
 /** What each catalogue registered here lists: one taken down elsewhere is listed again. */
 const shownList = new WeakMap<AparteAIProvider, string>();
+
+/** A service added (task 9.3): its id, its name, the models it offers now. */
+export interface ServiceCatalogue {
+  id: string;
+  label: string;
+  models: readonly string[];
+}
+
+const servicesShown = new Set<string>();
+
+/**
+ * Lists each service's models in the picker beside the built-in engine's, one catalogue per service; a service
+ * gone is taken out. The same list again tells aparté nothing (apartejs/aparte#251).
+ */
+export function showServices(services: readonly ServiceCatalogue[]): void {
+  for (const id of [...servicesShown]) {
+    if (services.some((service) => service.id === id)) continue;
+    aparteGlobalConfig.unregisterAIProvider(id);
+    servicesShown.delete(id);
+  }
+  for (const service of services) {
+    const shown = JSON.stringify([service.label, service.models]);
+    const registered = aparteGlobalConfig.getAIProvider(service.id);
+    if (registered && shownList.get(registered) === shown) continue;
+    if (registered) aparteGlobalConfig.unregisterAIProvider(service.id);
+    const made = createModelCatalogue({
+      id: service.id,
+      name: service.label,
+      isLocal: false,
+      models: service.models.map((model) => ({ id: model, name: model })),
+    });
+    shownList.set(made, shown);
+    aparteGlobalConfig.registerAIProvider(made);
+    servicesShown.add(service.id);
+  }
+}

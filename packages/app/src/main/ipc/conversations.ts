@@ -52,6 +52,7 @@ interface ConversationCore {
   conversationDocument: Core['conversationDocument'];
   conversations: Pick<Core['conversations'], 'open' | 'status' | 'markSeen'>;
   readAgain: Core['readAgain'];
+  serviceOf: Core['serviceOf'];
   removeConversation: Core['removeConversation'];
   branchOf: Core['branchOf'];
   prOf: Core['prOf'];
@@ -171,7 +172,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
               ...(pr ? { pr } : {}),
             }
           : {};
-        return [id, { projectId: meta?.projectId ?? null, ...status, ...counted }] as const;
+        // On a service (task 9.3): which, and its model — the window shows no memory and no gauge for it.
+        const service = await core.serviceOf(id).catch(() => undefined);
+        const onService = service && meta ? { service: { id: service.id, label: service.label, model: meta.modelId } } : {};
+        return [id, { projectId: meta?.projectId ?? null, ...status, ...counted, ...onService }] as const;
       }),
     );
     return Object.fromEntries(found.filter((entry) => entry !== null));

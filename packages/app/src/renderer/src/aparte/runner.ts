@@ -21,6 +21,8 @@ export interface ConversationRunnerOptions {
   project?: () => string | null;
   /** On its own branch: its name and its base (the core takes them at its first turn only). */
   branch?: () => { branch: string; base: string } | null;
+  /** A new conversation's service and model, picked before its first message (the core takes them at its first turn only). */
+  service?: () => { provider: string; model: string } | null;
   /** Tests only. */
   fetch?: typeof globalThis.fetch;
 }
@@ -39,6 +41,11 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
         query.set('worksIn', 'branch');
         query.set('branch', branch.branch);
         query.set('base', branch.base);
+      }
+      const service = options.service?.();
+      if (service) {
+        query.set('provider', service.provider);
+        query.set('model', service.model);
       }
       const said = query.toString();
       return said ? `${at}?${said}` : at;

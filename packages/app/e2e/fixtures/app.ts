@@ -12,6 +12,9 @@
 import {
   startFakeLlamaReleases,
   startFakeLlamaServer,
+  startFakeOpenAIServer,
+  type FakeOpenAIServer,
+  type FakeOpenAIServerOptions,
   writeFakeGguf,
   type FakeGgufOptions,
   type FakeLlamaReleases,
@@ -78,6 +81,11 @@ export interface LaunchOptions {
   settings?: Record<string, unknown>;
   /** GitHub's CLI, a fake one: its pull request (as `gh pr view --json` says it), or none. Without it, the app has no CLI. */
   gh?: { pr?: Record<string, unknown> };
+  /**
+   * A service that speaks OpenAI's API (task 9.3), already added in the app's providers as « Ollama » (id
+   * `ollama`, no key): what it answers, its models.
+   */
+  service?: Omit<FakeOpenAIServerOptions, 'key'>;
 }
 
 /** One completion the managed engine was asked for. */
@@ -102,6 +110,8 @@ export interface LaunchedApp {
   enginePort?: number;
   /** llama.cpp's releases, when the test asked for them. */
   releases?: FakeLlamaReleases;
+  /** The service the test asked for: what it was sent. */
+  service?: FakeOpenAIServer;
   /** What the managed engine was asked, in order: every completion it received. */
   engineRequests(): Promise<EngineRequest[]>;
   /** The addresses the window has loaded, or failed to load, since it was launched: none, if it stayed on its page. */
@@ -141,6 +151,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
   const output = (): string => lines.join('');
   let app: ElectronApplication | undefined;
   let releases: FakeLlamaReleases | undefined;
+  let service: FakeOpenAIServer | undefined;
 
   // Once: a test may close the app itself, and the fixture closes what is left after it.
   let closing: Promise<void> | undefined;
@@ -149,6 +160,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       if (app) await closeApp(app);
       await server.close();
       await releases?.close();
+      await service?.close();
       if (!options.keepData && !options.dataDir) {
         await rm(dataDir, { recursive: true, force: true }).catch(() => undefined);
         await rm(home, { recursive: true, force: true }).catch(() => undefined);
@@ -204,6 +216,13 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       .catch(() => ({}));
     const merged = { ...written, ...options.settings };
     const settings = Object.keys(merged).length > 0 ? { settings: merged } : {};
+    if (options.service) {
+      service = await startFakeOpenAIServer(options.service);
+      await writeFile(
+        join(dataDir, 'config', 'providers.json'),
+        JSON.stringify({ providers: [{ id: 'ollama', kind: 'openai-compat', label: 'Ollama', url: `${service.url}/v1`, server: 'ollama' }] }),
+      );
+    }
     if (!options.managed) {
       await writeFile(
         join(dataDir, 'config', 'global.json'),
@@ -282,6 +301,7 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
       launchAgain,
       ...(enginePort !== undefined ? { enginePort } : {}),
       ...(releases ? { releases } : {}),
+      ...(service ? { service } : {}),
       navigations,
       engineRequests,
       output,

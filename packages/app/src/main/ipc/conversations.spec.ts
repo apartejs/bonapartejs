@@ -58,6 +58,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     compact: async () => ({ ok: false, reason: 'not-worth' }),
     uncompact: async () => 'main',
     contextOf: async () => null,
+    serviceOf: async () => undefined,
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
       removed.push(id);

@@ -51,3 +51,6 @@ export const providersAdd = defineChannel(
 );
 
 export const providersRemove = defineChannel('providers.remove', z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/) }), z.void());
+
+/** The models a service offers now (the composer's picker); empty when it does not answer. */
+export const providersModels = defineChannel('providers.models', z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/) }), z.array(z.string()));

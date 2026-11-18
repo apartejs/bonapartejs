@@ -45,7 +45,7 @@ export type { DiskScanStateView } from './ipc/models.js';
 export { engineMemory, engineReleaseMemory, engineRestart, engineUnload, memoryOverviewSchema, memoryRowSchema } from './ipc/memory.js';
 export type { MemoryOverviewView, MemoryRowView } from './ipc/memory.js';
 export { searchQuery, searchResultSchema } from './ipc/search.js';
-export { probeResultSchema, providersAdd, providersList, providersProbe, providersRemove, providerViewSchema } from './ipc/providers.js';
+export { probeResultSchema, providersAdd, providersList, providersModels, providersProbe, providersRemove, providerViewSchema } from './ipc/providers.js';
 export type { ProbeResultView, ProviderViewData } from './ipc/providers.js';
 export { appOpenDataFolder, conversationsExport, settingsAll, settingsGet, settingsSet } from './ipc/settings.js';
 export type { SearchResultView } from './ipc/search.js';

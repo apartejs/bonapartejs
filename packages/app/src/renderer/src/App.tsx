@@ -29,6 +29,8 @@ import {
   conversationsInbox,
   conversationsSeen,
   conversationsReadAgain,
+  providersList,
+  providersModels,
   type InboxView,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -61,7 +63,7 @@ import { RewindBanner } from './chat/RewindBanner';
 import { ContextBanner } from './chat/ContextBanner';
 import { useCompaction } from './chat/useCompaction';
 import { useModelSwitch } from './chat/useModelSwitch';
-import { catalogueOf, showCatalogue } from './aparte/model-catalogue';
+import { catalogueOf, showCatalogue, showServices, type ServiceCatalogue } from './aparte/model-catalogue';
 import { ModelSwitchDialog } from './dialogs/ModelSwitchDialog';
 import { EngineUnloadedCard } from './chat/EngineUnloadedCard';
 import { STOP_REPLIES } from './settings/LaunchSettings';
@@ -308,9 +310,13 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
   // Where each conversation born here was started: until its first turn tells the core.
   const bornIn = useRef(new Map<string, string | null>());
 
+  // The service a new conversation starts on (task 9.3): what the picker shows, picked before its first message.
+  const chosenService = useRef<{ provider: string; model: string } | null>(null);
+  const [, setServicePicked] = useState(0);
   const streamRunner = useMemo(
     () =>
       createConversationRunner({
+        service: () => chosenService.current,
         mode: () => chosen.current,
         picked: () => picked.current,
         project: () => project.current?.id ?? null,
@@ -718,6 +724,36 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
       live = false;
     };
   }, [runningModel, engine.mode, messages, locale]);
+
+  // The services added (task 9.3): their models offered in the composer's picker, beside the engine's.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const all = await bridge.invoke(providersList, undefined);
+      const found = await Promise.all(
+        all
+          .filter((provider) => provider.kind === 'openai-compat')
+          .map(async (provider) => ({
+            id: provider.id,
+            label: provider.label,
+            models: await bridge.invoke(providersModels, { id: provider.id }).catch(() => [] as string[]),
+          })),
+      );
+      if (live) showServices(found satisfies ServiceCatalogue[]);
+    })().catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  // The conversation shown on a service: the picker shows its model; a new conversation after it starts there too,
+  // as the picker shows. One on the built-in engine brings the picker — and the next new one — back to the engine.
+  const shownService = conversationId ? (statuses[conversationId]?.service ?? null) : null;
+  useEffect(() => {
+    if (!conversationId) return;
+    const status = statuses[conversationId];
+    if (!status) return;
+    chosenService.current = status.service ? { provider: status.service.id, model: status.service.model } : null;
+  }, [conversationId, statuses]);
 
   // The engine unloaded (task 7.4; board « Coûts annoncés », 5): the conversation stays, a card says what
   // loading costs. A message sent meanwhile is held: aparté's `aparte-before-send`, cancelled, keeps it in the
@@ -1151,6 +1187,19 @@ function Workspace({ messages, locale, engine }: { messages: Messages; locale: L
             }
             onPickModel={modelSwitch.ask}
             opener={pickerOpener}
+            service={shownService ? { id: shownService.id, model: shownService.model } : chosenService.current ? { id: chosenService.current.provider, model: chosenService.current.model } : null}
+            onPickService={(provider, model, revert) => {
+              const shown = handles.get(deck.shown);
+              const begun = (shown?.getMessages().length ?? 0) > 0;
+              // Before its first message, the conversation starts where the person picked (task 9.3).
+              if (!begun) {
+                chosenService.current = provider ? { provider, model } : null;
+                setServicePicked((count) => count + 1);
+                return;
+              }
+              // Once it has begun, it changes provider between two turns — said first (next).
+              revert();
+            }}
           />
         }
       />
