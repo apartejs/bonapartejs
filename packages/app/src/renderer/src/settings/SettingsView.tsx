@@ -51,6 +51,7 @@ export function SettingsView({
   onPage,
   onBack,
   onCreatePlugin,
+  onOpenConversation,
 }: {
   messages: Messages;
   locale: Locale;
@@ -59,6 +60,8 @@ export function SettingsView({
   onBack(): void;
   /** « Créer avec l’agent » (task 11.3): a new conversation that asks for a plugin. */
   onCreatePlugin?(): void;
+  /** « Ouvrir la conversation » of a plugin made in one. */
+  onOpenConversation?(id: string): void;
 }) {
   const words = messages.settings;
   const [values, setValues] = useState<Values | null>(null);
@@ -146,7 +149,7 @@ export function SettingsView({
           />
         ) : null}
         {props && page === 'permissions' && project ? <ProjectPage messages={messages} locale={locale} projectId={project.id} /> : null}
-        {page === 'plugins' ? <PluginsPage messages={messages} locale={locale} onCreate={() => onCreatePlugin?.()} /> : null}
+        {page === 'plugins' ? <PluginsPage messages={messages} locale={locale} onCreate={() => onCreatePlugin?.()} {...(onOpenConversation ? { onOpenConversation } : {})} /> : null}
         {page === 'mcp' ? <McpServersPage messages={messages} /> : null}
       </div>
     </div>

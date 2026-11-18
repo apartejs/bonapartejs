@@ -333,10 +333,20 @@ ${appTokens}`,
     if (key === 'language') chosenLanguage = value;
   });
 
+  // What the plugins are, told to the window whoever changed it — the person, the model's tools, a process that
+  // ended: one word for a burst of changes.
+  let pluginsTold: ReturnType<typeof setTimeout> | null = null;
+  core.plugins.onChange(() => {
+    if (pluginsTold) return;
+    pluginsTold = setTimeout(() => {
+      pluginsTold = null;
+      push({ kind: 'plugins' });
+    }, 50);
+  });
+
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   registerAllChannels(ipc, core, {
     browser: builtinBrowser,
-    pluginsChanged: () => push({ kind: 'plugins' }),
     version: () => __BONAPARTE_VERSION__,
     locale: interfaceLocale,
     // The system's folder dialog, over the window — or the test's folder in a test run.

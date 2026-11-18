@@ -15,7 +15,8 @@ import {
   type ProjectFactsView,
   type ProjectView,
 } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Glyph } from '../shell/icons';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 
@@ -101,7 +102,7 @@ export function NewProject({ open, messages, onClose, onCreated, defaultMode = '
           {words.title}
         </h1>
         <button type="button" className="aparte-dialog__close" aria-label={words.close} onClick={onClose}>
-          {createElement('aparte-icon', { name: 'close' })}
+          <Glyph name="close" />
         </button>
       </header>
       <div className="aparte-dialog__body new-project__body">

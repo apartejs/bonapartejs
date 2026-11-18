@@ -75,10 +75,10 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
   const allow = useRef<HTMLButtonElement>(null);
   const diff = useRef<AparteDiff | null>(null);
 
-  // What a write would change, as the core computes it.
+  // What a write would change, as the core computes it — and the code of a plugin made here before it runs (task 11.4).
   useEffect(() => {
     setPreview(null);
-    if ((kind !== 'edit' && kind !== 'write') || !request.conversationId) return;
+    if ((kind !== 'edit' && kind !== 'write' && request.name !== 'extension_run') || !request.conversationId) return;
     let current = true;
     void bridge
       .invoke(toolsPreview, { id: request.conversationId, call: { name: request.name, input: request.input } })

@@ -561,3 +561,26 @@ describe('PluginHost — what is switched off is kept (task 11.1)', () => {
     expect(again.isEnabled('notes', 'p1')).toBe(false);
   });
 });
+
+describe('PluginHost — what changed is told', () => {
+  it('each start, stop, removal and switch is told to whoever listens, a crash included', async () => {
+    const host = new PluginHost({ registry: new ToolRegistry() });
+    const told: number[] = [];
+    let count = 0;
+    const off = host.onChange(() => told.push((count += 1)));
+    host.add({ id: 'notes', name: 'Notes', version: '1.0.0' }, { builtin: true });
+    await host.activate('notes', { activate: () => undefined });
+    expect(told.length).toBeGreaterThanOrEqual(1);
+    const afterStart = told.length;
+    await host.setEnabled('notes', false);
+    expect(told.length).toBeGreaterThan(afterStart);
+    const afterOff = told.length;
+    await host.forget('notes');
+    expect(told.length).toBeGreaterThan(afterOff);
+    off();
+    const before = told.length;
+    host.add({ id: 'other', name: 'Other', version: '1.0.0' }, { builtin: true });
+    await host.activate('other', { activate: () => undefined });
+    expect(told.length).toBe(before);
+  });
+});

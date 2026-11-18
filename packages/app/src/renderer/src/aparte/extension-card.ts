@@ -7,7 +7,7 @@
 
 import type { AparteConfig, AparteToolCallSegment } from '@aparte/core';
 import { aparteGlobalConfig } from '@aparte/core';
-import { extensionsCode, extensionsInstall, extensionsTry, localize, type Locale, type PluginManifest } from '@aparte/bonaparte-shared';
+import { extensionsCode, extensionsInstall, extensionsTry, localize, type Locale, type PluginManifest, type PluginStatus } from '@aparte/bonaparte-shared';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 
@@ -88,15 +88,19 @@ function cardOf(made: Made, messages: Messages, locale: Locale): HTMLElement {
     });
     return self;
   };
-  const ref = { conversationId: made.conversationId, id: made.id };
+  // The revision this card shows: what it does is done on that one, never on a newer one not seen here.
+  const ref = { conversationId: made.conversationId, id: made.id, rev: made.rev };
+  /** What the core says of it once done: started, or not — with its reason. */
+  const outcome = (statuses: readonly Pick<PluginStatus, 'id' | 'active' | 'error'>[], done: string): void => {
+    const it = statuses.find((one) => one.id === made.id);
+    status.textContent = it?.active ? done : words.failed(it?.error ?? words.notStarted);
+  };
   actions.append(
     button(words.install, 'aparte-btn--primary aparte-btn--solid', async () => {
-      await bridge.invoke(extensionsInstall, ref);
-      status.textContent = words.installed;
+      outcome(await bridge.invoke(extensionsInstall, ref), words.installed);
     }),
     button(words.try, 'aparte-btn--outline', async () => {
-      await bridge.invoke(extensionsTry, ref);
-      status.textContent = words.trying;
+      outcome(await bridge.invoke(extensionsTry, ref), words.trying);
     }),
     button(words.code, 'aparte-btn--outline', async (self) => {
       if (!code.hidden) {

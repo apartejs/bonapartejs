@@ -17,7 +17,8 @@ import {
   type McpServerViewData,
   type ProjectView,
 } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Glyph, Icon } from '../shell/icons';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 
@@ -98,7 +99,7 @@ export function McpServersPage({ messages }: { messages: Messages }) {
             {words.paste}
           </button>
           <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={() => setDialog('add')}>
-            {createElement('aparte-icon', { name: 'plus' })}
+            <Icon name="plus" />
             {words.add}
           </button>
         </div>
@@ -152,7 +153,7 @@ export function McpServersPage({ messages }: { messages: Messages }) {
                       })
                     }
                   >
-                    {createElement('aparte-icon', { name: expanded ? 'collapse' : 'expand' })}
+                    <Glyph name={expanded ? 'collapse' : 'expand'} />
                   </button>
                   <span className={`mcp-server__dot mcp-server__dot--${server.state}`} role="img" aria-label={words.state[server.state]} />
                   <span className="mcp-server__name">

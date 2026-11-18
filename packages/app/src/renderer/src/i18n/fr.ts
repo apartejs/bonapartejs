@@ -932,6 +932,10 @@ export const fr: Messages = {
     none: 'Aucun plugin ne répond à ce filtre.',
     empty: 'Aucun plugin ajouté pour l’instant : « Ajouter… » en prend un d’un dossier, de npm ou d’un dépôt git.',
     appScope: 'Toute l’app',
+    trialScope: 'Une conversation',
+    onTrial: 'À l’essai',
+    trialLine: 'À l’essai dans sa conversation · pas encore installé',
+    openConversation: 'Ouvrir la conversation',
     projectScope: (name) => `Projet ${name}`,
     effects: { read: 'Lit', write: 'Écrit', execute: 'Exécute', network: 'Réseau', ui: 'Interface seule' },
     from: { folder: 'Depuis un dossier', npm: 'Depuis npm', git: 'Depuis un dépôt git', conversation: (title) => `Créé dans « ${title} »` },
@@ -997,6 +1001,7 @@ export const fr: Messages = {
         extension_undefine: 'Plugin retiré',
       },
       trialGroup: 'À l’essai',
+      notStarted: 'il n’a pas démarré, sans dire pourquoi',
     },
     search: {
       title: 'Recherche web',

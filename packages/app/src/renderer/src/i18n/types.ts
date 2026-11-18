@@ -884,6 +884,11 @@ export interface Messages {
     none: string;
     empty: string;
     appScope: string;
+    /** A plugin on trial: seen by its conversation only. */
+    trialScope: string;
+    onTrial: string;
+    trialLine: string;
+    openConversation: string;
     projectScope(name: string): string;
     effects: { read: string; write: string; execute: string; network: string; ui: string };
     from: { folder: string; npm: string; git: string; conversation(title: string): string };
@@ -944,6 +949,8 @@ export interface Messages {
       failed(error: string): string;
       lines: { harness_inspect: string; extension_define: string; extension_run: string; extension_stop: string; extension_undefine: string };
       trialGroup: string;
+      /** It did not start, and said no reason. */
+      notStarted: string;
     };
     search: {
       title: string;

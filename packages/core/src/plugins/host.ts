@@ -138,10 +138,30 @@ export class PluginHost {
   /** Which plugin owns a tool of the registry. */
   private readonly owners = new Map<string, string>();
   private readonly log: (message: string) => void;
+  private readonly listeners = new Set<() => void>();
 
   constructor(private readonly options: PluginHostOptions) {
     this.log = options.log ?? (() => undefined);
     this.state = options.state ?? null;
+  }
+
+  /**
+   * Told whenever what the plugins are changes — one started, stopped, crashed, removed, switched, tried: the app
+   * tells the window, whoever made the change (the person, the model's tools, a process that ended).
+   */
+  onChange(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private changed(): void {
+    for (const listener of [...this.listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        this.log(`a listener of the plugins failed: ${describe(error)}`);
+      }
+    }
   }
 
   /** What is kept of the plugins: opened at the first need. */
@@ -258,6 +278,7 @@ export class PluginHost {
       this.log(`[plugin ${id}] activation failed: ${plugin.error}`);
       await this.teardown(id);
     }
+    this.changed();
     return this.statusOf(plugin);
   }
 
@@ -279,6 +300,7 @@ export class PluginHost {
     this.plugins.delete(id);
     this.modules.delete(id);
     this.trials.delete(id);
+    this.changed();
   }
 
   async deactivateAll(): Promise<void> {
@@ -317,6 +339,7 @@ export class PluginHost {
     const state = await this.stateOf();
     if (options.projectId) {
       await state.setOff(id, !enabled, options.projectId);
+      this.changed();
       return;
     }
     if (enabled) {
@@ -327,6 +350,7 @@ export class PluginHost {
     }
     await state.setOff(id, true);
     await this.teardown(id);
+    this.changed();
   }
 
   isEnabled(id: string, projectId?: string): boolean {
@@ -611,6 +635,7 @@ export class PluginHost {
     activation.ptys.clear();
     activation.flows.clear();
     this.activations.delete(id);
+    this.changed();
   }
 }
 

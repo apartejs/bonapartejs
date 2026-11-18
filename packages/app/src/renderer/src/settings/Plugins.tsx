@@ -7,10 +7,11 @@
  */
 
 import { localize, pluginsCheckUpdates, pluginsOverview, pluginsRemove, pluginsSetEnabled, type Locale, type PluginStatus } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 import { AddPluginDialog } from '../dialogs/AddPlugin';
+import { Icon, type IconName } from '../shell/icons';
 import { WebSearchDialog } from './WebSearch';
 
 type Filter = 'all' | 'on' | 'off';
@@ -43,15 +44,40 @@ export interface PluginsPageProps {
   locale: Locale;
   /** « Créer avec l’agent »: a new conversation, its composer asking for a plugin. */
   onCreate(): void;
+  /** « Ouvrir la conversation »: the conversation a plugin was made in. */
+  onOpenConversation?(id: string): void;
 }
 
-export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
+/** Each row's icon: what a built-in does, where an added one came from. */
+const BUILTIN_ICONS: Record<string, IconName> = {
+  terminal: 'terminal',
+  browser: 'globe',
+  'web-search': 'search',
+  subagents: 'subagents',
+  'project-scripts': 'terminal',
+  'auto-titles': 'edit',
+};
+function iconOf(plugin: PluginStatus, conversation: string | null): IconName {
+  if (plugin.builtin) return BUILTIN_ICONS[plugin.id] ?? 'panel';
+  if (conversation !== null) return 'conversation';
+  return (plugin.source as { kind?: string } | undefined)?.kind === 'git' ? 'branch' : 'folder';
+}
+
+/** The conversation a plugin was made in: the one it is tried in, or the one it was installed from. */
+function madeIn(plugin: PluginStatus): string | null {
+  if (plugin.trial !== undefined) return plugin.trial;
+  const source = plugin.source as { kind: string; conversationId?: string } | undefined;
+  return source?.kind === 'conversation' && source.conversationId ? source.conversationId : null;
+}
+
+export function PluginsPage({ messages, locale, onCreate, onOpenConversation }: PluginsPageProps) {
   const words = messages.plugins;
   const [plugins, setPlugins] = useState<PluginStatus[] | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<'add' | 'search' | null>(null);
+  const madeId = useId();
   const addedId = useId();
   const builtinId = useId();
 
@@ -86,21 +112,25 @@ export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
     if (!needle) return true;
     return [plugin.id, localize(plugin.name, locale), plugin.description ? localize(plugin.description, locale) : ''].some((text) => text.toLowerCase().includes(needle));
   });
-  const added = shown.filter((plugin) => !plugin.builtin);
+  const made = shown.filter((plugin) => !plugin.builtin && madeIn(plugin) !== null);
+  const added = shown.filter((plugin) => !plugin.builtin && madeIn(plugin) === null);
   const builtin = shown.filter((plugin) => plugin.builtin);
 
   const rowOf = (plugin: PluginStatus) => {
     const name = localize(plugin.name, locale);
-    const source = sourceLine(plugin, words);
+    const trial = plugin.trial !== undefined;
+    const source = trial ? words.trialLine : sourceLine(plugin, words);
+    const conversation = madeIn(plugin);
     return (
-      <li key={plugin.id} className="plugin-row" data-plugin={plugin.id}>
+      <li key={plugin.id} className={`plugin-row${trial ? ' plugin-row--trial' : ''}`} data-plugin={plugin.id}>
         <span className="plugin-row__icon" aria-hidden="true">
-          {createElement('aparte-icon', { name: 'panel' })}
+          <Icon name={iconOf(plugin, conversation)} />
         </span>
         <span className="plugin-row__body">
           <span className="plugin-row__title">
             <span className="plugin-row__name">{name}</span>
-            <span className="aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">{words.appScope}</span>
+            <span className="aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">{trial ? words.trialScope : words.appScope}</span>
+            {trial ? <span className="aparte-badge aparte-badge--neutral aparte-badge--outline aparte-badge--sm">{words.onTrial}</span> : null}
             {plugin.effects.length === 0 ? (
               <span className="aparte-badge aparte-badge--neutral aparte-badge--soft aparte-badge--sm">{words.effects.ui}</span>
             ) : (
@@ -126,7 +156,12 @@ export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
               {words.settings}
             </button>
           ) : null}
-          {!plugin.builtin ? (
+          {conversation !== null && onOpenConversation ? (
+            <button type="button" className="aparte-btn aparte-btn--ghost aparte-btn--sm" onClick={() => onOpenConversation(conversation)}>
+              {words.openConversation}
+            </button>
+          ) : null}
+          {!plugin.builtin && !trial ? (
             <button
               type="button"
               className="aparte-btn aparte-btn--ghost aparte-btn--sm"
@@ -136,6 +171,8 @@ export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
               {words.remove(name)}
             </button>
           ) : null}
+          {/* A trial is not switched here: it lives in its conversation, which ends it. */}
+          {trial ? null : (
           <input
             type="checkbox"
             role="switch"
@@ -145,6 +182,7 @@ export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
             disabled={busy === plugin.id}
             onChange={(event) => void act(plugin.id, () => bridge.invoke(pluginsSetEnabled, { id: plugin.id, enabled: event.target.checked }))}
           />
+          )}
         </span>
       </li>
     );
@@ -159,7 +197,7 @@ export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
             {words.add}
           </button>
           <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={onCreate}>
-            {createElement('aparte-icon', { name: 'plus' })}
+            <Icon name="plus" />
             {words.create}
           </button>
         </div>
@@ -191,6 +229,14 @@ export function PluginsPage({ messages, locale, onCreate }: PluginsPageProps) {
         <p className="setting-section__hint">{words.none}</p>
       ) : (
         <>
+          {made.length > 0 ? (
+            <section className="plugins-section" aria-labelledby={madeId}>
+              <h2 id={madeId} className="plugins-section__title">
+                {words.created}
+              </h2>
+              <ul className="plugins-list">{made.map(rowOf)}</ul>
+            </section>
+          ) : null}
           <section className="plugins-section" aria-labelledby={addedId}>
             <h2 id={addedId} className="plugins-section__title">
               {words.added}

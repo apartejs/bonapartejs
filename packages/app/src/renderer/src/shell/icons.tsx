@@ -28,6 +28,8 @@ import {
   settingsIcon,
   terminalIcon,
 } from '@aparte/core/icons';
+import type { AparteIconName } from '@aparte/core';
+import { createElement } from 'react';
 
 const STROKE = 'class="aparte-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 
@@ -70,4 +72,12 @@ export type IconName = keyof typeof ICONS;
 export function Icon({ name }: { name: IconName }) {
   // Constant SVG of aparté's set: nothing a person or a model wrote.
   return <span className="bonaparte-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS[name] }} />;
+}
+
+/**
+ * One of aparté's own icons. `<aparte-icon>` draws nothing, and says nothing, for a name it does not have: its
+ * name is aparté's type, so such a name is a type error here.
+ */
+export function Glyph({ name }: { name: AparteIconName }) {
+  return createElement('aparte-icon', { name });
 }

@@ -27,14 +27,49 @@ const MANIFEST = {
 };
 const CODE = "export default { activate(ctx) { ctx.registerCommand('changelog', () => ({ send: 'Résume les commits du jour.' })); } };";
 
-function agent(prompt: string): string {
+const agentWith = (code: string) => (prompt: string): string => {
   const user = prompt.lastIndexOf('<|turn>user');
   const results = prompt.slice(user).split('<|tool_response>').length - 1;
   if (!prompt.slice(user).includes('plugin')) return 'ok';
   if (results === 0) return '<|tool_call>call:harness_inspect{}<tool_call|>';
-  if (results === 1) return `<|tool_call>call:extension_define{manifest:${gemma(MANIFEST)},code:${gemma(CODE)}}<tool_call|>`;
+  if (results === 1) return `<|tool_call>call:extension_define{manifest:${gemma(MANIFEST)},code:${gemma(code)}}<tool_call|>`;
   return 'Voilà le plugin. Rien ne tourne tant que tu n’as pas dit oui.';
-}
+};
+const agent = agentWith(CODE);
+
+test('a trial the model starts itself (extension_run) reaches the window: its « / » command is there, marked « À l’essai »', async ({ launch }) => {
+  const run = (prompt: string): string => {
+    const user = prompt.lastIndexOf('<|turn>user');
+    const results = prompt.slice(user).split('<|tool_response>').length - 1;
+    if (results === 2) return `<|tool_call>call:extension_run{id:${gemma('changelog')}}<tool_call|>`;
+    if (results === 3) return 'Il tourne ici.';
+    return agent(prompt);
+  };
+  const { page } = await launch({ engine: { responder: run }, settings: { defaultMode: 'plume' } });
+  const ui = chat(page);
+  await ui.send('Crée-moi un plugin : une commande /changelog, et lance-le.');
+  // Its code is shown before it runs: the person says yes.
+  const approval = page.getByRole('region', { name: 'Demande d’accord' });
+  await expect(approval).toContainText("registerCommand('changelog'", { timeout: 30_000 });
+  await approval.getByRole('button', { name: 'Autoriser', exact: true }).click();
+  await expect(ui.replyText).toHaveText(/Il tourne ici/, { timeout: 30_000 });
+  await ui.editor.click();
+  await page.keyboard.type('/');
+  await expect(page.getByRole('listbox').getByRole('option', { name: /changelog/ })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('listbox')).toContainText('À l’essai');
+});
+
+test('« Essayer » on a plugin that does not start says so, with its reason — never « À l’essai »', async ({ launch }) => {
+  const broken = "export default { activate() { throw new Error('no git here'); } };";
+  const { page } = await launch({ engine: { responder: agentWith(broken) }, settings: { defaultMode: 'plume' } });
+  await chat(page).send('Crée-moi un plugin : une commande /changelog.');
+  const card = page.locator('section.extension-card[data-extension="changelog"]');
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.getByRole('button', { name: 'Essayer dans cette conversation' }).click();
+  await expect(card.getByRole('status')).toContainText('Pas fait : ');
+  await expect(card.getByRole('status')).toContainText('no git here');
+  await expect(card).not.toContainText('À l’essai dans cette conversation');
+});
 
 test('a plugin made in a conversation: its card, tried there with its « / » command on trial, then installed', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: agent }, settings: { defaultMode: 'plume' } });
@@ -61,6 +96,18 @@ test('a plugin made in a conversation: its card, tried there with its « / » co
   await expect(option).toBeVisible();
   await expect(page.getByRole('listbox')).toContainText('À l’essai');
   await page.keyboard.press('Escape');
+
+  // On trial, the Plugins page lists it among those made in a conversation: not switched there — its conversation is.
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: /^Plugins/ }).click();
+  const made = page.getByRole('region', { name: 'Créés dans tes conversations' });
+  const trial = made.locator('.plugin-row', { has: page.locator('.plugin-row__name', { hasText: 'changelog' }) });
+  await expect(trial).toContainText('À l’essai');
+  await expect(trial).toContainText('Une conversation');
+  await expect(trial.getByRole('switch')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Ajoutés' }).locator('.plugin-row__name', { hasText: 'changelog' })).toHaveCount(0);
+  await trial.getByRole('button', { name: 'Ouvrir la conversation' }).click();
+  await expect(card).toBeVisible();
 
   await card.getByRole('button', { name: 'Installer' }).click();
   await expect(card).toContainText('Installé');

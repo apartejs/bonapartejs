@@ -929,6 +929,10 @@ export const en: Messages = {
     none: 'No plugin matches this filter.',
     empty: 'No plugin added yet: « Add… » takes one from a folder, from npm or from a git repository.',
     appScope: 'Whole app',
+    trialScope: 'One conversation',
+    onTrial: 'On trial',
+    trialLine: 'On trial in its conversation · not installed yet',
+    openConversation: 'Open the conversation',
     projectScope: (name) => `Project ${name}`,
     effects: { read: 'Reads', write: 'Writes', execute: 'Runs', network: 'Network', ui: 'Interface only' },
     from: { folder: 'From a folder', npm: 'From npm', git: 'From a git repository', conversation: (title) => `Made in “${title}”` },
@@ -994,6 +998,7 @@ export const en: Messages = {
         extension_undefine: 'Plugin removed',
       },
       trialGroup: 'On trial',
+      notStarted: 'it did not start, and said no reason',
     },
     search: {
       title: 'Web search',

@@ -1093,6 +1093,10 @@ function Workspace({
           goTo(null);
           setTimeout(() => prefill(messages.plugins.createPrompt), 0);
         }}
+        onOpenConversation={(id) => {
+          setSettingsPage(null);
+          goTo(id);
+        }}
       />
     ) : null}
     <div className="aparte-app-shell bonaparte-shell" hidden={settingsPage !== null}>

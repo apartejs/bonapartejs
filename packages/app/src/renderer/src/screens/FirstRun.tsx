@@ -32,7 +32,8 @@ import {
   type ProbeResultView,
   type RecommendedModelView,
 } from '@aparte/bonaparte-shared';
-import { createElement, useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { Glyph } from '../shell/icons';
 import { bridge } from '../bridge';
 import { formatBytes, formatSeconds, type NumberStyle } from '../format';
 import type { Messages } from '../i18n/index';
@@ -107,7 +108,7 @@ function LlamaStatus({ llama, text, style, downloading, busy, failure, onDownloa
     <div className="llama-status first-run__status">
       <div className="llama-status__row">
         <span className={`first-run__mark${current ? ' first-run__mark--found' : ''}`} aria-hidden="true">
-          {createElement('aparte-icon', { name: current ? 'check' : 'download' })}
+          <Glyph name={current ? 'check' : 'download'} />
         </span>
         <div className="llama-status__text">
           <p className="llama-status__line">{line}</p>
@@ -584,7 +585,7 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                 ) : null}
                 <div className="first-run__status first-run__gpu">
                   <span className={`first-run__mark${gpuBytes !== null ? ' first-run__mark--found' : ''}`} aria-hidden="true">
-                    {createElement('aparte-icon', { name: gpuBytes !== null ? 'check' : 'info' })}
+                    <Glyph name={gpuBytes !== null ? 'check' : 'info'} />
                   </span>
                   <div className="llama-status__text">
                     <p className="llama-status__line">{text.gpu.title}</p>
