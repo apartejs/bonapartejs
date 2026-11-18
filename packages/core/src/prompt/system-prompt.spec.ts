@@ -78,12 +78,11 @@ describe('buildSystemPrompt', () => {
     expect(one.project).not.toBe(other.project);
   });
 
-  it('a discussion is given neither edit_file, nor write_file, nor run_command, whatever it is passed', () => {
+  it('a discussion reaches no file and runs nothing: the web only, whatever it is passed (task 9.7, as the market does)', () => {
     const { stable } = buildSystemPrompt(options({ kind: 'discussion' }));
-    expect(stable).not.toMatch(/edit_file|write_file|run_command/);
-    expect(stable).toContain('read_file');
+    expect(stable).not.toMatch(/read_file|edit_file|write_file|run_command/);
     expect(stable).toContain('web_fetch');
-    expect(toolsFor('discussion', TOOLS).map((one) => one.name)).toEqual(['read_file', 'web_fetch']);
+    expect(toolsFor('discussion', TOOLS).map((one) => one.name)).toEqual(['web_fetch']);
     expect(toolsFor('code', TOOLS)).toHaveLength(TOOLS.length);
   });
 

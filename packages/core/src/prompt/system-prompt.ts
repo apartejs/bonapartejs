@@ -44,8 +44,8 @@ const IDENTITY: Record<ConversationKind, string> = {
     'You are bonaparte, a local-first coding agent working on a real project on the person’s computer. ' +
     'Be precise and concise. Verify with tools instead of assuming.',
   discussion:
-    'You are bonaparte, a local-first assistant. In this conversation you read files and the web to answer, ' +
-    'and you change nothing on the computer. Be precise and concise.',
+    'You are bonaparte, a local-first assistant. In this conversation you have no access to the person’s files ' +
+    'nor to their computer: you answer from what you know, and from the web when a tool lets you. Be precise and concise.',
 };
 
 // Without it, a delta appended later would contradict the frozen prompt.
@@ -53,9 +53,12 @@ const AMENDMENT =
   'The list of tools may be amended later in this conversation: an update will announce any tool added or ' +
   'removed, and it takes precedence over the list given here.';
 
-/** A discussion reads and fetches; it never writes nor runs anything (spec §2). */
+/**
+ * A discussion reaches no file and runs nothing — the web only, as a conversation without a folder does in the
+ * other assistants (task 9.7); its questions are the window's. A code conversation has every tool.
+ */
 export function toolsFor(kind: ConversationKind, tools: readonly ToolDef[]): ToolDef[] {
-  return kind === 'code' ? [...tools] : tools.filter((tool) => tool.effect !== 'write' && tool.effect !== 'execute');
+  return kind === 'code' ? [...tools] : tools.filter((tool) => tool.effect === 'network');
 }
 
 /**

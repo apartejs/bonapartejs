@@ -427,6 +427,11 @@ export interface Core {
    * engine is `switchModel`, which renders it again for its model.
    */
   switchProvider(conversationId: string, providerId: string, model: string): Promise<void>;
+  /**
+   * « Travailler dans un projet… » (task 9.7): a discussion becomes a code conversation of the project, in its
+   * default mode. Nothing is read again: its next turn tells the tools, the folders and the mode as notes.
+   */
+  attachProject(conversationId: string, projectId: string): Promise<void>;
   /** A turn of a conversation on a service: aparté's own loop, the core's tools and policy (task 9.2). */
   turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response>;
   /**
@@ -1269,6 +1274,10 @@ export function createCore(deps: CoreDeps): Core {
     }));
     const signer = await tickets();
     const { roots, projectId, barred } = await rootsOf(conversationId);
+    // Only the tools its kind is told of: a discussion's call to a file tool finds none (task 9.7).
+    const kind = (await conversationStore.get(conversationId))?.kind ?? 'code';
+    const visible = plugins.visibleTo(projectId);
+    const told = new Set(toolsFor(kind, tools.view(visible).list()).map((tool) => tool.name));
     // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
     try {
       const result = await runAgentTurn(
@@ -1277,7 +1286,7 @@ export function createCore(deps: CoreDeps): Core {
           input,
           mode: (await modeOf(conversationId)).mode,
           ...(projectId ? { projectId } : {}),
-          registry: tools.view(plugins.visibleTo(projectId)),
+          registry: tools.view((def) => visible(def) && told.has(def.name)),
           permissions,
           conversations,
           roots,
@@ -1326,6 +1335,16 @@ export function createCore(deps: CoreDeps): Core {
     // again for its model (task 9.3).
     await (await openJournal(conversationStore.dir, conversationId, meta.branchId)).append({ kind: 'engine', engineId: provider.id, modelId: model });
     return true;
+  }
+
+  async function attachProject(conversationId: string, projectId: string): Promise<void> {
+    const project = await projectStore.get(projectId);
+    if (!project) throw new Error(`No project ${projectId}.`);
+    const meta = await conversationStore.get(conversationId);
+    if (!meta) throw new Error(`No conversation ${conversationId}.`);
+    await conversationStore.update(conversationId, { kind: 'code', projectId: project.id });
+    projectRoots.set(project.id, project.roots);
+    await core.setMode(conversationId, project.defaultMode ?? 'repetition', { confirmed: false });
   }
 
   async function switchProvider(conversationId: string, providerId: string, model: string): Promise<void> {
@@ -1827,6 +1846,7 @@ export function createCore(deps: CoreDeps): Core {
     serviceOf,
     startOnService,
     switchProvider,
+    attachProject,
     turnOnService,
     modeOf,
 

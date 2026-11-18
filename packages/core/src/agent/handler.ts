@@ -125,7 +125,13 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       // Started in a project: it belongs to it, and runs in its default mode unless the person chose one.
       const project = await core.projects.get(url.searchParams.get('project') ?? '');
       if (project) await core.conversationStore.update(conversationId, { projectId: project.id });
-      const mode = chosen.success ? chosen.data : project?.defaultMode;
+      // Without a project, a discussion when the window says so (task 9.7): in Lecture, whatever mode was shown.
+      if (!project && url.searchParams.get('kind') === 'discussion') {
+        await core.conversationStore.update(conversationId, { kind: 'discussion' });
+        await core.setMode(conversationId, 'lecture', { confirmed: false });
+      }
+      const discussion = !project && url.searchParams.get('kind') === 'discussion';
+      const mode = discussion ? undefined : chosen.success ? chosen.data : project?.defaultMode;
       // Only a mode the person picked in this run confirms Impro: a default read from disk does not
       // (security rule 9) — the window says `picked=1` when the person chose it in the switch.
       const picked = chosen.success && url.searchParams.get('picked') === '1';
