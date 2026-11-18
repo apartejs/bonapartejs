@@ -36,6 +36,8 @@ import { e2eEngineDeps, e2ePickedFolder, e2eSearchEngine } from './e2e-engine.js
 import { createHiddenSearch, type SearchSession } from './search/hidden-page.js';
 import { mainWords, type MainWords } from './i18n/index.js';
 import { registerAllChannels } from './ipc/index.js';
+import { readUpdates } from './ipc/updates.js';
+import { createAppUpdates, fakeUpdater, type UpdaterLike } from './updater.js';
 import { createIpcRegistry } from './ipc/register.js';
 import { stopEngineBeforeQuit } from './quit.js';
 import { devServerUrlFrom, isTrustedOrigin } from './security.js';
@@ -345,9 +347,22 @@ ${appTokens}`,
     }, 50);
   });
 
+  // The app's own update (task 13.1): electron-updater in a packaged app; a test run's own; none in development.
+  const updater = options.e2e ? fakeUpdater(process.env) : app.isPackaged ? await packagedUpdater() : null;
+  if (options.e2e && updater) (globalThis as { __bonaparteUpdater?: unknown }).__bonaparteUpdater = updater;
+  const appUpdates = createAppUpdates({
+    updater,
+    current: __BONAPARTE_VERSION__,
+    auto: () => setting(core, 'autoUpdateApp', true),
+    whenIdle: () => core.whenIdle(),
+    log: (line) => console.error(line),
+  });
+
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   registerAllChannels(ipc, core, {
     browser: builtinBrowser,
+    updates: appUpdates,
+    updatesChanged: () => push({ kind: 'updates' }),
     // A change the person made is told before its answer: the window acts on it at once (a title provider, a pane).
     pluginsChanged: () => push({ kind: 'plugins' }),
     version: () => __BONAPARTE_VERSION__,
@@ -407,6 +422,17 @@ ${appTokens}`,
     },
   });
 
+  // The updates (task 13.1): asked at start then every six hours. A test run's own update is read at once; nothing else is asked.
+  if (options.e2e) void appUpdates.check().then(() => push({ kind: 'updates' }));
+  else {
+    const checkUpdates = () =>
+      void readUpdates(core, appUpdates, __BONAPARTE_VERSION__, true)
+        .then(() => push({ kind: 'updates' }))
+        .catch((error: unknown) => console.error('[bonaparte] the updates could not be checked:', error));
+    setTimeout(checkUpdates, 30_000).unref();
+    setInterval(checkUpdates, 6 * 60 * 60 * 1000).unref();
+  }
+
   window = createMainWindow({ devServerUrl, e2e: options.e2e });
   // « Moniteur de ressources » (task 12.4): read while its entry is on, once a window shows it.
   core.resources.start();
@@ -455,4 +481,15 @@ ${appTokens}`,
   });
   // The first drawing reads every conversation: the window does not wait for it.
   void noticed.refresh();
+}
+
+/** electron-updater, loaded only in a packaged app: the releases of the repository (electron-builder's `publish`). */
+async function packagedUpdater(): Promise<UpdaterLike | null> {
+  try {
+    const { autoUpdater } = await import('electron-updater');
+    return autoUpdater as unknown as UpdaterLike;
+  } catch (error) {
+    console.error('[bonaparte] the app cannot update itself:', error);
+    return null;
+  }
 }

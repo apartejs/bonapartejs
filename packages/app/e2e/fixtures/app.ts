@@ -100,7 +100,7 @@ export interface LaunchOptions {
    * The hub the recommended models are downloaded from (task 9.5), a local one, and the catalogue the app
    * recommends: one small model per name, served by the hub. `paceMs`: a download that lasts.
    */
-  hub?: { models: Record<string, { family: 'gemma' | 'qwen'; gguf?: FakeGgufOptions }>; paceMs?: number };
+  hub?: { models: Record<string, { family: 'gemma' | 'qwen'; gguf?: FakeGgufOptions; replaces?: string[] }>; paceMs?: number };
   /**
    * The public search engine the hidden page reads (task 10.4), a local one shaped as DuckDuckGo's HTML page:
    * its results, or a verification page. Without it, a test run searches nothing.
@@ -292,6 +292,8 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
           sha256: createHash('sha256').update(body).digest('hex'),
           context: 32_768,
           fromGiB: 0,
+          // A new version of a model on the disk (task 13.1).
+          ...(model.replaces ? { replaces: model.replaces } : {}),
         });
       }
       hub = await startFakeModelHub({ files, ...(options.hub.paceMs ? { paceMs: options.hub.paceMs } : {}) });

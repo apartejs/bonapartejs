@@ -1093,7 +1093,8 @@ export function createCore(deps: CoreDeps): Core {
     const llama = await llamaCpp(options.check ? { checkLatest: true } : {});
     const offered = await offeredModels();
     return {
-      llama: llama.updateAvailable && llama.latest ? llama.latest : null,
+      llama: llama.updateAvailable && llama.latest ? { ...llama.latest, installing: llama.installing } : null,
+      busy: supervisor.held,
       models: await Promise.all(
         offered.map(async ({ entry, replaces }) => ({
           id: entry.id,
@@ -1120,8 +1121,11 @@ export function createCore(deps: CoreDeps): Core {
         await conversationStore.update(meta.id, { modelId: fresh.path });
       }
     }
+    // The new version is the one a load brings back from now on: chosen as the default in place of the old one.
     const chosen = await appSettings.get('defaultModel').catch(() => '');
-    if (typeof chosen === 'string' && chosen && samePath(chosen, offer.replaces)) await appSettings.set('defaultModel', fresh.path);
+    if (typeof chosen !== 'string' || !chosen || samePath(chosen, offer.replaces)) await appSettings.set('defaultModel', fresh.path);
+    // The old one runs: the new one takes its place — its memory saved first, each conversation read again when opened.
+    if (loaded && samePath(loaded.path, offer.replaces)) await core.loadModel(fresh.path);
   }
 
   async function keepModel(id: string): Promise<void> {

@@ -1279,3 +1279,35 @@ for (const locale of ['fr', 'en'] as const) {
     });
   }
 }
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the updates of phase 13: the app, llama.cpp and a model, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const fr = locale === 'fr';
+      const { app, page } = await launch({
+        locale,
+        managed: { models: { 'gemma-4-e2e': { paddingBytes: 1024 * 1024 } }, releases: true },
+        hub: { models: { 'gemma-4-e2e-v2': { family: 'gemma', replaces: ['gemma-4-e2e.gguf'] } } },
+        env: { BONAPARTE_E2E_UPDATE: JSON.stringify({ version: '1.1.0', bytes: 92 * 1024 * 1024, notes: fr ? 'La recherche Ctrl K, l’export des conversations, et des correctifs.' : 'Ctrl K search, exporting the conversations, and fixes.' }) },
+      });
+      await page.emulateMedia({ colorScheme: scheme });
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      await page.getByRole('button', { name: fr ? 'Démarrer' : 'Start' }).click();
+      const ui = chat(page);
+      await expect(ui.composer(fr ? 'Réponds, ou demande autre chose…' : 'Reply, or ask something else…')).toBeVisible({ timeout: 20_000 });
+      await ui.send(fr ? 'Bonjour' : 'Hello');
+      await expect(ui.replies).toHaveCount(1, { timeout: 15_000 });
+      await page.locator('.bonaparte-updates-link').click({ timeout: 15_000 });
+      const dialog = page.locator('.updates-dialog');
+      await expect(dialog.locator('.update-card')).toHaveCount(3, { timeout: 15_000 });
+      await page.waitForTimeout(300);
+      await shot(page, into, `updates-${locale}-${scheme}.png`);
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(820, 1000));
+      await page.waitForTimeout(400);
+      await shot(page, into, `narrow-updates-${locale}-${scheme}.png`);
+    });
+  }
+}

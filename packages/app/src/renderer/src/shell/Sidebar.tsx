@@ -59,6 +59,8 @@ export interface SidebarProps {
   onSettings(): void;
   /** « À traiter » (task 8.4): what waits for the person, counted; the page open. */
   inbox: { count: number; open: boolean; onOpen(): void };
+  /** « Mises à jour » (task 13.1): shown only when one is ready. */
+  updates?: { count: number; onOpen(): void };
 }
 
 /** A row as the list draws it: the conversation, where its memory is, its branch's files. */
@@ -218,6 +220,15 @@ export function Sidebar(props: SidebarProps) {
         )}
       </div>
       <EngineCard engine={props.engine} messages={messages} resources={props.resources ?? null} {...(props.locale ? { locale: props.locale } : {})} />
+      {props.updates && props.updates.count > 0 ? (
+        <button type="button" className="bonaparte-settings-link bonaparte-updates-link" aria-label={messages.updates.openCount(props.updates.count)} onClick={props.updates.onOpen}>
+          <Icon name="update" />
+          {messages.updates.open}
+          <span className="bonaparte-inbox-entry__count" aria-hidden="true">
+            {props.updates.count}
+          </span>
+        </button>
+      ) : null}
       <button type="button" className="bonaparte-settings-link" onClick={props.onSettings}>
         <Icon name="settings" />
         {messages.settings.open}

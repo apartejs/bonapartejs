@@ -510,13 +510,19 @@ export class ConversationEngine {
       process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b;
     const tokens: number[] = [];
     for (const meta of await this.deps.store.list()) {
-      if (meta.engineId !== 'builtin' || !same(meta.modelId, modelPath)) continue;
+      if (meta.engineId !== 'builtin') continue;
+      const entries = await openJournal(this.deps.store.dir, meta.id, meta.branchId)
+        .then((journal) => journal.entries())
+        .catch(() => null);
+      if (!entries?.some((entry) => entry.kind === 'user')) continue;
+      // The model its prompt was frozen for: the journal says it, the card only names the one it was made on.
+      const model = branchModel(entries).modelId || meta.modelId;
+      if (!model || !same(model, modelPath)) continue;
       const owner = this.ownerOf(meta);
-      if (this.scheduler.isResident(owner)) {
-        const entries = await openJournal(this.deps.store.dir, meta.id, meta.branchId)
-          .then((journal) => journal.entries())
-          .catch(() => null);
-        if (entries?.some((entry) => entry.kind === 'user')) tokens.push(estimateTokens(frozenPrompt(entries)));
+      // In the engine: kept there, or its turn holds the slot right now.
+      const working = this.scheduler.busy.some((one) => one.kind === 'conversation' && one.conversationId === meta.id);
+      if (working || this.scheduler.isResident(owner)) {
+        tokens.push(estimateTokens(frozenPrompt(entries)));
         continue;
       }
       const manifest = await this.deps.kv.manifest(ownerKey(owner));

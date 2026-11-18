@@ -49,8 +49,10 @@ export interface ModelUpdateView {
 
 /** What can be updated, besides the app (whose update the main process owns). */
 export interface UpdatesView {
-  llama: { build: string; bytes: number } | null;
+  llama: { build: string; bytes: number; installing: { done: number; total: number | null } | null } | null;
   models: ModelUpdateView[];
+  /** A reply holds the engine: what installs waits for the end of the turn. */
+  busy: boolean;
 }
 
 export interface RereadCost {

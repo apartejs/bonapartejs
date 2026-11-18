@@ -1047,6 +1047,7 @@ describe('createCore — the updates (task 13.1)', () => {
     const { core, gemma, entry, hub } = await withMemory();
     const updates = await core.updates();
     expect(updates.llama).toBeNull();
+    expect(updates.busy).toBe(false);
     expect(updates.models).toEqual([
       {
         id: 'gemma-4-test',
@@ -1070,6 +1071,40 @@ describe('createCore — the updates (task 13.1)', () => {
     expect((await readdir(join(dir, 'models')))).toContain('gemma-4-test.gguf');
     expect((await core.updates()).models).toEqual([]);
     expect(gemma).not.toBe(kept);
+    // A load brings the new one back from now on.
+    expect(await core.settings.get('defaultModel')).toBe(kept);
+  }, 20_000);
+
+  it('with the old version running, the new one takes its place once downloaded', async () => {
+    const { core, gemma, dir } = await withMemory();
+    await core.loadModel(gemma);
+    await core.updateModel('gemma-4-test');
+    expect(await core.engineState()).toMatchObject({ status: 'ready', model: { path: join(dir, 'data', 'models', 'gemma-4-test-v2.gguf') } });
+  }, 30_000);
+
+  it('counts a conversation whose memory is still in the engine', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'bp-upd-'));
+    dirs.push(scratch);
+    const { entry, hub } = await newVersion(scratch);
+    const { core, gemma } = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c2', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    await core.conversations.turn('c2', { text: 'Bonjour' }, () => undefined);
+    expect((await core.updates()).models[0]?.reread.conversations).toBe(1);
+  }, 20_000);
+
+  it('counts the conversation whose turn holds the engine right now', async () => {
+    const scratch = await mkdtemp(join(tmpdir(), 'bp-upd-'));
+    dirs.push(scratch);
+    const { entry, hub } = await newVersion(scratch);
+    const { core, gemma } = await setup({ modelHub: hub.url, modelCatalogue: [entry] });
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c3', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    let during: Promise<number | undefined> | undefined;
+    await core.conversations.turn('c3', { text: 'Bonjour' }, () => {
+      during ??= core.updates().then((view) => view.models[0]?.reread.conversations);
+    });
+    expect(await during).toBe(1);
   }, 20_000);
 
   it('« Garder la version actuelle » never offers it again', async () => {
@@ -1083,7 +1118,7 @@ describe('createCore — the updates (task 13.1)', () => {
     const github = await startFakeLlamaReleases({ build: 'b12383' });
     opened.push(github);
     const { core, gemma } = await setup({ llamaReleases: github.url });
-    expect((await core.updates({ check: true })).llama).toEqual({ build: 'b12383', bytes: github.bytes });
+    expect((await core.updates({ check: true })).llama).toEqual({ build: 'b12383', bytes: github.bytes, installing: null });
     await core.loadModel(gemma);
     const release = core.hold();
     const updating = core.updateLlamaCpp();

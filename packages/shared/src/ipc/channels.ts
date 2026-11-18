@@ -8,6 +8,7 @@
 import { appInfo } from './app.js';
 import { mcpAdd, mcpOverview, mcpPaste, mcpRemove, mcpStart, mcpStop } from './mcp.js';
 import { runsList, runsStart, runsStop } from './runs.js';
+import { updatesKeep, updatesList, updatesLlama, updatesModel, updatesRestart } from './updates.js';
 import { browserBack, browserCancelPick, browserCloseTab, browserConsole, browserHide, browserNavigate, browserOpenTab, browserPick, browserPins, browserPlace, browserReload, browserTabs } from './browser.js';
 import {
   conversationsArchive,
@@ -196,4 +197,9 @@ export const CHANNELS = [
   runsList,
   runsStart,
   runsStop,
+  updatesList,
+  updatesRestart,
+  updatesLlama,
+  updatesModel,
+  updatesKeep,
 ] as const;

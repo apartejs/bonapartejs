@@ -4325,3 +4325,131 @@ body {
   max-width: var(--aparte-message-max-width, 800px);
   margin: 0 auto var(--aparte-space-4);
 }
+
+/* « Mises à jour » (task 13.1, board « Une mise à jour »): three cards, each with its cost, and the app's switch. */
+.updates-dialog {
+  width: min(700px, calc(100vw - 32px));
+}
+
+.updates-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.updates-dialog__body {
+  display: grid;
+  gap: 16px;
+}
+
+.updates-dialog__intro {
+  margin: 0;
+  color: var(--aparte-text-muted);
+}
+
+.updates-dialog__list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.update-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--aparte-border);
+  border-radius: 12px;
+  background: var(--aparte-bg);
+}
+
+.update-card__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--aparte-surface-2);
+  color: var(--aparte-text-muted);
+}
+
+.update-card__mark {
+  width: 26px;
+  fill: var(--aparte-primary);
+}
+
+.update-card__text {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.update-card__title,
+.update-card__notes,
+.update-card__cost {
+  margin: 0;
+}
+
+.update-card__kind {
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}
+
+.update-card__notes,
+.update-card__cost {
+  color: var(--aparte-text-muted);
+  font-size: 13px;
+}
+
+.update-card__cost,
+.update-card__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.update-card__warning {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.update-card__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.update-card__actions {
+  flex: none;
+}
+
+.updates-dialog__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--aparte-border);
+}
+
+.updates-dialog__auto-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--aparte-text-muted);
+}
+
+.updates-dialog__auto-label strong {
+  color: var(--aparte-text);
+  font-weight: 600;
+}
+
+.updates-dialog__note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--aparte-text-muted);
+  font-size: 12px;
+}

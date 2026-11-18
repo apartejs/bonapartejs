@@ -41,6 +41,7 @@ import {
   localize,
   type PluginStatus,
   type InboxView,
+  updatesList,
 } from '@aparte/bonaparte-shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
@@ -110,6 +111,7 @@ import { TooBigCard } from './failures/TooBigCard';
 import { EngineDiedCard } from './failures/EngineDied';
 import { DiskFullCard } from './failures/DiskFullCard';
 import { ConversationSettingsDialog } from './dialogs/ConversationSettings';
+import { UpdatesDialog, updatesCount } from './dialogs/Updates';
 import { TURN_ACTIVITY } from './aparte/runner';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
@@ -296,6 +298,22 @@ function Workspace({
   }, []);
   // « Réglages de la conversation… » (task 12.4): the conversation its dialog is open on.
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
+  // « Mises à jour » (task 13.1): how many are ready, read at start, when the main process says so, and as the dialog closes.
+  const [updatesOpen, setUpdatesOpen] = useState(false);
+  const [updatesReady, setUpdatesReady] = useState(0);
+  useEffect(() => {
+    if (updatesOpen) return;
+    let live = true;
+    const read = (): void => void bridge.invoke(updatesList, { check: false }).then((view) => live && setUpdatesReady(updatesCount(view)));
+    read();
+    const off = bridge.on((event) => {
+      if (event.kind === 'updates') read();
+    });
+    return () => {
+      live = false;
+      off();
+    };
+  }, [updatesOpen]);
   const pluginPanes = useMemo(
     () =>
       plugins
@@ -1245,6 +1263,7 @@ function Workspace({
           onSearch={() => setSearching(true)}
           onOpen={(id) => goTo(id)}
           onSettings={() => setSettingsPage('general')}
+          updates={{ count: updatesReady, onOpen: () => setUpdatesOpen(true) }}
         />
       ) : (
         <Sidebar
@@ -1279,6 +1298,7 @@ function Workspace({
             },
           }}
           onSettings={() => setSettingsPage('general')}
+          updates={{ count: updatesReady, onOpen: () => setUpdatesOpen(true) }}
         />
       )}
       <SearchPalette
@@ -1425,6 +1445,7 @@ function Workspace({
         }}
       />
       <ConversationSettingsDialog messages={messages} locale={locale} conversationId={settingsOf} onClose={() => setSettingsOf(null)} />
+      <UpdatesDialog messages={messages} locale={locale} open={updatesOpen} onClose={() => setUpdatesOpen(false)} />
       {inboxOpen ? (
         <InboxPage
           messages={messages}

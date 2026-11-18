@@ -1140,6 +1140,42 @@ export const en: Messages = {
       reread: (seconds) => `Read again with this model · ~${seconds}`,
     },
   },
+  updates: {
+    open: 'Updates',
+    openCount: (count) => `Updates, ${count} ready`,
+    title: 'Updates',
+    close: 'Close',
+    intro: (count) =>
+      count === 1
+        ? 'One update is ready. It says what it costs before it does it.'
+        : `${count === 2 ? 'Two' : count === 3 ? 'Three' : String(count)} updates are ready. Each says what it costs before it does it.`,
+    none: 'Nothing to update for now.',
+    appTitle: (version) => `bonaparte ${version}`,
+    appKind: 'the app',
+    appNotes: 'A new version of bonaparte.',
+    appCost: 'Restarts the app, about 5 s. The conversations and their memory stay as they are.',
+    appDownload: (size) => `${size} to download first.`,
+    restart: 'Restart',
+    llamaTitle: (build) => `llama.cpp ${build}`,
+    llamaKind: 'the engine',
+    llamaNotes: (size) => `The new build of llama.cpp: ${size}, verified before it runs.`,
+    llamaCost: 'Reloads the model once no conversation is working. The conversations’ memory stays valid: the model does not change.',
+    update: 'Update',
+    modelKind: 'the model',
+    modelNotes: 'A new version of the same model, published by its author.',
+    modelCost: (size, conversations, duration) =>
+      conversations === 0
+        ? `${size} to download. No conversation kept in memory needs reading again.`
+        : `${size} to download. Then ${conversations === 1 ? 'the conversation' : `the ${conversations} conversations`} kept in memory will be read again when reopened: about ${duration} in all, paid one at a time. Keeping the current version avoids all that.`,
+    download: 'Download',
+    keep: 'Keep the current version',
+    waiting: 'After this turn…',
+    progress: (percent) => `${percent}%`,
+    auto: 'Update the app by itself.',
+    autoHint: 'The engine and the model always ask.',
+    note: 'Nothing installs while a conversation is working: the update waits for the end of the turn.',
+    failed: (detail) => `The update did not go through: ${detail}`,
+  },
   conversationSettings: {
     menu: 'Conversation settings…',
     title: 'Conversation settings',

@@ -1081,6 +1081,37 @@ export interface Messages {
     };
   };
   /** « Réglages de la conversation » (task 12.4). */
+  /** « Mises à jour » (task 13.1): the app, llama.cpp and the models, each with its cost said before. */
+  updates: {
+    open: string;
+    openCount(count: number): string;
+    title: string;
+    close: string;
+    intro(count: number): string;
+    none: string;
+    appTitle(version: string): string;
+    appKind: string;
+    appNotes: string;
+    appCost: string;
+    appDownload(size: string): string;
+    restart: string;
+    llamaTitle(build: string): string;
+    llamaKind: string;
+    llamaNotes(size: string): string;
+    llamaCost: string;
+    update: string;
+    modelKind: string;
+    modelNotes: string;
+    modelCost(size: string, conversations: number, duration: string): string;
+    download: string;
+    keep: string;
+    waiting: string;
+    progress(percent: number): string;
+    auto: string;
+    autoHint: string;
+    note: string;
+    failed(detail: string): string;
+  };
   conversationSettings: {
     menu: string;
     title: string;

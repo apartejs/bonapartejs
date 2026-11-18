@@ -5,7 +5,10 @@
  */
 
 import {
+  alertTriangleIcon,
   botIcon,
+  clockIcon,
+  downloadIcon,
   chevronLeftIcon,
   codeIcon,
   eyeIcon,
@@ -39,7 +42,14 @@ const branchIcon = `<svg ${STROKE}><circle cx="6" cy="5" r="2"/><circle cx="6" c
 /** « À traiter »: a tray, the app's own, drawn in the kit's stroke. */
 const inboxIcon = `<svg ${STROKE}><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>`;
 
+/** A model's layers (« le modèle » of « Mises à jour »), drawn in the kit's stroke. */
+const layersIcon = `<svg ${STROKE}><path d="m12 2 10 5-10 5L2 7l10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>`;
+
 const ICONS = {
+  alert: alertTriangleIcon,
+  clock: clockIcon,
+  update: downloadIcon,
+  layers: layersIcon,
   branch: branchIcon,
   inbox: inboxIcon,
   panel: panelLeftIcon,

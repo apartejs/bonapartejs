@@ -1143,6 +1143,42 @@ export const fr: Messages = {
       reread: (seconds) => `Relire avec ce modèle · ~${seconds}`,
     },
   },
+  updates: {
+    open: 'Mises à jour',
+    openCount: (count) => `Mises à jour, ${count} prête${count > 1 ? 's' : ''}`,
+    title: 'Mises à jour',
+    close: 'Fermer',
+    intro: (count) =>
+      count === 1
+        ? 'Une mise à jour est prête. Elle dit ce qu’elle coûte avant de le faire.'
+        : `${count === 2 ? 'Deux' : count === 3 ? 'Trois' : String(count)} mises à jour sont prêtes. Chacune dit ce qu’elle coûte avant de le faire.`,
+    none: 'Rien à mettre à jour pour l’instant.',
+    appTitle: (version) => `bonaparte ${version}`,
+    appKind: 'l’app',
+    appNotes: 'Une nouvelle version de bonaparte.',
+    appCost: 'Redémarre l’app, environ 5 s. Les conversations et leur mémoire restent telles quelles.',
+    appDownload: (size) => `${size} à télécharger d’abord.`,
+    restart: 'Redémarrer',
+    llamaTitle: (build) => `llama.cpp ${build}`,
+    llamaKind: 'le moteur',
+    llamaNotes: (size) => `La nouvelle build de llama.cpp : ${size}, vérifiés avant d’être lancés.`,
+    llamaCost: 'Recharge le modèle quand aucune conversation ne travaille. La mémoire des conversations reste valable : le modèle ne change pas.',
+    update: 'Mettre à jour',
+    modelKind: 'le modèle',
+    modelNotes: 'Une nouvelle version du même modèle, publiée par son auteur.',
+    modelCost: (size, conversations, duration) =>
+      conversations === 0
+        ? `${size} à télécharger. Aucune conversation gardée en mémoire n’est à relire.`
+        : `${size} à télécharger. Ensuite, ${conversations === 1 ? 'la conversation gardée' : `les ${conversations} conversations gardées`} en mémoire ${conversations === 1 ? 'devra être relue' : 'devront être relues'} à leur réouverture : environ ${duration} au total, payées une à une. Garder la version actuelle évite tout ça.`,
+    download: 'Télécharger',
+    keep: 'Garder la version actuelle',
+    waiting: 'Après ce tour…',
+    progress: (percent) => `${percent} %`,
+    auto: 'Mettre à jour l’app toute seule.',
+    autoHint: 'Le moteur et le modèle demandent toujours.',
+    note: 'Rien ne s’installe pendant qu’une conversation travaille : la mise à jour attend la fin du tour.',
+    failed: (detail) => `La mise à jour n’a pas abouti : ${detail}`,
+  },
   conversationSettings: {
     menu: 'Réglages de la conversation…',
     title: 'Réglages de la conversation',

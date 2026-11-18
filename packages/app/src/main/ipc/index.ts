@@ -20,6 +20,8 @@ import { registerProviderChannels } from './providers.js';
 import { registerMcpChannels } from './mcp.js';
 import { registerRunChannels } from './runs.js';
 import { registerBrowserChannels } from './browser.js';
+import { registerUpdateChannels } from './updates.js';
+import type { AppUpdates } from '../updater.js';
 import type { BuiltinBrowser } from '../browser/service.js';
 import type { IpcRegistry } from './register.js';
 
@@ -42,6 +44,10 @@ export interface AppFacts {
   browser?: BuiltinBrowser;
   /** The plugins changed (task 11.3): the window reads them again. */
   pluginsChanged?(): void;
+  /** The app's own update (task 13.1); absent in a build that does not update itself. */
+  updates?: AppUpdates;
+  /** What can be updated changed: the window reads it again. */
+  updatesChanged?(): void;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -73,4 +79,5 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerModelChannels(ipc, core, facts.chooseFolder);
   registerMemoryChannels(ipc, core);
   registerProviderChannels(ipc, core);
+  registerUpdateChannels(ipc, core, facts.updates ?? null, facts.version, facts.updatesChanged);
 }

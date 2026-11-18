@@ -32,6 +32,8 @@ export interface RailProps {
   onSearch(): void;
   onOpen(id: string): void;
   onSettings(): void;
+  /** « Mises à jour » (task 13.1): shown only when one is ready. */
+  updates?: { count: number; onOpen(): void };
 }
 
 export function Rail(props: RailProps) {
@@ -73,6 +75,9 @@ export function Rail(props: RailProps) {
             {words.engine(props.engine.model.name)}
           </span>
         </span>
+      ) : null}
+      {props.updates && props.updates.count > 0 ? (
+        <TipButton label={messages.updates.openCount(props.updates.count)} icon="update" side="end" className="bonaparte-updates-link" onClick={props.updates.onOpen} />
       ) : null}
       <TipButton label={messages.settings.open} icon="settings" side="end" onClick={props.onSettings} />
     </nav>

@@ -186,3 +186,5 @@ export { runsList, runsStart, runsStop, runViewSchema } from './ipc/runs.js';
 export type { RunViewData } from './ipc/runs.js';
 export { readFromView, readToView, VIEW_CHANNEL } from './plugin-view.js';
 export type { FromView, ToView, ViewTheme } from './plugin-view.js';
+export { appUpdateSchema, modelUpdateSchema, updatesKeep, updatesList, updatesLlama, updatesModel, updatesRestart, updatesSchema } from './ipc/updates.js';
+export type { AppUpdateView, ModelUpdateView, UpdatesView } from './ipc/updates.js';
