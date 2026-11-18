@@ -15,6 +15,7 @@
  *   outside the project.
  */
 
+import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve } from 'node:path';
 import type { PlayMode, ToolEffect, Verdict } from '@aparte/bonaparte-shared';
@@ -72,6 +73,15 @@ const ARMED: RegExp[] = [
   /(^|\/)[^/]+\.config\.[^/]+$/,
   /(^|\/)makefile$/,
   /(^|\/)\.env(\.[^/]*)?$/,
+  // What « what the project runs » launches, its overrides, and what docker builds (audit 13.4).
+  /(^|\/)(docker-)?compose(\.override)?\.ya?ml$/,
+  /(^|\/)dockerfile(\.[^/]*)?$/,
+  // What git's hooks run through their managers, and what direnv runs on entering a folder (audit 13.4).
+  /(^|\/)\.pre-commit-config\.ya?ml$/,
+  /(^|\/)\.?lefthook(-local)?\.(ya?ml|json|toml)$/,
+  /(^|\/)\.lintstagedrc(\.[^/]*)?$/,
+  /(^|\/)\.simple-git-hooks(\.[^/]*)?$/,
+  /(^|\/)\.envrc$/,
   // Beyond a project, within the home folder: what the system runs at login,
   // what a shell runs when it starts, who may log in by key.
   /(^|\/)start menu\/programs\/startup\//,
@@ -84,6 +94,15 @@ const ARMED: RegExp[] = [
   /(^|\/)\.gitconfig$/,
 ];
 
+/** Where a folder really is, its links resolved; as spelled when it cannot be read. */
+function realPlace(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return path;
+  }
+}
+
 function normalize(path: string): string {
   return path.replace(/\\/g, '/').toLowerCase();
 }
@@ -93,8 +112,11 @@ export function isArmedPath(path: string, dataDir: string, alwaysAsk: readonly s
   const normalized = normalize(path);
   if (ARMED.some((pattern) => pattern.test(normalized))) return true;
   if (alwaysAsk.some((name) => normalized === normalize(name) || normalized.endsWith(`/${normalize(name)}`))) return true;
-  const data = normalize(resolve(dataDir)).replace(/\/+$/, '');
-  return normalized === data || normalized.startsWith(`${data}/`);
+  // The judged path is a real one (links resolved): the data folder counts by its spelling and by its real place.
+  return [resolve(dataDir), realPlace(resolve(dataDir))].some((dir) => {
+    const data = normalize(dir).replace(/\/+$/, '');
+    return normalized === data || normalized.startsWith(`${data}/`);
+  });
 }
 
 /** The most permissive mode does not survive a restart without a new confirmation. */

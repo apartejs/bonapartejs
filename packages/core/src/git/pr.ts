@@ -7,6 +7,7 @@
  * the branch pushed, then `gh pr create --fill`.
  */
 
+import { withoutSecrets } from '../process/env.js';
 import { spawnHidden } from '../process/spawn.js';
 import { git, type GitResult } from './git.js';
 
@@ -39,13 +40,26 @@ export function ciOf(checks: readonly Check[]): PrStatus['ci'] {
   return 'success';
 }
 
+/**
+ * GitHub's CLI signs in with its own token, the one variable of the kind it keeps; the app's other secrets stay
+ * out of it, and of the hooks a push makes git run (audit 13.4).
+ */
+export function ghEnvironment(base: Record<string, string | undefined>): Record<string, string> {
+  const own: Record<string, string> = {};
+  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST']) {
+    const value = base[name];
+    if (value) own[name] = value;
+  }
+  return { ...withoutSecrets(base), ...own, GH_PROMPT_DISABLED: '1' };
+}
+
 function run(gh: readonly string[], args: readonly string[], cwd: string): Promise<GitResult> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let child;
     try {
-      child = spawnHidden(gh[0]!, [...gh.slice(1), ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GH_PROMPT_DISABLED: '1' } });
+      child = spawnHidden(gh[0]!, [...gh.slice(1), ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'], env: ghEnvironment(process.env) });
     } catch (error) {
       resolve({ code: null, stdout: '', stderr: String(error) });
       return;

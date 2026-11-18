@@ -19,7 +19,7 @@ function recorder() {
 describe('spawnHidden', () => {
   it('hands the program and its arguments to spawn, without a shell and without a window', () => {
     const { calls, spawn } = recorder();
-    spawnHidden('node', ['-e', '0'], { spawn });
+    spawnHidden('node', ['-e', '0'], { spawn, platform: 'linux' });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.command).toBe('node');
     expect(calls[0]!.args).toEqual(['-e', '0']);
@@ -40,6 +40,31 @@ describe('spawnHidden', () => {
     const { calls, spawn } = recorder();
     spawnHidden('node', [], { spawn });
     expect(calls[0]!.options).not.toHaveProperty('spawn');
+  });
+
+  it('on Windows, a bare name is the program found on the PATH — never one the folder it runs in holds (audit 13.4)', () => {
+    const { calls, spawn } = recorder();
+    const files = new Set(['C:\\proj\\git.exe', 'C:\\Git\\cmd\\git.exe']);
+    spawnHidden('git', ['status'], { spawn, cwd: 'C:\\proj', env: { Path: 'C:\\Git\\cmd;C:\\Windows' }, platform: 'win32', exists: (path) => files.has(path) });
+    expect(calls[0]!.command).toBe('C:\\Git\\cmd\\git.exe');
+    expect(calls[0]!.options).toMatchObject({ cwd: 'C:\\proj' });
+    expect(calls[0]!.options).not.toHaveProperty('platform');
+    expect(calls[0]!.options).not.toHaveProperty('exists');
+  });
+
+  it('on Windows, a bare name the PATH does not hold is not looked for in the folder it would run in', () => {
+    const { calls, spawn } = recorder();
+    spawnHidden('git', ['status'], { spawn, cwd: 'C:\\proj', env: { PATH: 'C:\\Windows' }, platform: 'win32', exists: (path) => path === 'C:\\proj\\git.exe' });
+    expect(calls[0]!.command).toBe('git');
+    expect(calls[0]!.options['cwd']).not.toBe('C:\\proj');
+  });
+
+  it('leaves a path as it is, and a bare name elsewhere than on Windows', () => {
+    const { calls, spawn } = recorder();
+    spawnHidden('C:\\tools\\llama-server.exe', [], { spawn, platform: 'win32', exists: () => true });
+    spawnHidden('git', [], { spawn, cwd: '/proj', platform: 'linux', exists: () => true });
+    expect(calls.map((call) => call.command)).toEqual(['C:\\tools\\llama-server.exe', 'git']);
+    expect(calls[1]!.options).toMatchObject({ cwd: '/proj' });
   });
 
   it('really launches a process, and its output comes back', async () => {

@@ -13,6 +13,8 @@
 
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, win32 } from 'node:path';
 
 /** A launched process, as Node gives it. Other modules take the type from here. */
 export type SpawnedProcess = ChildProcess;
@@ -20,17 +22,52 @@ export type SpawnedProcess = ChildProcess;
 /** The shape of Node's `spawn`: what a test replaces to watch a launch without doing it. */
 export type SpawnFn = (command: string, args: readonly string[], options: SpawnOptions) => SpawnedProcess;
 
-/** Node's spawn options, minus the two this module decides, plus the seam for tests. */
-export type SpawnHiddenOptions = Omit<SpawnOptions, 'shell' | 'windowsHide'> & { spawn?: SpawnFn };
+/** Node's spawn options, minus the two this module decides, plus the seams for tests. */
+export type SpawnHiddenOptions = Omit<SpawnOptions, 'shell' | 'windowsHide'> & {
+  spawn?: SpawnFn;
+  platform?: NodeJS.Platform;
+  exists?: (path: string) => boolean;
+};
+
+/**
+ * On Windows a bare program name is looked for in the folder it runs in before the PATH: a `git.exe` a
+ * repository carries would run in place of git (audit 13.4). A bare name is therefore resolved on the PATH
+ * alone; one the PATH does not hold runs from the runtime's own folder, where it is not either — and fails as
+ * Node says a missing program fails.
+ */
+function onPathOnly(
+  command: string,
+  options: { cwd?: string | URL | undefined; env?: NodeJS.ProcessEnv | undefined },
+  platform: NodeJS.Platform,
+  exists: (path: string) => boolean,
+): { command: string; cwd?: string | URL } {
+  if (platform !== 'win32' || /[\\/]/.test(command)) return { command, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) };
+  const env = options.env ?? process.env;
+  const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH');
+  const dirs = (pathKey ? (env[pathKey] ?? '') : '').split(';').filter(Boolean);
+  const own = win32.extname(command) !== '';
+  for (const dir of dirs) {
+    const base = win32.join(dir, command);
+    for (const candidate of own ? [base] : [`${base}.com`, `${base}.exe`]) {
+      if (exists(candidate)) return { command: candidate, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) };
+    }
+  }
+  return { command, cwd: dirname(process.execPath) };
+}
 
 export function spawnHidden(
   command: string,
   args: readonly string[],
   options: SpawnHiddenOptions = {},
 ): SpawnedProcess {
-  const { spawn = nodeSpawn, ...rest } = options;
+  const { spawn = nodeSpawn, platform = process.platform, exists, ...rest } = options;
+  // A test that replaces spawn describes its own machine: nothing of this one's PATH is looked up, unless it says how.
+  const found =
+    options.spawn && !exists
+      ? { command, ...(rest.cwd !== undefined ? { cwd: rest.cwd } : {}) }
+      : onPathOnly(command, rest, platform, exists ?? existsSync);
   // Written last, so that a caller who slipped them in (JavaScript, a cast) loses.
-  return spawn(command, [...args], { ...rest, shell: false, windowsHide: true });
+  return spawn(found.command, [...args], { ...rest, ...(found.cwd !== undefined ? { cwd: found.cwd } : {}), shell: false, windowsHide: true });
 }
 
 /** Options of a program launched with a window of its own: what it is given, and the seam for tests. */

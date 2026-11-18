@@ -56,6 +56,22 @@ describe('a file that runs later asks in every mode — and is refused in Lectur
     '.github/workflows/ci.yml',
     '.npmrc',
     'Makefile',
+    // What « what the project runs » launches, and what docker builds (audit 13.4).
+    'compose.yaml',
+    'docker-compose.yml',
+    'docker-compose.override.yaml',
+    'compose.override.yml',
+    'Dockerfile',
+    'web/Dockerfile.dev',
+    // What the hooks of git run, through their managers, and what direnv runs on entering a folder (audit 13.4).
+    '.pre-commit-config.yaml',
+    'lefthook.yml',
+    '.lefthook.yaml',
+    'lefthook-local.yml',
+    '.lintstagedrc',
+    '.lintstagedrc.json',
+    '.simple-git-hooks.json',
+    '.envrc',
   ];
   for (const path of ARMED) {
     it(path, () => {
@@ -68,6 +84,20 @@ describe('a file that runs later asks in every mode — and is refused in Lectur
   it('an ordinary file passes in Plume', () => {
     for (const path of ['src/index.ts', 'README.md', 'docs/config.md', 'src/package.ts', 'configure.ts']) {
       expect(edit(path, 'plume')).toEqual({ verdict: 'allow' });
+    }
+  });
+
+  it("bonaparte's own data is armed even reached through a link: the real place of the data folder counts (audit 13.4)", async () => {
+    const real = await mkdtemp(join(tmpdir(), 'bp-real-data-'));
+    const linked = `${real}-link`;
+    await symlink(real, linked, process.platform === 'win32' ? 'junction' : 'dir');
+    try {
+      // The judged path is a real one; the data folder is known by the link's spelling.
+      expect(isArmedPath(join(real, 'plugins', 'x', 'plugin.json'), linked)).toBe(true);
+      expect(isArmedPath(join(linked, 'config', 'global.json'), linked)).toBe(true);
+    } finally {
+      await rm(linked, { recursive: true, force: true });
+      await rm(real, { recursive: true, force: true });
     }
   });
 

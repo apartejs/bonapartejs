@@ -42,6 +42,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { withoutSecrets } from '../process/env.js';
 import type { SpawnedProcess, SpawnFn } from '../process/spawn.js';
 import { spawnTree, stopProcessTree } from '../process/tree.js';
 import type { ToolRegistry } from '../tools/registry.js';
@@ -453,7 +454,8 @@ export class PluginHost {
         const child = spawnTree(program, args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           ...(options.cwd ? { cwd: options.cwd } : {}),
-          ...(options.env ? { env: options.env } : {}),
+          // A plugin's process never inherits the app's secrets, whatever it passes (audit 13.4).
+          env: options.env ? withoutSecrets(options.env) : withoutSecrets(process.env),
           ...(this.options.spawn ? { spawn: this.options.spawn } : {}),
         });
         activation.processes.add(child);

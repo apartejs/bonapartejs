@@ -6,6 +6,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { withoutSecrets } from '../process/env.js';
 import { spawnHidden, type SpawnFn } from '../process/spawn.js';
 
 export interface ProcessProbe {
@@ -25,7 +26,8 @@ export function runShort(command: string, args: readonly string[], timeoutMs: nu
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawnHidden(command, args, { stdio: ['ignore', 'pipe', 'pipe'], ...(spawn ? { spawn } : {}) });
+      // A probe of a binary the person picked, tar unpacking a download: none of the app's secrets (audit 13.4).
+      child = spawnHidden(command, args, { stdio: ['ignore', 'pipe', 'pipe'], env: withoutSecrets(process.env), ...(spawn ? { spawn } : {}) });
     } catch {
       resolve(null);
       return;

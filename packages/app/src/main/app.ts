@@ -233,7 +233,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   const engineDeps = e2eEngineDeps(process.env, options.e2e);
   const terminals = createTerminalService({
     shells: () => shells,
-    start: () => utilityProcess.fork(ptyProcessPath, [], { serviceName: 'bonaparte-terminals', stdio: 'ignore' }),
+    // The terminals' process itself, not only its shells, without the app's secrets (audit 13.4).
+    start: () => utilityProcess.fork(ptyProcessPath, [], { serviceName: 'bonaparte-terminals', stdio: 'ignore', env: withoutSecrets(process.env) }),
     env: () => withoutSecrets(process.env),
     home: engineDeps.home ?? homedir(),
     log: (message) => console.log(message),
