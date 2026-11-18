@@ -395,8 +395,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   « À traiter » answers a question with choices (`observeElicitations`).
   Not adopted: the sub-agents' line on the turn's fold (`setTurnSummary`,
   #247), which folds the tool lines of every reply — a choice for Paul.
-  Open: apartejs/aparte#253 (`<aparte-diff>` redraws for any comments
-  array: `DiffView` keeps one).
+  **aparté 1.12.1** keeps `<aparte-diff>` as it is when handed the same
+  comments or the same change (apartejs/aparte#253: `DiffView` hands them
+  as they come), and **1.12.2** says `picked` for a model chosen through
+  `/model` (apartejs/aparte#255). **aparté 1.13.0** (2026-11-17) gives a
+  message its author, a notice (`kind: 'notice'`), a note under a message
+  and `setAutoReply`; bonaparte runs on it and uses none of them yet. No
+  issue of bonaparte's is open on aparté.
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -867,9 +872,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   engine unloaded, a resume is a 409 and the answer is lost — the page offers
   neither « Autoriser » nor a question's choices then. A question's choices
   are shown only when the question its chat shows now has the card's words.
-- **aparté's `/model` rows say `picked: false`** (apartejs/aparte#255): a
-  change counts as the person's when it says `picked`, or when it aims at a
-  model the config does not hold.
+- **A test of a redraw marks the elements it watches** (an expando on the
+  comment field, on a line number) and checks they are the same after a
+  render of the app: a field can survive a redraw its rows do not.
 
 ## Real-model smoke results
 

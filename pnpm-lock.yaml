@@ -63,41 +63,41 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/core':
-        specifier: 1.12.0
-        version: 1.12.0
+        specifier: 1.13.0
+        version: 1.13.0
       '@aparte/locales':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-approval':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-ask-user':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-cards':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-diff':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-model-selector':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)(react@19.3.1)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)(react@19.3.1)
       '@aparte/plugin-shiki':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)(shiki@4.6.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)(shiki@4.6.0)
       '@aparte/plugin-streaming-markdown':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-subagents':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-triggers':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/react':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@xterm/addon-fit':
         specifier: 0.11.0
         version: 0.11.0
@@ -160,18 +160,18 @@ importers:
         specifier: workspace:*
         version: link:../shared
       '@aparte/engine':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       '@aparte/plugin-diff':
-        specifier: 1.12.0
-        version: 1.12.0(@aparte/core@1.12.0)
+        specifier: 1.13.0
+        version: 1.13.0(@aparte/core@1.13.0)
       zod:
         specifier: 'catalog:'
         version: 4.6.7
     devDependencies:
       '@aparte/core':
-        specifier: 1.12.0
-        version: 1.12.0
+        specifier: 1.13.0
+        version: 1.13.0
       '@huggingface/jinja':
         specifier: 0.5.13
         version: 0.5.13
@@ -241,12 +241,12 @@ importers:
 
 packages:
 
-  '@aparte/core@1.12.0':
-    resolution: {integrity: sha512-lrPaF0lerkbBuDJPRUXAIiTGyuiiH4/r0+UzN3EH2mxoeoH3eyUyzJvGred7V4enpl+VQxmkM/+6a19qnnxVzg==}
+  '@aparte/core@1.13.0':
+    resolution: {integrity: sha512-Fm4gJW4luCYg+FUwOsAHzdTZmn73Ct+FEBhNRbD/ihas4twoSHdsTmV+NZfFPbPyuso+9lBFdet99VbJyPTwbA==}
     engines: {node: '>=18'}
 
-  '@aparte/engine@1.12.0':
-    resolution: {integrity: sha512-lOFqZU5VFZFwAKK1qjBScgOl9Q77QYPFCT4OdVW6F00WpjTxqhBhNrOQ/CYLUGXIBozSUkyratYQ9JpT55AZIQ==}
+  '@aparte/engine@1.13.0':
+    resolution: {integrity: sha512-8Z5+mgHbg/FRlcroO+A48UrFrccbhqQuVq4FDYSkzW+MDbSuWG6zbWQd77vJD9Fcy/9YHV2uvg45svSNUsQItg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@aparte/core': '*'
@@ -254,42 +254,42 @@ packages:
       '@aparte/core':
         optional: true
 
-  '@aparte/locales@1.12.0':
-    resolution: {integrity: sha512-Ha8Nz9n3rreRcz3zQDnX668xAAqIQxK4+F2vEwytPOuEov/5K0/ZQjLGFPdWIc+vvMSrd6cqclvQIdP/Pu6mdg==}
+  '@aparte/locales@1.13.0':
+    resolution: {integrity: sha512-5otfmrdWgDNcRPjlns+pzPI3K6BOZbbtbIeETUt7lfGrTOeCWHgXWF+S1izZcQ7w/mh6ShBwhxXzqL+u1ktdLg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-approval@1.12.0':
-    resolution: {integrity: sha512-y5LVlNtpR7rEy2SayECC4Yxu4k251dQdJ3smM0H7yaRZpVHeN0yhlIsfWkT917rpUlfcYT5Nfu3PZIH3cwB0Dw==}
+  '@aparte/plugin-approval@1.13.0':
+    resolution: {integrity: sha512-H/xGqzRqlE19is90He7pDeBKmPvHJSiYDB+nfb7GG6V/itI+/WdvVG3AExN6Q0MlUrucG3cLp1lF9Yvn7AmJwg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-ask-user@1.12.0':
-    resolution: {integrity: sha512-u1hZnxEU5ypu0YcldYSjwtKgdeU2qqqFHq2R8pkWsbI53K2gw98x3pgIXqxJKQR7aYCS1CI60DqHG1LD8I2bxQ==}
+  '@aparte/plugin-ask-user@1.13.0':
+    resolution: {integrity: sha512-KbOBQT+QRpOGtfEkFXgdAD1ZWRoqiXHR/i4fQtWOitPtS35QG3ftX6mNQ7Z6cBtIJ0t+ydFCcvlY29R04edv9Q==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-cards@1.12.0':
-    resolution: {integrity: sha512-WLvK0IC4sB9ssFdN2TSzmjLrARlYGEg8ztVjgCxw9dmF6Btt80Lcogu23Y+W9k1pz5D/fyU+Xn8fNhkDfWv8Qw==}
+  '@aparte/plugin-cards@1.13.0':
+    resolution: {integrity: sha512-HuQeGTmLqaMAV9dLNcM1i1C5HR3HRm5u9zAnplWa8mlnForTRA15PiSHPHoF4L+OlQK3o/IJSG9o8xCcLObalg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-diff@1.12.0':
-    resolution: {integrity: sha512-IxEv/SoLWGLcTLc3IaI5hZ4JmNlk57JIY0cOgXICv0biNQcS6epL1wyNJJC6S6b8flAwC5vkmc5Sn+Zdrc1HsQ==}
+  '@aparte/plugin-diff@1.13.0':
+    resolution: {integrity: sha512-GQHEIScJoaL1HzZh4ZrF60yIMV9qo2bH8bGves6flW2/LfwiAIV6BzToAWw1Lyr7hOnSJnhdQnW30EoSnUld/w==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-model-selector@1.12.0':
-    resolution: {integrity: sha512-HELhMcWJnHUcNtp88W+NWyaLxFGLhKHVv6Kt+REIQKVKXFY6H5YTFBrJyL3cbCH+HKoDCYV1dQBDopfL08n1Vw==}
+  '@aparte/plugin-model-selector@1.13.0':
+    resolution: {integrity: sha512-XQ40ot2TIFLpSYpzKOyjwd8lsygANrL52hxfEuC1nvQ/6WxNqhWgOl0JhO6kYEg5mLgz2UnblXzMq2z0+RZZRg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@angular/core': ^19.2.0 || ^20.0.0 || ^21.0.0
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
       react: ^18.0.0 || ^19.0.0
       svelte: ^4.0.0 || ^5.20.0
       vue: ^3.5.0
@@ -303,36 +303,36 @@ packages:
       vue:
         optional: true
 
-  '@aparte/plugin-shiki@1.12.0':
-    resolution: {integrity: sha512-GP4h9r7tipFjDGEHVO+lDqiMl54fzqJga67g3NZ8+j8HmudBFRshNtN6ZOpbzEfsn+M1/0ieq+6O4RPZyOvytg==}
+  '@aparte/plugin-shiki@1.13.0':
+    resolution: {integrity: sha512-yAXHGTCmrbpxYjIqTTrdgtW6RhTYhXjWLy8I3MwzASYxit/0azSWSQIraLMUZ0Jt4ONhJdU/Ss2c08mq2aZGRw==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
       shiki: ^4.0.0
 
-  '@aparte/plugin-streaming-markdown@1.12.0':
-    resolution: {integrity: sha512-aMIRWtHzn8BtVNocQZrJYsHQo+LFPhTvcHqr5YxtZN6lXzX4ct0+hw122mGQqY0J/4oRg3By0UvM7GTi/g+CBQ==}
+  '@aparte/plugin-streaming-markdown@1.13.0':
+    resolution: {integrity: sha512-vTYKWvf/WIGbff/Dn/rSFpvW6aQ7Sw/jZHNcd8zE7BK/VBnE95qSUs/fwSBZ4lMEV17ZhUeDTEcOhFepBR8Xgg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-subagents@1.12.0':
-    resolution: {integrity: sha512-kDuN01fTXV4TruiPaDhjxGHWkoQ34UblD6O44abIm9VnM/NGOmz6vUcJlUr3RaJ/CzxtTRDXFncuUCxbPkHhQA==}
+  '@aparte/plugin-subagents@1.13.0':
+    resolution: {integrity: sha512-XrhyqGa+++R7zfDzbKPOQLZ+Tig59wUeCaPRtPlGe3osZ+x2KLclH2fPrWknD4ihwrkO8940TL0jKAr0bvm9/Q==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/plugin-triggers@1.12.0':
-    resolution: {integrity: sha512-H9Gi79j/of+ESFB8GA5BuF72lSKi3hEEr98aXLAy7PeXOMArgiVd3oX29lPVLinJpN6DRcN4gdbtsHBKbmvWeg==}
+  '@aparte/plugin-triggers@1.13.0':
+    resolution: {integrity: sha512-JYC3Mud7cKGX344Wt4Hw0YDJnejRAsXMHn2mstrVmiKuAYbdy/lpAPOuVTf/hEtwAllxJQdY93jb1vCIsNxRsg==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
 
-  '@aparte/react@1.12.0':
-    resolution: {integrity: sha512-SbPU36mNUXlEXmgXgC+KsFTxOCuwmvpCg9uPUIFa3oE3XLM0IEpSjhqdnaJtDoIKzgE/iVPw8Nk7OXhSxVAYwQ==}
+  '@aparte/react@1.13.0':
+    resolution: {integrity: sha512-XVGMAPH2ThMg4mQG0DnxKrQi2aRbKop3OefyoEdMhsdzSqQc2K0WroWtHAs5wTGTwx1FEpF/CgbqOQcfioiWHA==}
     engines: {node: '>=18'}
     peerDependencies:
-      '@aparte/core': '>=1.12.0 <2.0.0'
+      '@aparte/core': '>=1.13.0 <2.0.0'
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
 
@@ -3491,61 +3491,61 @@ packages:
 
 snapshots:
 
-  '@aparte/core@1.12.0':
+  '@aparte/core@1.13.0':
     dependencies:
-      '@aparte/engine': 1.12.0(@aparte/core@1.12.0)
+      '@aparte/engine': 1.13.0(@aparte/core@1.13.0)
 
-  '@aparte/engine@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/engine@1.13.0(@aparte/core@1.13.0)':
     optionalDependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/locales@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/locales@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/plugin-approval@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-approval@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/plugin-ask-user@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-ask-user@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/plugin-cards@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-cards@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/plugin-diff@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-diff@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/plugin-model-selector@1.12.0(@aparte/core@1.12.0)(react@19.3.1)':
+  '@aparte/plugin-model-selector@1.13.0(@aparte/core@1.13.0)(react@19.3.1)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
     optionalDependencies:
       react: 19.3.1
 
-  '@aparte/plugin-shiki@1.12.0(@aparte/core@1.12.0)(shiki@4.6.0)':
+  '@aparte/plugin-shiki@1.13.0(@aparte/core@1.13.0)(shiki@4.6.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
       shiki: 4.6.0
 
-  '@aparte/plugin-streaming-markdown@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-streaming-markdown@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
       '@paulrichez/streaming-markdown': 0.3.2
 
-  '@aparte/plugin-subagents@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-subagents@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/plugin-triggers@1.12.0(@aparte/core@1.12.0)':
+  '@aparte/plugin-triggers@1.13.0(@aparte/core@1.13.0)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
 
-  '@aparte/react@1.12.0(@aparte/core@1.12.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
+  '@aparte/react@1.13.0(@aparte/core@1.13.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)':
     dependencies:
-      '@aparte/core': 1.12.0
+      '@aparte/core': 1.13.0
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
 

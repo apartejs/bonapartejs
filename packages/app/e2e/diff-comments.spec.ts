@@ -39,6 +39,28 @@ async function comment(pane: ReturnType<typeof diffView>, side: 'old' | 'new', l
   await pane.commentField.press('Control+Enter');
 }
 
+test('a comment being written stays as the app renders again: the same field, its words (aparté 1.12.1, apartejs/aparte#253)', async ({ launch }) => {
+  const { page, pane } = await changed(launch, []);
+  const notes = diffView(pane.getByRole('region', { name: 'notes.txt', exact: true }));
+  await comment(notes, 'new', 1, 'Garde le mot anglais.');
+  await notes.lineNumber('new', 2).click();
+  await notes.commentField.fill('En cours d’écriture');
+  await notes.commentField.evaluate((field) => Object.assign(field, { keptAcross: true }));
+  const row = notes.lineNumber('new', 1);
+  await row.evaluate((number) => Object.assign(number, { keptAcross: true }));
+  // Anything the app draws again hands the pane its comments again: here, the sidebar folded and unfolded.
+  await page.getByRole('button', { name: 'Réduire la barre latérale' }).click();
+  await page.getByRole('button', { name: 'Déplier la barre latérale' }).click();
+  await expect(page.getByRole('button', { name: 'Réduire la barre latérale' })).toBeVisible();
+  const field = await notes.commentField.evaluate((element) => ({
+    same: (element as unknown as { keptAcross?: boolean }).keptAcross === true,
+    value: (element as HTMLTextAreaElement).value,
+  }));
+  expect(field).toEqual({ same: true, value: 'En cours d’écriture' });
+  // The rows too: the same elements (a text selected in the code stays selected).
+  expect(await row.evaluate((number) => (number as unknown as { keptAcross?: boolean }).keptAcross === true)).toBe(true);
+});
+
 test('comments wait under their lines, counted; one changes; they leave together, in one message, one turn', async ({ launch }) => {
   const prompts: string[] = [];
   const { page, pane } = await changed(launch, prompts);

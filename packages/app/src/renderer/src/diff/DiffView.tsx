@@ -3,13 +3,14 @@
  * as a component made from its spec: the one place the app draws a change.
  * Given the texts before and after, it computes the diff itself and lets
  * every folded run of lines open. Its colours are the `--aparte-diff-*`
- * tokens.
+ * tokens. The same change, or the same comments, handed again at a render of
+ * the app draw nothing: the folds and a comment being written stay (aparté
+ * 1.12.1, apartejs/aparte#253).
  */
 
 import '@aparte/plugin-diff';
 import { diffElement, type AparteDiffComment, type AparteDiffCommentEventDetail } from '@aparte/plugin-diff';
 import { createAparteElement } from '@aparte/react';
-import { useCallback, useMemo, useRef } from 'react';
 
 const Diff = createAparteElement(diffElement);
 
@@ -24,23 +25,13 @@ export interface DiffViewProps {
 }
 
 export function DiffView({ path, before, after, commentable, comments, onComment }: DiffViewProps) {
-  // The same change keeps the same object: the view keeps its folds and what is picked.
-  const diff = useMemo(() => ({ path, before, after }), [path, before, after]);
-  // The same comments keep the same array, and the handler one function: aparté draws the whole view again for
-  // any array it is given — a fold opened, a comment being written, lost at every render of the app (review of
-  // phase 8: the « À traiter » reads made those frequent; apartejs/aparte#253).
-  const said = comments ? JSON.stringify(comments) : null;
-  const kept = useMemo(() => comments, [said]);
-  const handler = useRef(onComment);
-  handler.current = onComment;
-  const onDiffComment = useCallback((detail: AparteDiffCommentEventDetail, event: CustomEvent<AparteDiffCommentEventDetail>) => handler.current?.(detail, event), []);
   return (
     <Diff
       className="diff-view"
-      diff={diff}
+      diff={{ path, before, after }}
       {...(commentable ? { commentable: true } : {})}
-      {...(kept ? { comments: kept } : {})}
-      {...(onComment ? { onDiffComment } : {})}
+      {...(comments ? { comments } : {})}
+      {...(onComment ? { onDiffComment: onComment } : {})}
     />
   );
 }
