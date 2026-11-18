@@ -799,3 +799,39 @@ describe('createCore — the modes and the previews of the window', () => {
     expect(await core.previewCall('c1', { name: 'read_file', input: { path: 'x' } })).toBeNull();
   });
 });
+
+describe('createCore — the providers (task 9.1)', () => {
+  const vault = () => {
+    const held = new Map<string, string>();
+    return {
+      held,
+      get: async (name: string) => held.get(name),
+      set: async (name: string, value: string) => void held.set(name, value),
+      delete: async (name: string) => void held.delete(name),
+      has: async (name: string) => held.has(name),
+    };
+  };
+
+  it('a service added keeps its key in the vault given, never in a file; the window is told only that there is one', async () => {
+    const secrets = vault();
+    const { core, dir } = await setup({ secrets });
+    const added = await core.providers.add({ kind: 'openai-compat', label: 'Ollama', url: 'http://localhost:11434/v1', server: 'ollama' }, 'sk-ollama');
+    expect(await core.providers.list()).toEqual([
+      expect.objectContaining({ id: 'builtin', hasKvMemory: true, hasKey: false }),
+      expect.objectContaining({ id: added.id, label: 'Ollama', hasKvMemory: false, hasKey: true }),
+    ]);
+    expect(JSON.stringify(await core.providers.list())).not.toContain('sk-ollama');
+    expect([...secrets.held.values()]).toEqual(['sk-ollama']);
+    for (const name of await readdir(join(dir, 'data', 'config'))) {
+      expect(await readFile(join(dir, 'data', 'config', name), 'utf8')).not.toContain('sk-ollama');
+    }
+    await core.providers.remove(added.id);
+    expect(secrets.held.size).toBe(0);
+  });
+
+  it('without a vault, a key is refused, never written; a service without one is added', async () => {
+    const { core } = await setup();
+    await expect(core.providers.add({ kind: 'openai-compat', label: 'LM Studio', url: 'http://localhost:1234/v1' }, 'sk-x')).rejects.toThrow(/vault/);
+    await expect(core.providers.add({ kind: 'openai-compat', label: 'LM Studio', url: 'http://localhost:1234/v1' })).resolves.toMatchObject({ label: 'LM Studio' });
+  });
+});

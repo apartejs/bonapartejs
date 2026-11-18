@@ -118,6 +118,9 @@ import type { CommandOutputEvent, ToolDef } from './tools/types.js';
 import { ConversationStore } from './conversation/store.js';
 import { KvStore, memoriesRefusedBy } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
+import { probeEndpoint, type ProbeResult } from './providers/probe.js';
+import { ProviderRegistry, type NewProvider, type Provider } from './providers/registry.js';
+import type { SecretStore } from './providers/secrets.js';
 
 /** Whose perimeter a pane browses: a conversation's, else a project's, else the home folder. */
 export interface FileScope {
@@ -159,7 +162,12 @@ export interface CoreDeps {
   replyLanguage?: () => string;
   /** Where llama.cpp's releases are read (default: GitHub's API); null: never asked (tests). */
   llamaReleases?: string | null;
+  /** The system's vault, for the services' keys (task 9.1). Without it, a key is refused, never written. */
+  secrets?: SecretStore;
 }
+
+/** A provider as the window sees it: whether it has a key, never the key. */
+export type ProviderView = Provider & { hasKey: boolean };
 
 export interface EngineState {
   mode: 'managed' | 'remote';
@@ -363,6 +371,16 @@ export interface Core {
   readonly settings: SettingsStore;
   /** « Chercher sur tout le disque »: the folders where it finds models join « modelFolders ». */
   readonly diskScan: DiskScan;
+  /** The built-in engine and the services added (task 9.1). */
+  readonly providers: {
+    list(): Promise<ProviderView[]>;
+    /** What answers at an address: llama.cpp, an OpenAI-compatible service, or nothing usable — said within 5 s. */
+    probe(url: string, key?: string): Promise<ProbeResult>;
+    add(service: NewProvider, key?: string): Promise<ProviderView>;
+    remove(id: string): Promise<void>;
+    /** The core's own use: a service's key, never handed to the window. */
+    keyOf(id: string): Promise<string | undefined>;
+  };
   /** « Ajouter un dossier »: a folder joins the ones searched for models. */
   addModelFolder(folder: string): Promise<string[]>;
   /** « Moteur et mémoire »: what runs, and what each conversation keeps on disk. */
@@ -502,6 +520,20 @@ export function createCore(deps: CoreDeps): Core {
     if (next.length !== list.length) await appSettings.set('modelFolders', next);
     return next;
   }
+  // The services' keys: the system's vault, else nowhere — a key is refused rather than written in clear.
+  const vault: SecretStore = deps.secrets ?? {
+    get: async () => undefined,
+    has: async () => false,
+    delete: async () => undefined,
+    set: async () => {
+      throw new Error('No vault on this machine: the key cannot be kept.');
+    },
+  };
+  const providerRegistry = new ProviderRegistry(join(deps.dataDir, 'config', 'providers.json'), vault);
+  const viewOf = async (provider: Provider): Promise<ProviderView> => ({
+    ...provider,
+    hasKey: provider.kind === 'builtin' ? false : await providerRegistry.hasKey(provider.id),
+  });
   const diskScan = new DiskScan(deps.diskRoots ?? (() => diskRoots()), async (folders) => void (await addModelFolders(folders)));
   // Where the core says what went wrong without failing: the supervisor's own default.
   const log = deps.logger ?? ((line: string) => console.log(line));
@@ -1595,6 +1627,13 @@ export function createCore(deps: CoreDeps): Core {
     },
     settings: appSettings,
     diskScan,
+    providers: {
+      list: async () => Promise.all((await providerRegistry.list()).map(viewOf)),
+      probe: (url, key) => probeEndpoint(url, key === undefined ? {} : { key }),
+      add: async (service, key) => viewOf(await providerRegistry.add(service, key)),
+      remove: (id) => providerRegistry.remove(id),
+      keyOf: (id) => providerRegistry.keyOf(id),
+    },
     addModelFolder: (folder) => addModelFolders([folder]),
 
     async memory() {

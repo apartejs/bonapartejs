@@ -69,7 +69,6 @@ describe('the settings of the app (task 5.2)', () => {
       codeFont: 'JetBrains Mono',
       defaultModel: '',
       modelFolders: [],
-      profile: 'code',
       branchPrefix: 'bonaparte/',
       autoUpdateApp: true,
       'notifications.replyDone': 'banner',
@@ -81,6 +80,10 @@ describe('the settings of the app (task 5.2)', () => {
     for (const [key, value] of Object.entries(defaults)) expect(settingDefault(key), key).toEqual(value);
     // The disk budget is derived from the free space (task 3.4) until the person sets one.
     expect(SETTINGS.find((field) => field.key === 'kvBudgetBytes')).toMatchObject({ type: 'number', default: null });
+  });
+
+  it('no « coder ou discuter » profile: what it chose follows from the project (Paul, 18/11)', () => {
+    expect(SETTINGS.map((field) => field.key)).not.toContain('profile');
   });
 
   it('the choices the boards offer, and nothing else', () => {

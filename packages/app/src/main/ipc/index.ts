@@ -16,6 +16,7 @@ import { registerProjectChannels, type ChooseFolder } from './projects.js';
 import { searchQuery } from '@aparte/bonaparte-shared';
 import { registerExportChannel, registerSettingsChannels } from './settings.js';
 import { registerMemoryChannels, registerModelChannels } from './models.js';
+import { registerProviderChannels } from './providers.js';
 import type { IpcRegistry } from './register.js';
 
 export interface AppFacts {
@@ -58,4 +59,5 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerExportChannel(ipc, core, facts.chooseFolder);
   registerModelChannels(ipc, core, facts.chooseFolder);
   registerMemoryChannels(ipc, core);
+  registerProviderChannels(ipc, core);
 }

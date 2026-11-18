@@ -12,6 +12,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  safeStorage,
   shell,
   Tray,
   utilityProcess,
@@ -25,6 +26,7 @@ import { bonaparteDataDir, createAgentHandler, createCore, withoutSecrets, type 
 import { terminal, terminalManifest } from '@aparte/bonaparte-plugin-terminal';
 import { APP_EVENT, type AppEvent, type Locale } from '@aparte/bonaparte-shared';
 import { registerAppProtocol } from './agent-protocol.js';
+import { createVault } from './secrets.js';
 import { e2eEngineDeps, e2ePickedFolder } from './e2e-engine.js';
 import { mainWords, type MainWords } from './i18n/index.js';
 import { registerAllChannels } from './ipc/index.js';
@@ -224,6 +226,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   if (options.e2e) (globalThis as { __bonaparteTerminals?: unknown }).__bonaparteTerminals = terminals;
   const core = createCore({
     dataDir,
+    // The services' keys (task 9.1): encrypted by the system, in one file of the data folder.
+    secrets: createVault({ file: join(dataDir, 'vault.json'), safeStorage }),
     // The answers are written in the language of the interface.
     replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
     terminals,

@@ -59,7 +59,6 @@ const NOTIFY = ['banner', 'badge', 'off'];
 export const APP_SETTINGS: SettingField[] = [
   // « Comme Windows » by default: French when the system speaks it, English otherwise.
   { key: 'language', type: 'select', scopes: GLOBAL, default: 'system', options: ['system', 'fr', 'en'] },
-  { key: 'profile', type: 'select', scopes: GLOBAL, default: 'code', options: ['code', 'chat'] },
   { key: 'sidebarGrouping', type: 'select', scopes: GLOBAL, default: 'project', options: ['project', 'single'] },
   { key: 'autoOpenPanel', type: 'select', scopes: GLOBAL, default: 'approval', options: ['never', 'approval', 'always'] },
   { key: 'newConversationWorksIn', type: 'select', scopes: BY_PROJECT, default: 'folder', options: ['folder', 'branch'] },
