@@ -394,7 +394,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   « Arrêter les sous-agents » while they work (the composer's `stopLabel`);
   « À traiter » answers a question with choices (`observeElicitations`).
   Not adopted: the sub-agents' line on the turn's fold (`setTurnSummary`,
-  #247), which folds the tool lines of every reply — a choice for Paul.
+  #247), which folds the tool lines of every reply: Paul keeps the lines as
+  they are (2026-11-18).
   **aparté 1.12.1** keeps `<aparte-diff>` as it is when handed the same
   comments or the same change (apartejs/aparte#253: `DiffView` hands them
   as they come), and **1.12.2** says `picked` for a model chosen through
