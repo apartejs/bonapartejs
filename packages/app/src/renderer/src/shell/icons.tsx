@@ -76,7 +76,7 @@ export function Icon({ name }: { name: IconName }) {
 
 /**
  * One of aparté's own icons. `<aparte-icon>` draws nothing, and says nothing, for a name it does not have: its
- * name is aparté's type, so such a name is a type error here.
+ * name is aparté's type, so such a name is a type error here (apartejs/aparte#262).
  */
 export function Glyph({ name }: { name: AparteIconName }) {
   return createElement('aparte-icon', { name });
