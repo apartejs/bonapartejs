@@ -175,6 +175,18 @@ A conversation has its own temperature, reasoning and context cap
 (« Réglages de la conversation… »), and the engine's card shows the
 processor, the memory and the graphics card. Every button has a name, and
 the shell's Tab order is written in a test.
+Phase 13 is done but for its real-model smoke (task 13.5, on Paul's word):
+the distribution. « Mises à jour » says what each update costs before it is
+done — the app (electron-updater, its download first, the end of the reply
+waited for, the memory saved before the installer starts), llama.cpp (the
+same model loaded again, on the old build if the new one fails) and a
+model's new version (the conversations it makes to read again) — and
+nothing installs under a reply. A per-user NSIS installer updates itself
+from the repository's releases, a tag making one draft; the packed app is
+run by a test before it is published. `npx @aparte/bonaparte` launches the
+app it carries. The security audit of the whole repository (the ten rules,
+`docs/superpowers/plans/securite.md`) found 23 defects, all fixed or ruled
+on; every package is at 1.0.0, and the tag `v1.0.0` waits for Paul.
 
 ## apartéJS frictions — MANDATORY
 
@@ -846,6 +858,23 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   reply (`core.whenIdle()`, the supervisor's `whenFree`). `autoUpdateApp`:
   downloaded in the background, installed at the next quit. The entry is in
   the sidebar and the rail, only when one is ready.
+- **What runs on Windows** (`core/src/process/spawn.ts`, audit 13.4): a
+  bare program name is resolved on the PATH's full entries only (`.com`,
+  `.exe`, the name with a dot as Windows completes it), never in the folder
+  it runs in — a `git.exe` a repository carries; one not found launches
+  nothing. A program counts by `lstat`: an app execution alias (python,
+  winget) is a link the file system cannot follow. A test that injects
+  `spawn` without `exists` describes its own machine. git, gh (its own
+  token kept), the probes and every plugin process get no secret; the
+  ssh-agent's socket is not one.
+- **Outside text, on a service too** (`families/service-tokens.ts`, audit
+  13.4): what a service's model reads — tool results, descriptions and
+  schemas (keys included), the history, the project's instructions — is
+  disarmed for every family a service may run (Gemma, Qwen, Mistral,
+  Llama 2, DeepSeek, any `<|name|>`); what the model writes back has the
+  disarming marks taken off (`restoreDisarmed`, in edit_file and
+  write_file). A third party's plugin tool is judged as a program it runs:
+  refused in Lecture, asked elsewhere, never a read-only sub-agent's.
 - **The installer and the command** (tasks 13.2 and 13.3,
   `packages/app/electron-builder.yml`, `.github/workflows/release.yml`,
   `packages/cli/src/launch.ts`, `scripts/assemble-app.mjs`): the workspace is
@@ -1158,6 +1187,24 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **`appSettings.setEngine` does not reach a config already read**: a load
   that offloads layers drops the cached config (`config = undefined`)
   before it launches.
+
+- **A turn holds the slot before it is resident**: as a turn ends, the
+  conversation is the scheduler's `busy` owner, not yet its resident — a
+  question asked then (the disk check, the updates' count) counts it as in
+  the engine either way.
+- **electron-updater's background download rejects on its own**:
+  `checkForUpdates()` hands back a `downloadPromise` that nothing catches,
+  and an unhandled rejection closes the app. And `quitAndInstall` starts
+  the NSIS installer first, which kills the app within seconds: the memory
+  is saved before, not in `before-quit`.
+- **`existsSync` is false for a Windows app execution alias** (the Store's
+  python, winget), which Windows runs: look for a program with `lstat`.
+- **electron-builder unpacks native modules by itself**, `asarUnpack` or
+  not: a test of the packed app proves node-pty by running a shell.
+- **Electron 45 gives the address a request went to** only on a redirect
+  (`onBeforeRedirect`'s `ip`), and behind a proxy it is the proxy's:
+  Chromium's own resolution (`session.resolveHost`, its cache) says where a
+  page is.
 
 ## Real-model smoke results
 
