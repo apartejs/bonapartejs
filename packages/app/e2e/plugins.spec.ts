@@ -104,3 +104,18 @@ test('« Titres automatiques » off: a new conversation keeps its untitled name'
   await expect(conversationList(page).row('Nouvelle conversation')).toBeVisible();
   await expect(conversationList(page).row('Ma question sur les heures')).toHaveCount(0);
 });
+
+test('a project’s page: the MCP servers and plugins it uses; a plugin switched off for it stays on for the app', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' }, mcp: { fake: { command: process.execPath, args: ['--version'] } } });
+  await expect(chat(page).editor).toBeVisible();
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Permissions' }).click();
+  await page.getByRole('button', { name: /^Ouvrir maison/ }).click();
+  await expect(page.getByText(/Ce projet utilise 1 serveur MCP et \d+ plugins/)).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Serveurs MCP' })).toContainText('fake');
+  const plugins = page.getByRole('list', { name: 'Plugins' });
+  await plugins.getByRole('switch', { name: 'Terminal' }).click();
+  await expect(plugins.getByRole('switch', { name: 'Terminal' })).not.toBeChecked();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: /^Plugins/ }).click();
+  await expect(row(page, 'Terminal').getByRole('switch', { name: 'Terminal' })).toBeChecked();
+});

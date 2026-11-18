@@ -464,6 +464,14 @@ export const en: Messages = {
       noProjectHint: 'Stays in your home folder; beyond it, asks.',
     },
     project: {
+      extensions: {
+        title: 'Plugins and MCP servers',
+        uses: (servers, plugins) => `This project uses ${servers} MCP ${servers === 1 ? 'server' : 'servers'} and ${plugins} ${plugins === 1 ? 'plugin' : 'plugins'}. Their lists also each have their page in the settings.`,
+        servers: 'MCP servers',
+        plugins: 'Plugins',
+        appWide: 'Whole app',
+        none: 'None.',
+      },
       badge: 'Project',
       intro: 'The agent reads and writes in these folders. Beyond them, it asks, whatever the mode.',
       folders: 'Folders',

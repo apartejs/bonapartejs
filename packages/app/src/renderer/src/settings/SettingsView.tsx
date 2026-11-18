@@ -145,7 +145,7 @@ export function SettingsView({
             }}
           />
         ) : null}
-        {props && page === 'permissions' && project ? <ProjectPage messages={messages} projectId={project.id} /> : null}
+        {props && page === 'permissions' && project ? <ProjectPage messages={messages} locale={locale} projectId={project.id} /> : null}
         {page === 'plugins' ? <PluginsPage messages={messages} locale={locale} onCreate={() => onCreatePlugin?.()} /> : null}
         {page === 'mcp' ? <McpServersPage messages={messages} /> : null}
       </div>

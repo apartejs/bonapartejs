@@ -5,18 +5,19 @@
  * asked there. Reached from « Réglages · Permissions ».
  */
 
-import { projectsAddFolder, projectsDetect, projectsList, projectsUpdate, type ProjectView } from '@aparte/bonaparte-shared';
+import { projectsAddFolder, projectsDetect, projectsList, projectsUpdate, type Locale, type ProjectView } from '@aparte/bonaparte-shared';
 import { useEffect, useState } from 'react';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 import { Icon } from '../shell/icons';
 import { Section } from './controls';
+import { ProjectExtensions } from './ProjectExtensions';
 import { AlwaysAsked, ModeCards } from './rules';
 
 /** What a project's own list starts from: the files of a project that run later. */
 const PROJECT_BUILTINS = ['.env*', 'package.json', '.git/hooks/', '.husky/'];
 
-export function ProjectPage({ messages, projectId }: { messages: Messages; projectId: string }) {
+export function ProjectPage({ messages, locale, projectId }: { messages: Messages; locale: Locale; projectId: string }) {
   const words = messages.settings.project;
   const [project, setProject] = useState<ProjectView | null>(null);
   const [instructions, setInstructions] = useState<string | null | undefined>(undefined);
@@ -92,6 +93,7 @@ export function ProjectPage({ messages, projectId }: { messages: Messages; proje
         <h3 className="setting-section__subtitle">{words.alwaysAskHere}</h3>
         <AlwaysAsked messages={messages} builtins={PROJECT_BUILTINS} added={project.alwaysAsk ?? []} onChange={(alwaysAsk) => update({ alwaysAsk })} />
       </Section>
+      <ProjectExtensions messages={messages} locale={locale} projectId={project.id} />
     </div>
   );
 }

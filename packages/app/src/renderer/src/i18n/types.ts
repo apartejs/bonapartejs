@@ -388,6 +388,15 @@ export interface Messages {
       noProjectHint: string;
     };
     project: {
+      /** Its plugins and MCP servers (task 11.3): what it uses, and what it switches off of the app's plugins. */
+      extensions: {
+        title: string;
+        uses(servers: number, plugins: number): string;
+        servers: string;
+        plugins: string;
+        appWide: string;
+        none: string;
+      };
       badge: string;
       intro: string;
       folders: string;

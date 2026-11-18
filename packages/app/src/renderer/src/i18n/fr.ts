@@ -464,6 +464,14 @@ export const fr: Messages = {
       noProjectHint: 'Reste dans ton dossier personnel ; au-delà, demande.',
     },
     project: {
+      extensions: {
+        title: 'Plugins et serveurs MCP',
+        uses: (servers, plugins) => `Ce projet utilise ${servers} ${servers > 1 ? 'serveurs MCP' : 'serveur MCP'} et ${plugins} ${plugins > 1 ? 'plugins' : 'plugin'}. Leurs listes ont aussi chacune leur page dans les réglages.`,
+        servers: 'Serveurs MCP',
+        plugins: 'Plugins',
+        appWide: 'Toute l’app',
+        none: 'Aucun.',
+      },
       badge: 'Projet',
       intro: 'L’agent lit et écrit dans ces dossiers. Au-delà, il demande, quel que soit le mode.',
       folders: 'Dossiers',
