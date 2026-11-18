@@ -4,14 +4,13 @@
  * runs. And « Une partie sur le processeur » is read at the very next launch, not after a restart of the app.
  */
 
-import { spawn as nodeSpawn } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core } from '../api.js';
-import type { SpawnFn } from '../process/spawn.js';
+import { spawnHidden, type SpawnFn, type SpawnHiddenOptions } from '../process/spawn.js';
 
 const BIN = fileURLToPath(new URL('../testing/fake-llama-bin.mjs', import.meta.url));
 const cores: Core[] = [];
@@ -31,7 +30,9 @@ async function rig() {
   const notLlama = join(dataDir, 'bin', 'notes.txt');
   await writeFile(notLlama, 'not a program');
   const spawn: SpawnFn = (command, args, options) =>
-    command === llama ? nodeSpawn(process.execPath, [BIN, ...args], options) : nodeSpawn(command, [...args], options);
+    command === llama
+      ? spawnHidden(process.execPath, [BIN, ...args], options as SpawnHiddenOptions)
+      : spawnHidden(command, args, options as SpawnHiddenOptions);
   const core = createCore({ dataDir, env: {}, spawn, llamaReleases: null, logger: () => undefined, gpuMemory: async () => 24 * 1024 ** 3 });
   cores.push(core);
   return { core, dataDir, llama, notLlama };
