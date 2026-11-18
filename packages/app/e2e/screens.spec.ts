@@ -1136,8 +1136,8 @@ for (const locale of ['fr', 'en'] as const) {
       await mkdir(into, { recursive: true });
       const words =
         locale === 'fr'
-          ? { settings: 'Réglages', add: 'Ajouter…', dialog: 'Ajouter un plugin', field: 'Dossier du plugin', read: 'Lire le plugin', ask: 'Crée-moi un plugin : une commande /changelog qui résume les commits du jour.' }
-          : { settings: 'Settings', add: 'Add…', dialog: 'Add a plugin', field: 'Plugin folder', read: 'Read the plugin', ask: 'Make me a plugin: a /changelog command that sums up the commits of the day.' };
+          ? { settings: 'Réglages', try: 'Essayer dans cette conversation', add: 'Ajouter…', dialog: 'Ajouter un plugin', field: 'Dossier du plugin', read: 'Lire le plugin', ask: 'Crée-moi un plugin : une commande /changelog qui résume les commits du jour.' }
+          : { settings: 'Settings', try: 'Try it in this conversation', add: 'Add…', dialog: 'Add a plugin', field: 'Plugin folder', read: 'Read the plugin', ask: 'Make me a plugin: a /changelog command that sums up the commits of the day.' };
       const source = await mkdtemp(join(tmpdir(), 'bp-screens-plugin-'));
       for (const [name, text] of Object.entries(BONJOUR_PLUGIN)) await writeFile(join(source, name), text);
       const { app, page } = await launch({ locale, engine: { responder: makesPlugin }, settings: { defaultMode: 'plume' }, plugins: { bonjour: BONJOUR_PLUGIN } });
@@ -1151,6 +1151,9 @@ for (const locale of ['fr', 'en'] as const) {
       await expect(page.locator('section.extension-card[data-extension="changelog"]')).toBeVisible({ timeout: 30_000 });
       await page.waitForTimeout(500);
       await page.screenshot({ path: join(into, `plugin-made-${locale}-${scheme}.png`), animations: 'disabled' });
+      // Tried here: the Plugins page lists it among those made in a conversation.
+      await page.locator('section.extension-card[data-extension="changelog"]').getByRole('button', { name: words.try }).click();
+      await expect(page.locator('section.extension-card .extension-card__status')).not.toBeEmpty({ timeout: 15_000 });
 
       // Réglages · Plugins.
       await page.getByRole('button', { name: words.settings, exact: true }).click();
