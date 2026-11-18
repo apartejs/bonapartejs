@@ -260,8 +260,12 @@ export interface Messages {
     /** The entry of « À traiter » in the sidebar, its count named, and its key. */
     inbox: string;
     inboxCount(count: number): string;
-    inboxShortcut: string;
     brand: string;
+    /** The mascot (task 12.2): its name says its state. */
+    mascot: {
+      label(state: string): string;
+      states: Record<'idle' | 'thinking' | 'talking' | 'reading' | 'waiting' | 'happy' | 'surprised' | 'error' | 'sleeping' | 'wake', string>;
+    };
     nav: string;
     navCollapsed: string;
     collapse: string;

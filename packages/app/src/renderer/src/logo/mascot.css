@@ -1,0 +1,462 @@
+/*
+ * The mascot (task 12.2, board « Logo et ses états »): its sizes in em, so that one font size scales it; only
+ * `transform` and `opacity` move (and the colour of the hat and the cockade, eased); the loops while the model
+ * writes are in `steps()`; everything stops under « réduire les animations ». Colours are the tokens'.
+ */
+
+.mascot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 3em;
+  height: 2.5em;
+  line-height: 1;
+  transform-origin: 50% 80%;
+}
+
+.mascot__hat {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 60%;
+}
+
+.mascot__hat-body {
+  fill: var(--bonaparte-hat);
+  transition: fill 0.45s ease;
+}
+
+.mascot__braid {
+  fill: none;
+  stroke: var(--bonaparte-hat-braid);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.mascot__socket {
+  fill: var(--bonaparte-hat-socket);
+}
+
+.mascot__light {
+  opacity: 0.45;
+  transition: opacity 0.45s ease;
+}
+
+.mascot__cockade {
+  fill: var(--bonaparte-brass-cockade);
+  transition: fill 0.45s ease;
+}
+
+.mascot__core {
+  fill: var(--bonaparte-brass-core);
+}
+
+.mascot__face {
+  position: absolute;
+  inset-inline: 0;
+  top: 1.2em;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  color: var(--bonaparte-brass-face);
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  transform-origin: 50% 70%;
+}
+
+.mascot__features {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0 0.02em;
+  color: var(--bonaparte-brass-feature);
+}
+
+.mascot__eye {
+  display: inline-block;
+  transform-origin: 50% 60%;
+}
+
+.mascot__nose {
+  display: inline-block;
+  padding: 0 0.04em;
+  transform: translateY(-0.04em);
+  transform-origin: 50% 100%;
+}
+
+.mascot__dots {
+  position: absolute;
+  inset-inline: 0;
+  top: -0.45em;
+  display: none;
+  color: var(--bonaparte-mascot-dots);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.5em;
+  line-height: 1;
+  text-align: center;
+}
+
+.mascot__zz {
+  position: absolute;
+  right: -0.05em;
+  top: 1.1em;
+  display: none;
+  width: 0.5em;
+  height: 0.5em;
+  color: var(--bonaparte-hat-asleep);
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1;
+}
+
+.mascot__z {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font-size: 0.42em;
+  opacity: 0;
+  animation: mascot-zzz 3s ease-in-out infinite;
+}
+
+.mascot__z:nth-child(2) {
+  animation-delay: 1s;
+  font-size: 0.36em;
+}
+
+.mascot__z:nth-child(3) {
+  animation-delay: 2s;
+  font-size: 0.3em;
+}
+
+.mascot[data-state='idle'] .mascot__eye,
+.mascot[data-state='talking'] .mascot__eye,
+.mascot[data-state='reading'] .mascot__eye,
+.mascot[data-state='waiting'] .mascot__eye {
+  animation: mascot-blink 5s infinite;
+}
+
+.mascot[data-state='thinking'] .mascot__dots {
+  display: block;
+  animation: mascot-dots 1.6s steps(4) infinite;
+}
+
+.mascot[data-state='thinking'] .mascot__features {
+  animation: mascot-look 2.4s ease-in-out infinite;
+}
+
+.mascot[data-state='thinking'] .mascot__light {
+  animation: mascot-breathe 2.6s ease-in-out infinite;
+}
+
+.mascot[data-state='talking'] .mascot__nose {
+  animation: mascot-flap 0.45s steps(6) infinite;
+}
+
+.mascot[data-state='talking'] .mascot__light {
+  opacity: 1;
+  animation: mascot-pulse 0.9s steps(6) infinite;
+}
+
+.mascot[data-state='reading'] .mascot__features {
+  animation: mascot-sweep 1.4s ease-in-out infinite;
+}
+
+.mascot[data-state='reading'] .mascot__light {
+  opacity: 0.8;
+}
+
+.mascot[data-state='waiting'] {
+  animation: mascot-tilt 3.2s ease-in-out infinite;
+}
+
+.mascot[data-state='waiting'] .mascot__cockade {
+  fill: var(--bonaparte-brass-waiting);
+}
+
+.mascot[data-state='waiting'] .mascot__light {
+  opacity: 1;
+  animation: mascot-ask 1.6s ease-in-out infinite;
+}
+
+.mascot[data-state='happy'] .mascot__face {
+  animation: mascot-bounce 2.4s cubic-bezier(0.34, 1.56, 0.64, 1) infinite;
+}
+
+.mascot[data-state='happy'] .mascot__hat {
+  animation: mascot-raise 2.4s ease-in-out infinite;
+}
+
+.mascot[data-state='happy'] .mascot__light,
+.mascot[data-state='surprised'] .mascot__light {
+  opacity: 1;
+}
+
+.mascot[data-state='surprised'] .mascot__hat {
+  animation: mascot-pop 2.4s ease-out infinite;
+}
+
+.mascot[data-state='surprised'] .mascot__face {
+  animation: mascot-jolt 2.4s ease-out infinite;
+}
+
+.mascot[data-state='error'] {
+  animation: mascot-shake 2.4s ease-in-out infinite;
+}
+
+.mascot[data-state='error'] .mascot__hat-body {
+  fill: var(--bonaparte-hat-error);
+}
+
+.mascot[data-state='error'] .mascot__light,
+.mascot[data-state='sleeping'] .mascot__light {
+  opacity: 0;
+}
+
+.mascot[data-state='sleeping'] .mascot__hat-body {
+  fill: var(--bonaparte-hat-asleep);
+}
+
+.mascot[data-state='sleeping'] .mascot__hat {
+  transform: translateY(0.05em) rotate(5deg);
+}
+
+.mascot[data-state='sleeping'] .mascot__face,
+.mascot[data-state='sleeping'] .mascot__features {
+  color: var(--bonaparte-hat-asleep);
+}
+
+.mascot[data-state='sleeping'] .mascot__zz {
+  display: block;
+}
+
+.mascot[data-state='wake'] .mascot__face {
+  animation: mascot-wake 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.mascot[data-state='wake'] .mascot__hat {
+  animation: mascot-settle 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.mascot[data-state='wake'] .mascot__light {
+  animation: mascot-fill 2.4s ease-out infinite;
+}
+
+@keyframes mascot-blink {
+  0%,
+  96%,
+  100% {
+    transform: scaleY(1);
+  }
+  97%,
+  99% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes mascot-dots {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes mascot-look {
+  0%,
+  100% {
+    transform: translate(-0.06em, -0.04em);
+  }
+  25% {
+    transform: translate(0.06em, -0.04em);
+  }
+  50% {
+    transform: translate(0.06em, 0.02em);
+  }
+  75% {
+    transform: translate(-0.06em, 0.02em);
+  }
+}
+
+@keyframes mascot-breathe {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes mascot-flap {
+  0%,
+  100% {
+    transform: translateY(-0.04em) scale(1, 1);
+  }
+  50% {
+    transform: translateY(-0.04em) scale(1.08, 1.4);
+  }
+}
+
+@keyframes mascot-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes mascot-sweep {
+  0%,
+  100% {
+    transform: translateX(-0.07em);
+  }
+  50% {
+    transform: translateX(0.07em);
+  }
+}
+
+@keyframes mascot-tilt {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30%,
+  70% {
+    transform: rotate(-7deg);
+  }
+}
+
+@keyframes mascot-ask {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes mascot-bounce {
+  0%,
+  30%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  8% {
+    transform: translateY(-0.08em) rotate(-3deg);
+  }
+  15% {
+    transform: translateY(-0.12em) rotate(0);
+  }
+  22% {
+    transform: translateY(-0.08em) rotate(3deg);
+  }
+}
+
+@keyframes mascot-raise {
+  0%,
+  42%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  12%,
+  30% {
+    transform: translateY(-0.24em) rotate(-9deg);
+  }
+}
+
+@keyframes mascot-pop {
+  0%,
+  36%,
+  100% {
+    transform: translateY(0);
+  }
+  9% {
+    transform: translateY(-0.42em);
+  }
+  18% {
+    transform: translateY(0);
+  }
+  24% {
+    transform: translateY(-0.06em);
+  }
+}
+
+@keyframes mascot-jolt {
+  0%,
+  36%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  9% {
+    transform: translateY(-0.1em) scale(1.04);
+  }
+}
+
+@keyframes mascot-shake {
+  0%,
+  26%,
+  100% {
+    transform: translateX(0) rotate(0);
+  }
+  6%,
+  18% {
+    transform: translateX(-0.04em) rotate(-1.5deg);
+  }
+  12% {
+    transform: translateX(0.04em) rotate(1.5deg);
+  }
+}
+
+@keyframes mascot-zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0.5em, -1.4em) scale(1.2);
+  }
+}
+
+@keyframes mascot-wake {
+  0% {
+    transform: scale(0.9) rotate(-3deg);
+  }
+  12% {
+    transform: scale(1.06) rotate(2deg);
+  }
+  26%,
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes mascot-settle {
+  0% {
+    transform: translateY(0.05em) rotate(5deg);
+  }
+  20%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+}
+
+@keyframes mascot-fill {
+  0% {
+    opacity: 0;
+  }
+  45%,
+  100% {
+    opacity: 0.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot,
+  .mascot * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

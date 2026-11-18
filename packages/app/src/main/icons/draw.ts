@@ -106,7 +106,8 @@ function crossings(shapes: readonly Point[][], y: number): number[] {
 const SAMPLES = 8;
 
 /** Fills `size`×`size` pixels: each pixel's alpha is the share of its samples `colour` paints, its colour their mean. */
-function paint(size: number, colour: (x: number, y: number) => Rgb | null): Uint8Array {
+function paint(size: number, colour: (x: number, y: number) => Rgb | null, samples = SAMPLES): Uint8Array {
+  const SAMPLES = samples;
   const pixels = new Uint8Array(size * size * 4);
   for (let py = 0; py < size; py += 1) {
     for (let px = 0; px < size; px += 1) {
@@ -223,7 +224,96 @@ const rgbOf = (tokens: ReadonlyMap<string, string>, name: string): Rgb => {
   return [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)) as Rgb;
 };
 
-/** Every icon, by its file name: `tray-<state>-<size>.png` and `badge-<kind>-<size>.png`. */
+/** The braid of the bicorne (board « Logo »): an open line, drawn as a stroke. */
+const BRAID = 'M15 46C29 41 36 19 60 18C84 19 91 41 105 46';
+
+/** The distance from a point to a polyline. */
+function distanceTo(line: readonly Point[], x: number, y: number): number {
+  let best = Infinity;
+  for (let i = 1; i < line.length; i += 1) {
+    const [ax, ay] = line[i - 1]!;
+    const [bx, by] = line[i]!;
+    const length = (bx - ax) ** 2 + (by - ay) ** 2;
+    const t = length === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / length));
+    best = Math.min(best, Math.hypot(x - (ax + t * (bx - ax)), y - (ay + t * (by - ay))));
+  }
+  return best;
+}
+
+const mix = (under: Rgb, over: Rgb, alpha: number): Rgb => [0, 1, 2].map((c) => under[c]! * (1 - alpha) + over[c]! * alpha) as Rgb;
+
+/**
+ * The app's icon (task 12.2, board « Logo », « Une nuit étoilée »): a rounded night with three brass stars, and the
+ * mark in its middle — the face in brass under the bicorne, lit on the dark, its cockade on. In the 120 units of the
+ * board; the face, text in Georgia on a screen, is drawn here as its strokes: two brackets, two eyes, a nose.
+ */
+export function appIcon(tokens: ReadonlyMap<string, string>, size: number): Uint8Array {
+  const night = rgbOf(tokens, '--bonaparte-icon-night');
+  const hatColour = rgbOf(tokens, '--bonaparte-icon-hat');
+  const face = rgbOf(tokens, '--bonaparte-icon-face');
+  const feature = rgbOf(tokens, '--bonaparte-icon-feature');
+  const brass = rgbOf(tokens, '--bonaparte-brass-cockade');
+  const core = rgbOf(tokens, '--bonaparte-brass-core');
+  const white = rgbOf(tokens, RING);
+  // The mark: 90 by 75 units, centred; its bicorne is the board's viewBox (120 by 100) at three quarters.
+  const hatAt = (point: Point): Point => [15 + point[0] * 0.75, 22.5 + point[1] * 0.75];
+  const hat = outline(BICORNE).map((shape) => shape.map(hatAt));
+  const braid = outline(BRAID).flat().map(hatAt);
+  const cockade = hatAt([38, 33]);
+  const stars: [number, number, number, number][] = [
+    [21.5, 23.5, 1.5, 0.8],
+    [97, 17, 1, 0.7],
+    [92.5, 98.5, 1.5, 0.6],
+  ];
+  // A bracket is the outer sliver of a wide circle, as Georgia draws one: thicker in its middle.
+  const bracket = (x: number, y: number, centre: number, side: 1 | -1): boolean => {
+    const dx = x - centre;
+    const dy = y - 74.5;
+    if (side * dx < 22 * 0.8) return false;
+    const thickness = 2.6 - 1.4 * Math.abs(dy) / 13;
+    return Math.abs(Math.hypot(dx, dy) - 22) < thickness / 2;
+  };
+  const scale = 120 / size;
+  // The hat's crossings, once per row of samples; its box, so that the braid is measured only near it.
+  const rows = new Map<number, number[]>();
+  const hatPoints = hat.flat();
+  const [top, bottom] = [Math.min(...hatPoints.map(([, py]) => py)), Math.max(...hatPoints.map(([, py]) => py))];
+  const inHat = (x: number, y: number): boolean => {
+    if (y < top || y > bottom) return false;
+    let across = rows.get(y);
+    if (!across) {
+      across = crossings(hat, y);
+      rows.set(y, across);
+    }
+    let count = 0;
+    for (const at of across) if (at > x) count += 1;
+    return count % 2 === 1;
+  };
+  return paint(size, (px, py) => {
+    const x = px * scale;
+    const y = py * scale;
+    // The rounded square: radius 28.
+    const cx = Math.min(Math.max(x, 28), 92);
+    const cy = Math.min(Math.max(y, 28), 92);
+    if (x < 0 || y < 0 || x > 120 || y > 120 || Math.hypot(x - cx, y - cy) > 28) return null;
+    let colour: Rgb = night;
+    for (const [sx, sy, r, alpha] of stars) if (Math.hypot(x - sx, y - sy) <= r) colour = mix(colour, brass, alpha);
+    if (bracket(x, y, 63, -1) || bracket(x, y, 57, 1)) colour = face;
+    // An apostrophe: a short wedge, wider at its top.
+    const eye = (ex: number): boolean => y >= 64 && y <= 69 && Math.abs(x - (ex - (y - 64) * 0.08)) < 1.5 - (y - 64) * 0.16;
+    if (eye(51.5) || eye(68.5)) colour = feature;
+    if (Math.hypot(x - 60, y - 83.5) <= 2.3) colour = feature;
+    if (inHat(x, y)) {
+      colour = hatColour;
+      if (distanceTo(braid, x, y) < 0.85) colour = mix(colour, white, 0.3);
+      const fromCockade = Math.hypot(x - cockade[0], y - cockade[1]);
+      if (fromCockade <= 6.5 * 0.75) colour = mix(mix(colour, [0, 0, 0], 0.22), fromCockade <= 2.4 * 0.75 ? core : brass, 0.9);
+    }
+    return colour;
+  }, size > 64 ? 3 : SAMPLES);
+}
+
+/** Every icon, by its file name: `tray-<state>-<size>.png`, `badge-<kind>-<size>.png` and `app-<size>.png`. */
 export function iconSet(tokens: ReadonlyMap<string, string>): Map<string, Buffer> {
   const set = new Map<string, Buffer>();
   const hat = outline(BICORNE);
@@ -234,5 +324,6 @@ export function iconSet(tokens: ReadonlyMap<string, string>): Map<string, Buffer
   for (const [kind, token] of Object.entries(BADGES)) {
     for (const size of [16, 32]) set.set(`badge-${kind}-${size}.png`, encodePng(size, size, dot(size, rgbOf(tokens, token), ring)));
   }
+  for (const size of [256, 512]) set.set(`app-${size}.png`, encodePng(size, size, appIcon(tokens, size)));
   return set;
 }

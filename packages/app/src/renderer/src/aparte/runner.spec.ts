@@ -43,6 +43,21 @@ describe('createConversationRunner', () => {
     expect(posted).toEqual(['bonaparte://app/agent/c/c-1', 'bonaparte://app/agent/c/c-2']);
   });
 
+  it('says what each turn is doing, once each time it changes (task 12.2: the mascot reads it)', async () => {
+    const { fetch } = answering([
+      { type: 'run-start' },
+      { type: 'step-start', name: 'restore' },
+      { type: 'thinking-delta', delta: 'hm' },
+      { type: 'text-delta', delta: 'Bon' },
+      { type: 'text-delta', delta: 'jour' },
+      { type: 'run-done' },
+    ]);
+    const said: string[] = [];
+    const runner = createConversationRunner({ fetch, onActivity: (conversationId, activity) => said.push(`${conversationId}:${activity}`) });
+    await runner(turn('c-1'));
+    expect(said).toEqual(['c-1:reading', 'c-1:thinking', 'c-1:writing', 'c-1:done']);
+  });
+
   it("keeps the core's step keys as they are: the page labels them", async () => {
     const { fetch } = answering([{ type: 'run-start' }, { type: 'step-start', name: 'reread' }, { type: 'step-end', name: 'reread' }, { type: 'run-done' }]);
     const events: { type: string; name?: string }[] = [];

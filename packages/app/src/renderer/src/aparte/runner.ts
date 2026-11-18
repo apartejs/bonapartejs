@@ -9,6 +9,10 @@
 
 import { AGENT_ENDPOINT, type PlayMode } from '@aparte/bonaparte-shared';
 import { createAgentStreamRunner } from '@aparte/core';
+import { activityOf, type TurnActivity } from '../logo/mascot-state';
+
+/** Said on the window as a turn's work changes (task 12.2): `{ conversationId, activity }`. */
+export const TURN_ACTIVITY = 'bonaparte-turn-activity';
 
 type StreamRunner = ReturnType<typeof createAgentStreamRunner>;
 
@@ -25,9 +29,15 @@ export interface ConversationRunnerOptions {
   service?: () => { provider: string; model: string } | null;
   /** A new conversation without a project is a discussion (task 9.7; the core takes it at its first turn only). */
   kind?: () => 'discussion' | null;
+  /** What each turn is doing, said once each time it changes (task 12.2); by default, on the window (`TURN_ACTIVITY`). */
+  onActivity?: (conversationId: string, activity: TurnActivity) => void;
   /** Tests only. */
   fetch?: typeof globalThis.fetch;
 }
+
+const toWindow = (conversationId: string, activity: TurnActivity): void => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(TURN_ACTIVITY, { detail: { conversationId, activity } }));
+};
 
 export function createConversationRunner(options: ConversationRunnerOptions = {}): StreamRunner {
   const runner = createAgentStreamRunner({
@@ -56,6 +66,23 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
     ...(options.fetch ? { fetch: options.fetch } : {}),
   });
   // A turn of no conversation has nowhere to go: refused before anything is posted.
-  return (turn) =>
-    turn.conversationId ? runner(turn) : Promise.reject(new Error('No conversation is open: there is nowhere to send this turn.'));
+  return (turn) => {
+    const conversationId = turn.conversationId;
+    if (!conversationId) return Promise.reject(new Error('No conversation is open: there is nowhere to send this turn.'));
+    // What the turn is doing, said once each time it changes: the mascot reads it (task 12.2).
+    let said: TurnActivity | null = null;
+    const say = (activity: TurnActivity | null): void => {
+      if (!activity || activity === said) return;
+      said = activity;
+      (options.onActivity ?? toWindow)(conversationId, activity);
+    };
+    const emitter: typeof turn.emitter = (event) => {
+      say(activityOf(event as unknown as { type: string } & Record<string, unknown>));
+      turn.emitter(event);
+    };
+    return runner({ ...turn, emitter }).catch((error: unknown) => {
+      say(turn.signal.aborted ? 'stopped' : 'failed');
+      throw error;
+    });
+  };
 }

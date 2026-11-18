@@ -72,6 +72,23 @@ describe('the icons', () => {
     expect(decode(set.get('badge-done-16.png')!).pixel(8, 8).slice(0, 3)).toEqual(rgb(tokens.get(TRAY_TOKENS.rest)!));
   });
 
+  it('the app’s icon (task 12.2): a starry night, rounded, the mark in its middle — the hat lit, the face in brass', async () => {
+    const tokens = readTokens(await readFile(TOKENS, 'utf8'));
+    const set = iconSet(tokens);
+    for (const size of [256, 512]) {
+      const png = decode(set.get(`app-${size}.png`)!);
+      expect([png.width, png.height]).toEqual([size, size]);
+      const at = (x: number, y: number) => png.pixel(Math.round((x / 120) * size), Math.round((y / 120) * size));
+      // Rounded: its corners are empty, its edges are the night.
+      expect(at(1, 1)[3]).toBe(0);
+      expect(at(60, 4)).toEqual([...rgb(tokens.get('--bonaparte-icon-night')!), 255]);
+      // The hat, lit, at the top of the mark; the brass of the face lower down.
+      expect(at(60, 42).slice(0, 3)).toEqual(rgb(tokens.get('--bonaparte-icon-hat')!));
+      expect(at(41, 75).slice(0, 3)).toEqual(rgb(tokens.get('--bonaparte-icon-face')!));
+      expect(at(60, 83.5).slice(0, 3)).toEqual(rgb(tokens.get('--bonaparte-icon-feature')!));
+    }
+  });
+
   it('every colour comes from a token, the ring of the badge included: without one, nothing is drawn', async () => {
     const tokens = readTokens(await readFile(TOKENS, 'utf8'));
     for (const token of [...Object.values(TRAY_TOKENS), '--bonaparte-tray-ring']) {
@@ -90,7 +107,8 @@ describe('the icons', () => {
 
   it('the icons in the repository are those the tokens give — run `node scripts/make-icons.mjs` after a change', async () => {
     const set = iconSet(readTokens(await readFile(TOKENS, 'utf8')));
-    expect(set.size).toBe(18);
+    // 12 of the tray, 6 badges, the app's icon at 256 and 512 (task 12.2).
+    expect(set.size).toBe(20);
     for (const [name, png] of set) {
       // Pixel for pixel: another zlib may compress the same pixels into other bytes.
       const kept = decode(await readFile(join(ICONS, name)));

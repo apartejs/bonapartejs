@@ -4226,3 +4226,26 @@ body {
 .shortcut-row__refused {
   margin: 0 4px 8px;
 }
+
+/* The mascot in the sidebar's header and at the top of the rail (task 12.2, board « Logo et ses états »). */
+.bonaparte-brand {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bonaparte-brand .bonaparte-wordmark {
+  flex: none;
+}
+
+.bonaparte-brand__mark {
+  font-size: 11px;
+}
+
+.bonaparte-rail__mark {
+  align-self: center;
+  margin-block: 4px 8px;
+  font-size: 10px;
+}

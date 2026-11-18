@@ -14,9 +14,13 @@ import type { ListedConversation } from './Sidebar';
 import { Icon } from './icons';
 import type { Statuses } from './statuses';
 import { TipButton } from './TipButton';
+import { Mascot } from '../logo/Mascot';
+import type { MascotState } from '../logo/mascot-state';
 
 export interface RailProps {
   messages: Messages;
+  /** The mascot's state (task 12.2). */
+  mascot: MascotState;
   engine: EngineStateView;
   conversations: readonly ListedConversation[];
   activeId: string | null;
@@ -36,6 +40,7 @@ export function Rail(props: RailProps) {
   const shown = conversations.filter((conversation) => conversation.id === activeId || statuses[conversation.id]?.waiting);
   return (
     <nav className="bonaparte-rail" aria-label={words.navCollapsed}>
+      <Mascot className="bonaparte-rail__mark" state={props.mascot} label={words.mascot.label(words.mascot.states[props.mascot])} />
       <TipButton label={words.expand} tip={words.expandTip} icon="panel" side="end" onClick={props.onExpand} />
       <TipButton label={words.newConversation} icon="plus" side="end" className="bonaparte-bordered" onClick={props.onNewConversation} />
       {props.onNewDiscussion ? <TipButton label={words.newDiscussion} icon="conversation" side="end" onClick={props.onNewDiscussion} /> : null}

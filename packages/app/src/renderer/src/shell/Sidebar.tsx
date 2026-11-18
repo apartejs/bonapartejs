@@ -20,6 +20,10 @@ import { EngineCard } from './EngineCard';
 import { Icon } from './icons';
 import { rowMarks, type Memory, type RowPr } from './statuses';
 import { TipButton } from './TipButton';
+import { Mascot } from '../logo/Mascot';
+import type { MascotState } from '../logo/mascot-state';
+import { keysOf } from '../shortcuts/registry';
+import { useBindings } from '../shortcuts/useShortcuts';
 
 /** A conversation as aparté's manager lists it: what the list draws. */
 export interface ListedConversation {
@@ -32,6 +36,8 @@ export interface ListedConversation {
 
 export interface SidebarProps {
   messages: Messages;
+  /** The mascot's state (task 12.2). */
+  mascot: MascotState;
   engine: EngineStateView;
   conversations: readonly ListedConversation[];
   activeId: string | null;
@@ -120,6 +126,10 @@ function ProjectGroup({
 export function Sidebar(props: SidebarProps) {
   const { messages, activeId, projects, projectOf, marksOf } = props;
   const words = messages.shell;
+  const bindings = useBindings();
+  // The pointer over the mark surprises it, when it has nothing more urgent to say.
+  const [hovered, setHovered] = useState(false);
+  const mascot: MascotState = hovered && props.mascot === 'idle' ? 'surprised' : props.mascot;
   const conversations: Row[] = props.conversations.map((conversation) => {
     const marks = marksOf(conversation.id);
     return {
@@ -139,7 +149,10 @@ export function Sidebar(props: SidebarProps) {
   return (
     <nav className="aparte-sidebar bonaparte-sidebar" aria-label={words.nav}>
       <div className="bonaparte-sidebar__top">
-        <span className="bonaparte-wordmark">{words.brand}</span>
+        <span className="bonaparte-brand" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+          <Mascot className="bonaparte-brand__mark" state={mascot} label={words.mascot.label(words.mascot.states[mascot])} />
+          <span className="bonaparte-wordmark">{words.brand}</span>
+        </span>
         <TipButton label={words.collapse} tip={words.collapseTip} icon="panel" onClick={props.onCollapse} />
         <TipButton label={words.newConversation} icon="plus" className="bonaparte-bordered" onClick={props.onNewConversation} />
         {/* One list has no « Discussions » section: its button stands here (review of phase 9). */}
@@ -157,7 +170,7 @@ export function Sidebar(props: SidebarProps) {
         className="bonaparte-inbox-entry"
         aria-current={props.inbox.open ? 'page' : undefined}
         aria-label={props.inbox.count > 0 ? words.inboxCount(props.inbox.count) : words.inbox}
-        title={`${words.inbox} · ${words.inboxShortcut}`}
+        title={`${words.inbox} · ${keysOf(bindings.inbox, messages.settings.shortcuts.keys).join(' ')}`}
         onClick={props.inbox.onOpen}
       >
         <Icon name="inbox" />

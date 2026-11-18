@@ -100,6 +100,8 @@ import { SubagentsPanel } from './panels/SubagentsPanel';
 import { InboxPage } from './screens/Inbox';
 import { createQuestionsLive } from './aparte/questions';
 import { useShortcut, useShortcutKeys } from './shortcuts/useShortcuts';
+import type { EngineLike } from './logo/mascot-state';
+import { useMascotState } from './logo/useMascotState';
 import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
@@ -1124,6 +1126,11 @@ function Workspace({
   }, []);
   stopRef.current = { shown: deck.shown, waiting: request !== undefined };
 
+  // The mascot says what the engine and the conversation shown are doing (task 12.2).
+  const engineLike: EngineLike =
+    engine.mode === 'remote' ? 'ready' : engine.status === 'stopped' && !engine.model && !engine.resume ? 'none' : engine.status;
+  const mascot = useMascotState(engineLike, conversationId ?? null);
+
   const style = { locale, units: messages.units };
   return (
     <>
@@ -1150,6 +1157,7 @@ function Workspace({
       {folded ? (
         <Rail
           messages={messages}
+          mascot={mascot}
           engine={engine}
           conversations={activeConversations}
           activeId={conversationId ?? null}
@@ -1164,6 +1172,7 @@ function Workspace({
       ) : (
         <Sidebar
           messages={messages}
+          mascot={mascot}
           engine={engine}
           conversations={activeConversations}
           activeId={conversationId ?? null}

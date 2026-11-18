@@ -4,7 +4,7 @@
  * app and never opens another window.
  */
 
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
 import { APP_ORIGIN } from '@aparte/bonaparte-shared';
 import { isOwnPage, isPermissionAllowed } from './security.js';
@@ -26,6 +26,8 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     minHeight: 480,
     show: false,
     title: 'bonaparte',
+    // The app's icon (task 12.2): the starry night of the board « Logo », drawn by scripts/make-icons.mjs.
+    icon: join(app.getAppPath(), 'resources', 'icons', 'app-256.png'),
     // A test run: invisible from the first instant, whatever shows it later.
     ...(options.e2e ? { x: OFF_SCREEN, y: OFF_SCREEN, opacity: 0, skipTaskbar: true } : {}),
     webPreferences: {

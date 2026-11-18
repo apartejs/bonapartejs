@@ -61,6 +61,27 @@
   --bonaparte-tray-asleep: #8A8A83;
   /* The ring around the badge's dot: it keeps the dot apart from the app's icon under it. */
   --bonaparte-tray-ring: #FFFFFF;
+
+  /*
+   * The mascot (board « Logo et ses états »): aparté's ('.') in brass, its bicorne in the accent. The cockade is
+   * its light: brass, amber while a request waits. The hat goes red on an error, grey asleep.
+   */
+  --bonaparte-brass-face: #B07D33;
+  --bonaparte-brass-feature: #241F2B;
+  --bonaparte-brass-cockade: #D9A24B;
+  --bonaparte-brass-core: #FFF4DC;
+  --bonaparte-brass-waiting: #E0A84A;
+  --bonaparte-hat: var(--aparte-primary);
+  --bonaparte-hat-error: var(--aparte-error);
+  --bonaparte-hat-asleep: #75756D;
+  --bonaparte-hat-braid: rgba(255, 255, 255, 0.3);
+  --bonaparte-hat-socket: rgba(0, 0, 0, 0.22);
+  --bonaparte-mascot-dots: #6B6B64;
+  /* The app's icon (board « Logo », « Une nuit étoilée »): the mark on the dark, whatever the theme. */
+  --bonaparte-icon-night: #161615;
+  --bonaparte-icon-hat: #6BB2C8;
+  --bonaparte-icon-face: #D9A24B;
+  --bonaparte-icon-feature: #E7C588;
 }
 
 [data-aparte-theme='dark'] {
@@ -80,6 +101,12 @@
 
   --bonaparte-merged: #C3AEE4;
   --bonaparte-merged-bg: color-mix(in srgb, var(--bonaparte-merged) 16%, var(--aparte-bg));
+
+  /* The mascot on a dark ground: the face lighter brass, its features brass too. */
+  --bonaparte-brass-face: #D9A24B;
+  --bonaparte-brass-feature: #E7C588;
+  --bonaparte-hat-asleep: #9A9A92;
+  --bonaparte-mascot-dots: #B5B5AD;
 }
 
 [data-bonaparte-accent='teal'] {
