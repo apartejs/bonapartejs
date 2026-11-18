@@ -143,7 +143,24 @@ engine in a hidden page, or an online provider whose key stays in the
 vault, asked before it goes out. MCP servers (stdio, launched hidden
 without a shell, their tree stopped; or HTTP) are kept for the app or a
 project in « Serveurs MCP », started by the first turn, their tools in the
-one registry. A section below that names something not built yet says so.
+one registry. Phase 11 is done: the plugins. A plugin is added from a
+folder, npm (its version fixed) or git, read before anything of it runs —
+its manifest, « auteur non vérifié », its effects, what it will add — then
+kept under `<data>/plugins/<id>/`, switched on or off, an update offered,
+never made in silence. Its Node half runs in a process of its own and
+speaks by messages; its tools are `plugin__<id>__<tool>`, judged like
+every tool; its view runs in a sandboxed frame of its own origin
+(`bonaparte-plugin://<id>/`), with the kit's sheet and the theme, and
+never the bridge. « Réglages · Plugins » lists those made in a
+conversation, those added and the built-in ones — « Sous-agents »,
+« Titres automatiques » and the project's scripts among them, each
+switching the core's own function — and a project may switch off what
+the app switches on. The agent makes a plugin in a conversation
+(`harness_inspect`, `extension_define`, compiled and never run): its
+card says what it adds and what it may do, « Essayer dans cette
+conversation » runs it there alone, its « / » command marked « À
+l'essai », and « Installer » keeps it with the others. A section below
+that names something not built yet says so.
 
 ## apartéJS frictions — MANDATORY
 
@@ -720,6 +737,52 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   background by a conversation's first turn, or « Démarrer »; a file that
   cannot be read is never written over. Tests use
   `testing/fake-mcp-server.mjs`.
+- **Plugins added** (task 11.1, `core/src/plugins/install.ts`, `state.ts`,
+  `added.ts`, `remote.ts`; `main/plugin-host/`): `PluginInstaller` stages a
+  source under `<data>/plugins/.staging/<uuid>` — a folder copied without
+  `.git`, `npm pack --ignore-scripts` unpacked by the system's `tar`, or
+  `git clone --depth 1 -c protocol.ext.allow=never` — and its preview is
+  read from there; installing moves it to `<data>/plugins/<id>/`. What is
+  added, its source and who switched it off live in `config/plugins.json`
+  (`PluginState`, never written over when it cannot be read). Each plugin
+  runs in one Electron utility process (`plugin-process.ts`, built apart
+  with `?modulePath`), the app's environment minus its secrets, talking by
+  messages (`remoteModule` ↔ `runPluginChild`, the core's subpath
+  `@aparte/bonaparte-core/plugin-child`); a crash tears its context down,
+  never the app. `AddedPlugins` activates them at start (a folder put there
+  by hand counts as one added from that folder).
+- **A plugin's view** (task 11.2, `main/plugin-host/protocol.ts`,
+  `panels/PluginFrame.tsx`, `plugin-frame-relay.ts`, `shared/src/plugin-view.ts`,
+  `plugin-sdk/src/view.ts`, `react.ts`): `bonaparte-plugin://<id>/` serves
+  the view's files under a strict CSP, a trial's under `@<rev>/`, and the
+  kit's sheet with our tokens at `/@bonaparte/kit.css`; the window allows
+  only that scheme in its frames (`frame-src`). The frame is
+  `sandbox="allow-scripts"`, without the preload; it speaks on one channel
+  (`bonaparte-view`), the relay checking each message's source and shape
+  (`readFromView`). Its pane is `plugin:<id>:<pane>` in the dock.
+  `defineView` and `defineReactView` are what an author imports.
+- **« Réglages · Plugins »** (task 11.3, `settings/Plugins.tsx`,
+  `dialogs/AddPlugin.tsx`, `settings/WebSearch.tsx`,
+  `settings/ProjectExtensions.tsx`, `core/src/plugins/entries.ts`): the
+  core's own functions are entries switched like plugins (`subagents`
+  takes `run_subagent` out of the inventory, `project-scripts` empties
+  `runs.list`, `auto-titles` gives aparté's `setTitleProvider` the untitled
+  word); a project's page lists its MCP servers and plugins, one switched
+  off for it alone (`visibleTo(projectId, conversationId)`). The search
+  engine's key goes to the vault as `search-<provider>`.
+- **A plugin made in a conversation** (task 11.4, `core/src/plugins/extensions.ts`,
+  `guide.ts`, `tools/builtin/extensions.ts`; `aparte/extension-card.ts`):
+  `ExtensionStore` keeps each definition as a revision of its own under
+  `<data>/extensions/<conv>/<id>/<rev>/`, checked by `node --check`
+  (Electron as node) and never run; `harness_inspect` (read) gives what is
+  active and `PLUGIN_GUIDE` (`docs/plugin-guide.md` is equal to it),
+  `extension_define` (write), `extension_run` (execute: its card shows the
+  code as a diff from nothing), `extension_stop` and `extension_undefine`
+  (ui) — never a sub-agent's. A trial is visible to its conversation only
+  (`host.trialIn`); « Installer » makes it a plugin added from it. Its
+  « / » commands come from `PluginStatus.commands` through
+  `aparte-collect-commands`, a trial's under the group « À l'essai »
+  (aparté's rows carry no badge: apartejs/aparte#261).
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
   mounted and hidden (a reply goes on). The app's settings live in the
   core's `SettingsStore` (`config/global.json`, under `settings`), checked
@@ -1000,6 +1063,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **A test of a redraw marks the elements it watches** (an expando on the
   comment field, on a line number) and checks they are the same after a
   render of the app: a field can survive a redraw its rows do not.
+- **Electron 45's utility process ignores Node's `--permission`**
+  (`process.permission` is undefined there): a plugin's process is a plain
+  Node process. What keeps it apart is the process itself, its environment
+  without secrets, and the host that hands it only what its effects allow.
+  And a plugin that spawns `process.execPath` relaunches Electron, not Node.
+- **`?raw` of a package's file fails in electron-vite's main build**
+  (`ERR_PACKAGE_PATH_NOT_EXPORTED`): import it by a relative path into
+  `node_modules` (the kit's sheet, apartejs/aparte#260).
+- **aparté's « / » list hides its group headings while a filter is typed**
+  (apartejs/aparte#261): a test that reads a group types « / » alone.
 
 ## Real-model smoke results
 

@@ -5,7 +5,8 @@
  * otherwise.
  */
 
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FAKE_QWEN_TEMPLATE, tempRepo } from '@aparte/bonaparte-core/testing';
 import type { ElectronApplication, Page } from '@playwright/test';
@@ -1086,6 +1087,86 @@ for (const locale of ['fr', 'en'] as const) {
       await fake.getByRole('button', { name: words.expand }).click();
       await page.waitForTimeout(500);
       await page.screenshot({ path: join(into, `mcp-servers-${locale}-${scheme}.png`), animations: 'disabled' });
+    });
+  }
+}
+
+const BONJOUR_PLUGIN: Record<string, string> = {
+  'plugin.json': JSON.stringify({
+    id: 'bonjour',
+    name: 'Bonjour',
+    version: '0.1.0',
+    description: { en: 'Says hello in the language of the conversation.', fr: 'Dit bonjour dans la langue de la conversation.' },
+    entry: { node: 'index.mjs' },
+    effects: [{ effect: 'read', what: { en: 'the conversation’s language', fr: 'la langue de la conversation' } }],
+    contributes: { tools: [{ name: 'greet', description: 'Say hello.', effect: 'read' }] },
+  }),
+  'index.mjs': "export default { activate(ctx) { ctx.registerToolHandler('greet', async () => ({ content: 'bonjour' })); } };\n",
+};
+
+const GEMMA_QUOTE = '<|"|>';
+const gemmaValue = (value: unknown): string => {
+  if (typeof value === 'string') return `${GEMMA_QUOTE}${value}${GEMMA_QUOTE}`;
+  if (Array.isArray(value)) return `[${value.map(gemmaValue).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.entries(value).map(([key, inner]) => `${key}:${gemmaValue(inner)}`).join(',')}}`;
+  return String(value);
+};
+const CHANGELOG = {
+  id: 'changelog',
+  name: 'changelog',
+  version: '0.1.0',
+  effects: [{ effect: 'execute', what: { en: 'run git log in the project', fr: 'lancer git log dans le projet' } }],
+  contributes: { commands: [{ name: 'changelog', description: { en: 'Sum up the commits of the day', fr: 'Résumer les commits du jour' } }] },
+};
+const CHANGELOG_CODE = "export default { activate(ctx) { ctx.registerCommand('changelog', () => ({ send: 'Sum up the commits of the day.' })); } };";
+const makesPlugin = (prompt: string): string => {
+  const user = prompt.lastIndexOf('<|turn>user');
+  const results = prompt.slice(user).split('<|tool_response>').length - 1;
+  if (!prompt.slice(user).includes('plugin')) return 'ok';
+  if (results === 0) return '<|tool_call>call:harness_inspect{}<tool_call|>';
+  if (results === 1) return `<|tool_call>call:extension_define{manifest:${gemmaValue(CHANGELOG)},code:${gemmaValue(CHANGELOG_CODE)}}<tool_call|>`;
+  return prompt.includes('Crée-moi') ? 'Voilà le plugin. Rien ne tourne tant que tu n’as pas dit oui.' : 'Here is the plugin. Nothing runs until you say yes.';
+};
+
+for (const locale of ['fr', 'en'] as const) {
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`the plugins, added and made in a conversation, ${locale}, ${scheme}`, async ({ launch }) => {
+      test.skip(!folder, 'pictures are taken on request: set BONAPARTE_SCREENS to a folder');
+      const into = folder as string;
+      await mkdir(into, { recursive: true });
+      const words =
+        locale === 'fr'
+          ? { settings: 'Réglages', add: 'Ajouter…', dialog: 'Ajouter un plugin', field: 'Dossier du plugin', read: 'Lire le plugin', ask: 'Crée-moi un plugin : une commande /changelog qui résume les commits du jour.' }
+          : { settings: 'Settings', add: 'Add…', dialog: 'Add a plugin', field: 'Plugin folder', read: 'Read the plugin', ask: 'Make me a plugin: a /changelog command that sums up the commits of the day.' };
+      const source = await mkdtemp(join(tmpdir(), 'bp-screens-plugin-'));
+      for (const [name, text] of Object.entries(BONJOUR_PLUGIN)) await writeFile(join(source, name), text);
+      const { app, page } = await launch({ locale, engine: { responder: makesPlugin }, settings: { defaultMode: 'plume' }, plugins: { bonjour: BONJOUR_PLUGIN } });
+      await page.emulateMedia({ colorScheme: scheme });
+      await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1440, 1000));
+      const ui = chat(page);
+      await expect(ui.editor).toBeVisible();
+
+      // The card of a plugin made in the conversation, its code shown.
+      await ui.send(words.ask);
+      await expect(page.locator('section.extension-card[data-extension="changelog"]')).toBeVisible({ timeout: 30_000 });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(into, `plugin-made-${locale}-${scheme}.png`), animations: 'disabled' });
+
+      // Réglages · Plugins.
+      await page.getByRole('button', { name: words.settings, exact: true }).click();
+      await page.getByRole('navigation', { name: words.settings }).getByRole('link', { name: /^Plugins/ }).click();
+      await expect(page.locator('.plugin-row__name', { hasText: 'Bonjour' })).toBeVisible();
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `plugins-${locale}-${scheme}.png`), animations: 'disabled', fullPage: true });
+
+      // « Ajouter un plugin », its preview read.
+      await page.getByRole('button', { name: words.add }).click();
+      const dialog = page.getByRole('dialog', { name: words.dialog });
+      await dialog.getByRole('textbox', { name: words.field }).fill(source);
+      await dialog.getByRole('button', { name: words.read }).click();
+      await expect(dialog.getByText(/greet/)).toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: join(into, `plugin-add-${locale}-${scheme}.png`), animations: 'disabled' });
     });
   }
 }
