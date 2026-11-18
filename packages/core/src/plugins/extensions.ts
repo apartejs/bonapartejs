@@ -14,6 +14,8 @@ import { PLUGIN_MANIFEST_FILE } from './host.js';
 
 export const EXTENSION_ENTRY = 'index.mjs';
 const CHECK_TIMEOUT_MS = 30_000;
+/** What a removal keeps of a plugin made here: the last revision number it was given. */
+const LAST_FILE = 'last';
 
 export interface Extension {
   conversationId: string;
@@ -95,8 +97,7 @@ export class ExtensionStore {
     const parsed = parseManifest(raw);
     if (!parsed.ok) return { ok: false, error: `The manifest does not read: ${parsed.error}. Fix it and define the plugin again.` };
     const manifest = parsed.manifest;
-    const revs = (await readdir(this.dirOf(conversationId, manifest.id)).catch(() => [])).map(Number).filter(Number.isInteger);
-    const rev = Math.max(0, ...revs) + 1;
+    const rev = (await this.lastRev(conversationId, manifest.id)) + 1;
     const dir = this.dirOf(conversationId, manifest.id, rev);
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, PLUGIN_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
@@ -111,11 +112,34 @@ export class ExtensionStore {
     return { ok: true, extension };
   }
 
-  /** Every revision of it goes. */
+  /**
+   * Every revision of it goes; its last number stays (`last`), so that a plugin defined again under this id never
+   * takes a number a card already shows — a card would then name code it never showed.
+   */
   async undefine(conversationId: string, id: string): Promise<void> {
-    if (!/^[a-z][a-z0-9-]*$/.test(id)) return;
-    await rm(this.dirOf(conversationId, id), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    if (!/^[\w-]{1,128}$/.test(conversationId) || !/^[a-z][a-z0-9-]*$/.test(id)) return;
+    const last = await this.lastRev(conversationId, id);
+    for (const name of await readdir(this.dirOf(conversationId, id)).catch(() => [])) {
+      if (name === LAST_FILE) continue;
+      await rm(join(this.dirOf(conversationId, id), name), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+    if (last > 0) await writeFile(join(this.dirOf(conversationId, id), LAST_FILE), String(last));
     this.known.get(conversationId)?.delete(id);
+  }
+
+  /** A conversation deleted: what was made in it goes. */
+  async forgetConversation(conversationId: string): Promise<void> {
+    if (!/^[\w-]{1,128}$/.test(conversationId)) return;
+    await rm(this.dirOf(conversationId), { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    this.known.delete(conversationId);
+  }
+
+  /** The highest revision number ever given to this plugin here: on disk, or kept by a removal. */
+  private async lastRev(conversationId: string, id: string): Promise<number> {
+    const dir = this.dirOf(conversationId, id);
+    const revs = (await readdir(dir).catch(() => [])).map(Number).filter(Number.isInteger);
+    const kept = Number.parseInt(await readFile(join(dir, LAST_FILE), 'utf8').catch(() => '0'), 10);
+    return Math.max(0, ...revs, Number.isInteger(kept) ? kept : 0);
   }
 
   private remember(extension: Extension): void {

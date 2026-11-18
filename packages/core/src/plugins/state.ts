@@ -83,7 +83,10 @@ export class PluginState {
     });
   }
 
+  /** What it came from, checked as the file will be read again: nothing written makes it unreadable. */
   record(id: string, source: PluginSource, addedAt: string): Promise<void> {
+    const checked = pluginSourceSchema.safeParse(source);
+    if (!checked.success) return Promise.reject(new Error(`Where the plugin ${id} came from cannot be kept: ${checked.error.issues[0]?.message ?? 'not valid'}.`));
     return this.change((data) => {
       data.installed[id] = { source, addedAt };
     });

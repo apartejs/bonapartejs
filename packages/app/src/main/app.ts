@@ -347,6 +347,8 @@ ${appTokens}`,
   const ipc = createIpcRegistry({ ipcMain, isTrusted: (url) => isTrustedOrigin(url, devServerUrl) });
   registerAllChannels(ipc, core, {
     browser: builtinBrowser,
+    // A change the person made is told before its answer: the window acts on it at once (a title provider, a pane).
+    pluginsChanged: () => push({ kind: 'plugins' }),
     version: () => __BONAPARTE_VERSION__,
     locale: interfaceLocale,
     // The system's folder dialog, over the window — or the test's folder in a test run.

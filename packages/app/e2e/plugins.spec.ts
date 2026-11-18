@@ -119,3 +119,15 @@ test('a project’s page: the MCP servers and plugins it uses; a plugin switched
   await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: /^Plugins/ }).click();
   await expect(row(page, 'Terminal').getByRole('switch', { name: 'Terminal' })).toBeChecked();
 });
+
+test('a plugin switched off for the whole app is not offered on a project’s page — no switch there that would snap back', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' } });
+  await openPage(page);
+  await row(page, 'Terminal').getByRole('switch', { name: 'Terminal' }).click();
+  await expect(row(page, 'Terminal').getByRole('switch', { name: 'Terminal' })).not.toBeChecked();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Permissions' }).click();
+  await page.getByRole('button', { name: /^Ouvrir maison/ }).click();
+  const plugins = page.getByRole('list', { name: 'Plugins' });
+  await expect(plugins.getByRole('switch', { name: 'Navigateur' })).toBeVisible();
+  await expect(plugins.getByRole('switch', { name: 'Terminal' })).toHaveCount(0);
+});

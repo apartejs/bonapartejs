@@ -22,7 +22,7 @@ describe('aparté’s icons', () => {
   it('are drawn through Glyph alone, whose name aparté knows', () => {
     const raw = sources(root)
       .filter((file) => !file.endsWith(join('shell', 'icons.tsx')))
-      .filter((file) => readFileSync(file, 'utf8').includes("createElement('aparte-icon'"))
+      .filter((file) => /createElement\(\s*['"`]aparte-icon['"`]|<aparte-icon[\s>]/.test(readFileSync(file, 'utf8')))
       .map((file) => relative(root, file));
     expect(raw).toEqual([]);
   });

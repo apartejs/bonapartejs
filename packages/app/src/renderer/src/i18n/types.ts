@@ -889,6 +889,10 @@ export interface Messages {
     onTrial: string;
     trialLine: string;
     openConversation: string;
+    /** Its accessible name: which plugin's. */
+    openConversationOf: (name: string) => string;
+    stopTrial: string;
+    stopTrialOf: (name: string) => string;
     projectScope(name: string): string;
     effects: { read: string; write: string; execute: string; network: string; ui: string };
     from: { folder: string; npm: string; git: string; conversation(title: string): string };

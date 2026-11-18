@@ -60,6 +60,7 @@ export {
   extensionsTry,
   extensionsInstall,
   extensionsCode,
+  extensionsStop,
 } from './ipc/plugins.js';
 export type { PluginAddRequestView } from './ipc/plugins.js';
 export type { AppEvent, CommandOutputView } from './ipc/plugins.js';

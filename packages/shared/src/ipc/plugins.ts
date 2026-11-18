@@ -82,6 +82,8 @@ export const searchKeysSet = defineChannel('search.setKey', z.object({ provider:
 const extensionRef = z.object({ conversationId: idSchema, id: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64), rev: z.number().int().positive() });
 export const extensionsTry = defineChannel('extensions.try', extensionRef, statuses);
 export const extensionsInstall = defineChannel('extensions.install', extensionRef, statuses);
+/** A plugin's trial ended from the Plugins page: all it added goes. */
+export const extensionsStop = defineChannel('extensions.stop', z.object({ id: z.string().regex(/^[a-z][a-z0-9-]*$/).max(64) }), statuses);
 export const extensionsCode = defineChannel('extensions.code', extensionRef, z.object({ code: z.string(), rev: z.number(), dir: z.string() }).nullable());
 
 /** « Parcourir… »: the system's folder dialog, in the main process. */

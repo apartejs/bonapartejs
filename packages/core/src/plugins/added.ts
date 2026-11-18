@@ -96,11 +96,19 @@ export class AddedPlugins {
   }
 
   /** The trial ends: all it added goes. Asked by a conversation, only that conversation's own trial. */
-  async stopTrial(id: string, conversationId?: string): Promise<void> {
+  async stopTrial(id: string, conversationId?: string): Promise<boolean> {
     const trial = this.trialOf(id);
-    if (trial === undefined) return;
-    if (conversationId !== undefined && trial !== conversationId) return;
+    if (trial === undefined) return false;
+    if (conversationId !== undefined && trial !== conversationId) return false;
     await this.host.forget(id);
+    return true;
+  }
+
+  /** A conversation that goes (deleted) takes its trials with it. */
+  async stopTrialsOf(conversationId: string): Promise<void> {
+    for (const plugin of this.host.status()) {
+      if (plugin.trial === conversationId) await this.host.forget(plugin.id);
+    }
   }
 
   private trialOf(id: string): string | undefined {
@@ -131,7 +139,7 @@ export class AddedPlugins {
     await this.host.forget(extension.id);
     const done = await this.options.installer.install(read.preview.stagingId);
     const state = await this.host.keptState();
-    await state.record(done.id, { kind: 'conversation', conversationId: extension.conversationId, ...(title ? { title } : {}) }, (this.options.now?.() ?? new Date()).toISOString());
+    await state.record(done.id, { kind: 'conversation', conversationId: extension.conversationId, ...(title ? { title: title.slice(0, 256) } : {}) }, (this.options.now?.() ?? new Date()).toISOString());
     await state.setOff(done.id, false);
     this.host.add(done.manifest, { builtin: false, dir: done.dir });
     return this.activate(done.id);

@@ -59,6 +59,25 @@ test('a trial the model starts itself (extension_run) reaches the window: its «
   await expect(page.getByRole('listbox')).toContainText('À l’essai');
 });
 
+test('a trial ends from the Plugins page: « Arrêter l’essai » — its « / » command goes with it', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: agent }, settings: { defaultMode: 'plume' } });
+  const ui = chat(page);
+  await ui.send('Crée-moi un plugin : une commande /changelog.');
+  const card = page.locator('section.extension-card[data-extension="changelog"]');
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await card.getByRole('button', { name: 'Essayer dans cette conversation' }).click();
+  await expect(card).toContainText('À l’essai dans cette conversation');
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: /^Plugins/ }).click();
+  await page.getByRole('button', { name: 'Arrêter l’essai de changelog' }).click();
+  await expect(page.locator('.plugin-row__name', { hasText: 'changelog' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Conversations' }).click();
+  await ui.editor.click();
+  await page.keyboard.type('/');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await expect(page.getByRole('listbox').getByRole('option', { name: /changelog/ })).toHaveCount(0);
+});
+
 test('« Essayer » on a plugin that does not start says so, with its reason — never « À l’essai »', async ({ launch }) => {
   const broken = "export default { activate() { throw new Error('no git here'); } };";
   const { page } = await launch({ engine: { responder: agentWith(broken) }, settings: { defaultMode: 'plume' } });

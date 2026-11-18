@@ -563,7 +563,7 @@ describe('PluginHost — what is switched off is kept (task 11.1)', () => {
 });
 
 describe('PluginHost — what changed is told', () => {
-  it('each start, stop, removal and switch is told to whoever listens, a crash included', async () => {
+  it('each start, stop, removal and switch is told to whoever listens', async () => {
     const host = new PluginHost({ registry: new ToolRegistry() });
     const told: number[] = [];
     let count = 0;

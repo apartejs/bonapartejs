@@ -2048,6 +2048,9 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async removeConversation(id) {
+      // Its plugins on trial end with it; what it made goes too (one installed from it stays, as installed).
+      await addedPlugins.stopTrialsOf(id);
+      await extensions.forgetConversation(id).catch(() => undefined);
       await conversations.remove(id);
       // Copies of the person's files never outlive the conversation that kept them.
       await checkpoints.forget(id);

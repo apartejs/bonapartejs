@@ -54,6 +54,24 @@ describe('a plugin made in a conversation (task 11.4)', () => {
     expect(await extensions.revision('c1', '../c2', 1)).toBeUndefined();
   });
 
+  it('a revision number is never given twice, removal included: an old card never names new code', async () => {
+    const { extensions } = await store();
+    await extensions.define('c1', { manifest: MANIFEST, code: CODE });
+    await extensions.undefine('c1', 'changelog');
+    expect(await extensions.revision('c1', 'changelog', 1)).toBeUndefined();
+    expect(await extensions.define('c1', { manifest: MANIFEST, code: CODE })).toMatchObject({ ok: true, extension: { rev: 2 } });
+    expect(await extensions.revision('c1', 'changelog', 1)).toBeUndefined();
+  });
+
+  it('a conversation deleted: what was made in it goes', async () => {
+    const { data, extensions } = await store();
+    await extensions.define('c1', { manifest: MANIFEST, code: CODE });
+    await extensions.forgetConversation('c1');
+    expect(existsSync(join(data, 'extensions', 'c1'))).toBe(false);
+    expect(extensions.latest('c1')).toEqual([]);
+    expect(await extensions.revision('c1', 'changelog', 1)).toBeUndefined();
+  });
+
   it('a code that does not compile is refused, with what to fix; nothing of it is kept', async () => {
     const { data, extensions } = await store();
     const refused = await extensions.define('c1', { manifest: MANIFEST, code: 'export default { activate(ctx) { ctx.registerCommand( } };' });
@@ -74,7 +92,7 @@ describe('a plugin made in a conversation (task 11.4)', () => {
     const { data, extensions } = await store();
     await extensions.define('c1', { manifest: MANIFEST, code: CODE });
     await extensions.undefine('c1', 'changelog');
-    expect(existsSync(join(data, 'extensions', 'c1', 'changelog'))).toBe(false);
+    expect(existsSync(join(data, 'extensions', 'c1', 'changelog', '1'))).toBe(false);
     expect(extensions.latest('c1')).toEqual([]);
   });
 });

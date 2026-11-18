@@ -27,7 +27,7 @@ const manifest = (version: string, effect: string) => ({
 const code = (word: string) => `export default { activate(ctx) { ctx.registerCommand('changelog', () => ({ send: '${word}' })); } };\n`;
 
 describe('a card acts on the revision it shows', () => {
-  it('its code, its trial and its install are those of its revision; a revision not there is said', async () => {
+  it('its code is its revision’s; a revision not there is refused for its code, its trial and its install', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'bp-extensions-api-'));
     dirs.push(dir);
     await mkdir(join(dir, 'home'), { recursive: true });

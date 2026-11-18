@@ -14,20 +14,24 @@ export function ProjectExtensions({ messages, locale, projectId }: { messages: M
   const words = messages.settings.project.extensions;
   const [servers, setServers] = useState<McpServerViewData[]>([]);
   const [plugins, setPlugins] = useState<PluginStatus[]>([]);
+  const [appOn, setAppOn] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     void bridge
       .invoke(mcpOverview, undefined)
       .then((all) => setServers(all.filter((server) => server.scope.kind === 'app' || server.scope.projectId === projectId)))
       .catch(() => undefined);
-    void bridge
-      .invoke(pluginsOverview, { projectId })
-      .then((found) => setPlugins(found as PluginStatus[]))
+    void Promise.all([bridge.invoke(pluginsOverview, { projectId }), bridge.invoke(pluginsOverview, {})])
+      .then(([forProject, forApp]) => {
+        setPlugins(forProject as PluginStatus[]);
+        setAppOn(new Set(forApp.filter((plugin) => plugin.enabled).map((plugin) => plugin.id)));
+      })
       .catch(() => undefined);
   }, [projectId]);
 
-  // What the app itself runs: a plugin switched off for the whole app is not this project's to switch on.
-  const shown = plugins.filter((plugin) => plugin.active || !plugin.enabled);
+  // What the app itself runs: a plugin switched off for the whole app is not this project's to switch on, and a
+  // trial is its conversation's.
+  const shown = plugins.filter((plugin) => appOn.has(plugin.id) && plugin.trial === undefined);
   return (
     <Section title={words.title}>
       <p className="setting-section__hint">{words.uses(servers.length, shown.filter((plugin) => plugin.enabled).length)}</p>

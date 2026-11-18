@@ -537,7 +537,12 @@ export class PluginHost {
           };
         }
         const judge = this.options.judge ?? onlyReads;
-        const verdict = await judge({ conversationId: ctx.conversationId, tool: core.def, input });
+        let verdict: Verdict;
+        try {
+          verdict = await judge({ conversationId: ctx.conversationId, tool: core.def, input });
+        } catch (error) {
+          return { content: `Not done: ${describe(error)}`, failed: true };
+        }
         if (verdict.verdict === 'deny') return { content: `Not done: ${verdict.reason}`, failed: true };
         // The person allowed this very call of the plugin: what only the mode asks about is what they
         // allowed. Anything asked for another reason (a file that runs later, outside the perimeter, the
@@ -550,8 +555,12 @@ export class PluginHost {
         }
         // The person allowed the plugin's call, not what it reaches: nothing lands outside the perimeter on its word.
         const inside: ToolContext = { ...ctx, granted: false };
-        const output = await core.handler({ id: `${call.id}/${inner}`, name: inner, input }, inside);
-        return { content: output.content, ...(output.failed ? { failed: true } : {}) };
+        try {
+          const output = await core.handler({ id: `${call.id}/${inner}`, name: inner, input }, inside);
+          return { content: output.content, ...(output.failed ? { failed: true } : {}) };
+        } catch (error) {
+          return { content: `The tool failed: ${describe(error)}`, failed: true };
+        }
       };
       const result = await handler({
         input: isRecord(call.input) ? call.input : {},

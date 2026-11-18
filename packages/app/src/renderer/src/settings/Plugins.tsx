@@ -6,7 +6,7 @@
  * switches and buttons; the rows are ours, on its tokens.
  */
 
-import { localize, pluginsCheckUpdates, pluginsOverview, pluginsRemove, pluginsSetEnabled, type Locale, type PluginStatus } from '@aparte/bonaparte-shared';
+import { extensionsStop, localize, pluginsCheckUpdates, pluginsOverview, pluginsRemove, pluginsSetEnabled, type Locale, type PluginStatus } from '@aparte/bonaparte-shared';
 import { useEffect, useId, useState } from 'react';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
@@ -157,8 +157,24 @@ export function PluginsPage({ messages, locale, onCreate, onOpenConversation }: 
             </button>
           ) : null}
           {conversation !== null && onOpenConversation ? (
-            <button type="button" className="aparte-btn aparte-btn--ghost aparte-btn--sm" onClick={() => onOpenConversation(conversation)}>
+            <button
+              type="button"
+              className="aparte-btn aparte-btn--ghost aparte-btn--sm"
+              aria-label={words.openConversationOf(name)}
+              onClick={() => onOpenConversation(conversation)}
+            >
               {words.openConversation}
+            </button>
+          ) : null}
+          {trial ? (
+            <button
+              type="button"
+              className="aparte-btn aparte-btn--outline aparte-btn--sm"
+              aria-label={words.stopTrialOf(name)}
+              disabled={busy === plugin.id}
+              onClick={() => void act(plugin.id, () => bridge.invoke(extensionsStop, { id: plugin.id }))}
+            >
+              {words.stopTrial}
             </button>
           ) : null}
           {!plugin.builtin && !trial ? (
@@ -171,7 +187,7 @@ export function PluginsPage({ messages, locale, onCreate, onOpenConversation }: 
               {words.remove(name)}
             </button>
           ) : null}
-          {/* A trial is not switched here: it lives in its conversation, which ends it. */}
+          {/* A trial is not switched here: « Arrêter l’essai » ends it, as its conversation's model or deletion does. */}
           {trial ? null : (
           <input
             type="checkbox"

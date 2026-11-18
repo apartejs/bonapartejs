@@ -67,12 +67,15 @@ function wellFormed(message: unknown): message is FromPluginProcess {
       return true;
     case 'failed':
       return text('error');
-    case 'result':
-      return num('id') && typeof m['result'] === 'object' && m['result'] !== null;
+    case 'result': {
+      if (!num('id') || typeof m['result'] !== 'object' || m['result'] === null) return false;
+      const result = m['result'] as Record<string, unknown>;
+      return (result['content'] === undefined || typeof result['content'] === 'string') && (result['failed'] === undefined || typeof result['failed'] === 'boolean');
+    }
     case 'use':
       return num('id') && num('callId') && text('tool') && typeof m['input'] === 'object' && m['input'] !== null;
     case 'command-result':
-      return num('id') && typeof m['ok'] === 'boolean';
+      return num('id') && typeof m['ok'] === 'boolean' && (m['error'] === undefined || typeof m['error'] === 'string');
     case 'emit':
       return text('instanceId') && text('event');
     case 'log':
@@ -182,15 +185,27 @@ export function remoteModule(options: {
               });
               return;
             case 'result': {
+              // Read before the call is let go: a call is never dropped unanswered.
+              const result: PluginToolResult = { content: String(message.result.content ?? ''), ...(message.result.failed ? { failed: true } : {}) };
               const call = calls.get(message.id);
               calls.delete(message.id);
-              call?.resolve({ content: String(message.result.content ?? ''), ...(message.result.failed ? { failed: true } : {}) });
+              call?.resolve(result);
               return;
             }
             case 'use': {
               const call = calls.get(message.callId);
-              const used = call ? call.invocation.use(message.tool, message.input) : Promise.resolve({ content: 'That call has ended.', failed: true });
-              void used.then((result) => port.postMessage({ t: 'used', id: message.id, result }));
+              // A core tool that throws under it answers the plugin as a failure: nothing rejects in the app.
+              const used = call
+                ? Promise.resolve().then(() => call.invocation.use(message.tool, message.input))
+                : Promise.resolve({ content: 'That call has ended.', failed: true });
+              void used
+                .then(
+                  (result) => result,
+                  (error: unknown) => ({ content: `The tool failed: ${error instanceof Error ? error.message : String(error)}`, failed: true }),
+                )
+                .then((result) => {
+                  if (!exited) port.postMessage({ t: 'used', id: message.id, result });
+                });
               return;
             }
             case 'command-result': {

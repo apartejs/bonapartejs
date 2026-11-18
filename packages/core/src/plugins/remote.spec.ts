@@ -200,6 +200,43 @@ describe('a plugin of a third party, in its own process (task 11.1)', () => {
     expect(host.status()[0]).toMatchObject({ active: false, error: expect.stringMatching(/message/) });
   });
 
+  it('a core tool that throws under its `use` answers the plugin as a failure — nothing rejects in the app', async () => {
+    const unhandled: unknown[] = [];
+    const listen = (reason: unknown): void => void unhandled.push(reason);
+    process.on('unhandledRejection', listen);
+    try {
+      const module: PluginNodeModule = {
+        activate(ctx) {
+          ctx.registerToolHandler('peek', async (call) => {
+            const used = await call.use('read_file', { path: 'a\u0000b' });
+            return { content: used.failed ? `failed: ${used.content}` : 'read' };
+          });
+        },
+      };
+      const { registry, context, host } = await rig(module);
+      // The judge itself throws, as a path the file system refuses makes it.
+      (host as unknown as { options: { judge: () => never } }).options.judge = () => {
+        throw new Error('judge broke');
+      };
+      const result = await registry.run({ id: 't1', name: 'plugin__revue-pr__peek', input: {} }, context);
+      expect(result.content).toMatch(/^failed: .*judge broke/);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', listen);
+    }
+  });
+
+  it('a result it cannot read ends its call as failed — the turn never waits for ever', async () => {
+    const module: PluginNodeModule = { activate: (ctx) => ctx.registerToolHandler('peek', () => new Promise(() => undefined)) };
+    const { registry, context, process } = await rig(module);
+    const running = registry.run({ id: 't1', name: 'plugin__revue-pr__peek', input: {} }, context);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    process.inject({ t: 'result', id: 1, result: { content: { toString: 1 } } });
+    const result = await Promise.race([running, new Promise((resolve) => setTimeout(() => resolve('HUNG'), 2_000))]);
+    expect(result).toMatchObject({ failed: true });
+  });
+
   it('a file that is no plugin module is said', async () => {
     const { status } = await rig({ nothing: true });
     expect(status).toMatchObject({ active: false, error: expect.stringMatching(/activate/) });

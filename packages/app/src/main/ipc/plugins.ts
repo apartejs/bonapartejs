@@ -22,6 +22,7 @@ import {
   extensionsTry,
   extensionsInstall,
   extensionsCode,
+  extensionsStop,
 } from '@aparte/bonaparte-shared';
 import type { ChooseFolder } from './projects.js';
 import type { IpcRegistry } from './register.js';
@@ -69,6 +70,11 @@ export function registerPluginChannels(
   });
   ipc.handle(extensionsInstall, async ({ conversationId, id, rev }) => {
     await core.extensions.install(conversationId, id, rev);
+    changed();
+    return statuses();
+  });
+  ipc.handle(extensionsStop, async ({ id }) => {
+    await core.addedPlugins.stopTrial(id);
     changed();
     return statuses();
   });

@@ -231,6 +231,25 @@ describe('a plugin made in a conversation, tried and installed (task 11.4)', () 
     expect(await added.installExtension(await extensionOf(data))).toMatchObject({ id: 'changelog', active: true, source: { kind: 'conversation', conversationId: 'c1' } });
   });
 
+  it('a conversation’s long title never makes what is kept unreadable: after a restart it installs again', async () => {
+    const data = await temp('bp-added-data-');
+    const { added } = await rig(data);
+    await added.installExtension(await extensionOf(data), 'x'.repeat(400));
+    const again = await rig(data);
+    expect((await again.host.keptState()).error).toBeUndefined();
+    expect(await again.added.installExtension(await extensionOf(data), 'y'.repeat(400))).toMatchObject({ id: 'changelog', active: true });
+  });
+
+  it('a conversation that goes takes its trials with it — another conversation’s stay', async () => {
+    const data = await temp('bp-added-data-');
+    const { added, registry } = await rig(data);
+    await added.tryExtension(await extensionOf(data, 'c1', 'changelog'));
+    await added.tryExtension(await extensionOf(data, 'c2', 'notes'));
+    await added.stopTrialsOf('c1');
+    expect(registry.get('plugin__changelog__today')).toBeUndefined();
+    expect(registry.get('plugin__notes__today')).toBeDefined();
+  });
+
   it('one conversation never takes over, installs or ends the trial of another', async () => {
     const data = await temp('bp-added-data-');
     const { host, added, registry } = await rig(data);

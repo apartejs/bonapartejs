@@ -125,8 +125,8 @@ export function extensionTools(deps: ExtensionToolsDeps): BuiltinTool[] {
       },
       handler: async (call, ctx) => {
         const id = text(call.input, 'id') ?? '';
-        await deps.added.stopTrial(id, ctx.conversationId);
-        return { content: `The trial of ${id} ended.` };
+        const stopped = await deps.added.stopTrial(id, ctx.conversationId);
+        return { content: stopped ? `The trial of ${id} ended.` : `No trial of ${id} runs in this conversation: nothing was stopped.` };
       },
     },
     {
