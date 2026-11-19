@@ -117,7 +117,13 @@ export type TurnEvent =
   /** What the turn waits for, said while it waits: the slot, a restore, a seed, a re-read. */
   | { type: 'step'; name: 'slot-wait' | 'restore' | 'seed' | 'reread'; phase: 'start' | 'end' }
   /** The prompt being read, as the server counts it. */
-  | { type: 'progress'; done: number; total: number };
+  | { type: 'progress'; done: number; total: number }
+  /**
+   * The model is called again within the turn, after its tools answered: a new turn on the wire (`turn-start`), so
+   * that what it thinks and writes now is a block of its own — aparté appends to the last block until then. The
+   * turn's first call is said by whoever opened the run (the handler; a sub-agent's `agent-start`).
+   */
+  | { type: 'round' };
 
 /** A call the model wrote, given an id: what the tool rounds answer. */
 export interface ModelCall {
@@ -1566,6 +1572,7 @@ export class ConversationEngine {
       sink({ type: 'step', name: 'reread', phase: 'end' });
     };
     for (let round = 0; ; round += 1) {
+      if (round > 0) sink({ type: 'round' });
       const demux = family.createDemux();
       let raw = '';
       let truncated = false;

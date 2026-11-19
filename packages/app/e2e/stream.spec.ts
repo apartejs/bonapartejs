@@ -4,6 +4,8 @@
  * as it is generated.
  */
 
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 
@@ -81,6 +83,27 @@ test('a reply is on the page while the engine is still writing it', async ({ lau
 
   // The engine read the message, in the model's own template.
   expect(server.getSlotTokens(0).join('')).toContain('<|turn>user\nBonjour<turn|>');
+});
+
+test('what the model thinks after a tool is a block of its own, never added to the one before', async ({ launch }) => {
+  const Q = '<|"|>';
+  const answered = (prompt: string) => prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user');
+  const { page, home } = await launch({
+    engine: {
+      responder: (prompt) =>
+        answered(prompt)
+          ? '<|channel>thought\nJe relis ce que j’ai lu.<channel|>Fini.'
+          : `<|channel>thought\nJe lis d’abord.<channel|><|tool_call>call:read_file{path:${Q}notes.txt${Q}}<tool_call|>`,
+    },
+  });
+  await writeFile(join(home, 'notes.txt'), 'une note\n');
+  const ui = chat(page);
+  await ui.send('Lis notes.txt');
+  await expect(ui.replyText).toHaveText('Fini.', { timeout: 20_000 });
+  const blocks = page.locator('aparte-chat-bubble[data-role="assistant"] .aparte-segment-thinking .aparte-thinking-content');
+  await expect(blocks).toHaveCount(2);
+  await expect(blocks.nth(0)).toHaveText('Je lis d’abord.');
+  await expect(blocks.nth(1)).toHaveText('Je relis ce que j’ai lu.');
 });
 
 test('what the model thinks is kept apart from what it answers', async ({ launch }) => {

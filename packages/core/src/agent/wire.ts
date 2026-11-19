@@ -15,6 +15,9 @@ export function turnEventToWire(event: TurnEvent, rereading: { on: boolean }, ag
       return { type: 'text-delta', delta: event.delta, ...mine };
     case 'thinking':
       return { type: 'thinking-delta', delta: event.delta, ...mine };
+    case 'round':
+      // aparté starts its blocks afresh only on a turn-start: one per call to the model, a sub-agent's under its id.
+      return { type: 'turn-start', ...mine };
     case 'step':
       if (event.name === 'reread') rereading.on = event.phase === 'start';
       return { type: event.phase === 'start' ? 'step-start' : 'step-end', name: event.name, ...mine };

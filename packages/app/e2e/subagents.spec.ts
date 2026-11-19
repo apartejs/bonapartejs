@@ -67,6 +67,32 @@ test('a line each in the reply; the pane says where they stand, and opens one wi
   await expect(opened).toContainText('seul son rendu revient dans ta conversation');
 });
 
+test('a sub-agent’s thoughts of two rounds are two blocks in its thread, never one', async ({ launch }) => {
+  const { page, home } = await launch({
+    engine: {
+      responder: (prompt) => {
+        if (isSubagent(prompt)) {
+          return answered(prompt)
+            ? '<|channel>thought\nJ’ai lu, je conclus.<channel|>Rendu.'
+            : `<|channel>thought\nJe lis d’abord.<channel|>${call('read_file', { path: 'notes.txt' })}`;
+        }
+        return answered(prompt) ? 'Synthèse.' : call('run_subagent', { name: 'Lecteur', mission: 'Lis notes.txt.', tools: 'read' });
+      },
+    },
+  });
+  await writeFile(join(home, 'notes.txt'), 'une note\n');
+  const ui = chat(page);
+  await ui.send('Une piste');
+  await expect(ui.replyText).toHaveText('Synthèse.', { timeout: 20_000 });
+  await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Sous-agents', exact: true }).click();
+  await pane(page).getByRole('button', { name: /Lecteur/ }).click();
+  const view = pane(page).getByRole('region', { name: 'Lecteur', exact: true }).locator('aparte-subagent-view');
+  const blocks = view.locator('.aparte-segment-thinking .aparte-thinking-content');
+  await expect(blocks).toHaveCount(2);
+  await expect(blocks.nth(0)).toHaveText('Je lis d’abord.');
+  await expect(blocks.nth(1)).toHaveText('J’ai lu, je conclus.');
+});
+
 test('a line’s « Ouvrir » opens the pane on that sub-agent', async ({ launch }) => {
   const { page, home } = await launch({ engine: { responder: model(TWO) } });
   await writeFile(join(home, 'notes.txt'), 'une note\n');

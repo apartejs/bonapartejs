@@ -416,6 +416,25 @@ describe('the agent handler — the tools', () => {
     expect(lines.at(-1)?.type).toBe('run-done');
   });
 
+  it('each call to the model begins a turn on the wire: what it thinks after a tool is a new block, never the last one', async () => {
+    const { handler } = await setup({
+      responder: (prompt) =>
+        prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user')
+          ? '<|channel>thought\nsecond<channel|>Done.'
+          : `<|channel>thought\nfirst<channel|><|tool_call>call:read_file{path:${Q}surely-not-here.txt${Q}}<tool_call|>`,
+    });
+    const lines = await linesOf(await handler(post(turn(user('Lis ce fichier')))));
+    const kinds = lines.map((line) => line.type);
+    // One turn-start for the run's first model call, one for the call after the tool (aparté: a turn per model call).
+    expect(kinds.filter((kind) => kind === 'turn-start')).toHaveLength(2);
+    const second = kinds.lastIndexOf('turn-start');
+    expect(second).toBeGreaterThan(kinds.indexOf('tool-failed'));
+    const thoughtAfter = lines.findIndex((line, at) => at > second && line.type === 'thinking-delta');
+    expect(thoughtAfter).toBeGreaterThan(second);
+    expect(joined(lines.slice(second), 'thinking-delta')).toContain('second');
+    expect(joined(lines.slice(second), 'thinking-delta')).not.toContain('first');
+  });
+
   it('a call to ask about ends the stream with run-suspended: its pending call, and a ticket', async () => {
     const { handler } = await setup({
       responder: call(`<|tool_call>call:edit_file{path:${Q}a.ts${Q},old_string:${Q}a${Q},new_string:${Q}b${Q}}<tool_call|>`),

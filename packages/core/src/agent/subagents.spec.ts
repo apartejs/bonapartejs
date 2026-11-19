@@ -184,6 +184,19 @@ describe('a sub-agent on the built-in engine', () => {
     expect(resolved!['agentId']).toBeUndefined();
   });
 
+  it('each of its calls to the model begins a turn under its agentId: its thoughts of two rounds are two blocks', async () => {
+    const { run } = await rig(
+      model([LECTEUR], () => `<|channel>thought\nfirst look<channel|>${call('read_file', { path: 'a.ts' })}`),
+    );
+    const { events } = await run('Que vaut a ?');
+    const agentId = String(of(events, 'agent-start')[0]!['agentId']);
+    const mine = by(events, agentId);
+    const kinds = mine.map((event) => event.type);
+    // Its first call opens with its agent-start; the call after its tool is a new turn.
+    expect(kinds.filter((kind) => kind === 'turn-start')).toHaveLength(1);
+    expect(kinds.indexOf('turn-start')).toBeGreaterThan(kinds.indexOf('tool-resolved'));
+  });
+
   it('only its result enters the conversation; its own thread is kept apart', async () => {
     const { run, store, meta, engine } = await rig(model([LECTEUR]));
     const { events } = await run('Que vaut a ?');
