@@ -61,7 +61,18 @@ export const modelChoiceSchema = z.object({
 
 export type ModelChoiceView = z.infer<typeof modelChoiceSchema>;
 
-export const loadErrorCodeSchema = z.enum(['not-listed', 'unsupported-family', 'no-chat-template', 'too-big', 'failed']);
+// `missing-runtime`, `old-runtime`: llama.cpp stopped before its first line because the Visual C++ runtime is missing
+// or too old (0xC0000135, 0xC0000139); `silent`: it stopped without a word, its exit code in `detail`.
+export const loadErrorCodeSchema = z.enum([
+  'not-listed',
+  'unsupported-family',
+  'no-chat-template',
+  'too-big',
+  'missing-runtime',
+  'old-runtime',
+  'silent',
+  'failed',
+]);
 
 export const engineLoadResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), state: engineStateSchema }),
@@ -139,6 +150,11 @@ export const engineLlama = defineChannel(
 
 /** Downloads the newest build for this machine: only on a click, its size said before. */
 export const engineLlamaInstall = defineChannel('engine.llama.install', z.void(), llamaInstallResultSchema);
+
+/** Microsoft's own installer of the Visual C++ runtime, at its permanent address: the window never names an address. */
+export const VC_RUNTIME_DOWNLOAD = 'https://aka.ms/vc14/vc_redist.x64.exe';
+/** Opens Microsoft's installer in the person's browser: llama.cpp cannot start without the runtime. */
+export const engineRuntimeDownload = defineChannel('engine.runtimeDownload', z.void(), z.void());
 
 /** A model bonaparte recommends for this machine (task 9.5): its size said before it is downloaded. */
 export const recommendedModelSchema = z.object({

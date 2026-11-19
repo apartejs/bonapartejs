@@ -94,6 +94,34 @@ test('a load that fails says so, and keeps what the engine said', async ({ launc
   await expect(page.getByRole('button', { name: 'Démarrer' })).toBeEnabled();
 });
 
+test('an engine Windows could not start says the Visual C++ runtime is missing, and offers Microsoft’s', async ({ launch }) => {
+  test.skip(process.platform !== 'win32', 'the code Windows gives a program it could not start: elsewhere an exit code keeps one byte');
+  const { app, page } = await launch({
+    managed: { models: MODELS },
+    env: { FAKE_LLAMA_EXIT_SILENTLY: String(0xc0000135) },
+  });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('Le moteur n’a pas démarré.', { timeout: 20_000 });
+  await expect(alert).toContainText('llama.cpp ne trouve pas une bibliothèque de Windows');
+  await expect(alert).toContainText('le runtime Visual C++ de Microsoft');
+  // Never our own English shown as what llama.cpp said.
+  await expect(alert).not.toContainText('stopped before it was ready');
+  await alert.getByRole('button', { name: 'Installer le runtime de Microsoft' }).click();
+  await expect
+    .poll(() => app.evaluate(() => (globalThis as { __openedLinks?: string[] }).__openedLinks ?? []))
+    .toEqual(['https://aka.ms/vc14/vc_redist.x64.exe']);
+});
+
+test('an engine that stops without a word says so, with its exit code', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS }, env: { FAKE_LLAMA_EXIT_SILENTLY: '3' } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const alert = page.getByRole('alert');
+  await expect(alert).toContainText('llama.cpp s’est arrêté sans rien écrire.', { timeout: 20_000 });
+  await expect(alert).toContainText('Code de sortie 0x3');
+  await expect(alert).not.toContainText('Voici ce qu’a dit llama.cpp');
+});
+
 test('the screen speaks English when the app does', async ({ launch }) => {
   const { page } = await launch({ locale: 'en', managed: { models: MODELS } });
   await expect(page.getByRole('heading', { name: 'Let’s set up the engine' })).toBeVisible();

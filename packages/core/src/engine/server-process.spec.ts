@@ -144,6 +144,24 @@ describe('launchServer', () => {
     expect(launches[1]!.options.detached).toBeFalsy();
   });
 
+  it('a server Windows refuses to launch says why in its lines: the system’s words, not silence', async () => {
+    const refused = launchServer('llama-server', [], {
+      env: {},
+      spawn: () => {
+        throw Object.assign(new Error('spawn EPERM'), { code: 'EPERM' });
+      },
+      platform: 'win32',
+    });
+    expect(await refused.exited).toBeNull();
+    expect(refused.lastLines()).toMatch(/could not be launched: spawn EPERM/);
+
+    const child = inertChild(5);
+    const missing = launchServer('llama-server', [], { env: {}, spawn: () => child, platform: 'win32' });
+    (child as unknown as EventEmitter).emit('error', new Error('spawn llama-server ENOENT'));
+    expect(await missing.exited).toBeNull();
+    expect(missing.lastLines()).toMatch(/spawn llama-server ENOENT/);
+  });
+
   it('stopping a server that already left does nothing', async () => {
     const child = inertChild(5);
     const server = launchServer('llama', [], { env: {}, spawn: () => child, platform: 'win32' });

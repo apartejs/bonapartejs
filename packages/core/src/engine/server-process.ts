@@ -67,13 +67,17 @@ export function launchServer(command: string, args: readonly string[], options: 
       ...(options.spawn ? { spawn: options.spawn } : {}),
     });
   } catch (error) {
-    log(`[llama-server] could not be launched: ${error instanceof Error ? error.message : String(error)}`);
+    // The system's words are what there is to say: kept as the server's last line, never lost to silence.
+    const said = `could not be launched: ${error instanceof Error ? error.message : String(error)}`;
+    log(`[llama-server] ${said}`);
     finish(null);
-    return { pid: undefined, running: false, exited, lastLines: () => '', stop: async () => undefined };
+    return { pid: undefined, running: false, exited, lastLines: () => said, stop: async () => undefined };
   }
 
   child.on('exit', (code) => finish(code));
   child.on('error', (error) => {
+    lines.push(error.message);
+    if (lines.length > KEPT_LINES) lines.shift();
     log(`[llama-server] ${error.message}`);
     finish(null);
   });

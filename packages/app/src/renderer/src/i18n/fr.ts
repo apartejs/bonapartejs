@@ -44,11 +44,18 @@ export const fr: Messages = {
     },
     failed: {
       title: 'Le moteur n’a pas démarré.',
+      runtimeAction: 'Installer le runtime de Microsoft',
+      exitCode: (code) => `Code de sortie ${code}`,
+      runtimeHint: 'Ton navigateur le télécharge chez Microsoft. Installe-le, puis clique « Démarrer ».',
       reason: {
         'not-listed': 'Ce fichier n’est plus parmi les modèles trouvés.',
         'unsupported-family': 'Le moteur intégré ne parle pas cette famille de modèles.',
         'no-chat-template': 'Ce fichier n’a pas de gabarit de conversation.',
         'too-big': 'Ce modèle ne tient pas dans la carte.',
+        'missing-runtime':
+          'llama.cpp ne trouve pas une bibliothèque de Windows dont il a besoin pour démarrer : le plus souvent, le runtime Visual C++ de Microsoft.',
+        'old-runtime': 'Le runtime Visual C++ de Microsoft de ce Windows est trop ancien pour ce llama.cpp.',
+        silent: 'llama.cpp s’est arrêté sans rien écrire.',
         failed: 'Voici ce qu’a dit llama.cpp :',
       },
     },
@@ -773,6 +780,9 @@ export const fr: Messages = {
       'unsupported-family': 'Le moteur intégré ne sait pas parler à ce modèle.',
       'no-chat-template': 'Ce modèle n’a pas de gabarit de conversation.',
       'too-big': 'Ce modèle ne tient pas dans la carte : rien n’a été chargé.',
+      'missing-runtime': 'llama.cpp ne trouve pas une bibliothèque de Windows, sans doute le runtime Visual C++ : rien n’a été chargé.',
+      'old-runtime': 'Le runtime Visual C++ de ce Windows est trop ancien pour llama.cpp : rien n’a été chargé.',
+      silent: 'llama.cpp s’est arrêté sans rien écrire : rien n’a été chargé.',
       failed: 'Le modèle n’a pas pu être chargé.',
     },
   },

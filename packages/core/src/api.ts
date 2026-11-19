@@ -11,7 +11,7 @@
  */
 
 import { access, mkdir, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, parse, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, parse, resolve } from 'node:path';
 import { z } from 'zod';
 import type { LlamaCppHttpClient } from './backend/llamacpp/http-client.js';
 import type { BackendStatus } from './backend/types.js';
@@ -35,6 +35,7 @@ import {
 } from './engine/gpu-memory.js';
 import { MeasureStore } from './engine/measures.js';
 import { installedLlama, installLlama } from './engine/llama-install.js';
+import { ensureLlamaRuntime, runtimeStatus, type RuntimePlace } from './engine/llama-runtime.js';
 import {
   buildNumber,
   latestLlamaAsset,
@@ -161,6 +162,11 @@ export interface CoreDeps {
   env?: NodeJS.ProcessEnv;
   /** Tests only: what to launch instead of llama.cpp (`[node, fake-llama-bin.mjs]`). */
   llamaCommand?: readonly string[];
+  /**
+   * The Visual C++ runtime the app carries for llama.cpp on Windows (`engine/llama-runtime.ts`): put beside the build
+   * bonaparte installed when Windows has none as recent. `systemDir` and `platform` are a test's.
+   */
+  llamaRuntime?: { dir: string | undefined; systemDir?: string; platform?: NodeJS.Platform; arch?: string };
   /** The port of the managed server (default 8763). */
   port?: number;
   /** Where models are looked for (default: the known folders, or `BONAPARTE_MODEL_DIRS`). */
@@ -877,6 +883,18 @@ export function createCore(deps: CoreDeps): Core {
    * Found once; not finding it is not remembered — it may be installed later.
    */
   let found: Promise<LlamaFound | null> | undefined;
+  /** Where the Visual C++ runtime goes for a llama.cpp of bonaparte's, and where Windows keeps its own. */
+  function runtimePlace(binaryDir: string): RuntimePlace {
+    const platform = deps.llamaRuntime?.platform ?? process.platform;
+    return {
+      binaryDir,
+      bundledDir: deps.llamaRuntime?.dir,
+      systemDir: deps.llamaRuntime?.systemDir ?? join(env['SystemRoot'] ?? env['SYSTEMROOT'] ?? 'C:\\Windows', 'System32'),
+      platform,
+      arch: deps.llamaRuntime?.arch ?? process.arch,
+    };
+  }
+
   function llamaFound(): Promise<LlamaFound | null> {
     found ??= (async (): Promise<LlamaFound | null> => {
       const read = await readConfig();
@@ -891,12 +909,16 @@ export function createCore(deps: CoreDeps): Core {
           build: await buildOf([configured]),
         };
       const managed = await installedLlama(llamaDir);
-      if (managed)
+      if (managed) {
+        // Before anything runs it — a load, `--version`, `--list-devices` — what it needs of Windows is there.
+        const runtime = await ensureLlamaRuntime(runtimePlace(dirname(managed.binary)));
+        if (runtime === 'failed') deps.logger?.('[bonaparte] the Visual C++ runtime could not be put beside llama.cpp');
         return {
           source: 'managed',
           path: managed.binary,
           build: managed.build,
         };
+      }
       // The tests' fake binary stands for the one on the PATH.
       if (deps.llamaCommand) {
         const build = await buildOf(deps.llamaCommand);
@@ -2556,6 +2578,14 @@ export function createCore(deps: CoreDeps): Core {
         llama: async () => {
           const llama = await llamaFound();
           return llama ? { source: llama.source, command: llama.path, build: llama.build } : null;
+        },
+        // The runtime the llama.cpp found will load: beside it (a path the core knows), Windows' own, or the app's.
+        runtime: async () => {
+          const llama = await llamaFound().catch(() => null);
+          const binaryDir = llama && isAbsolute(llama.path) ? dirname(llama.path) : undefined;
+          const place = runtimePlace(binaryDir ?? '');
+          const status = await runtimeStatus({ ...place, binaryDir });
+          return status ? { ...status, managed: llama?.source === 'managed' } : null;
         },
         slotsDir: kvDir,
         canWrite: async (dir) => {

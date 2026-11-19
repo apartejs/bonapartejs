@@ -53,7 +53,15 @@ export interface Messages {
     empty: { title: string; body: string };
     failed: {
       title: string;
-      reason: Record<'not-listed' | 'unsupported-family' | 'no-chat-template' | 'too-big' | 'failed', string>;
+      reason: Record<
+        'not-listed' | 'unsupported-family' | 'no-chat-template' | 'too-big' | 'missing-runtime' | 'old-runtime' | 'silent' | 'failed',
+        string
+      >;
+      /** The Visual C++ runtime missing or too old: Microsoft's installer, opened in the browser. */
+      runtimeAction: string;
+      runtimeHint: string;
+      /** Before the code an engine that wrote nothing exited with. */
+      exitCode(code: string): string;
     };
     /** The llama.cpp a load runs, and keeping it up to date. */
     /** The first launch (task 9.6, board « Premier lancement »). */
@@ -785,7 +793,10 @@ export interface Messages {
     branch: string;
     change: string;
     loading: string;
-    refused: Record<'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'too-big' | 'failed', string>;
+    refused: Record<
+      'busy' | 'not-listed' | 'unsupported-family' | 'no-chat-template' | 'too-big' | 'missing-runtime' | 'old-runtime' | 'silent' | 'failed',
+      string
+    >;
   };
   /** The engine unloaded (task 7.4; board « Coûts annoncés », 5): the card above the composer. */
   /** A service that no longer answers (task 9.3). */

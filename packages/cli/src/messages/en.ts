@@ -30,6 +30,11 @@ export const en: CliMessages = {
     llamaSilent: (command) => `The llama.cpp chosen in the configuration does not answer: ${command}`,
     llamaTooOld: (command, build, min) => `llama.cpp ${build} is too old: b${min} or newer is needed (${command})`,
     llamaUnknownBuild: (command, build) => `llama.cpp answers, its version cannot be read: “${build}” (${command})`,
+    runtimeBeside: (version) => `Visual C++ runtime beside llama.cpp: ${version}`,
+    runtimeSystem: (version) => `Windows’ Visual C++ runtime: ${version}`,
+    runtimeCarried: (version) => `No Visual C++ runtime in Windows: bonaparte puts its own (${version}) beside llama.cpp`,
+    runtimeMissing:
+      'No Visual C++ runtime: llama.cpp will not start. Install it from Microsoft: https://aka.ms/vc14/vc_redist.x64.exe',
     slots: (dir, free) => `Conversation memories: ${dir}${free ? ` · ${free} free` : ''}`,
     slotsLowDisk: (dir, free) => `Conversation memories: ${dir} · only ${free} free`,
     slotsNotWritable: (dir) => `Conversation memories: cannot write in ${dir}`,

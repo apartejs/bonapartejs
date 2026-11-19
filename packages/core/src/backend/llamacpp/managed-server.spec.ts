@@ -152,6 +152,24 @@ describe('ManagedServer', () => {
     expect(failure).toBeInstanceOf(EngineStoppedError);
     expect((failure as EngineStoppedError).said).toBe('error: cannot load the model');
     expect((failure as Error).message).toMatch(/cannot load the model/);
+    expect((failure as EngineStoppedError).reason).toBe('said');
+  });
+
+  it('a server that stops without a word: its exit code kept, and why when Windows says it', async () => {
+    const silent = await managed({ baseEnv: { ...process.env, FAKE_LLAMA_EXIT_SILENTLY: '3' } });
+    const failure = (await silent.server.start().catch((error: unknown) => error)) as EngineStoppedError;
+    expect(failure).toBeInstanceOf(EngineStoppedError);
+    expect(failure.said).toBe('');
+    expect(failure.code).toBe(3);
+    expect(failure.reason).toBe('silent');
+    expect(failure.message).toMatch(/without a word.*exit code 3/);
+  });
+
+  it.runIf(process.platform === 'win32')('a server Windows could not start: a library missing (0xC0000135)', async () => {
+    const missing = await managed({ baseEnv: { ...process.env, FAKE_LLAMA_EXIT_SILENTLY: String(0xc0000135) } });
+    const failure = (await missing.server.start().catch((error: unknown) => error)) as EngineStoppedError;
+    expect(failure.reason).toBe('missing-library');
+    expect(failure.message).toMatch(/0xC0000135/);
   });
 
   it('a server that never answers: crashed after the time allowed, and stopped', async () => {

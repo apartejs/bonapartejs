@@ -23,6 +23,9 @@ files:
 # the archive; it loads under Electron without a rebuild (a lesson of v0).
 asarUnpack:
   - node_modules/node-pty/**
+  # The Visual C++ runtime llama.cpp's package lacks (scripts/prepare-vcruntime.mjs):
+  # llama.cpp, a program of its own, copies it from the disk, never from the archive.
+  - resources/vcruntime/**
 npmRebuild: false
 nodeGypRebuild: false
 

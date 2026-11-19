@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bonaparteDataDir, createCore, spawnHidden, spawnWindowed } from '@aparte/bonaparte-core';
-import { launchFromCli } from './launch.js';
+import { launchFromCli, resolveAppDir } from './launch.js';
 import { localeOf, main } from './main.js';
 import { en } from './messages/en.js';
 import { fr } from './messages/fr.js';
@@ -27,7 +27,15 @@ const code = await main(process.argv.slice(2), {
   version: pkg.version,
   color: process.stdout.isTTY === true,
   doctor: async () => {
-    const core = createCore({ dataDir: bonaparteDataDir(), env: process.env, logger: () => undefined });
+    // The Visual C++ runtime the app carries for llama.cpp on Windows, as the app itself finds it.
+    const appDir = resolveAppDir(packageRoot, existsSync);
+    const runtime = appDir ? join(appDir, 'resources', 'vcruntime') : undefined;
+    const core = createCore({
+      dataDir: bonaparteDataDir(),
+      env: process.env,
+      logger: () => undefined,
+      llamaRuntime: { dir: runtime && existsSync(runtime) ? runtime : undefined },
+    });
     try {
       return await core.doctor();
     } finally {

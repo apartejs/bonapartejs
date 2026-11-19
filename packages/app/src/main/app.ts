@@ -58,6 +58,7 @@ import appTokens from '../renderer/src/theme/tokens.css?raw';
 import { createTerminalService } from './terminals/pty-host.js';
 import { findShells } from './terminals/shells.js';
 import { createMainWindow } from './windows.js';
+import { carriedRuntimeDir } from './vcruntime.js';
 
 /** The language the person chose (the setting « language »), until it is read: the system's. */
 let chosenLanguage: unknown = 'system';
@@ -280,6 +281,8 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     // The answers are written in the language of the interface.
     replyLanguage: () => (interfaceLocale() === 'fr' ? 'French' : 'English'),
     terminals,
+    // The Visual C++ runtime llama.cpp's package lacks, put beside it when Windows has none as recent.
+    llamaRuntime: { dir: carriedRuntimeDir(app.getAppPath(), existsSync) },
     // A plugin of a third party runs in a utility process of its own, kept to its own folder (task 11.1).
     pluginProcess: pluginProcessStarter({
       fork: (modulePath, args, forkOptions) => utilityProcess.fork(modulePath, args, forkOptions) as unknown as UtilityProcessLike,

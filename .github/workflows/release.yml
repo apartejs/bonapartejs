@@ -35,8 +35,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows is the product's platform; macOS and Linux at best.
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # Windows is the product's platform; macOS and Linux at best. Windows on the image
+        # with Visual Studio 2026, as llama.cpp's own Windows builds: its redistributable
+        # Visual C++ runtime is the one the installer carries for llama.cpp.
+        os: [windows-2025-vs2026, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -66,10 +68,17 @@ jobs:
           version=$(node -p "require('./packages/app/package.json').version")
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app $version"; exit 1; }
 
+      # The Visual C++ runtime llama.cpp's package lacks, from the runner's Visual
+      # Studio (its redistributable folder): the installer carries it.
+      - name: Prepare the Visual C++ runtime
+        if: runner.os == 'Windows'
+        working-directory: packages/app
+        run: node scripts/prepare-vcruntime.mjs
+
       # The packed app is run before it is published: a file it needs at run time
       # and the pack missed fails here, not on the person's machine.
       - name: Pack and run the packed app
-        if: matrix.os == 'windows-latest'
+        if: runner.os == 'Windows'
         working-directory: packages/app
         run: |
           pnpm exec electron-builder --dir --publish never

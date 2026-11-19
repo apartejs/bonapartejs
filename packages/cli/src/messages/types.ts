@@ -19,6 +19,11 @@ export interface CliMessages {
     llamaSilent(command: string): string;
     llamaTooOld(command: string, build: string, min: number): string;
     llamaUnknownBuild(command: string, build: string): string;
+    /** On Windows: the Visual C++ runtime llama.cpp needs — Windows' own, the one bonaparte carries, or none. */
+    runtimeBeside(version: string): string;
+    runtimeSystem(version: string): string;
+    runtimeCarried(version: string): string;
+    runtimeMissing: string;
     slots(dir: string, free: string | null): string;
     slotsLowDisk(dir: string, free: string): string;
     slotsNotWritable(dir: string): string;

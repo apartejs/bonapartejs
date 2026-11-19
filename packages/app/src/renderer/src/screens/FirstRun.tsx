@@ -18,6 +18,7 @@ import {
   engineModelDownload,
   engineModels,
   engineRecommended,
+  engineRuntimeDownload,
   engineSettingsGet,
   modelsAddFolder,
   providersAdd,
@@ -810,6 +811,23 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                     <p className="aparte-alert__title">{text.failed.title}</p>
                     <p className="aparte-alert__message">{text.failed.reason[failure.code]}</p>
                     {failure.code === 'failed' && failure.detail ? <pre className="engine-setup__log">{failure.detail}</pre> : null}
+                    {failure.code === 'silent' && failure.detail ? (
+                      <pre className="engine-setup__log">{text.failed.exitCode(failure.detail)}</pre>
+                    ) : null}
+                    {failure.code === 'missing-runtime' || failure.code === 'old-runtime' ? (
+                      <>
+                        <p className="aparte-alert__message">{text.failed.runtimeHint}</p>
+                        <div className="failure-card__actions">
+                          <button
+                            type="button"
+                            className="aparte-btn aparte-btn--outline"
+                            onClick={() => void bridge.invoke(engineRuntimeDownload, undefined)}
+                          >
+                            {text.failed.runtimeAction}
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               ) : null}

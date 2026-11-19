@@ -94,6 +94,8 @@ export type { Locale } from './ipc/app.js';
 export {
   engineLlama,
   engineLlamaInstall,
+  engineRuntimeDownload,
+  VC_RUNTIME_DOWNLOAD,
   engineLlamaPick,
   engineModelDownload,
   engineRecommended,

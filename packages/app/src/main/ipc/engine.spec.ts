@@ -100,6 +100,14 @@ describe('the engine channels', () => {
     });
   });
 
+  it('say why an engine that wrote nothing stopped: the Visual C++ runtime missing or too old, else its exit code', async () => {
+    const stopped = (code: number) => setup(async () => Promise.reject(new EngineStoppedError('', code))).call('engine.load', { path: 'x.gguf' });
+    await expect(stopped(0xc0000135)).resolves.toEqual({ ok: false, error: { code: 'missing-runtime', detail: '0xC0000135' } });
+    await expect(stopped(-1073741511)).resolves.toEqual({ ok: false, error: { code: 'old-runtime', detail: '0xC0000139' } });
+    // Never our own sentence shown as « what llama.cpp said ».
+    await expect(stopped(3)).resolves.toEqual({ ok: false, error: { code: 'silent', detail: '0x3' } });
+  });
+
   it('refuse a load whose path is not a string, before the core hears of it', async () => {
     const { call } = setup(async () => READY);
     await expect(call('engine.load', { path: 42 })).rejects.toThrow(/input/);

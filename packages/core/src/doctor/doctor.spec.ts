@@ -27,6 +27,24 @@ describe('bonaparte doctor (task 9.6)', () => {
     expect(report.ok).toBe(true);
   });
 
+  it('on Windows, says the Visual C++ runtime the llama.cpp found will run with — and only what is true of it', async () => {
+    const runtime = (status: { system: string | null; carried: string | null; beside: string | null; managed: boolean }) =>
+      runDoctor(env({ runtime: async () => status })).then((report) => report.checks.find((check) => check.id === 'runtime'));
+    const first = await runDoctor(env({ runtime: async () => ({ system: '14.51.36247.0', carried: null, beside: null, managed: false }) }));
+    expect(first.checks.map((check) => check.id)).toEqual(['node', 'llama', 'runtime', 'slots', 'gpu']);
+    // Beside llama.cpp first: Windows loads that one before its own.
+    expect(await runtime({ system: '14.51.36247.0', carried: '14.51.36247.0', beside: '14.50.35719.0', managed: true })).toMatchObject({ status: 'ok', runs: 'beside', version: '14.50.35719.0' });
+    expect(await runtime({ system: '14.51.36247.0', carried: null, beside: null, managed: false })).toMatchObject({ status: 'ok', runs: 'system', version: '14.51.36247.0' });
+    // Only the llama.cpp bonaparte installed gets the runtime it carries.
+    expect(await runtime({ system: null, carried: '14.51.36247.0', beside: null, managed: true })).toMatchObject({ status: 'ok', runs: 'carried' });
+    const configured = await runtime({ system: null, carried: '14.51.36247.0', beside: null, managed: false });
+    expect(configured).toMatchObject({ status: 'fail', blocking: true, runs: null });
+    // Neither: llama.cpp's official package stops before its first line.
+    expect(await runtime({ system: null, carried: null, beside: null, managed: true })).toMatchObject({ status: 'fail', blocking: true, runs: null });
+    // Elsewhere than Windows there is nothing to say.
+    expect((await runDoctor(env({ runtime: async () => null }))).checks.map((check) => check.id)).not.toContain('runtime');
+  });
+
   it('a Node too old blocks', async () => {
     const report = await runDoctor(env({ nodeVersion: 'v18.20.0' }));
     expect(report.checks[0]).toMatchObject({ id: 'node', status: 'fail', blocking: true, version: 'v18.20.0', min: 22 });

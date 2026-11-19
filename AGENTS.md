@@ -924,6 +924,21 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   Windows and Linux, Metal on a Mac; a package without GitHub's SHA-256
   digest, or from anywhere but llama.cpp's releases, is never offered;
   unpacked by the system's `tar` (Windows' own, by its full path).
+- **The Visual C++ runtime** (`core/src/engine/llama-runtime.ts`,
+  `app/src/main/vcruntime*.ts`, `app/scripts/prepare-vcruntime.mjs`):
+  every binary of llama.cpp's Windows package imports msvcp140,
+  vcruntime140 and vcruntime140_1, and the package carries none — on a
+  Windows without them the server stops before its first line
+  (0xC0000135). The app carries them, copied at pack time from Visual
+  Studio's `VC\Redist` folder (the only source its licence allows; never
+  committed; the newest found, a warning when older than what built
+  llama.cpp: `MIN_RUNTIME`),
+  unpacked beside app.asar and in the npm package. `llamaFound()` puts
+  them beside the llama.cpp bonaparte installed only when System32 has
+  none as recent, and takes its copy away once Windows has one (Windows
+  Update keeps that one current). An engine that stops without a word
+  says why (`EngineStoppedError.reason`): the runtime missing or too old
+  (« Installer le runtime de Microsoft »), else its exit code.
 - **`archive/v0`** is a local branch. Read it without leaving the current one:
   `git show archive/v0:<path>`, or the `v0-porter` agent. In Git Bash on
   Windows, prefix the command with `MSYS_NO_PATHCONV=1` when the path starts
@@ -1216,6 +1231,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`onBeforeRedirect`'s `ip`), and behind a proxy it is the proxy's:
   Chromium's own resolution (`session.resolveHost`, its cache) says where a
   page is.
+- **A clean Windows is not the developer's machine**: llama.cpp's official
+  package needs the Visual C++ runtime, which every developer machine has
+  and Windows Sandbox does not. A program Windows could not load exits
+  0xC0000135 without a line; the card read that as llama.cpp's own words.
+  An exit code arrives as Windows gives it (`>>> 0` to compare), and
+  Node's `process.exit(0xC0000135)` keeps it whole on Windows only. Test an
+  install in Windows Sandbox before saying it works on any machine.
 
 ## Real-model smoke results
 

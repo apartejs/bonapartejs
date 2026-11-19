@@ -22,6 +22,13 @@ export interface DoctorEnv {
   freeDiskBytes(dir: string): Promise<number | null>;
   /** The card's video memory, as llama.cpp says it; null when none is measured. */
   gpuBytes(): Promise<number | null>;
+  /**
+   * On Windows, the Visual C++ runtime llama.cpp's package needs and does not carry (`engine/llama-runtime.ts`): the
+   * one beside the llama.cpp found, Windows' own, the one bonaparte carries — each a version, null when incomplete —
+   * and whether that llama.cpp is the one bonaparte installed (the only one it puts its runtime beside). Null
+   * elsewhere than Windows.
+   */
+  runtime?(): Promise<{ system: string | null; carried: string | null; beside: string | null; managed: boolean } | null>;
 }
 
 export type DoctorStatus = 'ok' | 'warn' | 'fail';
@@ -43,6 +50,12 @@ export type DoctorCheck =
       /** Its build is older than the oldest one bonaparte runs, `minBuild`. */
       tooOld?: boolean;
       minBuild?: number;
+    })
+  | (CheckBase & {
+      id: 'runtime';
+      /** Which runtime llama.cpp will load: the one beside it, Windows' own, or the one bonaparte puts there; null: none. */
+      runs: 'beside' | 'system' | 'carried' | null;
+      version: string | null;
     })
   | (CheckBase & { id: 'slots'; dir: string; writable: boolean; freeBytes: number | null })
   | (CheckBase & { id: 'gpu'; bytes: number | null });
@@ -71,6 +84,25 @@ async function checkLlama(env: DoctorEnv): Promise<DoctorCheck> {
   return { ...base, status: 'ok', blocking: false };
 }
 
+/**
+ * The runtime the llama.cpp found will load, in Windows' order: beside it first, then Windows' own; else the one
+ * bonaparte puts beside the build it installed. None: llama.cpp's official package stops before its first line.
+ * Whether that runtime is recent enough for the build is not known before it runs: the engine says it then.
+ */
+async function checkRuntime(env: DoctorEnv): Promise<DoctorCheck | null> {
+  const runtime = await env.runtime?.().catch(() => null);
+  if (!runtime) return null;
+  const [runs, version]: [Extract<DoctorCheck, { id: 'runtime' }>['runs'], string | null] =
+    runtime.beside !== null
+      ? ['beside', runtime.beside]
+      : runtime.system !== null
+        ? ['system', runtime.system]
+        : runtime.carried !== null && runtime.managed
+          ? ['carried', runtime.carried]
+          : [null, null];
+  return { id: 'runtime', status: runs ? 'ok' : 'fail', blocking: !runs, runs, version };
+}
+
 async function checkSlots(env: DoctorEnv): Promise<DoctorCheck> {
   const writable = await env.canWrite(env.slotsDir);
   const freeBytes = writable ? await env.freeDiskBytes(env.slotsDir) : null;
@@ -84,6 +116,7 @@ async function checkGpu(env: DoctorEnv): Promise<DoctorCheck> {
 }
 
 export async function runDoctor(env: DoctorEnv): Promise<DoctorReport> {
-  const checks = [checkNode(env.nodeVersion), await checkLlama(env), await checkSlots(env), await checkGpu(env)];
+  const runtime = await checkRuntime(env);
+  const checks = [checkNode(env.nodeVersion), await checkLlama(env), ...(runtime ? [runtime] : []), await checkSlots(env), await checkGpu(env)];
   return { checks, ok: !checks.some((check) => check.status === 'fail' && check.blocking) };
 }

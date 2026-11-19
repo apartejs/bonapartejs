@@ -27,6 +27,20 @@ try {
   process.exit(1);
 }
 
+// The Visual C++ runtime llama.cpp's package lacks on Windows (prepare-vcruntime.mjs, run just before on Windows):
+// a package without it would leave a Windows that has none with an engine that cannot start.
+try {
+  await stat(join(source, 'resources', 'vcruntime', 'msvcp140.dll'));
+} catch {
+  if (process.env.BONAPARTE_PACK_WITHOUT_RUNTIME !== '1') {
+    console.error(
+      'The app carries no Visual C++ runtime (resources/vcruntime): pack on Windows, where it is prepared first.\n' +
+        'BONAPARTE_PACK_WITHOUT_RUNTIME=1 packs without it, for a package that will never reach Windows.',
+    );
+    process.exit(1);
+  }
+}
+
 const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 await mkdir(target, { recursive: true });
 await cp(join(source, 'out'), join(target, 'out'), { recursive: true, filter: (path) => !path.endsWith('.map') });

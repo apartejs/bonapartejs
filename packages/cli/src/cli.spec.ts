@@ -65,6 +65,15 @@ describe('formatDoctorReport', () => {
     expect(lines.at(-1)).toBe('The built-in engine cannot run until what is marked ✗ is fixed.');
   });
 
+  it('on Windows, says which Visual C++ runtime llama.cpp will load: beside it, Windows’ own, bonaparte’s, or none', () => {
+    const runtime = (runs: 'beside' | 'system' | 'carried' | null, version: string | null) =>
+      formatDoctorReport({ ok: true, checks: [{ id: 'runtime', status: runs ? 'ok' : 'fail', blocking: !runs, runs, version }] }, fr).split('\n')[2];
+    expect(runtime('beside', '14.50.35719.0')).toBe(' ✓ Runtime Visual C++ à côté de llama.cpp : 14.50.35719.0');
+    expect(runtime('system', '14.51.36247.0')).toBe(' ✓ Runtime Visual C++ de Windows : 14.51.36247.0');
+    expect(runtime('carried', '14.51.36247.0')).toBe(' ✓ Runtime Visual C++ absent de Windows : bonaparte met le sien (14.51.36247.0) à côté de llama.cpp');
+    expect(runtime(null, null)).toMatch(/^ ✗ Runtime Visual C\+\+ absent : llama\.cpp ne démarrera pas\. .*https:\/\/aka\.ms\/vc14\/vc_redist\.x64\.exe$/);
+  });
+
   it('colours the marks only on a terminal', () => {
     expect(formatDoctorReport(GOOD, fr)).not.toContain('\u001b[');
     expect(formatDoctorReport(GOOD, fr, { color: true })).toContain('\u001b[32m✓\u001b[0m');

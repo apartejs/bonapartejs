@@ -43,6 +43,12 @@ function loadError(error: unknown): EngineLoadResult {
     return { ok: false, error: { code: 'too-big', detail, tooBig: { neededBytes: error.neededBytes, gpuBytes: error.gpuBytes, gpuLayers: error.gpuLayers } } };
   }
   if (error instanceof UnsupportedFamilyError) return { ok: false, error: { code: error.code, detail } };
+  // An engine that wrote nothing: why, as Windows' code says it — never our sentence shown as llama.cpp's words.
+  if (error instanceof EngineStoppedError && error.reason !== 'said') {
+    const hex = error.code === null ? '' : `0x${(error.code >>> 0).toString(16).toUpperCase()}`;
+    const code = error.reason === 'missing-library' ? 'missing-runtime' : error.reason === 'old-library' ? 'old-runtime' : 'silent';
+    return { ok: false, error: { code, detail: hex } };
+  }
   return { ok: false, error: { code: 'failed', detail } };
 }
 

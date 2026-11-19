@@ -12,6 +12,7 @@
 
 import { randomBytes } from 'node:crypto';
 import type { SpawnFn } from '../../process/spawn.js';
+import { stopReason, type StopReason } from '../../engine/llama-runtime.js';
 import { launchServer, serverEnvironment, type ServerProcess } from '../../engine/server-process.js';
 import type { BackendStatus } from '../types.js';
 import { buildLlamaServerArgs, type LlamaCppLaunchConfig } from './args.js';
@@ -45,10 +46,29 @@ function sameModelPath(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
-/** llama-server exited before it answered: `said` holds its last lines, as it wrote them. */
+/**
+ * llama-server exited before it answered: `said` holds its last lines, as it wrote them; `code` its exit code (null
+ * when killed or never started); `reason` why, when it wrote nothing — a library Windows could not find, or one too
+ * old for it.
+ */
 export class EngineStoppedError extends Error {
-  constructor(readonly said: string) {
-    super(`llama-server stopped before it was ready.${said ? `\n${said}` : ''}`);
+  readonly reason: StopReason;
+  constructor(
+    readonly said: string,
+    readonly code: number | null = null,
+  ) {
+    const reason = stopReason(code, said);
+    const hex = code === null ? null : `0x${(code >>> 0).toString(16).toUpperCase()}`;
+    const why =
+      reason === 'said'
+        ? `\n${said}`
+        : reason === 'missing-library'
+          ? ` Windows could not find a library it needs (${hex}): the Visual C++ runtime.`
+          : reason === 'old-library'
+            ? ` A library it needs is too old (${hex}): the Visual C++ runtime.`
+            : ` It stopped without a word${code === null ? '.' : `, exit code ${code} (${hex}).`}`;
+    super(`llama-server stopped before it was ready.${why}`);
+    this.reason = reason;
     this.name = 'EngineStoppedError';
   }
 }
@@ -135,7 +155,7 @@ export class ManagedServer {
     while (Date.now() < deadline) {
       if (!running.running) {
         this.setStatus('crashed');
-        throw new EngineStoppedError(running.lastLines());
+        throw new EngineStoppedError(running.lastLines(), await running.exited);
       }
       if (await this.client.health()) {
         await this.verifyServedModel(running);

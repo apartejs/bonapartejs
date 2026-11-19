@@ -4,7 +4,14 @@
  * the contract's (`CHANNELS`); a test checks they agree.
  */
 
-import { appInfo, conversationsOpenFolder, conversationsShowPr, type Locale } from '@aparte/bonaparte-shared';
+import {
+  appInfo,
+  conversationsOpenFolder,
+  conversationsShowPr,
+  engineRuntimeDownload,
+  VC_RUNTIME_DOWNLOAD,
+  type Locale,
+} from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
 import { registerConversationChannels } from './conversations.js';
 import { registerChangeChannels } from './changes.js';
@@ -61,6 +68,8 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
     const branch = await core.branchOf(id);
     if (branch) await facts.openFolder(branch.worktree);
   });
+  // Only Microsoft's installer of the Visual C++ runtime, at its one address: the window names none.
+  ipc.handle(engineRuntimeDownload, () => facts.openLink(VC_RUNTIME_DOWNLOAD));
   // Only a pull request's page on GitHub, as the core read it for this conversation.
   ipc.handle(conversationsShowPr, async ({ id }) => {
     const pr = await core.prOf(id);

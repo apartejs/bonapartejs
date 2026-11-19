@@ -41,3 +41,6 @@ packages/cli/app/
 # The Windows Sandbox kit: the installer and the npm package, built locally
 .sandbox/
 packages/cli/.built-*/
+
+# Microsoft's Visual C++ runtime, copied from Visual Studio when the app is packed: never committed
+packages/app/resources/vcruntime/

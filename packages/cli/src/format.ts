@@ -28,6 +28,10 @@ function line(check: DoctorCheck, words: CliMessages): string {
       if (check.tooOld) return say.llamaTooOld(check.command, check.build, check.minBuild ?? 0);
       return check.status === 'warn' ? say.llamaUnknownBuild(check.command, check.build) : say.llama(check.command, check.build, check.source);
     }
+    case 'runtime':
+      if (check.runs === null || check.version === null) return say.runtimeMissing;
+      if (check.runs === 'beside') return say.runtimeBeside(check.version);
+      return check.runs === 'system' ? say.runtimeSystem(check.version) : say.runtimeCarried(check.version);
     case 'slots':
       if (!check.writable) return say.slotsNotWritable(check.dir);
       if (check.status === 'warn' && check.freeBytes !== null) return say.slotsLowDisk(check.dir, size(check.freeBytes, words));

@@ -11,6 +11,16 @@ import { chat } from './fixtures/chat.js';
 
 const packed = join(import.meta.dirname, '..', 'dist', process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked', process.platform === 'win32' ? 'bonaparte.exe' : 'bonaparte');
 
+test('the packed app carries the Visual C++ runtime llama.cpp needs, outside the archive', () => {
+  test.skip(!existsSync(packed), 'nothing packed: run `pnpm dist:dir` first');
+  test.skip(process.platform !== 'win32', 'the runtime is Windows’');
+  // llama.cpp, a program of its own, copies it from the disk: never from app.asar.
+  const runtime = join(packed, '..', 'resources', 'app.asar.unpacked', 'resources', 'vcruntime');
+  for (const name of ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll', 'NOTICE.txt']) {
+    expect(existsSync(join(runtime, name)), name).toBe(true);
+  }
+});
+
 test('the packed app answers, and its terminal runs a shell', async ({ launch }) => {
   test.skip(!existsSync(packed), 'nothing packed: run `pnpm dist:dir` first');
   const { app, page } = await launch({ executable: packed, engine: { responder: () => 'Bonjour Paul' } });

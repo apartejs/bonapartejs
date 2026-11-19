@@ -34,7 +34,7 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepack": "node scripts/assemble-app.mjs",
+    "prepack": "node ../app/scripts/prepare-vcruntime.mjs && node scripts/assemble-app.mjs",
     "postpack": "node scripts/assemble-app.mjs --clean"
   },
   "dependencies": {

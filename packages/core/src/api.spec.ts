@@ -4,6 +4,7 @@
  * asked, and a turn then runs on that engine, in the model's family.
  */
 
+import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
@@ -423,6 +424,31 @@ describe('createCore — the llama.cpp it runs', () => {
     expect(github.downloads).toBe(1);
   });
 
+  it('puts the Visual C++ runtime it carries beside the build it installed, when Windows has none', async () => {
+    const github = await published();
+    const runtime = await mkdtemp(join(tmpdir(), 'bp-runtime-'));
+    const bundled = join(runtime, 'bundled');
+    const system = join(runtime, 'System32');
+    await mkdir(bundled, { recursive: true });
+    await mkdir(system, { recursive: true });
+    // Each file carries a version as a DLL does (VS_FIXEDFILEINFO).
+    const info = Buffer.alloc(16);
+    info.writeUInt32LE(0xfeef04bd, 0);
+    info.writeUInt32LE((14 << 16) | 51, 8);
+    info.writeUInt32LE((36247 << 16) >>> 0, 12);
+    for (const name of ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll']) await writeFile(join(bundled, name), info);
+    try {
+      const { core, dir } = await setup({ llamaReleases: github.url, llamaRuntime: { dir: bundled, systemDir: system, platform: 'win32' } });
+      await core.llamaCpp({ checkLatest: true });
+      await core.installLlamaCpp();
+      for (const name of ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll']) {
+        expect(existsSync(join(dir, 'data', 'llama.cpp', 'b12383', name))).toBe(true);
+      }
+    } finally {
+      await rm(runtime, { recursive: true, force: true });
+    }
+  });
+
   it('a load runs the build bonaparte installed, before the one on the PATH', async () => {
     const github = await published();
     const launched: string[] = [];
@@ -498,7 +524,8 @@ describe('createCore — the web search (task 10.4)', () => {
 
 describe('createCore — bonaparte doctor (task 9.6)', () => {
   it('says what the machine has for the built-in engine — llama.cpp found as a load would find it, the card — running nothing else', async () => {
-    const { core, dir } = await setup();
+    // The Visual C++ runtime is Windows' alone: its line is pinned in its own test.
+    const { core, dir } = await setup({ llamaRuntime: { dir: undefined, platform: 'linux' } });
     const report = await core.doctor();
     expect(report.checks.map((check) => [check.id, check.status])).toEqual([
       ['node', 'ok'],

@@ -13,9 +13,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.e2e.json",
     "test": "vitest run",
     "test:e2e": "pnpm -w build && playwright test",
-    "dist": "electron-builder --publish never",
-    "dist:dir": "electron-builder --dir --publish never",
-    "dist:store": "electron-builder --win appx --publish never"
+    "dist": "node scripts/prepare-vcruntime.mjs && electron-builder --publish never",
+    "dist:dir": "node scripts/prepare-vcruntime.mjs && electron-builder --dir --publish never",
+    "dist:store": "node scripts/prepare-vcruntime.mjs && electron-builder --win appx --publish never"
   },
   "dependencies": {
     "@aparte/core": "1.15.0",

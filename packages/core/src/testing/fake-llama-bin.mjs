@@ -43,6 +43,10 @@ if (failure) {
   process.stderr.write(`error: ${failure}\n`);
   process.exit(1);
 }
+// Or stop without a word, with the code Windows gives a program it could not start (a library missing: 0xC0000135).
+// Elsewhere than Windows an exit code keeps only its last byte: a test there uses a small one.
+const silentExit = process.env['FAKE_LLAMA_EXIT_SILENTLY'];
+if (silentExit) process.exit(Number(silentExit));
 
 const key = process.env['LLAMA_API_KEY'];
 if (!key) {
