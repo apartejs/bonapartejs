@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { createAppUpdates, fakeUpdater, type UpdaterLike } from './updater.js';
+import { createAppUpdates, fakeUpdater, updaterKind, type UpdaterLike } from './updater.js';
 
 class Updater extends EventEmitter implements UpdaterLike {
   autoDownload = true;
@@ -146,5 +146,14 @@ describe('the app’s update, review of phase 13', () => {
     await updates.check();
     await updates.restart();
     expect(order).toEqual(['download', 'idle', 'save', 'install']);
+  });
+});
+
+describe('which updater runs (the Store, review of the distribution)', () => {
+  it('a packaged app updates itself; installed by the Microsoft Store, the Store updates it — never electron-updater', () => {
+    expect(updaterKind({ e2e: false, packaged: true, windowsStore: false })).toBe('packaged');
+    expect(updaterKind({ e2e: false, packaged: true, windowsStore: true })).toBe('none');
+    expect(updaterKind({ e2e: false, packaged: false, windowsStore: false })).toBe('none');
+    expect(updaterKind({ e2e: true, packaged: false, windowsStore: false })).toBe('test');
   });
 });

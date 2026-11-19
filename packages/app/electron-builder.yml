@@ -41,6 +41,23 @@ nsis:
   deleteAppDataOnUninstall: false
   artifactName: bonaparte-setup-${version}.${ext}
 
+# The Microsoft Store (prepared, not submitted): `pnpm dist:store` makes an AppX
+# the Store signs at submission. It needs the Windows SDK, named by
+# ELECTRON_BUILDER_WINDOWS_KITS_PATH (its bin\<version>\x64 folder): the
+# makeappx electron-builder brings lacks a DLL. The tiles are build/appx/*.png. The identity is Partner Center's, once the
+# name is reserved there: Package/Identity/Name, Package/Identity/Publisher and
+# the publisher's display name replace these placeholders. The Store build does
+# not update itself (process.windowsStore): the Store does.
+appx:
+  identityName: apartejs.bonaparte
+  publisherDisplayName: apartejs
+  displayName: bonaparte
+  applicationId: bonaparte
+  backgroundColor: '#FFFFFF'
+  languages:
+    - fr-FR
+    - en-US
+
 mac:
   target:
     - dmg

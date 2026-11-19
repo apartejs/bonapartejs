@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:e2e": "pnpm -w build && playwright test",
     "dist": "electron-builder --publish never",
-    "dist:dir": "electron-builder --dir --publish never"
+    "dist:dir": "electron-builder --dir --publish never",
+    "dist:store": "electron-builder --win appx --publish never"
   },
   "dependencies": {
     "@aparte/core": "1.14.0",

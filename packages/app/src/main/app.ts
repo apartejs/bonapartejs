@@ -38,7 +38,7 @@ import { mainWords, type MainWords } from './i18n/index.js';
 import { APP_ID } from './app-id.js';
 import { registerAllChannels } from './ipc/index.js';
 import { readUpdates } from './ipc/updates.js';
-import { createAppUpdates, fakeUpdater, type UpdaterLike } from './updater.js';
+import { createAppUpdates, fakeUpdater, updaterKind, type UpdaterLike } from './updater.js';
 import { createIpcRegistry } from './ipc/register.js';
 import { stopEngineBeforeQuit } from './quit.js';
 import { devServerUrlFrom, isTrustedOrigin } from './security.js';
@@ -351,7 +351,8 @@ ${appTokens}`,
   });
 
   // The app's own update (task 13.1): electron-updater in a packaged app; a test run's own; none in development.
-  const updater = options.e2e ? fakeUpdater(process.env) : app.isPackaged ? await packagedUpdater() : null;
+  const kind = updaterKind({ e2e: options.e2e, packaged: app.isPackaged, windowsStore: process.windowsStore === true });
+  const updater = kind === 'test' ? fakeUpdater(process.env) : kind === 'packaged' ? await packagedUpdater() : null;
   if (options.e2e && updater) (globalThis as { __bonaparteUpdater?: unknown }).__bonaparteUpdater = updater;
   const appUpdates = createAppUpdates({
     updater,

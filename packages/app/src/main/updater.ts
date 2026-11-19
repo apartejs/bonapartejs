@@ -168,3 +168,13 @@ export function fakeUpdater(env: Record<string, string | undefined>): UpdaterLik
   })();
   return fake as unknown as UpdaterLike;
 }
+
+/**
+ * Which updater a build runs: a test run's own; a packaged app's electron-updater — except an app the Microsoft Store
+ * installed (MSIX, `process.windowsStore`), which the Store updates, and where electron-updater does not work; none
+ * when run from the sources.
+ */
+export function updaterKind(facts: { e2e: boolean; packaged: boolean; windowsStore: boolean }): 'test' | 'packaged' | 'none' {
+  if (facts.e2e) return 'test';
+  return facts.packaged && !facts.windowsStore ? 'packaged' : 'none';
+}
