@@ -37,3 +37,7 @@ packages/app/playwright-report/
 
 # App directory assembled inside the CLI package for `npx` (pnpm pack)
 packages/cli/app/
+
+# The Windows Sandbox kit: the installer and the npm package, built locally
+.sandbox/
+packages/cli/.built-*/
