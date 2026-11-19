@@ -485,12 +485,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   message its author, a notice (`kind: 'notice'`), a note under a message
   and `setAutoReply`; bonaparte runs on it and uses none of them yet.
   **aparté 1.13.1** (2026-11-18) only wraps long notices. **aparté 1.14.0**
-  (2026-11-19), which bonaparte runs on: a pill goes in at the caret or
-  after the draft (`insertToken` past the end, apartejs/aparte#259), a « / »
-  command carries a `badge` (#261), the composer's `stopKey` (#264), and the
-  error renderer's `appCode` (#265). One issue of bonaparte's is open on
-  aparté: apartejs/aparte#267 (an error renderer redraws aparté's whole
-  card).
+  (2026-11-19): a pill goes in at the caret or after the draft
+  (`insertToken` past the end, apartejs/aparte#259), a « / » command
+  carries a `badge` (#261), the composer's `stopKey` (#264), and the error
+  renderer's `appCode` (#265). **aparté 1.15.0** (2026-11-19), which
+  bonaparte runs on: an error renderer returns `null` for an error it does
+  not change, and that error keeps aparté's own card (#267). No issue of
+  bonaparte's is open on aparté.
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -831,7 +832,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   no overlay is visible (`checkVisibility`: aparté's selects keep hidden
   listboxes in the page) and the key was not cancelled already. A reply the
   engine cut says so in its own bubble, after a reload too: the error
-  renderer reads `appCode` (`aparte/errors.ts`, apartejs/aparte#265, #267).
+  renderer reads `appCode` and draws only that card (`aparte/errors.ts`,
+  apartejs/aparte#265); every other error is aparté's own card (aparté 1.15,
+  #267).
 - **The mascot** (`renderer/src/logo/`, task 12.2): `mascotState` derives
   its state from the runner's events (`TURN_ACTIVITY`, `aparte/runner.ts`)
   and the engine's; « content » lasts `HAPPY_MS`. Its keyframes move only
