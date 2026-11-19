@@ -106,6 +106,10 @@ test('the disk nearly full, said as a turn ends: how much is free, and the oldes
   await expect(card).toContainText('Aucune mémoire ancienne à libérer');
 
   await page.keyboard.press('Control+N');
+  // The new conversation shown first: right after the key, the field found could still be the one of the chat
+  // that is being hidden, and Playwright would wait on it for ever.
+  await expect(page.getByRole('heading', { name: 'Nouvelle conversation', level: 1 })).toBeVisible();
+  await expect(ui.userMessages).toHaveCount(0);
   await ui.send('Une autre question');
   await expect(card).toContainText('il faut libérer une mémoire ancienne', { timeout: 15_000 });
   await card.getByRole('button', { name: 'Libérer la plus ancienne' }).click();

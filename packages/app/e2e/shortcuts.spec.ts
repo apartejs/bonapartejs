@@ -84,6 +84,9 @@ test('Échap on a page over the conversation never stops the reply it hides (rev
 test('the panes’ keys: Ctrl Maj D, Ctrl ` and Ctrl Maj B open their pane', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: () => 'ok' } });
   await expect(chat(page).editor).toBeVisible();
+  // The code panes exist once the window knows the conversation is a project's (its icons say it): until then
+  // it is a discussion, which has none, and the keys go on as they would have.
+  await expect(page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Changements', exact: true })).toBeVisible();
   await page.keyboard.press('Control+Shift+D');
   await expect(page.getByRole('region', { name: 'Changements', exact: true })).toBeVisible();
   await page.keyboard.press('Control+`');
