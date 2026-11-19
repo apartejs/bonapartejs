@@ -484,9 +484,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `/model` (apartejs/aparte#255). **aparté 1.13.0** (2026-11-17) gives a
   message its author, a notice (`kind: 'notice'`), a note under a message
   and `setAutoReply`; bonaparte runs on it and uses none of them yet.
-  **aparté 1.13.1** (2026-11-18) only wraps long notices. One issue of
-  bonaparte's is open on aparté: apartejs/aparte#259 (a pill added from
-  outside the composer, task 10.2).
+  **aparté 1.13.1** (2026-11-18) only wraps long notices. **aparté 1.14.0**
+  (2026-11-19), which bonaparte runs on: a pill goes in at the caret or
+  after the draft (`insertToken` past the end, apartejs/aparte#259), a « / »
+  command carries a `badge` (#261), the composer's `stopKey` (#264), and the
+  error renderer's `appCode` (#265). One issue of bonaparte's is open on
+  aparté: apartejs/aparte#267 (an error renderer redraws aparté's whole
+  card).
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -741,8 +745,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`browser.pick` accepts only a colour), and gives back the element clicked;
   Escape leaves. What is joined is an aparté pill (`attachToken` in
   `aparte/composer.ts`: the label shown, the full description in the
-  message), put through the composer's inner editor
-  (apartejs/aparte#259); the comments leave as one message in the person's
+  message), at the caret or after the draft (aparté 1.14,
+  apartejs/aparte#259); the comments leave as one message in the person's
   name. Electron's own « Electron Security Warning » lines are no page's:
   the console drops them.
 - **What a project runs** (task 10.3, `core/src/project/runs.ts`,
@@ -814,16 +818,20 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (ui) — never a sub-agent's. A trial is visible to its conversation only
   (`host.trialIn`); « Installer » makes it a plugin added from it. Its
   « / » commands come from `PluginStatus.commands` through
-  `aparte-collect-commands`, a trial's under the group « À l'essai »
-  (aparté's rows carry no badge: apartejs/aparte#261).
+  `aparte-collect-commands`, a trial's with the badge « À l'essai », on its
+  row while the list is filtered too (aparté 1.14, apartejs/aparte#261).
 - **Shortcuts** (`renderer/src/shortcuts/registry.ts`, `useShortcuts.ts`,
   `settings/Shortcuts.tsx`; task 12.1): one registry of actions and their
   default combos (`SHORTCUTS`), the person's own in the `shortcuts` setting
   (type `keys`, checked by `COMBO` in the core); `useShortcut(action, run)`
   is the only way a screen binds one, a change is said on the window
   (`bonaparte-shortcut`). While a combo is captured nothing fires
-  (`CAPTURING`). Escape stops the reply only when no overlay is visible
-  (`checkVisibility`: aparté's selects keep hidden listboxes in the page).
+  (`CAPTURING`). Escape stops the reply: in the composer, aparté's own
+  `stopKey` (aparté 1.14); elsewhere in the window, our listener, only when
+  no overlay is visible (`checkVisibility`: aparté's selects keep hidden
+  listboxes in the page) and the key was not cancelled already. A reply the
+  engine cut says so in its own bubble, after a reload too: the error
+  renderer reads `appCode` (`aparte/errors.ts`, apartejs/aparte#265, #267).
 - **The mascot** (`renderer/src/logo/`, task 12.2): `mascotState` derives
   its state from the runner's events (`TURN_ACTIVITY`, `aparte/runner.ts`)
   and the engine's; « content » lasts `HAPPY_MS`. Its keyframes move only
