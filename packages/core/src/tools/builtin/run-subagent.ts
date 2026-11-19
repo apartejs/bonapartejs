@@ -44,7 +44,12 @@ export const runSubagentTool: BuiltinTool = {
       properties: {
         name: { type: 'string', description: 'Short name shown to the person.' },
         mission: { type: 'string', description: 'What to do and what to give back.' },
-        tools: { type: 'string', enum: ['read', 'all'], description: '"read" (default) or "all": also edits and commands.' },
+        tools: {
+          type: 'string',
+          enum: ['read', 'all'],
+          description:
+            '"read" (default): it reads and searches only. "all": it may also write and edit files and run commands — give "all" whenever the mission writes a file or runs a command.',
+        },
       },
       required: ['name', 'mission'],
     },

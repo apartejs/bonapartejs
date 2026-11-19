@@ -22,6 +22,8 @@ import { answerPause, NOT_RUN_STOPPED } from './resume.js';
 import { turnEventToWire } from './wire.js';
 
 export const DEFAULT_SUBAGENT_ROUNDS = 25;
+/** The same call failing this many times in a row stops a sub-agent: it is not learning from what it reads. */
+export const SAME_FAILURE_LIMIT = 3;
 
 /** What the engine gives a sub-agent: its turns, its pause, the answers to it. */
 export type SubagentEngine = Pick<ConversationEngine, 'subagentTurn' | 'subagentPaused' | 'recordSubagentAnswers'> &
@@ -57,14 +59,51 @@ function toolsFor(registry: ToolSet, spec: SubagentSpec): ToolSet {
     const tool = registry.get(name);
     return tool && allowed(tool.def) ? tool : undefined;
   };
+  const list = (): ToolDef[] => registry.list().filter(allowed);
   return {
-    list: () => registry.list().filter(allowed),
+    list,
     get,
     run: (call, ctx) =>
       get(call.name)
         ? registry.run(call, ctx)
-        : Promise.resolve({ toolCallId: call.id, name: call.name, content: `There is no tool named ${call.name}.`, failed: true }),
+        : Promise.resolve({ toolCallId: call.id, name: call.name, content: refusalOf(call.name, registry, spec, list()), failed: true }),
   };
+}
+
+/** A text's first sentence, at most 240 characters: what a failure was, without what follows it. */
+function firstSentence(text: string): string {
+  const end = text.search(/[.!?](\s|$)/);
+  const sentence = end >= 0 ? text.slice(0, end + 1) : text;
+  return sentence.length > 240 ? `${sentence.slice(0, 239)}…` : sentence;
+}
+
+/**
+ * What a sub-agent reads when it calls a tool that is not its own. Its prompt shows the conversation's whole
+ * inventory (it shares the conversation's frozen prompt), so it may well try one: the words say why not, and what to
+ * do instead, so that it acts on them rather than trying again.
+ */
+function refusalOf(name: string, registry: ToolSet, spec: SubagentSpec, mine: readonly ToolDef[]): string {
+  const theirs = registry.get(name)?.def;
+  const yours = mine.map((def) => def.name).join(', ') || 'none';
+  if (!theirs) return `There is no tool named ${name}. Your tools: ${yours}.`;
+  const wouldBeAllowed = theirs.where === 'core' && theirs.name !== RUN_SUBAGENT && !(EXTENSION_TOOLS as readonly string[]).includes(theirs.name);
+  if (spec.tools !== 'all' && wouldBeAllowed && theirs.effect !== 'read') {
+    return [
+      `${name} is not yours: this sub-agent reads and searches only (it was given the tools "read").`,
+      `Do not call ${name} again. Do what your tools allow (${yours}), then answer the main agent with your result`,
+      'and what is left for it to do — for a file to write, its path and its whole content.',
+    ].join(' ');
+  }
+  return `${name} is not for a sub-agent: use your own tools (${yours}), then answer the main agent with your result.`;
+}
+
+/**
+ * The tools a sub-agent's grammar admits: the whole inventory it reads in its prompt (the conversation's own), not
+ * only those it may use. A grammar of its own tools alone bent a call it meant (write_file) into the nearest name it
+ * was allowed (browser_read), again and again; now the call is written as meant, and refused in words it can act on.
+ */
+function seen(parent: SubagentParent): readonly ToolDef[] {
+  return parent.registry.list();
 }
 
 /** What the sub-agent reads before its mission: who it is, what it may use, where, and what to give back. English. */
@@ -93,6 +132,9 @@ async function drive(
   const scope = scopeOf(parent, agentId, spec);
   const maxRounds = parent.maxToolRounds ?? DEFAULT_SUBAGENT_ROUNDS;
   let rounds = 0;
+  // Nobody watches a sub-agent: the same call failing again and again stops it, said to the main agent.
+  const repeats = { same: '', count: 0 };
+  let stuck: string | undefined;
   const onCalls = async (calls: readonly ModelCall[]): Promise<CallsAnswer> => {
     rounds += 1;
     if (rounds > maxRounds) {
@@ -101,22 +143,42 @@ async function drive(
     }
     const answer = await answerCalls(scope, calls, emit);
     // Its own pause needs no ticket: its conversation's covers the calls it waits on.
-    return 'pending' in answer ? { suspend: { pending: answer.pending, ticket: '', results: answer.results } } : { results: answer.results };
+    if ('pending' in answer) return { suspend: { pending: answer.pending, ticket: '', results: answer.results } };
+    const failedAll = answer.results.length > 0 && answer.results.every((result) => result.failed);
+    const same = failedAll ? JSON.stringify(calls.map((one) => [one.name, one.input])) : '';
+    repeats.count = same !== '' && same === repeats.same ? repeats.count + 1 : same !== '' ? 1 : 0;
+    repeats.same = same;
+    if (repeats.count >= SAME_FAILURE_LIMIT) {
+      const names = [...new Set(calls.map((one) => one.name))].join(', ');
+      // What went wrong, in a sentence: never the advice the sub-agent was given (« do not call it again »).
+      const why = answer.results.map((result) => firstSentence(result.content)).join(' ');
+      stuck = `The sub-agent was stopped: it called ${names} the same way ${SAME_FAILURE_LIMIT} times in a row, and it failed each time (${why}). Do the work yourself, or give it a mission and tools that fit.`;
+      return { stop: 'limit' };
+    }
+    return { results: answer.results };
   };
   const rereading = { on: false };
   const sink = (event: TurnEvent): void => {
-    const line = turnEventToWire(event, rereading, agentId);
-    if (line) emit(line);
+    for (const line of turnEventToWire(event, rereading, agentId)) emit(line);
   };
   let end: SubagentEnd;
   try {
     const done = await turn(scope, sink, onCalls);
-    if (done.suspended) end = { kind: 'paused', pending: done.suspended.pending };
+    if (stuck) end = { kind: 'failed', result: stuck };
+    else if (done.overthought !== undefined) {
+      end = {
+        kind: 'failed',
+        result: `The sub-agent was stopped: its reasoning ran past ${done.overthought} characters without acting. Give it a narrower mission, or do the work yourself.`,
+      };
+    }
+    else if (done.suspended) end = { kind: 'paused', pending: done.suspended.pending };
     else if (done.stopped) end = { kind: 'stopped', result: done.answer || NOT_RUN_STOPPED };
     else end = { kind: 'done', result: done.answer || 'The sub-agent gave no answer.' };
   } catch (error) {
     end = { kind: 'failed', result: `The sub-agent failed: ${error instanceof Error ? error.message : String(error)}` };
   }
+  // Its last text whole before its end: aparté's parser may still hold a closing backtick.
+  emit({ type: 'text-flush', agentId } as StreamRunEvent);
   emit({
     type: 'agent-end',
     agentId,
@@ -157,7 +219,7 @@ export function subagentRunner(parent: SubagentParent): SubagentRunner {
         parent.engine.subagentTurn(
           parent.conversationId,
           { agentId, name: spec.name },
-          { start: { note: noteFor(spec, scope.registry.list(), scope.place.roots), mission: spec.mission }, tools: { defs: scope.registry.list(), onCalls } },
+          { start: { note: noteFor(spec, scope.registry.list(), scope.place.roots), mission: spec.mission }, tools: { defs: seen(parent), onCalls } },
           sink,
           { ...(slot ? { lend: slot.lend } : {}), signal: parent.signal },
         ),
@@ -204,11 +266,13 @@ export async function resumeSubagent(parent: SubagentParent, hold: SubagentHold,
     parent.emit({ type: 'agent-end', agentId, status: 'waiting' });
     return end;
   }
+  // Its answer after the pause is a turn of its own: never added to the blocks it settled before it.
+  parent.emit({ type: 'turn-start', agentId } as StreamRunEvent);
   return drive(parent, agentId, spec, (_scope, sink, onCalls) =>
     parent.engine.subagentTurn(
       parent.conversationId,
       { agentId, name: spec.name },
-      { resume: true, tools: { defs: scope.registry.list(), onCalls } },
+      { resume: true, tools: { defs: seen(parent), onCalls } },
       sink,
       { signal: parent.signal },
     ),

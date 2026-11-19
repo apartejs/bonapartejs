@@ -68,7 +68,7 @@ function model(missions: Record<string, string>[], work: (name: string) => strin
 }
 
 /** A conversation engine on a managed engine (its memory kept), the loop over it, and what the slot saw. */
-async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume', options: { slots?: number; paceMs?: number; nCtx?: number } = {}) {
+async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume', options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-subagents-'));
   dirs.push(dir);
   const root = join(dir, 'project');
@@ -78,6 +78,8 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
   const order: string[] = [];
   /** Which slot each sub-agent's completions ran on. */
   const placed: [string, unknown][] = [];
+  /** The tool grammar each sub-agent's completion was given. */
+  const grammars: string[] = [];
   const label = (filename: string) => (filename.startsWith('seed-') ? 'seed' : filename.includes('_agent-') ? 'sub-agent' : 'conversation');
   const server = await startFakeLlamaServer({
     slotDir: kvDir,
@@ -89,6 +91,7 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
       const prompt = String(body['prompt']);
       order.push(`${isSubagent(prompt) ? `complete ${subagentName(prompt)}` : 'complete conversation'}${body['n_predict'] === 0 ? ' (read)' : ''}`);
       if (isSubagent(prompt) && body['n_predict'] !== 0) placed.push([subagentName(prompt), body['id_slot']]);
+      if (isSubagent(prompt) && typeof body['grammar'] === 'string') grammars.push(body['grammar']);
     },
   });
   servers.push(server);
@@ -110,6 +113,7 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
     store,
     kv: new KvStore(kvDir),
     ...(options.slots ? { slots: options.slots } : {}),
+    ...(options.thinkingChars ? { subagentThinkingChars: options.thinkingChars } : {}),
     engine: async () => ({
       client,
       family: familyLayer('gemma'),
@@ -144,7 +148,7 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
     );
     return { result, events, said };
   };
-  return { dir, root, store, engine, meta, run, order, placed };
+  return { dir, root, store, engine, meta, run, order, placed, grammars };
 }
 
 const of = (events: StreamRunEvent[], type: StreamRunEvent['type']) => events.filter((event) => event.type === type) as Record<string, any>[];
@@ -254,6 +258,84 @@ describe('a sub-agent on the built-in engine', () => {
     const other = String(of(two.events, 'agent-start')[0]!['agentId']);
     expect(by(two.events, other).find((event) => event.type === 'tool-rejected')).toMatchObject({ by: 'policy' });
     expect(await readFile(join(writer.root, 'a.ts'), 'utf8')).toBe('export const a = 1;\n');
+  });
+
+  it('« read » and a call to write_file: never twisted into another tool — refused in words it can act on', async () => {
+    const write = () => call('write_file', { path: 'index.html', content: '<p>hi</p>' });
+    const { run, grammars, root } = await rig(model([LECTEUR], write), 'impro');
+    const { events } = await run('Écris index.html.');
+    const agentId = String(of(events, 'agent-start')[0]!['agentId']);
+    // Its prompt shows the conversation's whole inventory: its grammar admits every name it may read there, so a
+    // call it means is written as it means it, never bent into the nearest name it may use (browser_read).
+    expect(grammars.length).toBeGreaterThan(0);
+    for (const grammar of grammars) expect(grammar).toContain('write_file');
+    const failed = by(events, agentId).find((event) => event.type === 'tool-failed' || event.type === 'tool-resolved') as Record<string, unknown>;
+    expect(String(failed['error'] ?? failed['result'])).toMatch(/write_file is not yours: this sub-agent reads and searches only/);
+    expect(String(failed['error'] ?? failed['result'])).toMatch(/answer the main agent/);
+    // Nothing written: the file it meant to write is not there.
+    await expect(readFile(join(root, 'index.html'), 'utf8')).rejects.toThrow();
+  });
+
+  it('the same call failing three times in a row stops it, and the main agent reads why — never 25 rounds of it', async () => {
+    // A sub-agent that never learns: the same call, whatever it reads back.
+    const stuck = model([LECTEUR]);
+    const { run, order } = await rig((prompt) => (isSubagent(prompt) ? call('read_file', { path: 'missing.txt' }) : stuck(prompt)), 'impro');
+    const { events } = await run('Lis la page.');
+    const agentId = String(of(events, 'agent-start')[0]!['agentId']);
+    expect(order.filter((line) => line === 'complete Lecteur')).toHaveLength(3);
+    const [end] = of(events, 'agent-end');
+    expect(end).toMatchObject({ agentId, status: 'failed' });
+    expect(String(end!['error'])).toMatch(/stopped: it called read_file the same way 3 times in a row, and it failed each time/);
+    expect(String(end!['error'])).toMatch(/missing.txt/);
+    // The conversation goes on with what it learnt.
+    const launch = of(events, 'tool-start').find((event) => event['name'] === 'run_subagent')!;
+    const outcome = events.find(
+      (event) => (event.type === 'tool-resolved' || event.type === 'tool-failed') && (event as { toolCallId?: string }).toolCallId === launch['toolCallId'],
+    ) as Record<string, unknown>;
+    expect(String(outcome['result'] ?? outcome['error'])).toMatch(/same way 3 times/);
+  });
+
+  it('stopped on a refusal, it tells the main agent what it tried — never the words meant for the sub-agent', async () => {
+    const main = model([LECTEUR]);
+    const { run } = await rig((prompt) => (isSubagent(prompt) ? call('write_file', { path: 'index.html', content: 'x' }) : main(prompt)), 'impro');
+    const { events } = await run('Écris index.html.');
+    const error = String(of(events, 'agent-end')[0]!['error']);
+    expect(error).toMatch(/it called write_file the same way 3 times/);
+    expect(error).toMatch(/reads and searches only/);
+    expect(error).not.toMatch(/Do not call write_file again/);
+  });
+
+  it('a tool no sub-agent has is refused as such, whatever tools it was given', async () => {
+    const { run } = await rig(model([LECTEUR], () => call('run_subagent', { name: 'Petit', mission: 'Go.', tools: 'read' })), 'impro');
+    const { events } = await run('Que vaut a ?');
+    const agentId = String(of(events, 'agent-start')[0]!['agentId']);
+    const refused = by(events, agentId).find((event) => event.type === 'tool-failed') as Record<string, unknown>;
+    expect(String(refused['error'])).toMatch(/run_subagent is not for a sub-agent/);
+    expect(of(events, 'agent-start')).toHaveLength(1);
+  });
+
+  it('a reasoning that runs past its cap without acting stops it, said to the main agent — never the whole context', async () => {
+    const musing = `<|channel>thought\n${'Je réfléchis encore. '.repeat(200)}`;
+    const main = model([LECTEUR]);
+    const { run } = await rig((prompt) => (isSubagent(prompt) ? musing : main(prompt)), 'impro', { thinkingChars: 500 });
+    const { events } = await run('Réfléchis.');
+    const agentId = String(of(events, 'agent-start')[0]!['agentId']);
+    const thought = by(events, agentId)
+      .filter((event) => event.type === 'thinking-delta')
+      .map((event) => (event as { delta: string }).delta)
+      .join('');
+    // Cut once past the cap: what was shown is about the cap, never the 4,000 characters it would have written.
+    expect(thought.length).toBeGreaterThan(400);
+    expect(thought.length).toBeLessThan(1500);
+    const [end] = of(events, 'agent-end');
+    expect(end).toMatchObject({ agentId, status: 'failed' });
+    expect(String(end!['error'])).toMatch(/its reasoning ran past 500 characters without acting/);
+  });
+
+  it('the tool says when to give a sub-agent all its tools: a mission that writes a file or runs a command', () => {
+    const def = builtinTools().find((tool) => tool.def.name === 'run_subagent')!.def;
+    const tools = (def.inputSchema as { properties: Record<string, { description: string }> }).properties['tools']!;
+    expect(tools.description).toMatch(/"all".*writes a file or runs a command/);
   });
 
   it('a call it must ask about pauses the turn under its name; its state is kept for the answer', async () => {
@@ -464,6 +546,11 @@ describe('a sub-agent that waits for the person', () => {
     expect(resumed.find((line) => line.type === 'agent-end')).toMatchObject({ status: 'done', result: 'Result of Rédacteur: a is 1.' });
     expect(resumed.filter((line) => line.type === 'text-delta' && !line['agentId']).map((line) => line['delta']).join('')).toBe('Synthèse.');
     expect(resumed.at(-1)!.type).toBe('run-done');
+    // Its answer after the pause is a turn of its own: never added to the blocks it settled before it.
+    const mine = resumed.filter((line) => line['agentId'] === waits!.agentId).map((line) => line.type);
+    const restart = mine.indexOf('turn-start');
+    expect(restart).toBeGreaterThan(mine.indexOf('tool-resolved'));
+    expect(restart).toBeLessThan(mine.indexOf('text-delta'));
   });
 
   it('refused: only it stops — it reads the refusal and returns what it has; the conversation goes on', async () => {

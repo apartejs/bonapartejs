@@ -104,6 +104,8 @@ export interface ConversationEngineDeps {
   prompt(meta: ConversationMeta): Omit<SystemPromptOptions, 'family'>;
   measures?: MeasureStore;
   slots?: number;
+  /** How much a sub-agent may reason in one answer before it is cut (characters; `SUBAGENT_THINKING_CHARS`). */
+  subagentThinkingChars?: number;
   /** A save that failed (a full disk, a state bigger than the budget): said, never dropped in silence. */
   onSaveError?(error: unknown, conversationId: string): void;
   /** The project's instructions now (its `.bonaparte/instructions.md`, `AGENTS.md` or `CLAUDE.md`). */
@@ -215,7 +217,15 @@ export interface TurnResult {
   suspended?: { pending: PendingCall[]; ticket: string; results?: ToolResult[]; subagents?: SubagentHold[] };
   /** The tool rounds reached their limit. */
   limited?: true;
+  /** The model reasoned past this many characters in one answer without acting: the answer was cut (sub-agents). */
+  overthought?: number;
 }
+
+/**
+ * A sub-agent's reasoning in one answer, at most (characters, about 8,000 tokens): nobody watches it, and a small
+ * model can muse until the context is full. Past it, the answer is cut and the main agent told.
+ */
+export const SUBAGENT_THINKING_CHARS = 32_000;
 
 /** No model is loaded: nothing is loaded in silence (the window offers to). */
 export class NoEngineError extends Error {
@@ -1115,6 +1125,7 @@ export class ConversationEngine {
         answerOf: {},
         used,
         slot,
+        thinkingCap: this.deps.subagentThinkingChars ?? SUBAGENT_THINKING_CHARS,
         tooLong: async () => {
           throw new ContextFullError(this.contextFull(engine, used, engineWindow));
         },
@@ -1547,6 +1558,8 @@ export class ConversationEngine {
     thinking: boolean;
     /** The conversation's own temperature (task 12.4). */
     temperature?: number;
+    /** Reasoning past this many characters in one answer cuts it (a sub-agent's: nobody watches it). */
+    thinkingCap?: number;
     tools?: TurnTools;
     sink: (event: TurnEvent) => void;
     signal?: AbortSignal;
@@ -1578,10 +1591,19 @@ export class ConversationEngine {
       let truncated = false;
       let finished = false;
       const calls: ModelCall[] = [];
+      // A reasoning past its cap: this answer is cut, the turn's own signal untouched.
+      const overthinking = new AbortController();
+      let thought = 0;
       const take = (piece: DemuxEvent): void => {
+        if (overthinking.signal.aborted) return;
         if (piece.type === 'tool-call') calls.push({ id: `call-${randomUUID()}`, name: piece.name, input: piece.input });
+        if (piece.type === 'thinking' && run.thinkingCap !== undefined) {
+          thought += piece.delta.length;
+          if (thought > run.thinkingCap) overthinking.abort();
+        }
         sink(piece);
       };
+      const completionSignal = signal ? AbortSignal.any([signal, overthinking.signal]) : overthinking.signal;
       try {
         for await (const event of client.complete({
           prompt,
@@ -1590,8 +1612,9 @@ export class ConversationEngine {
           returnProgress: true,
           sampling: { stop: [...family.stop], ...(run.temperature !== undefined ? { temperature: run.temperature } : {}) },
           ...(grammar ?? {}),
-          ...(signal ? { signal } : {}),
+          signal: completionSignal,
         })) {
+          if (overthinking.signal.aborted) break;
           if (event.type === 'token') {
             finishReread();
             raw += event.text;
@@ -1612,8 +1635,9 @@ export class ConversationEngine {
             truncated = stats.truncated === true;
           }
         }
-        for (const piece of demux.flush()) take(piece);
+        if (!overthinking.signal.aborted) for (const piece of demux.flush()) take(piece);
         finishReread();
+        if (overthinking.signal.aborted && !signal?.aborted) throw overthinking.signal.reason;
         // The stream ended without its final event: the person stopped it (it may end quietly then),
         // or the engine went away.
         if (!finished) {
@@ -1623,6 +1647,11 @@ export class ConversationEngine {
         }
       } catch (error) {
         finishReread();
+        if (overthinking.signal.aborted && !signal?.aborted) {
+          // Its own journal keeps what it wrote; the turn ends here, said by whoever runs it.
+          await journal.append({ kind: 'assistant', raw, usage, ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
+          return { usage, overthought: run.thinkingCap! };
+        }
         if (signal?.aborted) {
           await journal.append({ kind: 'assistant', raw, stopped: 'user', ...answerOf, rendered: roundOpening + raw + family.endAssistant(raw) });
           return { usage, stopped: 'user' as const };

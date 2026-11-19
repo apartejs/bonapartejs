@@ -1238,6 +1238,23 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   An exit code arrives as Windows gives it (`>>> 0` to compare), and
   Node's `process.exit(0xC0000135)` keeps it whole on Windows only. Test an
   install in Windows Sandbox before saying it works on any machine.
+- **One `turn-start` per call to the model, a `text-flush` before it.**
+  aparté starts its reasoning and text blocks afresh only on a `turn-start`
+  (its own runner sends one before each model call, a sub-agent's under its
+  `agentId`, and a `text-flush` at each call's end); the core sent one per
+  reply, so every later round's reasoning went into the first block, already
+  settled (« Réflexion terminée » while it still came). And aparté's parser
+  holds a text that ends on a backtick until more comes: without a flush, a
+  turn-start or the run's end dropped it (« La valeur est » for « La valeur
+  est `42` »). A sub-agent resumed after a pause opens a turn too. No test
+  saw it: no fake model reasoned and called tools in the same reply.
+- **A sub-agent's grammar admits every tool its prompt shows.** It shares
+  the conversation's frozen prompt, whole inventory included; a grammar of
+  its own tools only bent a call it meant (`write_file`, in « read ») into
+  the nearest name allowed (`browser_read`), 18 times in a row on a real
+  model. Its registry refuses what is not its own, in words it can act on;
+  the same call failing three times stops it, and a reasoning past
+  `SUBAGENT_THINKING_CHARS` cuts its answer — both said to the main agent.
 
 ## Real-model smoke results
 

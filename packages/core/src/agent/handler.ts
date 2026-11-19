@@ -203,8 +203,7 @@ function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Respo
         const result: TurnResult = await runTurn(
           (event) => write(event),
           (event) => {
-            const line = turnEventToWire(event, rereading);
-            if (line) write(line);
+            for (const line of turnEventToWire(event, rereading)) write(line);
           },
           stop.signal,
         );
@@ -215,6 +214,8 @@ function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Respo
           return;
         }
         const { usage } = result;
+        // The last text the turn wrote, whole: aparté's parser may still hold its end (a closing backtick).
+        write({ type: 'text-flush' });
         if (result.suspended) {
           // The turn waits for a person, or for the window: the page answers, and resumes with the ticket.
           write({

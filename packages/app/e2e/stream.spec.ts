@@ -106,6 +106,23 @@ test('what the model thinks after a tool is a block of its own, never added to t
   await expect(blocks.nth(1)).toHaveText('Je relis ce que j’ai lu.');
 });
 
+test('a text that ends on a backtick is shown whole, before a tool and at the end of the answer', async ({ launch }) => {
+  const Q = '<|"|>';
+  const answered = (prompt: string) => prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user');
+  const { page, home } = await launch({
+    engine: {
+      responder: (prompt) => (answered(prompt) ? 'La valeur est `42`' : `Je lis \`notes.txt\`<|tool_call>call:read_file{path:${Q}notes.txt${Q}}<tool_call|>`),
+    },
+  });
+  await writeFile(join(home, 'notes.txt'), 'une note\n');
+  const ui = chat(page);
+  await ui.send('Lis notes.txt');
+  const texts = page.locator('aparte-chat-bubble[data-role="assistant"] .aparte-segment-text');
+  await expect(texts.last()).toContainText('La valeur est 42', { timeout: 20_000 });
+  await expect(texts.last().locator('code')).toHaveText('42');
+  await expect(texts.first().locator('code')).toHaveText('notes.txt');
+});
+
 test('what the model thinks is kept apart from what it answers', async ({ launch }) => {
   const { page } = await launch({
     engine: { responder: () => '<|channel>thought\nIl me salue, je salue.<channel|>Bonjour Paul.' },

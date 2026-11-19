@@ -8,7 +8,17 @@
 import type { StreamRunEvent } from '@aparte/engine';
 import type { TurnEvent } from '../conversation/engine.js';
 
-export function turnEventToWire(event: TurnEvent, rereading: { on: boolean }, agentId?: string): StreamRunEvent | null {
+export function turnEventToWire(event: TurnEvent, rereading: { on: boolean }, agentId?: string): StreamRunEvent[] {
+  const one = turnEventToLine(event, rereading, agentId);
+  if (event.type === 'round') {
+    // The text of the round before is flushed first: aparté's parser holds a text that ends on a backtick or on half a
+    // tag until more comes, and a turn-start drops what it holds (aparté's own runner flushes at each call's end too).
+    return [{ type: 'text-flush', ...(agentId ? { agentId } : {}) } as StreamRunEvent, ...(one ? [one] : [])];
+  }
+  return one ? [one] : [];
+}
+
+function turnEventToLine(event: TurnEvent, rereading: { on: boolean }, agentId?: string): StreamRunEvent | null {
   const mine = agentId ? { agentId } : {};
   switch (event.type) {
     case 'text':

@@ -435,6 +435,22 @@ describe('the agent handler — the tools', () => {
     expect(joined(lines.slice(second), 'thinking-delta')).not.toContain('first');
   });
 
+  it('the text of a round is flushed before the next turn begins, and before the run ends: none of it stays held', async () => {
+    const { handler } = await setup({
+      responder: (prompt) =>
+        prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user')
+          ? 'La valeur est `42`'
+          : `Je lis \`a.ts\`<|tool_call>call:read_file{path:${Q}surely-not-here.txt${Q}}<tool_call|>`,
+    });
+    const lines = await linesOf(await handler(post(turn(user('Lis ce fichier')))));
+    const kinds = lines.map((line) => line.type);
+    // aparté's parser holds a text that ends on a backtick until more comes: a turn-start without a flush drops it.
+    const second = kinds.lastIndexOf('turn-start');
+    expect(kinds.slice(0, second)).toContain('text-flush');
+    expect(kinds.lastIndexOf('text-flush')).toBeGreaterThan(kinds.lastIndexOf('text-delta'));
+    expect(kinds.lastIndexOf('text-flush')).toBeLessThan(kinds.indexOf('run-done'));
+  });
+
   it('a call to ask about ends the stream with run-suspended: its pending call, and a ticket', async () => {
     const { handler } = await setup({
       responder: call(`<|tool_call>call:edit_file{path:${Q}a.ts${Q},old_string:${Q}a${Q},new_string:${Q}b${Q}}<tool_call|>`),
