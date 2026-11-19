@@ -43,14 +43,25 @@ test('the agent’s keys: Ctrl Maj M changes the mode, Échap stops a reply, Ctr
   await page.keyboard.press('Control+Shift+M');
   await expect(ui.modeShown).toHaveText('Plume');
 
+  // In the composer, aparté's own stop key (aparté 1.14, apartejs/aparte#264).
+  await expect(page.locator('.bonaparte-live-chat:not([hidden]) aparte-composer')).toHaveAttribute('stop-key', 'Escape');
   await ui.send('Raconte');
   await expect.poll(async () => ((await ui.replyText.textContent()) ?? '').length).toBeGreaterThanOrEqual(12);
+  await ui.editor.click();
   await page.keyboard.press('Escape');
   await expect.poll(() => server.aborted, { timeout: 2_000 }).toBe(1);
   await expect(ui.streamingReplies).toHaveCount(0);
 
+  // Elsewhere in the window, the app's own listener.
+  await ui.send('Encore');
+  await expect.poll(async () => ((await ui.replyText.textContent()) ?? '').length).toBeGreaterThanOrEqual(12);
+  await page.getByRole('button', { name: 'Rechercher dans les conversations' }).focus();
+  await page.keyboard.press('Escape');
+  await expect.poll(() => server.aborted, { timeout: 2_000 }).toBe(2);
+  await expect(ui.streamingReplies).toHaveCount(0);
+
   await page.keyboard.press('Control+Alt+Z');
-  await expect(page.getByRole('dialog', { name: 'Revenir avant « Raconte » ?' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Revenir avant « Encore » ?' })).toBeVisible();
 });
 
 test('Échap on a page over the conversation never stops the reply it hides (review 12)', async ({ launch }) => {

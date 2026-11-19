@@ -56,7 +56,9 @@ test('a trial the model starts itself (extension_run) reaches the window: its «
   await ui.editor.click();
   await page.keyboard.type('/');
   await expect(page.getByRole('listbox').getByRole('option', { name: /changelog/ })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('listbox')).toContainText('À l’essai');
+  // The row itself carries « À l'essai » (aparté 1.14's badge), filtered too: a group heading goes while one types.
+  await page.keyboard.type('chang');
+  await expect(page.getByRole('listbox').getByRole('option', { name: /changelog/ })).toContainText('À l’essai');
 });
 
 test('a trial ends from the Plugins page: « Arrêter l’essai » — its « / » command goes with it', async ({ launch }) => {

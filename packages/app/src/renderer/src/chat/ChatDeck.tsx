@@ -72,6 +72,9 @@ function LiveChatView({
         emptyState={<p className="bonaparte-empty">{messages.chat.empty}</p>}
         // The window is one page: a link in a reply never takes it away (the main process refuses too).
         onLinkClick={(_detail, event) => event.preventDefault()}
+        // Échap stops the reply while the focus is in the composer, once nothing in it took the key (aparté 1.14,
+        // apartejs/aparte#264); elsewhere in the window, the app's own listener does.
+        stopKey="Escape"
         aboveComposer={shown ? props.aboveComposer : undefined}
         toolbar={shown ? props.toolbar : undefined}
       />

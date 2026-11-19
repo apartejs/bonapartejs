@@ -60,22 +60,19 @@ export function prefill(text: string, field: Composer | null = shownComposer()):
 
 /** aparté's editor inside the composer: where a pill goes. */
 interface ComposerEditor {
-  focusEnd(): void;
   getCaret(): { offset: number } | null;
   insertToken(from: number, to: number, token: AparteComposerToken): void;
 }
 
 /**
  * Something of the page attached to the message (task 10.2): a pill after what the person is writing — it shows
- * its label, and the message says its `text` in its place. The composer has no method for it: the pill goes in
- * through its editor, at a caret placed at the end (apartejs/aparte#259).
+ * its label, and the message says its `text` in its place: at the caret, else after what was written — an offset
+ * past the end of the draft is its end (aparté 1.14, apartejs/aparte#259). The insert takes the focus, and Undo knows it.
  */
 export function attachToken(token: AparteComposerToken, field: Composer | null = shownComposer()): boolean {
   const editor = field?.querySelector('aparte-composer-input') as unknown as ComposerEditor | null | undefined;
   if (!editor) return false;
-  editor.focusEnd();
-  const at = editor.getCaret()?.offset;
-  if (at === undefined) return false;
+  const at = editor.getCaret()?.offset ?? Number.POSITIVE_INFINITY;
   editor.insertToken(at, at, token);
   return true;
 }

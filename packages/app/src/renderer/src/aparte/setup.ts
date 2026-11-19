@@ -10,6 +10,8 @@ import { fr } from '@aparte/locales/fr';
 import { setupAskUser } from '@aparte/plugin-ask-user';
 import { setupShikiProvider } from '@aparte/plugin-shiki';
 import { setupStreamingMarkdownProvider } from '@aparte/plugin-streaming-markdown';
+import { messagesFor } from '../i18n/index';
+import { setupErrorCard } from './errors';
 
 export function setupAparte(locale: Locale): void {
   setupStreamingMarkdownProvider();
@@ -29,4 +31,6 @@ export function setupAparte(locale: Locale): void {
 export function setAparteLocale(locale: Locale): void {
   if (locale === 'fr') aparteGlobalConfig.setLocale(fr);
   else aparteGlobalConfig.resetLocale();
+  // A reply the engine cut says so in its bubble, in this language (aparté 1.14, apartejs/aparte#265).
+  setupErrorCard(messagesFor(locale).failures.engineDied.inReply);
 }

@@ -42,6 +42,16 @@ test('« Une partie sur le processeur » holds for that model, said in « Moteur
   await expect(page.getByRole('button', { name: 'Redémarrer maintenant' })).toBeVisible();
 });
 
+test('the reply the engine cut says so in its own bubble, after a reload too (aparté 1.14, apartejs/aparte#265)', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'un deux trois quatre cinq', failAfter: 2 } });
+  await chat(page).send('Compte');
+  const said = 'Le moteur s’est arrêté pendant cette réponse. La conversation est sauve ; sa mémoire est à relire.';
+  const bubble = page.locator('.bonaparte-live-chat:not([hidden]) .aparte-segment-error[data-app-code="engine-died"]');
+  await expect(bubble).toContainText(said, { timeout: 15_000 });
+  await page.reload();
+  await expect(bubble).toContainText(said, { timeout: 15_000 });
+});
+
 test('the engine stops during a reply: what is safe, what is lost, its log, and « Relancer et relire »', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: () => 'un deux trois quatre cinq', failAfter: 2 } });
   await chat(page).send('Compte');

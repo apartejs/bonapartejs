@@ -1046,6 +1046,8 @@ export interface Messages {
       pickFailed(reason: string): string;
     };
     engineDied: {
+      /** What the reply the engine cut says in its own bubble, after a reload too (aparté 1.14, apartejs/aparte#265). */
+      inReply: string;
       context: string;
       title: string;
       headline(code: string | null): string;

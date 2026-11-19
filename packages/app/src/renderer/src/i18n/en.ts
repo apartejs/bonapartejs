@@ -1104,6 +1104,7 @@ export const en: Messages = {
       pickFailed: (reason) => `This file is not a llama.cpp that answers: ${reason}`,
     },
     engineDied: {
+      inReply: 'The engine stopped during this reply. The conversation is safe; its memory has to be read again.',
       context: 'During a reply',
       title: 'The engine stopped',
       headline: (code) => (code ? `llama-server quit suddenly (code ${code})` : 'llama-server quit suddenly'),

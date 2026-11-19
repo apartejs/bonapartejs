@@ -324,13 +324,13 @@ function Workspace({
     [plugins, locale],
   );
   // The « / » commands of the plugins that run (task 11.4): a plugin tried in a conversation, there only, under
-  // « À l'essai » (a group: a row carries no badge, apartejs/aparte#261). Run, the command asks its plugin, which
+  // « À l'essai », the row's own badge, filtered too (aparté 1.14, apartejs/aparte#261). Run, the command asks its plugin, which
   // says what to send in the person's name or to tell.
   const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages });
   commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages };
   useEffect(() => {
     const collect = (event: Event): void => {
-      const detail = (event as CustomEvent<{ add(command: { id: string; name: string; description: string; group?: string; order: number; run(context: { notify(text: string): void }): void }): void }>).detail;
+      const detail = (event as CustomEvent<{ add(command: { id: string; name: string; description: string; badge?: string; order: number; run(context: { notify(text: string): void }): void }): void }>).detail;
       const now = commandsOf.current;
       for (const plugin of now.plugins) {
         if (plugin.builtin || !plugin.active || !plugin.enabled) continue;
@@ -340,7 +340,7 @@ function Workspace({
             id: `plugin:${plugin.id}:${command.name}`,
             name: command.name,
             description: localize(command.description, now.locale),
-            ...(plugin.trial !== undefined ? { group: now.messages.plugins.card.trialGroup } : {}),
+            ...(plugin.trial !== undefined ? { badge: now.messages.plugins.card.trialGroup } : {}),
             order: 300,
             run: (context) =>
               void bridge
@@ -1198,7 +1198,8 @@ function Workspace({
   useShortcut('terminal', () => togglePaneKey('terminal'));
   useShortcut('browser', () => togglePaneKey('browser'));
   // Échap stops the reply of the conversation shown, when nothing else takes it: no request or question waits, no
-  // dialog or menu is open, and the key was not typed in a field of its own (apartejs/aparte#264).
+  // dialog or menu is open, and the key was not typed in a field of its own. In the composer, aparté's own stop key
+  // answers first and cancels the key (aparté 1.14, apartejs/aparte#264): this listener is for the rest of the window.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape' || event.defaultPrevented || event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;

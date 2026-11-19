@@ -63,24 +63,28 @@ describe('a message sent in the person’s name', () => {
 });
 
 describe('something of the page attached to the message (task 10.2)', () => {
-  /** aparté's editor as it stands: a draft where each pill counts one character, a caret at the end once focused. */
-  function withEditor(draft: string) {
+  /** aparté's editor as it stands (1.14): a draft where each pill counts one character, its caret when it has one. */
+  function withEditor(draft: string, caret: number | null) {
     const inserted: { from: number; to: number; token: unknown }[] = [];
-    let focused = false;
     const input = {
-      focusEnd: () => void (focused = true),
-      getCaret: () => (focused ? { text: draft, offset: draft.length } : null),
+      getCaret: () => (caret === null ? null : { text: draft, offset: caret }),
       insertToken: (from: number, to: number, token: unknown) => void inserted.push({ from, to, token }),
     };
     const field = { querySelector: (selector: string) => (selector === 'aparte-composer-input' ? input : null) } as unknown as Composer;
     return { field, inserted };
   }
 
-  it('goes as a pill after what the person is writing, the message saying it in full', () => {
-    const { field, inserted } = withEditor('Regarde ça :');
+  it('goes as a pill after what the person wrote — an offset past the end is its end (aparté 1.14) — the message saying it in full', () => {
+    const { field, inserted } = withEditor('Regarde ça :', null);
     const token = { label: 'td.hours', text: 'This element: `td.hours`', kind: 'page-element' };
     expect(attachToken(token, field)).toBe(true);
-    expect(inserted).toEqual([{ from: 12, to: 12, token }]);
+    expect(inserted).toEqual([{ from: Number.POSITIVE_INFINITY, to: Number.POSITIVE_INFINITY, token }]);
+  });
+
+  it('goes at the caret when the person left one in the draft', () => {
+    const { field, inserted } = withEditor('Regarde ça : et ça', 12);
+    expect(attachToken({ label: 'x' }, field)).toBe(true);
+    expect(inserted[0]).toMatchObject({ from: 12, to: 12 });
   });
 
   it('without a composer, nothing is attached', () => {

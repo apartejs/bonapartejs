@@ -50,8 +50,9 @@ import ptyProcessPath from './terminals/pty-process?modulePath';
 import pluginProcessPath from './plugin-host/plugin-process?modulePath';
 import { pluginProcessStarter, type UtilityProcessLike } from './plugin-host/process-host.js';
 import { PLUGIN_SCHEME, servePluginFile } from './plugin-host/protocol.js';
-// A path, not the package: the main build keeps packages outside, and only a file it bundles is read as text.
-// aparté gives its kit to a frame no other way (apartejs/aparte#260).
+// A path, not the package: the main build keeps packages outside, and only a file it bundles is read as text —
+// `@aparte/core/styles.css?raw` stays an import at run time there. The frame's theme is the app's protocol
+// (apartejs/aparte#260, not planned on aparté's side).
 import kitStyles from '../../node_modules/@aparte/core/dist/index.css?raw';
 import appTokens from '../renderer/src/theme/tokens.css?raw';
 import { createTerminalService } from './terminals/pty-host.js';
