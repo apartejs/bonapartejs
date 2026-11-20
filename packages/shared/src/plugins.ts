@@ -47,6 +47,8 @@ const toolSchema = z
     description: z.string().min(1).max(400),
     effect: pluginEffect,
     inputSchema: z.record(z.string(), z.unknown()).optional(),
+    /** Kept for the conversations told of it before, never told to a new one (a tool another replaced). */
+    hidden: z.boolean().optional(),
   })
   .strict();
 

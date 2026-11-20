@@ -50,6 +50,19 @@ describe('what the model reads of the browser (audit 2026-11-21, I3)', () => {
 });
 
 describe('the built-in browser plugin (task 10.1)', () => {
+  it('one browser_open for a page or a file; browser_open_file kept for the conversations told of it, hidden from new ones, pointing to it (Paul, 2026-11-20)', async () => {
+    const tools = browserManifest.contributes?.tools ?? [];
+    const open = tools.find((tool) => tool.name === 'browser_open')!;
+    expect(Object.keys((open.inputSchema as { properties: object }).properties)).toEqual(['url', 'path']);
+    expect(open.description).toContain('path for a file of the project as for read_file');
+    expect(tools.find((tool) => tool.name === 'browser_open_file')?.hidden).toBe(true);
+    expect(tools.filter((tool) => tool.hidden).map((tool) => tool.name)).toEqual(['browser_open_file']);
+    const asked: string[] = [];
+    const call = await rig({ openFile: async (path) => (asked.push(path), { url: 'file:///C:/projet/a.html', title: 'A' }) }, ['C:/projet']);
+    expect(await call('browser_open_file', { path: 'a.html' })).toEqual({ content: 'Use browser_open with the same path.', failed: true });
+    expect(asked).toEqual([]);
+  });
+
   it('declares its tools with the effects of §9: open network, open a file of the project, read and screenshot read, act execute', () => {
     expect(browserManifest.contributes?.tools?.map((tool) => [tool.name, tool.effect])).toEqual([
       ['browser_open', 'network'],
@@ -81,9 +94,10 @@ describe('the built-in browser plugin (task 10.1)', () => {
       },
       ['C:/projet'],
     );
-    expect(await call('browser_open_file', { path: 'bac/snake3.html' })).toEqual({ content: 'Opened file:///C:/projet/bac/snake3.html (Snake) in the browser.' });
-    expect(await call('browser_open_file', { path: 'bac/none.html' })).toMatchObject({ failed: true, content: expect.stringMatching(/no file/) });
-    expect(await call('browser_open_file', {})).toMatchObject({ failed: true, content: expect.stringMatching(/path/) });
+    // One tool opens a page or a file (Paul, 2026-11-20): a path, as for read_file.
+    expect(await call('browser_open', { path: 'bac/snake3.html' })).toEqual({ content: 'Opened file:///C:/projet/bac/snake3.html (Snake) in the browser.' });
+    expect(await call('browser_open', { path: 'bac/none.html' })).toMatchObject({ failed: true, content: expect.stringMatching(/no file/) });
+    expect(await call('browser_open', {})).toMatchObject({ failed: true, content: expect.stringMatching(/path/) });
     // The address a model writes for a file goes the same way: a file of the perimeter, never a page of the disk.
     expect(await call('browser_open', { url: 'file:///C:/projet/bac/snake3.html' })).toEqual({ content: 'Opened file:///C:/projet/bac/snake3.html (Snake) in the browser.' });
     expect(asked.map(([path]) => path)).toEqual(['bac/snake3.html', 'bac/none.html', 'C:/projet/bac/snake3.html']);
@@ -101,7 +115,7 @@ describe('the built-in browser plugin (task 10.1)', () => {
 
   it('a page kept off the network is said so to the model: what it loads from the internet is blocked (review of 2026-11-20)', async () => {
     const call = await rig({ openFile: async () => ({ url: 'file:///C:/projet/a.html', title: 'A', offline: true }) }, ['C:/projet']);
-    expect(await call('browser_open_file', { path: 'a.html' })).toEqual({
+    expect(await call('browser_open', { path: 'a.html' })).toEqual({
       content: 'Opened file:///C:/projet/a.html (A) in the browser. Its page is kept off the network here: what it loads from the internet or from a server of this machine is blocked.',
     });
   });

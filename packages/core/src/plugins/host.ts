@@ -561,7 +561,7 @@ export class PluginHost {
         openFile: (path, from) =>
           within('read', 'open a file', async () => {
             const access = await accessOf(from.conversationId);
-            if (!access.files) return { error: 'A discussion reaches no file: open a page of the internet with browser_open instead.' };
+            if (!access.files) return { error: 'A discussion has no folder, so it opens no file: give browser_open the http(s) address of a page instead.' };
             const opened = await openPerimeterFile(browser, path, from.roots, access.network, callerOf(from.conversationId, access));
             return 'error' in opened || access.network ? opened : { ...opened, offline: true };
           }),
@@ -578,6 +578,7 @@ export class PluginHost {
       effect: tool.effect,
       source: plugin.builtin ? 'plugin' : 'extension',
       where: 'core',
+      ...(tool.hidden ? { hidden: true as const } : {}),
     };
   }
 

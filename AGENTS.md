@@ -792,7 +792,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `testing/fake-openai-server.ts`.
 - **The discussion** (task 9.7): a conversation without a project
   (`kind: 'discussion'`, `?kind=discussion` on its first turn) has the
-  network tools only and Lecture, no mode switch, no code panes;
+  network tools only and Lecture, no mode switch, no code panes — and
+  the whole built-in browser on web pages (Paul, 2026-11-20): its tools
+  (`toolsFor`), its « Navigateur » pane and Ctrl Maj B, never a file;
+  `browser_act` asked each time there (`PermissionEngine.forDiscussion`),
+  never refused by its Lecture, never free;
   `attachProject` makes it a code conversation, the project and its tools
   told as notes at the next turn. At launch, a new conversation starts in
   the project made last.
@@ -815,8 +819,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   an agent's session a request no page names (a service worker's) is judged
   as its page's (`blockedWithoutPage`), in the person's it passes —,
   http(s) only, never `bonaparte://` — and one `file:`: a file of the
-  conversation's folders the agent opened (`browser_open_file`, read; a
-  `file:///` given to `browser_open` goes the same way), checked by the host
+  conversation's folders the agent opened (`browser_open` with a `path`, or
+  a `file:///` address: a read, `effectOfCall`; one tool opens a page or a
+  file, Paul, 2026-11-20 — `browser_open_file` is kept `hidden` for the
+  conversations told of it, and says to use it), checked by the host
   (`openPerimeterFile`: in the perimeter, its links resolved, a file; never
   for a discussion), its page loading from the folder of the perimeter that
   holds it and from nowhere else of the disk — every `file:` request judged
@@ -827,8 +833,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   is (`browser.place`, measured on resize and every 300 ms); the page is
   taken off whenever anything covers it — a dialog, a page over the
   conversation, the pane hidden — since a native view sits above the
-  window's page. The agent's `browser_open` (network: loopback and public
-  addresses, never a private one), `browser_read` and `browser_screenshot`
+  window's page. The agent's `browser_open` (an address: network, loopback
+  and public addresses, never a private one), `browser_read` and `browser_screenshot`
   (read) and `browser_act` (execute) work on their conversation's own tab
   (`agent:<conversation>`, made at its first page, marked « Agent » in that
   conversation's pane and in no other's; each conversation's pane keeps its

@@ -24,22 +24,25 @@ export const browserManifest = defineManifest({
       {
         name: 'browser_open',
         description:
-          'Open an http(s) address in your own browser tab: a page of the internet, or of this machine (a dev server, localhost:5173), then read it with browser_read. ' +
-          'Use it to see a page or an app run. Your tab is a session of its own, with none of the user’s logins or cookies, and an address of the private network is refused.',
+          'Open a page or a file in your own browser tab, then read it with browser_read. ' +
+          'Give url for an http(s) address (of the internet, or of this machine: localhost:5173), or path for a file of the project as for read_file (index.html). ' +
+          'Your tab is a session of its own, with none of the user’s logins or cookies; a private network address is refused.',
         effect: 'network',
-        inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'The address, http or https.' } }, required: ['url'] },
-      },
-      {
-        name: 'browser_open_file',
-        description:
-          'Open a file of the project in your own browser tab, to see a page you wrote run (index.html). ' +
-          'Give its path as for read_file, then read it with browser_read. Only a file inside the project’s folders opens.',
-        effect: 'read',
         inputSchema: {
           type: 'object',
-          properties: { path: { type: 'string', description: 'The path of the file, in the project (bac/snake.html).' } },
-          required: ['path'],
+          properties: {
+            url: { type: 'string', description: 'An http(s) address.' },
+            path: { type: 'string', description: 'Or the path of a file of the project, as for read_file.' },
+          },
         },
+      },
+      {
+        // Kept for the conversations told of it before: one tool opens a page or a file now (Paul, 2026-11-20).
+        name: 'browser_open_file',
+        description: 'Replaced by browser_open: give it the same path to open a file in your own browser tab.',
+        effect: 'read',
+        hidden: true,
+        inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
       },
       {
         name: 'browser_read',

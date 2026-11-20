@@ -1,6 +1,7 @@
 /**
  * A discussion (task 9.7, aligned with the market): a conversation without a project reaches no file and runs
  * nothing — no mode switch, no code panes, no file tool told to the model; it is listed under « Discussions ».
+ * It has the whole built-in browser on web pages, its pane and its tools, its act asked each time (Paul, 2026-11-20).
  * « Travailler dans un projet… » makes it a code conversation of a project: its mode switch, its tools.
  */
 
@@ -10,17 +11,26 @@ import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 
-test('without a project, a new conversation is a discussion: no mode switch, no code panes, no file tool (task 9.7)', async ({ launch }) => {
+test('without a project, a new conversation is a discussion: no mode switch, no code panes, no file tool — the browser, on web pages (task 9.7; Paul, 2026-11-20)', async ({ launch }) => {
   const prompts: string[] = [];
   const { page } = await launch({ project: false, engine: { responder: () => 'Bonjour à toi.', onCompletion: (body) => prompts.push(String(body['prompt'])) } });
   const ui = chat(page);
   await expect(ui.editor).toBeVisible();
   await expect(ui.modeShown).toHaveCount(0);
-  await expect(page.getByRole('group', { name: 'Volets' })).toHaveCount(0);
+  // Its panes: the browser alone — no folder, so no Fichiers, Changements nor terminal.
+  const toggles = page.getByRole('group', { name: 'Volets' });
+  await expect(toggles.getByRole('button')).toHaveCount(1);
+  await expect(toggles.getByRole('button', { name: 'Navigateur', exact: true })).toBeVisible();
+  await page.keyboard.press('Control+Shift+B');
+  await expect(page.getByRole('region', { name: 'Navigateur', exact: true })).toBeVisible();
+  await page.keyboard.press('Control+Shift+B');
+  await expect(page.getByRole('region', { name: 'Navigateur', exact: true })).toHaveCount(0);
   await ui.send('Bonjour');
   await expect(ui.replyText).toHaveText('Bonjour à toi.', { timeout: 15_000 });
   expect(prompts.at(-1)).toContain('web_fetch');
-  expect(prompts.at(-1)).not.toMatch(/read_file|edit_file|run_command/);
+  // The whole browser on web pages; one tool opens a page or a file, and a discussion opens no file.
+  for (const name of ['browser_open', 'browser_read', 'browser_screenshot', 'browser_act']) expect(prompts.at(-1)).toContain(`declaration:${name}{`);
+  expect(prompts.at(-1)).not.toMatch(/read_file|edit_file|run_command|browser_open_file/);
   await expect(page.getByRole('group', { name: 'Discussions', exact: true })).toContainText('Bonjour');
   await expect(ui.modeShown).toHaveCount(0);
 });

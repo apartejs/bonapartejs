@@ -91,3 +91,35 @@ describe('the matrix of the design document', () => {
     expect(run.verdict === 'deny' ? run.reason : '').toContain('update_plan');
   });
 });
+
+describe('a discussion has the whole built-in browser; one browser_open for a page or a file (Paul, 2026-11-20)', () => {
+  const plugin = (name: string, effect: ToolEffect): ToolDef => ({ ...tool(name, effect), source: 'plugin' });
+  const dataDir = () => join(project, '..', 'bonaparte-data');
+
+  it('acting on a page is asked each time in a discussion — never refused by its Lecture, never let through by a rule', () => {
+    const remembered = () => [{ tool: 'browser_act' }];
+    const discussion = new PermissionEngine({ roots: () => [], dataDir: dataDir(), rules: remembered }).forDiscussion();
+    const act = { tool: plugin('browser_act', 'execute'), input: { action: 'click', selector: 'a' } };
+    for (const mode of MODES) expect(discussion.evaluate({ ...act, mode })).toEqual({ verdict: 'ask', why: 'mode' });
+    // A code conversation in Lecture runs nothing, its act included.
+    expect(new PermissionEngine({ roots: () => [project], dataDir: dataDir() }).evaluate({ ...act, mode: 'lecture' }).verdict).toBe('deny');
+    // Reading and picturing its page pass; opening one is the network, asked as « ask before the network » says.
+    expect(discussion.evaluate({ tool: plugin('browser_read', 'read'), input: {}, mode: 'lecture' })).toEqual({ verdict: 'allow' });
+    expect(discussion.evaluate({ tool: plugin('browser_open', 'network'), input: { url: 'https://example.com' }, mode: 'lecture' })).toEqual({
+      verdict: 'ask',
+      why: 'network',
+    });
+    const relaxed = new PermissionEngine({ roots: () => [], dataDir: dataDir(), askBeforeNetwork: () => false }).forDiscussion();
+    expect(relaxed.evaluate({ tool: plugin('browser_open', 'network'), input: { url: 'https://example.com' }, mode: 'lecture' })).toEqual({ verdict: 'allow' });
+  });
+
+  it('browser_open of a file of the project is a read, of an address the network', () => {
+    const engine = new PermissionEngine({ roots: () => [project], dataDir: dataDir() });
+    const open = plugin('browser_open', 'network');
+    expect(engine.evaluate({ tool: open, input: { path: 'bac/snake.html' }, mode: 'lecture' })).toEqual({ verdict: 'allow' });
+    expect(engine.evaluate({ tool: open, input: { url: 'file:///C:/projet/a.html' }, mode: 'lecture' })).toEqual({ verdict: 'allow' });
+    expect(engine.evaluate({ tool: open, input: { url: 'http://localhost:5173' }, mode: 'lecture' })).toEqual({ verdict: 'ask', why: 'network' });
+    // Another plugin's tool of the same name is judged by what it declares.
+    expect(engine.evaluate({ tool: { ...open, source: 'extension' }, input: { path: 'a.html' }, mode: 'repetition' }).verdict).toBe('ask');
+  });
+});

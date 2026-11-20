@@ -17,6 +17,8 @@ export interface ToolDef {
   source: 'builtin' | 'plugin' | 'mcp' | 'extension';
   /** Where it runs: in the core, or in the window (`ask_user`). */
   where: 'core' | 'window';
+  /** Kept for the conversations told of it before, never told to a new one (`browser_open_file`). */
+  hidden?: true;
 }
 
 export interface ToolResult {

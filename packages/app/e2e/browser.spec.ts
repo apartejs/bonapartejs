@@ -164,7 +164,7 @@ test('the agent opens a page it wrote — a file of the project — and reads it
           const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
           const results = turn.split('<|tool_response>').length - 1;
           if (!turn.includes('serpent')) return 'ok';
-          if (results === 0) return `<|tool_call>call:browser_open_file{path:${Q}bac/snake3.html${Q}}<tool_call|>`;
+          if (results === 0) return `<|tool_call>call:browser_open{path:${Q}bac/snake3.html${Q}}<tool_call|>`;
           if (results === 1) return '<|tool_call>call:browser_read{}<tool_call|>';
           return 'Lu.';
         },
@@ -213,13 +213,12 @@ test('a discussion reaches no file: the address of one, given to browser_open, o
     await expect(chat(page).editor).toBeVisible();
     await page.getByRole('navigation', { name: 'Projets et conversations', exact: true }).getByRole('button', { name: 'Nouvelle discussion' }).click();
     await chat(page).send('Ouvre mes notes');
-    // browser_open is the network: asked in a discussion (Lecture) while « ask before the network » is on.
-    const card = page.getByRole('region', { name: 'Demande d’accord' });
-    await expect(card).toBeVisible({ timeout: 15_000 });
-    await card.getByRole('button', { name: 'Autoriser', exact: true }).click();
+    // A file is a read (Paul, 2026-11-20: one browser_open for a page or a file): nothing to ask — the host refuses
+    // it in words, a discussion having no folder.
     await expect(chat(page).replyText).toHaveText('Fini.', { timeout: 20_000 });
+    await expect(page.getByRole('region', { name: 'Demande d’accord' })).toHaveCount(0);
     const answered = prompts.at(-1) ?? '';
-    expect(answered).toContain('A discussion reaches no file');
+    expect(answered).toContain('A discussion has no folder, so it opens no file');
     expect(answered).not.toContain('secret du dossier');
   } finally {
     await rm(folder, { recursive: true, force: true });

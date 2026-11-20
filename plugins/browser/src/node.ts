@@ -60,27 +60,27 @@ export const browser = definePlugin({
       return { content: `Opened ${opened.url} (${opened.title || 'untitled'}) in the browser.${offline}` };
     };
 
+    // One tool opens a page or a file (Paul, 2026-11-20): an address goes online, a path is a file of the perimeter.
     ctx.registerToolHandler('browser_open', async ({ input, roots, conversationId }) => {
       if (!ctx.browser) return UNAVAILABLE;
-      const url = typeof (input as { url?: unknown })?.url === 'string' ? (input as { url: string }).url.trim() : '';
-      if (!url) return { content: 'Argument "url" is required: the address to open.', failed: true };
+      const given = (input ?? {}) as { url?: unknown; path?: unknown };
+      const url = typeof given.url === 'string' ? given.url.trim() : '';
+      const path = typeof given.path === 'string' ? given.path.trim() : '';
+      if (!url && !path) return { content: 'Give "url", an http(s) address, or "path", a file of the project as for read_file.', failed: true };
+      if (!url) return openFile(path, { conversationId, roots });
       // The address a model writes for a file it made: opened as that file, in the perimeter, never as a page of the disk.
       if (/^file:/i.test(url)) {
-        const path = pathOfFileUrl(url);
-        if (!path) return { content: `Could not open ${url}: it is not the address of a file of this machine. Give its path to browser_open_file.`, failed: true };
-        return openFile(path, { conversationId, roots });
+        const named = pathOfFileUrl(url);
+        if (!named) return { content: `Could not open ${url}: it is not the address of a file of this machine. Give its path as "path".`, failed: true };
+        return openFile(named, { conversationId, roots });
       }
       const opened = await ctx.browser.open(url, { conversationId });
       if ('error' in opened) return { content: `Could not open ${url}: ${opened.error}`, failed: true };
       return { content: `Opened ${opened.url} (${opened.title || 'untitled'}) in the browser.` };
     });
 
-    ctx.registerToolHandler('browser_open_file', async ({ input, roots, conversationId }) => {
-      if (!ctx.browser) return UNAVAILABLE;
-      const path = typeof (input as { path?: unknown })?.path === 'string' ? (input as { path: string }).path.trim() : '';
-      if (!path) return { content: 'Argument "path" is required: the file to open, as for read_file.', failed: true };
-      return openFile(path, { conversationId, roots });
-    });
+    // Told to the conversations frozen before only: browser_open opens a file now.
+    ctx.registerToolHandler('browser_open_file', async () => ({ content: 'Use browser_open with the same path.', failed: true }));
 
     // Each tool works on its conversation's own tab, never another's nor the person's (the browser redo, step 2).
     ctx.registerToolHandler('browser_read', async ({ conversationId }) => {

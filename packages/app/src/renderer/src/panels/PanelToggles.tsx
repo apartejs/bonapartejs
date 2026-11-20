@@ -22,13 +22,15 @@ export interface PanelTogglesProps {
   onToggle(pane: PaneName): void;
   /** The panes of plugins (task 11.2), after the app's own: their names as their manifests say them. */
   plugins?: readonly { pane: PaneName; label: string }[];
+  /** The app's panes offered, when not all: a discussion has the browser only (Paul, 2026-11-20). */
+  only?: readonly BuiltinPane[];
 }
 
-export function PanelToggles({ messages, open, waiting, browserOpened = false, onToggle, plugins = [] }: PanelTogglesProps) {
+export function PanelToggles({ messages, open, waiting, browserOpened = false, onToggle, plugins = [], only }: PanelTogglesProps) {
   const words = messages.panels;
   return (
     <div role="group" aria-label={words.group} className="aparte-btn-group panel-toggles">
-      {PANES.map((pane) => {
+      {PANES.filter((pane) => !only || only.includes(pane)).map((pane) => {
         const name = words[pane];
         const marked = (pane === 'changes' && waiting > 0) || (pane === 'browser' && browserOpened && !open.includes(pane));
         return (

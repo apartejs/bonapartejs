@@ -92,6 +92,23 @@ describe('buildSystemPrompt', () => {
     expect(toolsFor('code', TOOLS)).toHaveLength(TOOLS.length);
   });
 
+  it('a discussion has the whole built-in browser — open, read, picture, act —, never a tool kept only for old conversations (Paul, 2026-11-20)', () => {
+    const browser = (name: string, effect: ToolDef['effect']): ToolDef => ({ ...tool(name, effect), source: 'plugin' });
+    const kept: ToolDef = { ...browser('browser_open_file', 'read'), hidden: true };
+    const all = [
+      ...TOOLS,
+      browser('browser_open', 'network'),
+      kept,
+      browser('browser_read', 'read'),
+      browser('browser_screenshot', 'read'),
+      browser('browser_act', 'execute'),
+      // A third party's tool of the same name is not the browser's.
+      { ...tool('plugin__x__browser_read', 'read'), source: 'extension' as const },
+    ];
+    expect(toolsFor('discussion', all).map((one) => one.name)).toEqual(['web_fetch', 'browser_open', 'browser_read', 'browser_screenshot', 'browser_act']);
+    expect(toolsFor('code', all).map((one) => one.name)).not.toContain('browser_open_file');
+  });
+
   it('a discussion is given no MCP tool, even one its server says only reads: it reads files on this machine (review of phase 10)', () => {
     const mcpRead = { ...tool('mcp__files__read_file', 'network'), source: 'mcp' as const };
     expect(toolsFor('discussion', [...TOOLS, mcpRead]).map((one) => one.name)).toEqual(['web_fetch']);
@@ -189,8 +206,16 @@ describe('buildSystemPrompt — the method and the environment (audit 2026-11-21
   it('a discussion has its own short method: the web for what is recent, its sources named', () => {
     const { stable } = buildSystemPrompt(options({ kind: 'discussion', family: gemma }));
     expect(stable).toContain('search the web');
-    expect(stable).toContain('give the address');
     expect(stable).not.toMatch(/run_command|edit_file/);
+  });
+
+  it('a discussion names a source only for a fact read on a page, and says which tool reads a page and which sees it run (review of round 2, 7)', () => {
+    const { stable } = buildSystemPrompt(options({ kind: 'discussion', family: gemma }));
+    expect(stable).toContain('When a fact comes from a page you read, give its address.');
+    expect(stable).not.toContain('Say where a fact comes from');
+    expect(stable).toMatch(/web_fetch[^\n]*text/);
+    expect(stable).toMatch(/browser_open[^\n]*(run|act)/);
+    expect(stable).toContain('no folder');
   });
 
   it('names the platform in the shared turn — one machine, one seed —, nothing per conversation', () => {

@@ -69,10 +69,11 @@ const IDENTITY: Record<ConversationKind, (platform: string | undefined) => strin
   discussion: (platform) =>
     [
       `You are bonaparte, an assistant on the user’s computer${platform ? ` (${platform})` : ''}. ` +
-        'In this conversation you reach none of their files and run nothing: you answer from what you know, and from the web when a tool lets you.',
+        'In this conversation you have no folder: you reach none of their files and run nothing. You answer from what you know, and from the web when a tool lets you.',
       'How to work:',
       '- For anything recent, or that you are not sure of, search the web, then read the best result before you answer.',
-      '- Say where a fact comes from: give the address of the page you read it on.',
+      '- web_fetch reads the text of a page; browser_open opens a page in your own browser tab, to see it run or act on it.',
+      '- When a fact comes from a page you read, give its address.',
       '- If a call fails, read the error and change the call: never repeat it unchanged.',
       'Be precise and concise.',
     ].join('\n'),
@@ -83,13 +84,22 @@ const AMENDMENT =
   'The list of tools may be amended later in this conversation: an update will announce any tool added or ' +
   'removed, and it takes precedence over the list given here.';
 
+/** The built-in browser's tools a discussion has: its pages, never a file (Paul, 2026-11-20). */
+const DISCUSSION_BROWSER = new Set(['browser_open', 'browser_read', 'browser_screenshot', 'browser_act']);
+
 /**
  * A discussion reaches no file and runs nothing — the web only, as a conversation without a folder does in the
- * other assistants (task 9.7); its questions are the window's. A code conversation has every tool.
+ * other assistants (task 9.7), and the whole built-in browser on web pages (Paul, 2026-11-20: its act asked each
+ * time); its questions are the window's. A code conversation has every tool. A tool kept only for conversations
+ * told of it before (`hidden`) is told to none.
  */
 export function toolsFor(kind: ConversationKind, tools: readonly ToolDef[]): ToolDef[] {
+  const told = tools.filter((tool) => !tool.hidden);
+  if (kind === 'code') return told;
   // An MCP tool is never a discussion's, whatever its effect: a server's « read-only » tool reads this machine's files.
-  return kind === 'code' ? [...tools] : tools.filter((tool) => tool.effect === 'network' && tool.source !== 'mcp');
+  return told.filter(
+    (tool) => (tool.effect === 'network' && tool.source !== 'mcp') || (tool.source === 'plugin' && DISCUSSION_BROWSER.has(tool.name)),
+  );
 }
 
 /**

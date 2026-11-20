@@ -157,15 +157,44 @@ function refusal(mode: PlayMode, effect: KnownEffect): string {
   return 'This call is not allowed in this mode.';
 }
 
+/** The built-in browser's tool, not a third party's of the same name. */
+function builtinBrowser(tool: ToolDef, name: string): boolean {
+  return tool.source === 'plugin' && tool.name === name;
+}
+
+/**
+ * What a call does: what its tool declares — but one browser_open opens a page or a file (Paul, 2026-11-20): a file
+ * of the project (`path`, or a `file:` address) is a read, which the host checks is in the perimeter; an address
+ * is the network.
+ */
+export function effectOfCall(tool: ToolDef, input: unknown): ToolEffect {
+  if (!builtinBrowser(tool, 'browser_open') || typeof input !== 'object' || input === null) return tool.effect;
+  const { url, path } = input as Record<string, unknown>;
+  if (typeof url === 'string' && url.trim() !== '') return /^\s*file:/i.test(url) ? 'read' : tool.effect;
+  return typeof path === 'string' && path.trim() !== '' ? 'read' : tool.effect;
+}
+
 export class PermissionEngine {
-  constructor(private readonly deps: PermissionEngineDeps) {}
+  constructor(
+    private readonly deps: PermissionEngineDeps,
+    private readonly kind: 'code' | 'discussion' = 'code',
+  ) {}
+
+  /** The same policy for a discussion: in Lecture for want of a project, the built-in browser's act asked each time. */
+  forDiscussion(): PermissionEngine {
+    return new PermissionEngine(this.deps, 'discussion');
+  }
 
   evaluate(query: PermissionQuery): Verdict {
-    const declared = KNOWN.has(query.tool.effect);
+    // A discussion has the whole built-in browser (Paul, 2026-11-20): a click or a text typed on a web page is asked
+    // each time — never refused by the Lecture it runs in, never let through by a mode or a rule.
+    if (this.kind === 'discussion' && builtinBrowser(query.tool, 'browser_act')) return { verdict: 'ask', why: 'mode' };
+    const called = effectOfCall(query.tool, query.input);
+    const declared = KNOWN.has(called);
     // A third party's plugin runs in a plain Node process: what it declares cannot be held to, so its tool is judged
     // as a program it runs — the network still asked as the network (audit 13.4).
-    const untrusted = query.tool.source === 'extension' && query.tool.effect !== 'network';
-    const effect: KnownEffect = declared && !untrusted ? query.tool.effect : 'execute';
+    const untrusted = query.tool.source === 'extension' && called !== 'network';
+    const effect: KnownEffect = declared && !untrusted ? (called as KnownEffect) : 'execute';
     let short = MATRIX[query.mode][effect];
     if (effect === 'network') {
       const asked = query.tool.source === 'extension' || (query.mode !== 'impro' && (this.deps.askBeforeNetwork?.() ?? true));

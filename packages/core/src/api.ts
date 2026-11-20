@@ -1819,8 +1819,10 @@ export function createCore(deps: CoreDeps): Core {
           input,
           mode: (await modeOf(conversationId)).mode,
           ...(projectId ? { projectId } : {}),
-          registry: tools.view((def) => visible(def) && told.has(def.name)),
-          permissions,
+          // A tool kept for the conversations told of it before stays callable: it says what replaced it.
+          registry: tools.view((def) => visible(def) && (told.has(def.name) || (kind === 'code' && def.hidden === true))),
+          // A discussion's browser: its act asked each time (Paul, 2026-11-20).
+          permissions: kind === 'discussion' ? permissions.forDiscussion() : permissions,
           conversations,
           roots,
           ...(barred ? { barred } : {}),
@@ -1975,7 +1977,7 @@ export function createCore(deps: CoreDeps): Core {
           return registry.run(call, { conversationId, roots, nCtx: 32_768, signal, ...originals });
         },
         judge: (tool, input) =>
-          permissions.evaluate({
+          (meta.kind === 'discussion' ? permissions.forDiscussion() : permissions).evaluate({
             tool,
             input,
             mode,
@@ -2658,12 +2660,13 @@ export function createCore(deps: CoreDeps): Core {
 
     async resumeTurn(conversationId, check, options, emit, onTurnEvent) {
       const place = await rootsOf(conversationId);
+      const resumed = await conversationStore.get(conversationId);
       const scope = {
         conversationId,
         mode: (await modeOf(conversationId)).mode,
         ...(place.projectId ? { projectId: place.projectId } : {}),
-        registry: tools.view(visibleTo(place.projectId, conversationId, await conversationStore.get(conversationId))),
-        permissions,
+        registry: tools.view(visibleTo(place.projectId, conversationId, resumed)),
+        permissions: resumed?.kind === 'discussion' ? permissions.forDiscussion() : permissions,
         place: { roots: place.roots, ...(place.barred ? { barred: place.barred } : {}) },
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),
         signal: options.signal,

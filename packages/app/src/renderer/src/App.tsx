@@ -85,6 +85,7 @@ import {
   shownPanes,
   toggle as togglePane,
   withPanes,
+  type BuiltinPane,
   type OpenPanes,
   type PanesByConversation,
 } from './panels/panes';
@@ -159,6 +160,8 @@ function playModeOf(value: unknown): PlayMode | null {
 const NARROW = '(max-width: 1099px)';
 /** How long the sidebar says why a conversation did not move. */
 const MOVE_NOTICE_MS = 8_000;
+/** The panes of a discussion: the browser, on web pages — no folder, so no code pane (Paul, 2026-11-20). */
+const DISCUSSION_PANES = ['browser'] as const satisfies readonly BuiltinPane[];
 
 function Workspace({
   messages,
@@ -1375,7 +1378,8 @@ function Workspace({
   });
   useShortcut('rewindLast', () => (settingsPage || inboxOpen ? false : rewinding.askLast(deck.shown)));
   const togglePaneKey = (pane: 'changes' | 'terminal' | 'browser'): boolean => {
-    if (discussion || settingsPage) return false;
+    // A discussion has the browser's pane only (Paul, 2026-11-20).
+    if (settingsPage || (discussion && !(DISCUSSION_PANES as readonly string[]).includes(pane))) return false;
     setPanes((was) => togglePane(was, pane, narrow));
     return true;
   };
@@ -1724,18 +1728,17 @@ function Workspace({
             />
           ) : null
         }
-        // A discussion has no code panes (task 9.7).
+        // A discussion has no code panes (task 9.7), and the whole browser (Paul, 2026-11-20).
         panels={
-          discussion ? undefined : (
-            <PanelToggles
-              messages={messages}
-              open={panes}
-              waiting={changesWaiting}
-              browserOpened={conversationId !== null && browserMarks.has(conversationId)}
-              plugins={pluginPanes}
-              onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))}
-            />
-          )
+          <PanelToggles
+            messages={messages}
+            open={panes}
+            waiting={changesWaiting}
+            browserOpened={conversationId !== null && browserMarks.has(conversationId)}
+            plugins={discussion ? [] : pluginPanes}
+            {...(discussion ? { only: DISCUSSION_PANES } : {})}
+            onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))}
+          />
         }
       />
       <div className="aparte-app-shell__main bonaparte-main">
@@ -1838,7 +1841,8 @@ function Workspace({
           ) : request ? (
             <ApprovalCard
               request={request}
-              mode={mode}
+              // A discussion has no mode to say: its browser's act is asked each time (Paul, 2026-11-20).
+              {...(discussion ? {} : { mode })}
               messages={messages}
               onAnswer={(answer) => approvals.answer(request.id, answer)}
               onAllowAndPlume={() => {
@@ -1961,7 +1965,9 @@ function Workspace({
       <PanelDock
         messages={messages}
         hidden={inboxOpen}
-        shown={shownPanes(panes, narrow).filter((pane) => !pluginOfPane(pane) || pluginPanes.some((one) => one.pane === pane))}
+        shown={shownPanes(panes, narrow).filter(
+          (pane) => (discussion ? (DISCUSSION_PANES as readonly string[]).includes(pane) : !pluginOfPane(pane) || pluginPanes.some((one) => one.pane === pane)),
+        )}
         narrow={narrow}
         labels={Object.fromEntries(pluginPanes.map((one) => [one.pane, one.label]))}
         content={{
