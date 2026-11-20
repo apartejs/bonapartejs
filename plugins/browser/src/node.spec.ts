@@ -7,7 +7,7 @@
 import type { PluginBrowser, PluginNodeContext, PluginToolInvocation, PluginToolResult } from '@aparte/bonaparte-plugin-sdk';
 import { describe, expect, it } from 'vitest';
 import { browserManifest } from './index.js';
-import { browser } from './node.js';
+import { browser, pathOfFileUrl } from './node.js';
 
 type Handler = (call: PluginToolInvocation) => Promise<PluginToolResult>;
 
@@ -62,8 +62,17 @@ describe('the built-in browser plugin (task 10.1)', () => {
     expect(await call('browser_open_file', {})).toMatchObject({ failed: true, content: expect.stringMatching(/path/) });
     // The address a model writes for a file goes the same way: a file of the perimeter, never a page of the disk.
     expect(await call('browser_open', { url: 'file:///C:/projet/bac/snake3.html' })).toEqual({ content: 'Opened file:///C:/projet/bac/snake3.html (Snake) in the browser.' });
-    expect(asked.map(([path]) => path)).toEqual(['bac/snake3.html', 'bac/none.html', process.platform === 'win32' ? 'C:\\projet\\bac\\snake3.html' : '/C:/projet/bac/snake3.html']);
+    expect(asked.map(([path]) => path)).toEqual(['bac/snake3.html', 'bac/none.html', 'C:/projet/bac/snake3.html']);
     expect(asked.every(([, from]) => from.roots[0] === 'C:/projet' && from.conversationId === 'c1')).toBe(true);
+  });
+
+  it('reads the path a file: address names — a drive, spaces and accents decoded; another machine’s is none', () => {
+    expect(pathOfFileUrl('file:///C:/Users/WDAGUtilityAccount/Desktop/bac/snake3.html')).toBe('C:/Users/WDAGUtilityAccount/Desktop/bac/snake3.html');
+    expect(pathOfFileUrl('file:///home/paul/mon%20jeu/caf%C3%A9.html')).toBe('/home/paul/mon jeu/café.html');
+    expect(pathOfFileUrl('file://localhost/C:/a.html')).toBe('C:/a.html');
+    expect(pathOfFileUrl('file://server/share/a.html')).toBeNull();
+    expect(pathOfFileUrl('file:///C:/a%E0.html')).toBeNull();
+    expect(pathOfFileUrl('https://example.com/')).toBeNull();
   });
 
   it('a page kept off the network is said so to the model: what it loads from the internet is blocked (review of 2026-11-20)', async () => {

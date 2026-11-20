@@ -4,8 +4,24 @@
  * text reaches the model as text — the core neutralises the template's control tokens in every tool result.
  */
 
-import { fileURLToPath } from 'node:url';
 import { definePlugin, type BrowserAction, type BrowserConsoleLine } from '@aparte/bonaparte-plugin-sdk';
+
+/**
+ * The path a `file:` address names, as the model wrote it (`file:///C:/projet/a.html` is `C:/projet/a.html`); null
+ * for another machine's (`file://server/…`) or an address that is not one. The host checks the path is a file of
+ * the perimeter. A built-in plugin has no Node: read in plain strings.
+ */
+export function pathOfFileUrl(url: string): string | null {
+  const match = /^file:\/\/(?:localhost)?(\/[^?#]*)$/i.exec(url.trim());
+  if (!match) return null;
+  let path: string;
+  try {
+    path = decodeURIComponent(match[1]!);
+  } catch {
+    return null;
+  }
+  return /^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path;
+}
 
 const UNAVAILABLE = { content: 'The built-in browser is not available here.', failed: true } as const;
 const NO_PAGE = { content: 'No page is open in the browser: open one with browser_open.', failed: true } as const;
@@ -50,12 +66,8 @@ export const browser = definePlugin({
       if (!url) return { content: 'Argument "url" is required: the address to open.', failed: true };
       // The address a model writes for a file it made: opened as that file, in the perimeter, never as a page of the disk.
       if (/^file:/i.test(url)) {
-        let path: string;
-        try {
-          path = fileURLToPath(url);
-        } catch {
-          return { content: `Could not open ${url}: it is not the address of a file. Give its path to browser_open_file.`, failed: true };
-        }
+        const path = pathOfFileUrl(url);
+        if (!path) return { content: `Could not open ${url}: it is not the address of a file of this machine. Give its path to browser_open_file.`, failed: true };
         return openFile(path, { conversationId, roots });
       }
       const opened = await ctx.browser.open(url);
