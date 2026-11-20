@@ -753,6 +753,13 @@ export interface Messages {
     count(messages: number): string;
   };
   /** Compaction (board « Coûts annoncés », 4; task 7.3). */
+  /** « /agents »: a pill that asks the model, in the person's name, to hand the work to sub-agents. */
+  agentsCommand: {
+    description: string;
+    pill: string;
+    /** What the message says in the pill's place: the tool named, as a small model needs it. */
+    ask: string;
+  };
   compact: {
     /** The « / » command's description. */
     command: string;

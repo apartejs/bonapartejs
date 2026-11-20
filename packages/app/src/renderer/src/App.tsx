@@ -326,12 +326,26 @@ function Workspace({
   // The « / » commands of the plugins that run (task 11.4): a plugin tried in a conversation, there only, under
   // « À l'essai », the row's own badge, filtered too (aparté 1.14, apartejs/aparte#261). Run, the command asks its plugin, which
   // says what to send in the person's name or to tell.
-  const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages });
-  commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages };
+  const subagentsOn = plugins.find((plugin) => plugin.id === 'subagents')?.enabled ?? true;
+  const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn });
+  commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn };
   useEffect(() => {
     const collect = (event: Event): void => {
       const detail = (event as CustomEvent<{ add(command: { id: string; name: string; description: string; badge?: string; order: number; run(context: { notify(text: string): void }): void }): void }>).detail;
       const now = commandsOf.current;
+      // « /agents » (a small model hands nothing to a sub-agent unless the tool is named): a pill in the person's
+      // words, the tool named in the message — only where sub-agents run.
+      if (now.subagents) {
+        detail.add({
+          id: 'agents',
+          name: 'agents',
+          description: now.messages.agentsCommand.description,
+          order: 250,
+          run: () => {
+            attachToken({ label: now.messages.agentsCommand.pill, text: now.messages.agentsCommand.ask, kind: 'subagents' });
+          },
+        });
+      }
       for (const plugin of now.plugins) {
         if (plugin.builtin || !plugin.active || !plugin.enabled) continue;
         if (plugin.trial !== undefined && plugin.trial !== now.conversationId) continue;

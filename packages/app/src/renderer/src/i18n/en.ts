@@ -736,6 +736,11 @@ export const en: Messages = {
     wentBack: 'Went back before this message',
     count: (messages) => (messages === 1 ? '1 message' : `${messages} messages`),
   },
+  agentsCommand: {
+    description: 'Hand the work to sub-agents',
+    pill: 'Sub-agents',
+    ask: 'Hand each independent part of this request to a sub-agent (the run_subagent tool). Give it tools "all" when it has to write files or run commands. The request:',
+  },
   compact: {
     command: 'Summarise the conversation, and it goes on from the summary',
     full: (percent) => `Context ${percent} % full`,

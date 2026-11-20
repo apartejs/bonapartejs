@@ -738,6 +738,11 @@ export const fr: Messages = {
     wentBack: 'Revenue avant ce message',
     count: (messages) => (messages === 1 ? '1 message' : `${messages} messages`),
   },
+  agentsCommand: {
+    description: 'Confier le travail à des sous-agents',
+    pill: 'Sous-agents',
+    ask: 'Confie chaque partie indépendante de cette demande à un sous-agent (outil run_subagent). Donne-lui tools "all" s’il doit écrire des fichiers ou lancer des commandes. Voici la demande :',
+  },
   compact: {
     command: 'Résume la conversation, et elle repart de ce résumé',
     full: (percent) => `Contexte plein à ${percent} %`,

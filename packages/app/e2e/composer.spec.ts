@@ -22,9 +22,25 @@ test('« / » lists the commands, and the one for a new conversation starts one'
   await page.keyboard.type('/');
   const list = page.getByRole('listbox');
   // Exactly these: no approval command beside the mode switch, whatever a plugin adds.
-  await expect(list.getByRole('option')).toHaveText([/^\/new/, /^\/retry/, /^\/copy/, /^\/compact/]);
+  await expect(list.getByRole('option')).toHaveText([/^\/new/, /^\/retry/, /^\/copy/, /^\/compact/, /^\/agents/]);
   await list.getByRole('option', { name: /Commencer une nouvelle conversation/ }).click();
   await expect(ui.userMessages).toHaveCount(0);
+});
+
+test('« /agents » joins a « Sous-agents » pill, and the message names run_subagent: a small model needs the tool named', async ({ launch }) => {
+  const prompts: string[] = [];
+  const { page } = await launch({ engine: { responder: () => 'ok', onCompletion: (body) => prompts.push(String(body['prompt'])) } });
+  const ui = chat(page);
+  await ui.editor.click();
+  await page.keyboard.type('/');
+  await page.getByRole('listbox').getByRole('option', { name: /^\/agents/ }).click();
+  await expect(page.locator('aparte-composer').getByText('Sous-agents', { exact: true })).toBeVisible();
+  await page.keyboard.type(' écris index.html et style.css');
+  await ui.sendButton.click();
+  await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+  const asked = prompts.at(-1) ?? '';
+  expect(asked).toContain('run_subagent');
+  expect(asked).toContain('écris index.html et style.css');
 });
 
 test('« @ » lists the files of the project, and puts the path chosen in the message', async ({ launch }) => {
