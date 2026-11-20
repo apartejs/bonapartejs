@@ -79,8 +79,15 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
     return ask();
   };
 
+  // The conversation whose tabs were read: until then the pane places nothing, so that the tab chosen in the
+  // conversation before is never placed — and kept as shown — in this one's name (third review of step 2).
+  const [readFor, setReadFor] = useState<string | null | undefined>(undefined);
   const read = (): void => {
+    const asked = conversation.current;
     void withATab().then((state) => {
+      // Another conversation shown meanwhile: its own read follows.
+      if (asked !== conversation.current) return;
+      setReadFor(asked);
       setTabs(state.tabs);
       setReading(state.reading);
       const moved = state.shown !== followed.current;
@@ -120,15 +127,24 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
     const element = slot.current;
     if (!active) return;
     const measure = (): void => {
-      // A tab with no page has no slot: placed nowhere, which takes the page shown before it off (second review).
+      if (readFor !== conversation.current) {
+        // Not read yet for the conversation shown: nothing of the browser on top meanwhile.
+        if (placed.current === 'unread') return;
+        placed.current = 'unread';
+        void bridge.invoke(browserHide, undefined);
+        return;
+      }
       const covered = !element || hidden || !element.checkVisibility() || document.querySelector('dialog[open]') !== null;
       const box = element?.getBoundingClientRect();
-      const rect = covered || !box || !shown?.url ? null : { x: box.x, y: box.y, width: box.width, height: box.height };
-      // Its conversation too: the main process shows an agent's page back in its own (the browser redo, step 2).
-      const key = JSON.stringify([active, rect, device, conversation.current]);
+      // A tab with no page has nothing to attach, yet the person looks at it: blank, never « covered » — the agent's
+      // new page then waits behind it (the browser redo, step 2, third review).
+      const blank = !covered && !shown?.url;
+      const rect = covered || blank || !box ? null : { x: box.x, y: box.y, width: box.width, height: box.height };
+      // Its conversation too: each conversation's pane keeps its own tab shown (the browser redo, step 2).
+      const key = JSON.stringify([active, rect, blank, device, conversation.current]);
       if (key === placed.current) return;
       placed.current = key;
-      void bridge.invoke(browserPlace, { tabId: active, rect, device, conversationId: conversation.current });
+      void bridge.invoke(browserPlace, { tabId: active, rect, device, conversationId: conversation.current, ...(blank ? { blank: true } : {}) });
     };
     measure();
     if (!element) return;
@@ -141,7 +157,7 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
       window.removeEventListener('resize', measure);
       clearInterval(timer);
     };
-  }, [active, device, hidden, shown?.url]);
+  }, [active, device, hidden, shown?.url, readFor]);
 
   const openTab = async (): Promise<void> => {
     const tabId = newTabId();
@@ -225,6 +241,7 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
                   <Icon name="globe" />
                   {tab.agent ? <span className="aparte-badge aparte-badge--primary aparte-badge--soft aparte-badge--sm browser-tab__agent">{words.agentTab}</span> : null}
                   <span className="browser-tab__text">{label}</span>
+                  {tab.fresh ? <span className="aparte-badge aparte-badge--primary aparte-badge--solid aparte-badge--sm browser-tab__fresh">{words.agentFresh}</span> : null}
                 </button>
                 <button type="button" className="browser-tab__close" aria-label={words.closeTab(label)} onClick={() => void closeTab(tab.tabId)}>
                   <Icon name="close" />

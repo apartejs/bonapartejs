@@ -126,6 +126,36 @@ test('the agent’s tab shows as « Agent » in its conversation’s pane, and i
   await expect(ui.getByRole('tab', { name: /Agent.*Page A/ })).toBeVisible({ timeout: 15_000 });
 });
 
+test('a blank « Nouvel onglet » is the person’s: the agent’s page waits behind it, marked « Nouveau », and the address the person types goes to their tab (third review of step 2)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const launched = await launch({ engine: { responder: (prompt) => model(prompts)(prompt), nCtx: 16_384 }, pages: PAGES });
+  pagesUrl = launched.pages!.url;
+  const { app, page: ui } = launched;
+  await openPane(ui);
+  const blank = ui.getByRole('tab', { name: /^Nouvel onglet$/ });
+  await expect(blank).toHaveAttribute('aria-selected', 'true');
+
+  await lookAt(ui, 'A');
+  // The agent's tab is there, behind the person's blank one, marked.
+  const agentTab = ui.getByRole('tab', { name: /Agent.*Page A/ });
+  await expect(agentTab).toBeVisible({ timeout: 15_000 });
+  await expect(blank).toHaveAttribute('aria-selected', 'true');
+  await expect(agentTab).toContainText('Nouveau');
+
+  // The person types an address: their own tab goes there, the agent's stays on its page.
+  const address = ui.getByRole('textbox', { name: 'Adresse' });
+  await address.fill(`${pagesUrl}/mine`);
+  await address.press('Enter');
+  await expect(ui.getByRole('tab', { name: /Ma page/ })).toBeVisible({ timeout: 15_000 });
+  expect(await personTabs(app)).toEqual([`${pagesUrl}/mine`]);
+  await expect(agentTab).toContainText('Page A');
+
+  // Shown, the agent's page is seen: its mark goes.
+  await agentTab.click();
+  await expect(agentTab).toHaveAttribute('aria-selected', 'true');
+  await expect(agentTab).not.toContainText('Nouveau');
+});
+
 /** A conversation's agent tab, as the main process holds it. */
 const agentTabs = (app: ElectronApplication, conversationId: string) =>
   app.evaluate(

@@ -26,6 +26,7 @@ import { bridge } from '../bridge';
 import { BRANCHES_ACTION, REWIND_ACTION } from '../aparte/message-actions';
 import type { RewindPreviewView } from '../dialogs/RewindDialog';
 import type { RewoundView } from './RewindBanner';
+import { bringBack as bringBackChat } from './hold';
 
 interface Asking {
   conversationId: string;
@@ -61,6 +62,8 @@ export interface RewindDeps {
   /** The conversation's chat taken down, then mounted again on what the manager holds. */
   unmount(id: string): void;
   mount(id: string): void;
+  /** The chat is back, or will not come back: the panes follow the conversation shown again. */
+  release(id: string): void;
   /** The branch menu, opened on the branches that part from the person's message. */
   openBranchesAt(conversationId: string, userIndex: number): void;
   /** Something moved on disk or in the conversation: the panes and the rows read again. */
@@ -171,10 +174,16 @@ export function useRewind(deps: RewindDeps) {
   /** The branch the core shows now, read again: the manager given it, the chat mounted on it. */
   const bringBack = async (id: string): Promise<void> => {
     try {
-      const document = (await bridge.invoke(conversationsLoadFull, { id })) as { messages?: unknown[]; tree?: unknown } | null;
-      if (document) await latest.current.replaceMessages(id, document.messages ?? [], document.tree);
-      latest.current.mount(id);
-      await settled();
+      await bringBackChat(
+        {
+          load: async (one) => (await bridge.invoke(conversationsLoadFull, { id: one })) as { messages?: unknown[]; tree?: unknown } | null,
+          replaceMessages: (one, messages, tree) => latest.current.replaceMessages(one, messages, tree),
+          mount: (one) => latest.current.mount(one),
+          release: (one) => latest.current.release(one),
+          settled,
+        },
+        id,
+      );
     } finally {
       reloading.current -= 1;
     }

@@ -140,6 +140,17 @@ export interface BrowserTabState {
   warnings: number;
   /** The tab of the conversation's agent. */
   agent?: true;
+  /** The agent's tab got a page the person has not seen yet: it waits behind their own tab (§3.3). */
+  fresh?: true;
+}
+
+/** How a pane says where its tab goes, besides the rectangle. */
+export interface PlaceOptions {
+  /**
+   * The tab has no page: nothing to attach, yet the pane is visible and the person looks at it — a blank « Nouvel
+   * onglet » is theirs, never « covered » (third review of step 2).
+   */
+  blank?: boolean;
 }
 
 export type AgentAction = { kind: 'click'; selector: string } | { kind: 'type'; selector: string; text: string } | { kind: 'scroll'; by: number };
@@ -180,8 +191,9 @@ interface Tab {
   /** Its page stays off the network: the conversation may not reach it without asking (review of 2026-11-20). */
   fileOffline?: boolean;
   /**
-   * An agent's tab that got a page while the person looked at a tab of their own in another conversation's pane:
-   * its conversation's pane shows it when the person comes back, until it is placed (review of step 2).
+   * An agent's tab that got a page while the person looked at a tab of their own in its conversation's visible pane:
+   * marked in the pane, behind theirs, until it is seen — and shown once that pane no longer shows the person's tab
+   * (third review of step 2).
    */
   fresh?: boolean;
 }
@@ -232,10 +244,16 @@ const READ_PAGE = `(() => {
 
 export class BrowserViews {
   private readonly tabs = new Map<string, Tab>();
-  private shown: string | null = null;
+  /**
+   * The tab each conversation's pane shows (null: the pane of a conversation not made yet), set by that pane's
+   * place and by its own agent's page — never inferred from what is attached, never another conversation's
+   * (third review of step 2).
+   */
+  private readonly shownBy = new Map<string | null, string>();
+  /** The pane visible right now — its conversation and the tab it shows —; null when closed or covered. */
+  private visible: { conversationId: string | null; tabId: string } | null = null;
+  /** What is attached to the window: only that. */
   private placed: Tab | null = null;
-  /** The conversation whose pane placed the tab shown, when it said (null: a new conversation). */
-  private placedIn: string | null | undefined;
   private bounds: Rect | null = null;
   private readonly resolve: (host: string) => Promise<string[]>;
 
@@ -247,7 +265,6 @@ export class BrowserViews {
   openTab(tabId: string): void {
     if (tabId.startsWith(AGENT_TAB)) return;
     this.createTab(tabId, 'person');
-    this.shown ??= tabId;
     this.options.changed();
   }
 
@@ -281,6 +298,7 @@ export class BrowserViews {
   /** A conversation deleted or archived: its agent's tab goes with it (review of step 2). */
   closeAgentTab(conversationId: string): void {
     this.closeTab(agentTabId(conversationId));
+    this.shownBy.delete(conversationId);
   }
 
   closeTab(tabId: string): void {
@@ -289,28 +307,36 @@ export class BrowserViews {
     if (this.placed === tab) this.unplace();
     tab.view.webContents.close();
     this.tabs.delete(tabId);
-    if (this.shown === tabId) this.shown = [...this.tabs.keys()].at(-1) ?? null;
+    // Shown nowhere any more: each pane that showed it shows what it chooses next.
+    for (const [conversation, shown] of this.shownBy) if (shown === tabId) this.shownBy.delete(conversation);
+    if (this.visible?.tabId === tabId) this.visible = null;
     this.options.changed();
   }
 
   /**
-   * Where the pane shows the tab; null: hidden. Only one tab is placed at a time — the one shown. The pane says its
-   * conversation, so that an agent's page opened while the person looks at their own tab elsewhere is shown back in
-   * its own conversation.
+   * Where a conversation's pane shows the tab (its conversation: null for one not made yet). A rectangle: the pane
+   * is visible and the tab attached there. Null: covered or closed — unless `blank`, a tab with no page in a
+   * visible pane, which has nothing to attach yet is what the person looks at. Only the tab placed is attached;
+   * whatever was attached before it goes.
    */
-  place(tabId: string, rect: Rect | null, device: Device, conversationId?: string | null): void {
+  place(tabId: string, rect: Rect | null, device: Device, conversationId: string | null = null, options: PlaceOptions = {}): void {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
-    this.shown = tabId;
-    this.placedIn = conversationId;
-    // Placed, an agent's new page is seen.
-    delete tab.fresh;
-    if (!rect || rect.width <= 0 || rect.height <= 0) {
-      // Nowhere: the tab shown now is not on top, nor the one placed before it (a blank « Nouvel onglet » chosen
-      // over the agent's page — second review of step 2).
-      this.unplace();
+    this.shownBy.set(conversationId, tabId);
+    const hasRect = rect !== null && rect.width > 0 && rect.height > 0;
+    if (!hasRect) this.unplace();
+    if (!hasRect && !options.blank) {
+      // Covered: nobody looks at this pane now.
+      this.visible = null;
       return;
     }
+    this.visible = { conversationId, tabId };
+    // Seen, an agent's new page is no longer marked.
+    if (tab.fresh) {
+      delete tab.fresh;
+      this.options.changed();
+    }
+    if (!hasRect || !rect) return;
     if (this.placed && this.placed !== tab) this.unplace();
     const width = device === 'phone' ? Math.min(PHONE_WIDTH, rect.width) : rect.width;
     const bounds = { x: Math.round(rect.x + (rect.width - width) / 2), y: Math.round(rect.y), width: Math.round(width), height: Math.round(rect.height) };
@@ -330,6 +356,7 @@ export class BrowserViews {
   /** The pane closed, or a page went over it (« À traiter », the settings, a menu): no view stays on top. */
   hideAll(): void {
     this.unplace();
+    this.visible = null;
   }
 
   async navigate(tabId: string, typed: string): Promise<{ url: string; title: string } | { error: string }> {
@@ -369,17 +396,27 @@ export class BrowserViews {
       errors: tab.console.filter((line) => line.level === 'error').length,
       warnings: tab.console.filter((line) => line.level === 'warning').length,
       ...(isAgentTab(tab) ? { agent: true as const } : {}),
+      ...(tab.fresh ? { fresh: true as const } : {}),
     }));
   }
 
   /**
-   * The tab to show in a conversation's pane, when it is one of its tabs: its agent's page not seen yet, else the
-   * one placed last, or the agent's page.
+   * The tab a conversation's pane shows: the one it placed last or its agent's page, whichever came last — and its
+   * agent's page not seen yet, once that pane no longer shows a tab of the person's to the person (closed, covered).
    */
   shownIn(conversationId: string | null): string | null {
     const own = conversationId === null ? undefined : this.tabs.get(agentTabId(conversationId));
-    if (own?.fresh) return own.id;
-    return this.shown && this.inScope(conversationId).some((tab) => tab.id === this.shown) ? this.shown : null;
+    if (own?.fresh && !this.looksAtOwnTab(conversationId)) return own.id;
+    const shown = this.shownBy.get(conversationId);
+    if (shown !== undefined && this.inScope(conversationId).some((tab) => tab.id === shown)) return shown;
+    return own?.id ?? null;
+  }
+
+  /** The person looks at a tab of their own in that conversation's pane, right now — a blank one included. */
+  private looksAtOwnTab(conversationId: string | null): boolean {
+    if (!this.visible || this.visible.conversationId !== conversationId) return false;
+    const tab = this.tabs.get(this.visible.tabId);
+    return tab !== undefined && !isAgentTab(tab);
   }
 
   private inScope(conversationId: string | null): Tab[] {
@@ -550,8 +587,9 @@ export class BrowserViews {
 
   /**
    * The caller's own tab, made at its first page in its project's session — again when the conversation moved to
-   * another project. It is shown, unless the person looks at a tab of their own in a visible pane: in its own
-   * conversation's, it waits behind theirs; in another's, it is shown when the person comes back (`fresh`).
+   * another project. Its conversation's pane shows it, unless that pane is visible right now and shows the person
+   * a tab of their own (a blank « Nouvel onglet » too): then it waits behind theirs, marked (`fresh`, §3.3).
+   * Another conversation's pane is never touched (third review of step 2).
    */
   private agentTab(from: AgentCaller): Tab {
     const id = agentTabId(from.conversationId);
@@ -559,10 +597,8 @@ export class BrowserViews {
     const was = this.tabs.get(id);
     if (was && was.partition !== partitionOf(owner)) this.closeTab(id);
     const tab = this.createTab(id, owner);
-    // The pane last placed in another conversation: whatever it shows now, or later once uncovered, this page is
-    // shown when the person comes back to its own (second review of step 2) — never cleared here, only by a place.
-    if (this.placedIn !== undefined && this.placedIn !== from.conversationId) tab.fresh = true;
-    if (!this.placed || isAgentTab(this.placed)) this.shown = id;
+    if (this.looksAtOwnTab(from.conversationId)) tab.fresh = true;
+    else this.shownBy.set(from.conversationId, id);
     this.options.changed();
     return tab;
   }

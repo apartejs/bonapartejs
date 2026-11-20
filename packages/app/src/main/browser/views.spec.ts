@@ -303,8 +303,8 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     expect(browser.shownIn('c1')).toBe('agent:c1');
     // Not in another conversation's pane.
     expect(browser.shownIn('c2')).toBeNull();
-    // The person shows their own tab: the agent's next page does not take its place.
-    browser.place('t1', RECT, 'desktop');
+    // The person shows their own tab in c1's pane: the agent's next page does not take its place.
+    browser.place('t1', RECT, 'desktop', 'c1');
     expect(browser.shownIn('c1')).toBe('t1');
     await browser.agentOpen('http://localhost:5173/b', C1);
     expect(browser.shownIn('c1')).toBe('t1');
@@ -361,10 +361,69 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     expect(attached.has(views[0]!)).toBe(true);
     browser.openTab('t1');
     // The pane shows the blank tab: placed nowhere, and nothing else stays placed.
-    browser.place('t1', null, 'desktop', 'c1');
+    browser.place('t1', null, 'desktop', 'c1', { blank: true });
     expect(attached.size).toBe(0);
     expect(browser.placement()).toBeNull();
     expect(browser.shownIn('c1')).toBe('t1');
+  });
+
+  it('a blank « Nouvel onglet » in a visible pane is the person’s: the agent’s page waits behind it, marked, and the address the person types goes to their tab (third review of step 2)', async () => {
+    const { browser, views, attached } = rig();
+    browser.openTab('t1');
+    // The pane shows the blank tab: nothing to attach, but the person looks at it.
+    browser.place('t1', null, 'desktop', 'c1', { blank: true });
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    expect(browser.shownIn('c1')).toBe('t1');
+    expect(attached.size).toBe(0);
+    expect(browser.states('c1').find((tab) => tab.agent)).toMatchObject({ fresh: true });
+    // The person types an address: their own tab goes there, the agent's stays on its page.
+    await browser.navigate(browser.shownIn('c1')!, 'http://localhost:5173/mine');
+    expect(views[0]!.loaded).toEqual(['http://localhost:5173/mine']);
+    expect(views[1]!.loaded).toEqual(['http://localhost:5173/a']);
+    // The agent's tab placed, its page is seen: the mark goes.
+    browser.place('agent:c1', RECT, 'desktop', 'c1');
+    expect(browser.states('c1').find((tab) => tab.agent)?.fresh).toBeUndefined();
+  });
+
+  it('an agent’s page opened while its conversation’s pane was closed is shown when the person comes back, whatever another conversation’s pane showed meanwhile (third review of step 2)', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://localhost:5173/mine');
+    browser.place('t1', RECT, 'desktop', 'c1');
+    // The person goes to c2: c1's pane is closed.
+    browser.hideAll();
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    // c2's pane opens on the person's tab.
+    browser.place('t1', RECT, 'desktop', 'c2');
+    expect(browser.shownIn('c2')).toBe('t1');
+    // Back in c1, its agent's new page is the one shown.
+    expect(browser.shownIn('c1')).toBe('agent:c1');
+    // A page opened while the person looked at their tab in c1's pane waits behind it, marked; the person leaves
+    // c1 and comes back: it is the one shown.
+    browser.place('t1', RECT, 'desktop', 'c1');
+    await browser.agentOpen('http://localhost:5173/b', C1);
+    expect(browser.shownIn('c1')).toBe('t1');
+    browser.hideAll();
+    browser.place('t1', RECT, 'desktop', 'c2');
+    expect(browser.shownIn('c1')).toBe('agent:c1');
+  });
+
+  it('each conversation’s pane keeps its own tab shown (third review of step 2)', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    browser.openTab('t2');
+    browser.place('t1', RECT, 'desktop', 'c1');
+    browser.place('t2', RECT, 'desktop', 'c2');
+    expect(browser.shownIn('c1')).toBe('t1');
+    expect(browser.shownIn('c2')).toBe('t2');
+    // An agent's page in c2, while c2's pane shows the person's tab: c1's choice is left alone.
+    await browser.agentOpen('http://localhost:5173/b', C2);
+    expect(browser.shownIn('c1')).toBe('t1');
+    expect(browser.shownIn('c2')).toBe('t2');
+    // A tab closed is shown nowhere any more.
+    browser.closeTab('t1');
+    expect(browser.shownIn('c1')).toBeNull();
+    expect(browser.shownIn('c2')).toBe('t2');
   });
 });
 

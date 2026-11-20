@@ -786,10 +786,14 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   addresses, never a private one), `browser_read` and `browser_screenshot`
   (read) and `browser_act` (execute) work on their conversation's own tab
   (`agent:<conversation>`, made at its first page, marked « Agent » in that
-  conversation's pane and in no other's, shown unless the person looks at a
-  tab of their own — in another conversation's pane, it is `fresh` and shown
-  when the person comes back, the pane saying its conversation in
-  `browser.place` —; closed when its conversation is deleted or archived,
+  conversation's pane and in no other's; each conversation's pane keeps its
+  own tab shown (`shownBy`, set by `browser.place` for the conversation it
+  names, never inferred from what is attached): the agent's page becomes
+  its conversation's, unless that pane is visible and shows the person a
+  tab of their own — a blank « Nouvel onglet » too, placed `blank`, not
+  covered —, where it waits behind theirs marked « Nouveau » (`fresh`),
+  shown once that pane no longer shows it; closed when its conversation is
+  deleted or archived,
   `closeAgentTab`) and never on a tab of the person's, through
   `BrowserService` — each call carries its conversation, and the host adds
   the project the core knows it in (`fileAccess`) —, given by the host only

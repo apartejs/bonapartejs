@@ -28,7 +28,7 @@ export function registerBrowserChannels(ipc: IpcRegistry, browser: Pick<BuiltinB
   ipc.handle(browserNavigate, ({ tabId, url }) => views.navigate(tabId, url));
   ipc.handle(browserBack, ({ tabId }) => views.back(tabId));
   ipc.handle(browserReload, ({ tabId }) => views.reload(tabId));
-  ipc.handle(browserPlace, ({ tabId, rect, device, conversationId }) => views.place(tabId, rect, device, conversationId));
+  ipc.handle(browserPlace, ({ tabId, rect, device, conversationId, blank }) => views.place(tabId, rect, device, conversationId ?? null, { blank: blank === true }));
   ipc.handle(browserHide, () => views.hideAll());
   ipc.handle(browserConsole, ({ tabId }) => views.console(tabId));
   ipc.handle(browserPick, ({ tabId, accent }) => views.pick(tabId, accent));

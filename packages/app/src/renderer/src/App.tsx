@@ -103,6 +103,7 @@ import { ServiceDownCard } from './chat/ServiceDownCard';
 import { STOP_REPLIES } from './settings/LaunchSettings';
 import { ConversationBranches, type ConversationBranchesHandle } from './chat/ConversationBranches';
 import { useRewind } from './chat/useRewind';
+import { paneConversationOf } from './chat/hold';
 import { setupMessageActions } from './aparte/message-actions';
 import { ComposerToolbar } from './chat/ComposerToolbar';
 import { NewProject } from './dialogs/NewProject';
@@ -294,9 +295,14 @@ function Workspace({
   // While going back (or its undo, or another branch shown) holds the conversation's chat down, a new chat stands
   // in for it: the panes stay the conversation's, as they were — never the stand-in's none (second review of the
   // browser redo, step 2).
+  // The hold ends when the chat comes back or cannot (`release`), and counts only while the stand-in is the chat
+  // shown: another conversation shown is followed at once (third review).
   const [heldDown, setHeldDown] = useState<string | null>(null);
-  const paneConversation = heldDown ?? conversationId;
-  const shownPaneKey = heldDown ?? paneKey(conversationId, deck.shown);
+  const paneConversation = paneConversationOf(heldDown, conversationId);
+  const shownPaneKey = paneKey(paneConversation, deck.shown);
+  useEffect(() => {
+    if (heldDown !== null && conversationId !== null && conversationId !== heldDown) setHeldDown(null);
+  }, [conversationId, heldDown]);
   const panes = panesOf(panesBy, shownPaneKey);
   const shownPaneKeyNow = useRef(shownPaneKey);
   shownPaneKeyNow.current = shownPaneKey;
@@ -591,8 +597,9 @@ function Workspace({
   // They leave together, in one message, into the conversation's own chat once it is free.
   const sendReview = (): void => {
     const pending = pendingOf(review);
-    if (!conversationId || pending.length === 0) return;
-    const id = conversationId;
+    // The conversation the comments were written on, whose chat takes them once it is free (back, if held down).
+    if (!paneConversation || pending.length === 0) return;
+    const id = paneConversation;
     sendWhenFree(reviewMessage(pending, messages), () => composerOf(id));
     changeReview(markSent);
   };
@@ -993,10 +1000,8 @@ function Workspace({
       if (id === shownIdRef.current) setHeldDown(id);
       setDeck((was) => forget(was, id));
     },
-    mount: (id) => {
-      setDeck((was) => openIn(was, id));
-      setHeldDown((was) => (was === id ? null : was));
-    },
+    mount: (id) => setDeck((was) => openIn(was, id)),
+    release: (id) => setHeldDown((was) => (was === id ? null : was)),
     openBranchesAt: (id, userIndex) => {
       if (id === shownIdRef.current) forks.current?.openAt(userIndex);
     },
@@ -1945,7 +1950,8 @@ function Workspace({
                 scope={{ ...(paneConversation ? { conversationId: paneConversation } : {}), ...(activeProject ? { projectId: activeProject.id } : {}) }}
                 onAttach={(token) => attachToken(token)}
                 onSend={(text) => {
-                  const id = conversationId ?? null;
+                  // The conversation whose pane it is (its chat, once back, if held down).
+                  const id = paneConversation;
                   sendWhenFree(text, () => (id ? composerOf(id) : shownComposer()));
                 }}
               />

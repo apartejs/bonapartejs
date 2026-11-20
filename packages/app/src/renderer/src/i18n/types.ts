@@ -605,6 +605,8 @@ export interface Messages {
     newTab: string;
     /** The mark of the tab of the conversation's agent (the browser redo, step 2). */
     agentTab: string;
+    /** The mark of the agent's tab when its new page waits behind the person's own tab (§3.3). */
+    agentFresh: string;
     newTabTip: string;
     closeTab(label: string): string;
     back: string;

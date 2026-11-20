@@ -21,6 +21,8 @@ export const browserTabSchema = z.object({
   warnings: z.number(),
   /** The tab of the conversation's agent (the browser redo, step 2). */
   agent: z.literal(true).optional(),
+  /** The agent's tab got a page the person has not seen: it waits behind their own tab, marked (§3.3). */
+  fresh: z.literal(true).optional(),
 });
 
 export type BrowserTabView = z.infer<typeof browserTabSchema>;
@@ -49,8 +51,9 @@ export const browserBack = defineChannel('browser.back', z.object({ tabId }), z.
 export const browserReload = defineChannel('browser.reload', z.object({ tabId }), z.void());
 const rect = z.object({ x: z.number(), y: z.number(), width: z.number().min(0), height: z.number().min(0) });
 /**
- * Where the tab shown goes, in the window's pixels; null: hidden (its pane closed or covered). The pane says its
- * conversation (null: a new one), so that an agent's page opened while the person looks elsewhere is shown back.
+ * Where the tab shown goes, in the window's pixels; null: hidden (its pane closed or covered) — unless `blank`: a
+ * tab with no page in a visible pane, which the person looks at though nothing is attached. The pane says its
+ * conversation (null: a new one): each conversation's pane keeps its own tab shown (the browser redo, step 2).
  */
 export const browserPlace = defineChannel(
   'browser.place',
@@ -59,6 +62,7 @@ export const browserPlace = defineChannel(
     rect: rect.nullable(),
     device: z.enum(['desktop', 'phone']),
     conversationId: z.string().min(1).max(128).nullable().optional(),
+    blank: z.boolean().optional(),
   }),
   z.void(),
 );

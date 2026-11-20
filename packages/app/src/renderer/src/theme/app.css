@@ -3571,7 +3571,8 @@ body {
 }
 
 /* The tab of the conversation's agent: its mark keeps its size, the title gives way. */
-.browser-tab__agent {
+.browser-tab__agent,
+.browser-tab__fresh {
   flex: none;
 }
 
