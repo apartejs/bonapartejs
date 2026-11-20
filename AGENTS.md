@@ -938,7 +938,22 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   winget) is a link the file system cannot follow. A test that injects
   `spawn` without `exists` describes its own machine. git, gh (its own
   token kept), the probes and every plugin process get no secret; the
-  ssh-agent's socket is not one.
+  ssh-agent's socket is not one. npm, npx, pnpm, yarn and every tool npm
+  installs are `.cmd` shims there, which only a shell runs: `resolveCommand`
+  (`core/src/process/command.ts`, for MCP, a project's runs, `npm pack` and
+  `run_command` alike) runs them as node and the script the shim names
+  (npm's cmd-shim, corepack's and `node_modules\.bin`'s forms; npm's own
+  script with the PATH's node when none is beside it). Any other batch file
+  is refused, saying why; `run_command` says a program the PATH lacks in
+  words, never « spawn … ENOENT » (audit 2026-11-21, D1).
+- **What a tool gives back** (`core/src/tools/output-cap.ts`, `edit-text.ts`;
+  audit 2026-11-21, D4 and D5): an output past the cap is cut in the middle,
+  a third of the head and two thirds of the tail, the note counting the
+  lines and characters left out and fitting in the cap; `run_command` keeps
+  its head and its end while it runs, `read_file` cuts after a whole line and
+  gives the offset to go on from. `edit_file` matches old_string whatever the
+  line endings and writes the file's own (`write_file` keeps a CRLF file's
+  too); the approval's preview makes the same match through `applyEdit`.
 - **Outside text, on a service too** (`families/service-tokens.ts`, audit
   13.4): what a service's model reads — tool results, descriptions and
   schemas (keys included), the history, the project's instructions — is
@@ -977,7 +992,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   rendered byte for byte as Google's template (`__fixtures__/gemma.jinja`,
   checked with `@huggingface/jinja`); Qwen is the second. Reasoning is
   switched on once, in the frozen system turn; a turn without it opens with
-  the empty thought channel.
+  the empty thought channel. Each layer says how its models are sampled
+  (`sampling({ thinking })`, from the makers' model cards: Gemma 4 1.0 /
+  0.95 / 64, Qwen3 0.6 / 0.95 / 20 thinking, 0.7 / 0.8 / 20 without, min_p
+  0), sent with every completion, the conversation's temperature over it
+  (audit 2026-11-21, D6); the catalog's `SAMPLING_SETTINGS` reach no turn.
 - **The engine** (`packages/core/src/api.ts`, `engine/`): `createCore` owns
   the supervisor; asking about the engine runs nothing, a load is the only
   thing that launches llama.cpp. The card's memory is what llama.cpp lists
