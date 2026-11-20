@@ -111,6 +111,8 @@ export type AppEvent =
   | { kind: 'engine' }
   /** What can be updated changed (task 13.1): the window reads it again. */
   | { kind: 'updates' }
+  /** The models found changed (a download done, a folder added): the window reads them again. */
+  | { kind: 'models' }
   /** The plugins changed (one added, removed, switched on or off, stopped): the window reads them again (task 11.2). */
   | { kind: 'plugins' }
   /** The built-in browser changed (a tab, its address, its console, the agent reading): the pane reads it again (task 10.1). */

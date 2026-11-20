@@ -16,7 +16,7 @@ import { modelSelectorElement, type AparteModelSelector } from '@aparte/plugin-m
 import '@aparte/plugin-triggers';
 import type { AparteTrigger } from '@aparte/plugin-triggers';
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
-import { ENGINE_PROVIDER } from '../aparte/model-catalogue';
+import { baseIdOf, ENGINE_PROVIDER, registeredId } from '../aparte/model-catalogue';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 import { Icon } from '../shell/icons';
@@ -63,8 +63,8 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
   useEffect(() => {
     const picker = selector.current as AparteModelSelector | null;
     if (!picker) return;
-    if (service) picker.setSelection(service.id, service.model);
-    else if (runningNow.current) picker.setSelection(ENGINE_PROVIDER, runningNow.current);
+    if (service) picker.setSelection(registeredId(service.id), service.model);
+    else if (runningNow.current) picker.setSelection(registeredId(ENGINE_PROVIDER), runningNow.current);
   }, [shownService]);
   useEffect(() => {
     if (!opener) return;
@@ -120,23 +120,25 @@ export function ComposerToolbar({ messages, mode, onMode, engine, scope, onPickM
             if (!detail.picked || !detail.modelId) return;
             const back = (): void => {
               const picker = selector.current as AparteModelSelector | null;
-              if (service) picker?.setSelection(service.id, service.model);
-              else if (runningNow.current) picker?.setSelection(ENGINE_PROVIDER, runningNow.current);
+              if (service) picker?.setSelection(registeredId(service.id), service.model);
+              else if (runningNow.current) picker?.setSelection(registeredId(ENGINE_PROVIDER), runningNow.current);
             };
-            // A service's model (task 9.3), or the engine's own picked back after one.
-            if (detail.providerId && detail.providerId !== ENGINE_PROVIDER) {
-              servicePicks.current?.(detail.providerId, detail.modelId, back);
+            // A service's model (task 9.3), or the engine's own picked back after one. The picker names the id its
+            // catalogue is registered under now (apartejs/aparte#276): the app knows the base one.
+            const provider = detail.providerId ? baseIdOf(detail.providerId) : null;
+            if (provider && provider !== ENGINE_PROVIDER) {
+              servicePicks.current?.(provider, detail.modelId, back);
               return;
             }
             if (detail.modelId === runningNow.current) {
               servicePicks.current?.(null, detail.modelId, back);
               return;
             }
-            const listed = aparteGlobalConfig.getAIProvider(ENGINE_PROVIDER)?.getModels() ?? [];
+            const listed = aparteGlobalConfig.getAIProvider(registeredId(ENGINE_PROVIDER))?.getModels() ?? [];
             const name = listed.find((model) => model.id === detail.modelId)?.name ?? detail.modelId;
             onPickModel(detail.modelId, name, () => {
               const back = runningNow.current;
-              if (back) (selector.current as AparteModelSelector | null)?.setSelection(ENGINE_PROVIDER, back);
+              if (back) (selector.current as AparteModelSelector | null)?.setSelection(registeredId(ENGINE_PROVIDER), back);
             });
           }}
         />

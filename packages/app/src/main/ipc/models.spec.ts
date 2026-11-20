@@ -25,9 +25,12 @@ function setup(chosen: string | null) {
   };
   const listeners = new Map<string, Listener>();
   const ipcMain: IpcMainLike = { handle: (name, listener) => void listeners.set(name, listener) };
-  registerModelChannels(createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') }), core, async () => chosen);
+  const told: string[] = [];
+  registerModelChannels(createIpcRegistry({ ipcMain, isTrusted: (url) => url.startsWith('bonaparte://app/') }), core, async () => chosen, () =>
+    told.push('models'),
+  );
   const call = (name: string, input?: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);
-  return { call, added };
+  return { call, added, told };
 }
 
 describe('the memory channels', () => {
@@ -59,10 +62,14 @@ describe('the memory channels', () => {
 
 describe('the model channels', () => {
   it('add the folder the person chose, and nothing when the dialog was closed', async () => {
-    await expect(setup('D:/modeles').call('models.addFolder', undefined)).resolves.toEqual(['D:/modeles']);
+    const chosen = setup('D:/modeles');
+    await expect(chosen.call('models.addFolder', undefined)).resolves.toEqual(['D:/modeles']);
+    // Its models join the composer's picker: the window is told.
+    expect(chosen.told).toEqual(['models']);
     const closed = setup(null);
     await expect(closed.call('models.addFolder', undefined)).resolves.toBeNull();
     expect(closed.added).toEqual([]);
+    expect(closed.told).toEqual([]);
   });
 
   it('take no folder from the window', async () => {

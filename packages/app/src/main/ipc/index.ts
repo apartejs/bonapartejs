@@ -56,13 +56,15 @@ export interface AppFacts {
   updates?: AppUpdates;
   /** What can be updated changed: the window reads it again. */
   updatesChanged?(): void;
+  /** The models found changed (a download done, a folder added): the window reads them again. */
+  modelsChanged?(): void;
   /** The colours of the window's own buttons, drawn by the system over the app (`main/title-bar.ts`). */
   titleBar?(colours: { color: string; symbolColor: string }): void;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
   ipc.handle(appInfo, () => ({ version: facts.version(), locale: facts.locale() }));
-  registerEngineChannels(ipc, core, facts.chooseFile);
+  registerEngineChannels(ipc, core, facts.chooseFile, facts.modelsChanged);
   registerMcpChannels(ipc, core);
   registerRunChannels(ipc, core);
   if (facts.browser) registerBrowserChannels(ipc, facts.browser);
@@ -90,7 +92,7 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   );
   registerSettingsChannels(ipc, core, facts.openDataFolder);
   registerExportChannel(ipc, core, facts.chooseFolder);
-  registerModelChannels(ipc, core, facts.chooseFolder);
+  registerModelChannels(ipc, core, facts.chooseFolder, facts.modelsChanged);
   registerMemoryChannels(ipc, core);
   registerProviderChannels(ipc, core);
   registerUpdateChannels(ipc, core, facts.updates ?? null, facts.version, facts.updatesChanged);

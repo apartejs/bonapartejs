@@ -50,9 +50,10 @@ function setup(
     installLlamaCpp: async () => ({ ...LLAMA, current: { source: 'managed', build: 'b12383' }, updateAvailable: false }),
     ...llama,
   } as unknown as Core;
-  registerEngineChannels(ipc, core);
+  const told: string[] = [];
+  registerEngineChannels(ipc, core, undefined, () => told.push('models'));
   const call = (name: string, input: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);
-  return { call };
+  return { call, told };
 }
 
 describe('the engine channels', () => {
@@ -137,8 +138,17 @@ describe('the engine channels', () => {
     await expect(call('engine.model.download', { id: 'qwen3-8b' })).resolves.toMatchObject({ ok: true, model: { id: 'qwen3-8b' } });
     const mismatch = setup(async () => READY, {
       downloadModel: async () => Promise.reject(new DigestMismatchError('https://huggingface.co/x.gguf')),
-    }).call;
-    await expect(mismatch('engine.model.download', { id: 'qwen3-8b' })).resolves.toMatchObject({ ok: false, error: { code: 'digest' } });
+    });
+    await expect(mismatch.call('engine.model.download', { id: 'qwen3-8b' })).resolves.toMatchObject({ ok: false, error: { code: 'digest' } });
+    // Nothing new on the disk: the window is not told.
+    expect(mismatch.told).toEqual([]);
+  });
+
+  it('tell the window when a download is done: the models found changed, the composer’s picker reads them again', async () => {
+    const model = { id: 'qwen3-8b', family: 'qwen' as const, name: 'Qwen3 8B', file: 'Qwen3-8B-Q4_K_M.gguf', bytes: 5, context: 32768, path: null, downloading: null };
+    const { call, told } = setup(async () => READY, { downloadModel: async () => ({ ...model, path: 'C:/data/models/Qwen3-8B-Q4_K_M.gguf' }) });
+    await call('engine.model.download', { id: 'qwen3-8b' });
+    expect(told).toEqual(['models']);
   });
 
   it('install llama.cpp, and say a file that is not the one published in its own words', async () => {

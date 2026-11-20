@@ -892,6 +892,16 @@ function Workspace({
   // back — shown chosen (task 7.4).
   const runningModel = engine.model?.path ?? engine.resume?.path;
   const [modelChoices, setModelChoices] = useState<ModelChoiceView[]>([]);
+  // Read again when the main process says the models found changed: a download done — one started at the first
+  // launch, which ends after the engine is ready —, a folder added.
+  const [modelsChanged, setModelsChanged] = useState(0);
+  useEffect(
+    () =>
+      bridge.on((event) => {
+        if (event.kind === 'models') setModelsChanged((count) => count + 1);
+      }),
+    [],
+  );
   useEffect(() => {
     // A server that already runs serves its own model: no picker, so no models read from the disk, and nothing
     // told to aparté's config — whose every change draws the conversation lists again (apartejs/aparte#251).
@@ -908,7 +918,7 @@ function Workspace({
     return () => {
       live = false;
     };
-  }, [runningModel, engine.mode, messages, locale]);
+  }, [runningModel, engine.mode, messages, locale, modelsChanged]);
 
   // The services added (task 9.3): their models offered in the composer's picker, beside the engine's.
   const servicesKnown = useRef<ServiceCatalogue[]>([]);

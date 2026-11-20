@@ -197,3 +197,29 @@ test('a recommended model downloading never holds « Démarrer » for a model al
   await expect(page.getByRole('button', { name: 'Démarrer' })).toBeEnabled({ timeout: 1_000 });
   await expect(row.getByRole('progressbar')).toBeVisible();
 });
+
+test('a model downloaded while another runs joins the composer’s picker once it is there', async ({ launch }) => {
+  const { page } = await launch({
+    managed: { models: MODELS },
+    hub: { models: { 'gemma-petit': { family: 'gemma' } }, paceMs: 3_000 },
+  });
+  const row = page.locator('.recommended-row', { hasText: 'gemma-petit' });
+  await row.getByRole('button', { name: /^Télécharger · [\d,]+ [KM]o$/ }).click();
+  await expect(row.getByRole('progressbar')).toBeVisible();
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  // The download goes on once the first launch is gone; the core finds the model when it is done.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const preload = window as unknown as { bonaparte: { invoke(name: string, input: unknown): Promise<{ name: string }[]> } };
+          return (await preload.bonaparte.invoke('engine.models', undefined)).map((model) => model.name);
+        }),
+      { timeout: 20_000 },
+    )
+    .toContain('gemma-petit');
+  const picker = page.getByRole('combobox', { name: 'Modèle' });
+  await picker.click();
+  await expect(page.getByRole('option', { name: /gemma-petit/ })).toBeVisible();
+});

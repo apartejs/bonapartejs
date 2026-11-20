@@ -23,10 +23,19 @@ import type { IpcRegistry } from './register.js';
 export type ModelsCore = Pick<Core, 'addModelFolder'> & { diskScan: Pick<Core['diskScan'], 'start' | 'state' | 'cancel'> };
 export type MemoryCore = Pick<Core, 'memory' | 'releaseMemory' | 'diskCheck' | 'unloadModel' | 'restartEngine' | 'resources'>;
 
-export function registerModelChannels(ipc: IpcRegistry, core: ModelsCore, chooseFolder: ChooseFolder): void {
+export function registerModelChannels(
+  ipc: IpcRegistry,
+  core: ModelsCore,
+  chooseFolder: ChooseFolder,
+  /** A folder added: its models are found now, and the window reads them again — the composer's picker among them. */
+  modelsChanged?: () => void,
+): void {
   ipc.handle(modelsAddFolder, async () => {
     const folder = await chooseFolder();
-    return folder === null ? null : core.addModelFolder(folder);
+    if (folder === null) return null;
+    const folders = await core.addModelFolder(folder);
+    modelsChanged?.();
+    return folders;
   });
   ipc.handle(modelsScanDisk, () => {
     core.diskScan.start();

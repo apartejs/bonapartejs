@@ -60,6 +60,8 @@ export function registerEngineChannels(
   >,
   /** The system's dialog for a file (task 12.3): the window never names one. */
   chooseFile?: () => Promise<string | null>,
+  /** The models found changed (a download done): the window reads them again — the composer's picker among them. */
+  modelsChanged?: () => void,
 ): void {
   ipc.handle(engineState, () => core.engineState());
   ipc.handle(engineLog, () => core.engineLog());
@@ -106,7 +108,9 @@ export function registerEngineChannels(
   ipc.handle(engineRecommended, () => core.recommendedModels());
   ipc.handle(engineModelDownload, async ({ id }): Promise<ModelDownloadResult> => {
     try {
-      return { ok: true, model: await core.downloadModel(id) };
+      const model = await core.downloadModel(id);
+      modelsChanged?.();
+      return { ok: true, model };
     } catch (error) {
       const detail = (error instanceof Error ? error.message : String(error)).slice(-4000);
       return { ok: false, error: { code: error instanceof DigestMismatchError ? 'digest' : 'failed', detail } };

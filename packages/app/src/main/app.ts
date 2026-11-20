@@ -372,6 +372,7 @@ ${appTokens}`,
     browser: builtinBrowser,
     updates: appUpdates,
     updatesChanged: () => push({ kind: 'updates' }),
+    modelsChanged: () => push({ kind: 'models' }),
     // A change the person made is told before its answer: the window acts on it at once (a title provider, a pane).
     pluginsChanged: () => push({ kind: 'plugins' }),
     version: () => __BONAPARTE_VERSION__,
