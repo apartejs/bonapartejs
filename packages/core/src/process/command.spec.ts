@@ -62,6 +62,19 @@ describe('a stdio server’s command, on Windows (task 10.5)', () => {
   });
 });
 
+describe('a bare .cmd is looked for on the PATH only (review of 2026-11-21)', () => {
+  it('never read from the app\'s own folder, then run against the project\'s', () => {
+    const here = new Map([['tool.cmd', '@node "%~dp0\\payload.js" %*'], [win32.join(NODE_DIR, 'node.exe').toLowerCase(), '']]);
+    const machine = {
+      env: { PATH: `C:\\Windows\\system32;${NODE_DIR}`, PATHEXT: '.COM;.EXE;.BAT;.CMD' },
+      platform: 'win32' as const,
+      exists: (file: string) => here.has(file.toLowerCase()),
+      read: (file: string) => here.get(file.toLowerCase()) ?? null,
+    };
+    expect(() => resolveCommand('tool.cmd', ['a'], { ...machine, cwd: 'C:\\dev\\app', notFound: 'refuse' })).toThrow(/not found where it is looked for/);
+  });
+});
+
 describe('the npm family on Windows, for run_command too (audit 2026-11-21, D1)', () => {
   const npmDir = 'C:\\Users\\me\\AppData\\Roaming\\npm';
   const project = 'C:\\dev\\app';

@@ -58,7 +58,12 @@ export function resolveCommand(command: string, args: readonly string[], options
     .split(';')
     .filter(Boolean);
 
-  const found = find(command, path, extensions, exists, options.cwd) ?? (/\.(cmd|bat)$/i.test(command) ? command : null);
+  // A bare name only on the PATH, a path from the folder it runs in: never the app's own folder (review of 2026-11-21).
+  const found = find(command, path, extensions, exists, options.cwd);
+  // A batch file named but not found is still never run: it would go through a shell.
+  if (!found && /\.(cmd|bat)$/i.test(command)) {
+    throw new Error(`${command} is a Windows batch file, and it was not found where it is looked for: a batch file would run through a shell, which bonaparte never does. Run the program it calls instead (node and its script, python, an .exe).`);
+  }
   if (!found) {
     if (options.notFound === 'refuse') {
       throw new Error(

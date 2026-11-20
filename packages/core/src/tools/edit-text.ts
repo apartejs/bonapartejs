@@ -37,11 +37,15 @@ export function keepEndings(before: string | null, content: string): string {
   return content.replace(/\n/g, '\r\n');
 }
 
+/** How many lines an ambiguous edit names: the message shows no more. */
+const MAX_LINES_NAMED = 10;
+
 export function applyEdit(content: string, oldString: string, newString: string): EditMatch {
   // Each line break of old_string matches either ending; the rest, exactly.
   const pattern = new RegExp(oldString.split(/\r?\n/).map(escape).join('\\r?\\n'), 'g');
   const found = [...content.matchAll(pattern)];
-  if (found.length > 1) return { ok: false, reason: 'ambiguous', occurrences: found.length, lines: found.map((one) => lineAt(content, one.index)) };
+  // Only the lines the message names are counted: a short old_string in a big file has thousands of matches.
+  if (found.length > 1) return { ok: false, reason: 'ambiguous', occurrences: found.length, lines: found.slice(0, MAX_LINES_NAMED).map((one) => lineAt(content, one.index)) };
   const match = found[0];
   if (!match) {
     const near = nearMatch(content, oldString);

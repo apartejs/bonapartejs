@@ -64,6 +64,15 @@ describe('read_file', () => {
     expect(later.content).toMatch(/\[Lines 500–\d+ of 1000 shown\. Read the rest with offset=\d+\.\]$/);
   });
 
+  it('one line longer than the view is said cut, never shown whole: search reaches the rest (review of 2026-11-21)', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'bundle.min.js'), `${'x'.repeat(20_000)}\n`);
+    const read = await call(readFileTool.handler, { path: 'bundle.min.js' }, ctx);
+    expect(read.content.length).toBeLessThanOrEqual(6_144);
+    expect(read.content).toMatch(/\[Line 1 is longer than this view \(20000 characters\): only its first \d+ are shown\. Use search to find what you need in it\.\]$/);
+    expect(read.content).not.toMatch(/offset=/);
+  });
+
   it('says what is wrong: no path, no file, a path outside — naming the folders', async () => {
     const { root, ctx } = await project();
     expect(await call(readFileTool.handler, {}, ctx)).toMatchObject({ failed: true, content: 'Missing argument: path.' });
@@ -103,6 +112,15 @@ describe('edit_file', () => {
     expect(twice).toMatchObject({ failed: true, content: expect.stringMatching(/occurs 2 times/) });
     expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('x\nx\n');
     expect(written).toEqual([]);
+  });
+
+  it('a short old_string in a big file is answered at once: only the lines it names are counted (review of 2026-11-21)', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'big.ts'), '{\n}\n'.repeat(30_000));
+    const started = performance.now();
+    const answer = await call(editFile.handler, { path: 'big.ts', old_string: '}', new_string: ']' }, ctx);
+    expect(answer).toMatchObject({ failed: true, content: expect.stringMatching(/occurs 30000 times/) });
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   it('a CRLF file is edited from an old_string written with \\n, and keeps its CRLF (audit 2026-11-21, D4)', async () => {

@@ -46,7 +46,16 @@ export const readFileTool: BuiltinTool = {
     const max = maxToolOutputChars(ctx.nCtx) - NOTE_ROOM;
     if (content.length > max) {
       const cut = content.lastIndexOf('\n', max);
-      const shown = cut > 0 ? content.slice(0, cut) : content.slice(0, max);
+      // One line longer than the view (a bundle, JSON on one line): said cut, never shown whole (review of 2026-11-21).
+      if (cut <= 0) {
+        const line = content.split('\n', 1)[0] ?? content;
+        const room = Math.max(0, max - 160);
+        return {
+          content: `${content.slice(0, room)}\n[Line ${start + 1} is longer than this view (${line.length} characters): only its first ${room} are shown. Use search to find what you need in it.]`,
+          structuredContent: { lines: 1 },
+        };
+      }
+      const shown = content.slice(0, cut);
       const shownLines = shown.split('\n').length;
       const last = start + shownLines;
       const total = lineCount(lines.join('\n'));
