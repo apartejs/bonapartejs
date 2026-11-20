@@ -283,13 +283,14 @@ export type BrowserAction = { kind: 'click'; selector: string } | { kind: 'type'
  * process, never with Node nor the window's bridge; this machine's own pages open, the network it is in does not.
  */
 export interface BrowserService {
-  open(url: string): Promise<{ url: string; title: string } | { error: string }>;
+  /** `conversationId`: whose agent opens it — the window shows that conversation's pane (the browser redo, step 1). */
+  open(url: string, conversationId: string): Promise<{ url: string; title: string } | { error: string }>;
   /**
    * A file of this machine, already checked by the core (`path` absolute, real, in the conversation's folders):
    * its page loads from `root`, the folder of the perimeter that holds it, and nothing else of the disk; it reaches
    * the network only with `network` — the conversation may go there without asking —, else it stays offline.
    */
-  openFile(path: string, root: string, options: { network: boolean }): Promise<{ url: string; title: string } | { error: string }>;
+  openFile(path: string, root: string, options: { network: boolean; conversationId: string }): Promise<{ url: string; title: string } | { error: string }>;
   /** The text of the page shown, and its console; null with no page open. The pane says « L'agent lit la page ». */
   read(): Promise<{ url: string; title: string; text: string; console: BrowserConsoleLine[] } | null>;
   /** A picture of the page shown, kept in the app's data folder (`saved`); null with no page open. */
@@ -354,7 +355,8 @@ export interface PluginNodeContext {
  * conversation and perimeter, the invocation's own) — the host checks it is a file there, and what the conversation
  * may, before anything opens. A file is read.
  */
-export interface PluginBrowser extends Omit<BrowserService, 'openFile'> {
+export interface PluginBrowser extends Omit<BrowserService, 'open' | 'openFile'> {
+  open(url: string, from: { conversationId: string }): Promise<{ url: string; title: string } | { error: string }>;
   openFile(
     path: string,
     from: { conversationId: string; roots: readonly string[] },

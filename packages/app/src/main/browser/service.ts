@@ -19,7 +19,13 @@ export interface BuiltinBrowser {
   dispose(): void;
 }
 
-export function createBuiltinBrowser(options: { window: () => BrowserWindow | undefined; dataDir: string; changed: () => void }): BuiltinBrowser {
+export function createBuiltinBrowser(options: {
+  window: () => BrowserWindow | undefined;
+  dataDir: string;
+  changed: () => void;
+  /** The agent of a conversation opened a page: the window shows it (the browser redo, step 1). */
+  opened?: (conversationId: string) => void;
+}): BuiltinBrowser {
   const session = sessions.fromPartition('bonaparte-browser');
   session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.on('will-download', (event) => event.preventDefault());
@@ -82,9 +88,16 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
   // Electron 45 does not type it here; where it gives it, it counts.
   session.webRequest.onCompleted((details) => responded(details as typeof details & { ip?: string }));
 
+  // A page the agent opened is shown to the person: the window opens its pane.
+  const shown =
+    (conversationId: string) =>
+    <T extends object>(result: T): T => {
+      if (!('error' in result)) options.opened?.(conversationId);
+      return result;
+    };
   const service: BrowserService = {
-    open: (url) => views.agentOpen(url),
-    openFile: (path, root, options) => views.agentOpenFile(path, root, options),
+    open: (url, conversationId) => views.agentOpen(url).then(shown(conversationId)),
+    openFile: (path, root, options) => views.agentOpenFile(path, root, options).then(shown(options.conversationId)),
     read: () => reading.during(() => views.agentRead()),
     async screenshot() {
       const shot = await views.agentScreenshot();

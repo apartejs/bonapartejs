@@ -272,7 +272,12 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
         });
   if (hiddenSearch) app.once('will-quit', () => hiddenSearch.dispose());
   // The built-in browser (task 10.1): its pages in a session of their own, on the main window.
-  const builtinBrowser = createBuiltinBrowser({ window: () => window, dataDir, changed: () => push({ kind: 'browser' }) });
+  const builtinBrowser = createBuiltinBrowser({
+    window: () => window,
+    dataDir,
+    changed: () => push({ kind: 'browser' }),
+    opened: (conversationId) => push({ kind: 'browser-opened', conversationId }),
+  });
   app.once('will-quit', () => builtinBrowser.dispose());
   if (options.e2e) (globalThis as { __bonaparteBrowser?: unknown }).__bonaparteBrowser = builtinBrowser.views;
   const core = createCore({

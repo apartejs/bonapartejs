@@ -33,6 +33,17 @@ export function close(open: OpenPanes, pane: PaneName): OpenPanes {
   return open.filter((one) => one !== pane);
 }
 
+/**
+ * A page the agent opened (the browser redo, step 1): opening a page is showing it. Its pane opens in the
+ * conversation shown, unless the person said panes never open by themselves (`autoOpenPanel`), or a narrow window
+ * would cover an approval or a question that waits; otherwise its icon is marked, and the pane of another
+ * conversation opens when the person goes back to it.
+ */
+export function browserOpens(state: { autoOpen: boolean; shown: boolean; narrow: boolean; waits: boolean }): 'open' | 'mark' {
+  if (!state.autoOpen || !state.shown) return 'mark';
+  return state.narrow && state.waits ? 'mark' : 'open';
+}
+
 /** Opens a pane, if it is not open yet. */
 export function opened(open: OpenPanes, pane: PaneName): OpenPanes {
   return open.includes(pane) ? open : [...open, pane];

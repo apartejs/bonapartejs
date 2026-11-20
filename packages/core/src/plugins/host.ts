@@ -141,6 +141,7 @@ async function openPerimeterFile(
   requested: string,
   roots: readonly string[],
   network: boolean,
+  conversationId: string,
 ): Promise<{ url: string; title: string } | { error: string }> {
   const home = homedir();
   let real: string;
@@ -153,7 +154,7 @@ async function openPerimeterFile(
   if (!found) return { error: `There is no file at ${requested}: give the path of a page in the project, an .html file.` };
   if (!found.isFile()) return { error: `${requested} is not a file: give the path of a page in it, an .html file.` };
   const root = (roots.length > 0 ? roots : [home]).map((one) => realLocation(resolve(one))).find((one) => contains(one, real)) ?? dirname(real);
-  return browser.openFile(real, root, { network });
+  return browser.openFile(real, root, { network, conversationId });
 }
 
 const onlyReads = ({ tool }: { tool: ToolDef }): Verdict =>
@@ -534,7 +535,7 @@ export class PluginHost {
       const within = <T>(effect: 'read' | 'execute', what: string, run: () => Promise<T>): Promise<T> =>
         declares.has(effect) ? live(run) : Promise.reject(new Error(`The plugin ${id} does not declare ${effect}: it cannot ${what}.`));
       context.browser = {
-        open: (url) => live(() => browser.open(url)),
+        open: (url, from) => live(() => browser.open(url, from.conversationId)),
         read: () => within('read', 'read the page', () => browser.read()),
         screenshot: () => within('read', 'picture the page', () => browser.screenshot()),
         act: (action) => within('execute', 'act in the page', () => browser.act(action)),
@@ -543,7 +544,7 @@ export class PluginHost {
           within('read', 'open a file', async () => {
             const access = (await this.options.fileAccess?.(from.conversationId)) ?? { files: true, network: false };
             if (!access.files) return { error: 'A discussion reaches no file: open a page of the internet with browser_open instead.' };
-            const opened = await openPerimeterFile(browser, path, from.roots, access.network);
+            const opened = await openPerimeterFile(browser, path, from.roots, access.network, from.conversationId);
             return 'error' in opened || access.network ? opened : { ...opened, offline: true };
           }),
       };

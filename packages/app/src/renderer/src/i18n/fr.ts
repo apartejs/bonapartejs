@@ -972,6 +972,7 @@ export const fr: Messages = {
     files: 'Fichiers',
     changes: 'Changements',
     changesWaiting: (count) => `Changements, ${count} en attente`,
+    browserOpened: 'Navigateur, l’agent y a ouvert une page',
     terminal: 'Terminal',
     subagents: 'Sous-agents',
     browser: 'Navigateur',

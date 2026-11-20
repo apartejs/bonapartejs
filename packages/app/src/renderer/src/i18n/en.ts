@@ -969,6 +969,7 @@ export const en: Messages = {
     files: 'Files',
     changes: 'Changes',
     changesWaiting: (count) => `Changes, ${count} waiting`,
+    browserOpened: 'Browser, the agent opened a page there',
     terminal: 'Terminal',
     subagents: 'Sub-agents',
     browser: 'Browser',

@@ -70,7 +70,7 @@ export const browser = definePlugin({
         if (!path) return { content: `Could not open ${url}: it is not the address of a file of this machine. Give its path to browser_open_file.`, failed: true };
         return openFile(path, { conversationId, roots });
       }
-      const opened = await ctx.browser.open(url);
+      const opened = await ctx.browser.open(url, { conversationId });
       if ('error' in opened) return { content: `Could not open ${url}: ${opened.error}`, failed: true };
       return { content: `Opened ${opened.url} (${opened.title || 'untitled'}) in the browser.` };
     });

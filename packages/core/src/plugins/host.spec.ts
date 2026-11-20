@@ -514,9 +514,9 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     await host.activate('pages', pages);
     await host.activate('reader', reader);
     expect(reader.ctx!.browser).toBeUndefined();
-    expect(await pages.ctx!.browser!.open('http://localhost:5173/')).toEqual({ url: 'http://localhost:5173/', title: 'Page' });
+    expect(await pages.ctx!.browser!.open('http://localhost:5173/', { conversationId: 'c1' })).toEqual({ url: 'http://localhost:5173/', title: 'Page' });
     await host.deactivate('pages');
-    await expect(pages.ctx!.browser!.open('http://x')).rejects.toThrow(/not active/);
+    await expect(pages.ctx!.browser!.open('http://x', { conversationId: 'c1' })).rejects.toThrow(/not active/);
     expect(opened).toEqual(['http://localhost:5173/']);
   });
 
@@ -548,10 +548,10 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     await mkdir(join(project, 'bac'));
     await writeFile(join(project, 'bac', 'snake.html'), '<title>Snake</title>');
     await writeFile(join(elsewhere, 'secret.html'), 'no');
-    const opened: [string, string, { network: boolean }][] = [];
+    const opened: [string, string, { network: boolean; conversationId: string }][] = [];
     const browser = {
       open: async (url: string) => ({ url, title: 'Page' }),
-      openFile: async (path: string, root: string, options: { network: boolean }) => {
+      openFile: async (path: string, root: string, options: { network: boolean; conversationId: string }) => {
         opened.push([path, root, options]);
         return { url: `file:///${path}`, title: 'Snake' };
       },
@@ -576,8 +576,8 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     // Its page reaches the network only where the conversation may without asking (review of 2026-11-20).
     await reader.ctx!.browser!.openFile('bac/snake.html', from('impro'));
     expect(opened).toEqual([
-      [join(project, 'bac', 'snake.html'), project, { network: false }],
-      [join(project, 'bac', 'snake.html'), project, { network: true }],
+      [join(project, 'bac', 'snake.html'), project, { network: false, conversationId: 'plume' }],
+      [join(project, 'bac', 'snake.html'), project, { network: true, conversationId: 'impro' }],
     ]);
     // Outside the folders, a folder, a file that is not there, a discussion: refused, with words the model can act on.
     expect(await reader.ctx!.browser!.openFile(join(elsewhere, 'secret.html'), from('plume'))).toMatchObject({ error: expect.stringMatching(/outside/i) });

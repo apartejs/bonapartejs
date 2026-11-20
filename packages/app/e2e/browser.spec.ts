@@ -208,3 +208,41 @@ test('a discussion reaches no file: the address of one, given to browser_open, o
     await rm(folder, { recursive: true, force: true });
   }
 });
+
+test('a page the agent opens is shown: the « Navigateur » pane opens by itself (Paul, 2026-11-20)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const launched = await launch({ engine: { responder: (prompt) => model(`${pagesUrl}/rapport`, prompts)(prompt), nCtx: 16_384 }, pages: { '/rapport': RAPPORT } });
+  pagesUrl = launched.pages!.url;
+  const { page } = launched;
+  await expect(chat(page).editor).toBeVisible();
+  await expect(page.getByRole('tablist', { name: 'Onglets' })).toHaveCount(0);
+  await chat(page).send('Regarde le récap');
+  const card = page.getByRole('region', { name: 'Demande d’accord' });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.getByRole('button', { name: 'Autoriser', exact: true }).click();
+  await expect(page.getByRole('tablist', { name: 'Onglets' })).toBeVisible({ timeout: 15_000 });
+  await expect(chat(page).replyText).toHaveText('Lu.', { timeout: 20_000 });
+});
+
+test('panes never opening by themselves, a page the agent opens marks the « Navigateur » icon instead (the browser redo, step 1)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const launched = await launch({
+    engine: { responder: (prompt) => model(`${pagesUrl}/rapport`, prompts)(prompt), nCtx: 16_384 },
+    pages: { '/rapport': RAPPORT },
+    settings: { autoOpenPanel: 'never' },
+  });
+  pagesUrl = launched.pages!.url;
+  const { page } = launched;
+  await chat(page).send('Regarde le récap');
+  const card = page.getByRole('region', { name: 'Demande d’accord' });
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  await card.getByRole('button', { name: 'Autoriser', exact: true }).click();
+  await expect(chat(page).replyText).toHaveText('Lu.', { timeout: 20_000 });
+  await expect(page.getByRole('tablist', { name: 'Onglets' })).toHaveCount(0);
+  const icon = page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Navigateur, l’agent y a ouvert une page' });
+  await expect(icon).toBeVisible();
+  // Opened by the person, the page is seen: the mark goes.
+  await icon.click();
+  await expect(page.getByRole('tablist', { name: 'Onglets' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Navigateur', exact: true })).toBeVisible();
+});

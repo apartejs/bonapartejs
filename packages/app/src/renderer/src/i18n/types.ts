@@ -684,6 +684,8 @@ export interface Messages {
     changes: string;
     /** The icon of Changements while changes wait for the person. */
     changesWaiting(count: number): string;
+    /** The agent opened a page the person has not seen yet. */
+    browserOpened: string;
     terminal: string;
     /** The sub-agents of the conversation (task 8.2). */
     subagents: string;

@@ -117,6 +117,8 @@ export type AppEvent =
   | { kind: 'plugins' }
   /** The built-in browser changed (a tab, its address, its console, the agent reading): the pane reads it again (task 10.1). */
   | { kind: 'browser' }
+  /** The agent of a conversation opened a page: the window shows that conversation's pane, as the person allows. */
+  | { kind: 'browser-opened'; conversationId: string }
   /** A notification or the notification area's menu was clicked: the window shows that conversation (task 8.5). */
   | { kind: 'open'; conversationId: string }
   /** A reading of the machine (task 12.4, « Moniteur de ressources »). */

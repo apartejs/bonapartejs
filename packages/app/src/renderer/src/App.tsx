@@ -70,7 +70,7 @@ import { PanelDock } from './panels/PanelDock';
 import { BrowserPanel } from './panels/BrowserPanel';
 import { PanelToggles } from './panels/PanelToggles';
 import { PluginFrame } from './panels/PluginFrame';
-import { close as closePane, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
+import { browserOpens, close as closePane, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { RewindBanner } from './chat/RewindBanner';
@@ -907,6 +907,51 @@ function Workspace({
   const forks = useRef<ConversationBranchesHandle>(null);
   const shownIdRef = useRef(conversationId);
   shownIdRef.current = conversationId;
+  // Opening a page is showing it (the browser redo, step 1): the pane of the conversation whose agent opened it
+  // opens, as the person allows (`autoOpenPanel`) and never over an answer that waits in a narrow window; else its
+  // icon is marked, and the pane opens when the person goes back to that conversation.
+  const narrowNow = useRef(narrow);
+  narrowNow.current = narrow;
+  const [browserMarks, setBrowserMarks] = useState<ReadonlySet<string>>(() => new Set());
+  const showBrowser = (id: string): 'open' | 'mark' => {
+    const decision = browserOpens({
+      autoOpen: autoOpen.current,
+      shown: id === shownIdRef.current,
+      narrow: narrowNow.current,
+      waits: statusesNow.current[id]?.waiting === true,
+    });
+    if (decision === 'open') setPanes((was) => opened(was, 'browser'));
+    setBrowserMarks((was) => {
+      if (decision === 'open' ? !was.has(id) : was.has(id)) return was;
+      const next = new Set(was);
+      if (decision === 'open') next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    return decision;
+  };
+  const showBrowserNow = useRef(showBrowser);
+  showBrowserNow.current = showBrowser;
+  useEffect(
+    () =>
+      bridge.on((event) => {
+        if (event.kind === 'browser-opened') showBrowserNow.current(event.conversationId);
+      }),
+    [],
+  );
+  // Back to a conversation whose agent opened a page meanwhile: its pane opens now.
+  useEffect(() => {
+    if (conversationId && browserMarks.has(conversationId)) showBrowserNow.current(conversationId);
+  }, [conversationId]);
+  // The pane opened by the person: the page is seen.
+  useEffect(() => {
+    if (!conversationId || !panes.includes('browser') || !browserMarks.has(conversationId)) return;
+    setBrowserMarks((was) => {
+      const next = new Set(was);
+      next.delete(conversationId);
+      return next;
+    });
+  }, [panes, conversationId, browserMarks]);
   const rewinding = useRewind({
     handles,
     replaceMessages: async (id, shown, tree) => {
@@ -1611,6 +1656,7 @@ function Workspace({
               messages={messages}
               open={panes}
               waiting={changesWaiting}
+              browserOpened={conversationId !== null && browserMarks.has(conversationId)}
               plugins={pluginPanes}
               onToggle={(pane) => setPanes((was) => togglePane(was, pane, narrow))}
             />

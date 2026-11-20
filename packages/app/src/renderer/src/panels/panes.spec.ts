@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { close, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle, type OpenPanes } from './panes';
+import { browserOpens, close, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle, type OpenPanes } from './panes';
 
 describe('the panes', () => {
   it('each icon opens and closes its own pane; they stack in one order', () => {
@@ -40,5 +40,19 @@ describe('the panes of a plugin (task 11.2)', () => {
     expect(shownPanes(open, false)).toEqual(['files', 'terminal', 'plugin:notes:list', 'plugin:revue-pr:revue']);
     expect(pluginOfPane('plugin:revue-pr:revue')).toEqual({ pluginId: 'revue-pr', paneId: 'revue' });
     expect(pluginOfPane('terminal')).toBeNull();
+  });
+});
+
+describe('a page the agent opened (the browser redo, step 1)', () => {
+  it('opens the pane of the conversation shown, as the person allows; else marks its icon', () => {
+    const shown = { autoOpen: true, shown: true, narrow: false, waits: false };
+    expect(browserOpens(shown)).toBe('open');
+    // « Jamais »: never by itself.
+    expect(browserOpens({ ...shown, autoOpen: false })).toBe('mark');
+    // Another conversation's page: its pane opens when the person goes back to it.
+    expect(browserOpens({ ...shown, shown: false })).toBe('mark');
+    // Narrow, the pane would cover an approval or a question that waits.
+    expect(browserOpens({ ...shown, narrow: true, waits: true })).toBe('mark');
+    expect(browserOpens({ ...shown, narrow: true })).toBe('open');
   });
 });
