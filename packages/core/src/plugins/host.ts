@@ -610,7 +610,7 @@ export class PluginHost {
         // network) they never saw — refused.
         if (verdict.verdict === 'ask' && !(ctx.granted === true && verdict.why === 'mode')) {
           return {
-            content: `Not done: ${inner} here needs the person's approval, which a plugin's tool cannot ask for. Do it with your own tools, so that the person is asked.`,
+            content: `Not done: ${inner} here needs the user's approval, which a plugin's tool cannot ask for. Do it with your own tools, so that the user is asked.`,
             failed: true,
           };
         }

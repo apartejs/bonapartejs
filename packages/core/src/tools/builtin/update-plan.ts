@@ -68,7 +68,7 @@ export const updatePlan: BuiltinTool = {
         },
         questions: {
           type: 'array',
-          description: 'What is left to settle on the way, each in a sentence: you will ask the person when it comes.',
+          description: 'What is left to settle on the way, each in a sentence: you will ask the user when it comes.',
           items: { type: 'string' },
         },
       },

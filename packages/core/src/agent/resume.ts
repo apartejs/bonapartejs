@@ -26,7 +26,7 @@ import type { Tickets } from './tickets.js';
 export type Pause = Extract<JournalEntry, { kind: 'pending' }>;
 
 /** What the model reads of a call the person stopped before it ran. */
-export const NOT_RUN_STOPPED = 'Not run: the person stopped the turn.';
+export const NOT_RUN_STOPPED = 'Not run: the user stopped the turn.';
 
 export type ResumeCheck =
   | { ok: true; pause: Pause; outcomes: Record<string, Outcome> }

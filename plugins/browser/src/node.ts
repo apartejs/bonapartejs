@@ -95,7 +95,7 @@ export const browser = definePlugin({
       const shot = await ctx.browser.screenshot({ conversationId });
       if (!shot) return NO_PAGE;
       return {
-        content: `A screenshot of ${shot.url} (${shot.width} × ${shot.height}) was taken and kept for the person (${shot.saved}); you cannot see it — read the page with browser_read.`,
+        content: `A screenshot of ${shot.url} (${shot.width} × ${shot.height}) was taken and kept for the user (${shot.saved}); you cannot see it — read the page with browser_read.`,
       };
     });
 

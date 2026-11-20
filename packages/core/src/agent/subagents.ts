@@ -113,7 +113,7 @@ function noteFor(spec: SubagentSpec, tools: readonly ToolDef[], roots: readonly 
     'you see nothing else of its conversation, and nobody else reads what you write but your last answer.',
     `Work on your own with these tools only: ${tools.map((tool) => tool.name).join(', ') || 'none'}.`,
     roots.length > 0 ? `You work in: ${roots.join(', ')}.` : '',
-    'Never ask the person anything. When you are done, answer with your result only: what the main agent needs, briefly. It is all that goes back to it.',
+    'Never ask the user anything. When you are done, answer with your result only: what the main agent needs, briefly. It is all that goes back to it.',
   ]
     .filter(Boolean)
     .join('\n');

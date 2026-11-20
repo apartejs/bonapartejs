@@ -58,12 +58,12 @@ const IDENTITY: Record<ConversationKind, (platform: string | undefined) => strin
       'How to work:',
       '- Find before you read: search and list_files, then read_file only the part you need (offset and limit for a long file).',
       '- Read a file before you edit it, and copy old_string exactly from what read_file showed.',
-      '- edit_file changes an existing file; write_file only creates a file or rewrites one whole.',
+      '- edit_file changes an existing file; write_file only creates a file or replaces a whole file.',
       '- Change only what the task needs. Never commit, push or delete unless the user asks.',
       '- After a change, check it: run the project’s tests, build or linter with run_command when it has them.',
       '- If a call fails, read the error and fix the call: never repeat it unchanged. After two failures, stop and tell the user what blocks you.',
       '- If the user refuses a call, do not try it again: follow their reason, or ask what they want instead.',
-      '- run_command has no shell: give the program, then each argument apart (no &&, |, > nor *). Use list_files, read_file and search rather than ls, cat or grep.',
+      '- run_command has no shell: give the program, then each argument apart (no &&, |, > or *). Use list_files, read_file and search rather than ls, cat or grep.',
       'End with a short message: what you changed, how you checked it, what is left.',
     ].join('\n'),
   discussion: (platform) =>
@@ -100,21 +100,21 @@ export function toolsFor(kind: ConversationKind, tools: readonly ToolDef[]): Too
 export function renderPerimeter(roots: readonly string[]): string {
   if (roots.length === 0) {
     return (
-      'No project folder is open. Your tools still work inside the person’s home folder: relative paths ' +
+      'No project folder is open. Your tools still work inside the user’s home folder: relative paths ' +
       'resolve from it. Name the exact path you are about to touch when it matters.'
     );
   }
   if (roots.length === 1) {
     return (
       `Open project: ${roots[0]}\n` +
-      'Relative paths resolve from this folder. Touching anything outside it needs the person’s approval.'
+      'Relative paths resolve from this folder. Touching anything outside it needs the user’s approval.'
     );
   }
   return (
     'Open project, spanning several folders:\n' +
     roots.map((root, index) => (index === 0 ? `- ${root}  (default: relative paths resolve here)` : `- ${root}`)).join('\n') +
     '\nRelative paths resolve against the first folder; reach another one by its absolute path. ' +
-    'Touching anything outside these folders needs the person’s approval.'
+    'Touching anything outside these folders needs the user’s approval.'
   );
 }
 
@@ -125,7 +125,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
 
   const project = [renderPerimeter(options.perimeter)];
   if (options.environment) project.push(options.environment);
-  if (options.replyLanguage) project.push(`Write your replies to the person in ${options.replyLanguage}.`);
+  if (options.replyLanguage) project.push(`Write your replies to the user in ${options.replyLanguage}.`);
   if (options.projectInstructions) {
     project.push(`Project instructions:\n${neutralizeControlTokens(options.projectInstructions, family)}`);
   }
@@ -141,7 +141,7 @@ export function buildServicePrompt(options: Omit<SystemPromptOptions, 'family' |
   const blocks = [IDENTITY[options.kind](options.platform), renderPerimeter(options.perimeter)];
   // The branch and the file names are a repository's choice: disarmed as its instructions are (security rule 5).
   if (options.environment) blocks.push(disarmForService(options.environment));
-  if (options.replyLanguage) blocks.push(`Write your replies to the person in ${options.replyLanguage}.`);
+  if (options.replyLanguage) blocks.push(`Write your replies to the user in ${options.replyLanguage}.`);
   // A file anyone who commits wrote: disarmed for any family the service may run (audit 13.4).
   if (options.projectInstructions) blocks.push(`Project instructions:\n${disarmForService(options.projectInstructions)}`);
   return blocks.join('\n\n');

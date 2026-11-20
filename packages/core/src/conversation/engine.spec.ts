@@ -450,12 +450,12 @@ describe('ConversationEngine — the reply language', () => {
     language = 'English';
     await say(meta.id, 'Hello');
     const told = prompts.at(-1)!;
-    expect(told).toContain('Write your replies to the person in English.');
-    expect(told.indexOf('Write your replies to the person in English.')).toBeGreaterThan(told.indexOf('Bonjour'));
+    expect(told).toContain('Write your replies to the user in English.');
+    expect(told.indexOf('Write your replies to the user in English.')).toBeGreaterThan(told.indexOf('Bonjour'));
     // The frozen prompt is the same: what was read before is still the start of what is sent.
     expect(told.startsWith(prompts[0]!.slice(0, prompts[0]!.indexOf('Bonjour')))).toBe(true);
     await say(meta.id, 'Again');
-    expect(prompts.at(-1)!.split('Write your replies to the person in English.').length - 1).toBe(1);
+    expect(prompts.at(-1)!.split('Write your replies to the user in English.').length - 1).toBe(1);
   });
 });
 

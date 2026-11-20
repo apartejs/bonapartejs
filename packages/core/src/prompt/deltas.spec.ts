@@ -101,7 +101,7 @@ describe('renderInstructionsDelta', () => {
 describe('renderReplyLanguageDelta', () => {
   it('asks for the new reply language, and says nothing when it did not change', () => {
     const delta = renderReplyLanguageDelta('French', 'English');
-    expect(delta).toEqual({ kind: 'reply-language', text: '[preferences update]\nWrite your replies to the person in English.' });
+    expect(delta).toEqual({ kind: 'reply-language', text: '[preferences update]\nWrite your replies to the user in English.' });
     expect(renderReplyLanguageDelta('French', 'French')).toBeNull();
   });
 });

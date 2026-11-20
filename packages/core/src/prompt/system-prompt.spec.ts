@@ -11,6 +11,11 @@ import { describe, expect, it } from 'vitest';
 import { familyLayer } from '../families/index.js';
 import type { ToolDef } from '../tools/types.js';
 import { PromptLog } from './prompt-log.js';
+import { NOT_RUN_STOPPED } from '../agent/resume.js';
+import { SUBAGENT_LEFT } from '../conversation/engine.js';
+import { PLUGIN_GUIDE } from '../plugins/guide.js';
+import { builtinTools } from '../tools/builtin/index.js';
+import { renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from './deltas.js';
 import { renderEnvironment } from './environment.js';
 import { buildServicePrompt, buildSystemPrompt, toolsFor, type SystemPromptOptions } from './system-prompt.js';
 
@@ -61,7 +66,7 @@ describe('buildSystemPrompt', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     const decor = [
       project.indexOf('C:\\work\\spanwise'),
-      project.indexOf('Write your replies to the person in French.'),
+      project.indexOf('Write your replies to the user in French.'),
       project.indexOf('Use pnpm, never npm.'),
     ];
     expect(decor.every((at) => at >= 0)).toBe(true);
@@ -130,6 +135,35 @@ describe('buildSystemPrompt', () => {
     // Gemma's declarations close the first turn, as Google's template writes them.
     const { stable } = buildSystemPrompt(options({ family: gemma }));
     expect(stable.endsWith('<tool|>')).toBe(true);
+  });
+});
+
+describe('one name for the one the model works for (review of round 2, 11)', () => {
+  it('says « the user » everywhere it speaks of them — the prompt, the notes, the tools, the refusals —, never « the person »', () => {
+    const said = [
+      ...['code', 'discussion'].flatMap((kind) =>
+        [[], ['C:\\a'], ['C:\\a', 'C:\\b']].map((perimeter) => {
+          const prompt = buildSystemPrompt(options({ kind: kind as 'code' | 'discussion', perimeter }));
+          return prompt.stable + prompt.project;
+        }),
+      ),
+      buildServicePrompt({ kind: 'code', perimeter: [], replyLanguage: 'French' }),
+      ...(['lecture', 'repetition', 'plume', 'impro'] as const).map((mode) => renderModeDelta(mode, true).text),
+      renderPerimeterDelta(['C:\\a'], [])!.text,
+      renderReplyLanguageDelta('French', 'English')!.text,
+      NOT_RUN_STOPPED,
+      SUBAGENT_LEFT,
+      PLUGIN_GUIDE,
+      ...builtinTools().map((tool) => JSON.stringify([tool.description, tool.inputSchema])),
+    ];
+    for (const text of said) expect(text).not.toMatch(/\bperson\b/i);
+    expect(said.join('\n')).toContain('the user');
+  });
+
+  it('says the shell rule and write_file in plain English', () => {
+    const { stable } = buildSystemPrompt(options({ family: gemma }));
+    expect(stable).toContain('(no &&, |, > or *)');
+    expect(stable).toContain('write_file only creates a file or replaces a whole file.');
   });
 });
 

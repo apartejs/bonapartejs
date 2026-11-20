@@ -42,7 +42,7 @@ export const runSubagentTool: BuiltinTool = {
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Short name shown to the person.' },
+        name: { type: 'string', description: 'Short name shown to the user.' },
         mission: { type: 'string', description: 'What to do and what to give back.' },
         tools: {
           type: 'string',

@@ -95,18 +95,18 @@ export function rewindNote(
   const said: string[] = [];
   const quoted = `“${excerpt(facts.message)}”`;
   if (what === 'code') {
-    if (facts.restored.length > 0) said.push(`The person put the files back to how they were before their message ${quoted}: ${facts.restored.join(', ')} are back to that state.`);
+    if (facts.restored.length > 0) said.push(`The user put the files back to how they were before their message ${quoted}: ${facts.restored.join(', ')} are back to that state.`);
     if (facts.conflicts.length > 0) said.push(`Left as they are, because they changed since: ${facts.conflicts.join(', ')}.`);
   } else if (what === 'conversation' && facts.kept.length > 0) {
     said.push(
-      `The person went back before their message ${quoted}: the conversation continues from there. ` +
+      `The user went back before their message ${quoted}: the conversation continues from there. ` +
         `The files were not put back: they keep the changes made after that point (${facts.kept.join(', ')}).`,
     );
   } else if (what === 'both' && facts.conflicts.length > 0) {
     said.push(`The files were put back to how they were before that point, except these, changed since: ${facts.conflicts.join(', ')}.`);
   }
   if (facts.commands.length > 0) {
-    if (said.length === 0 && what !== 'code') said.push(`The person went back before their message ${quoted}: the conversation continues from there.`);
+    if (said.length === 0 && what !== 'code') said.push(`The user went back before their message ${quoted}: the conversation continues from there.`);
     said.push(`Commands run after that point were not undone: ${facts.commands.join(', ')}.`);
   }
   return said.length > 0 ? said.join(' ') : undefined;

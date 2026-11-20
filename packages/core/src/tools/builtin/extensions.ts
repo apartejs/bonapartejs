@@ -76,7 +76,7 @@ export function extensionTools(deps: ExtensionToolsDeps): BuiltinTool[] {
         if (!defined.ok) return refused(defined.error);
         const { extension } = defined;
         return {
-          content: `Defined ${extension.id} ${extension.manifest.version}, revision ${extension.rev} (${extension.lines} lines), compiled. Nothing runs yet: run it with extension_run, or the person installs or tries it from its card.`,
+          content: `Defined ${extension.id} ${extension.manifest.version}, revision ${extension.rev} (${extension.lines} lines), compiled. Nothing runs yet: run it with extension_run, or the user installs or tries it from its card.`,
           structuredContent: {
             extension: {
               conversationId: extension.conversationId,
@@ -92,7 +92,7 @@ export function extensionTools(deps: ExtensionToolsDeps): BuiltinTool[] {
     {
       def: {
         name: 'extension_run',
-        description: 'Run the newest revision of a plugin made in this conversation, here only. The person sees its code and says yes first.',
+        description: 'Run the newest revision of a plugin made in this conversation, here only. The user sees its code and says yes first.',
         inputSchema: idInput,
         effect: 'execute',
         source: 'builtin',

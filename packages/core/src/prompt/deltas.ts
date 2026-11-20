@@ -43,7 +43,7 @@ export function renderPerimeterDelta(previous: readonly string[], current: reado
     return {
       kind: 'perimeter',
       text:
-        '[project update]\nThe project folders were closed. Your tools still work inside the person’s home ' +
+        '[project update]\nThe project folders were closed. Your tools still work inside the user’s home ' +
         'folder: relative paths resolve from it. Name the exact path you are about to touch.',
     };
   }
@@ -90,19 +90,19 @@ export function renderInstructionsDelta(previous: string | undefined, current: s
 /** The person changed the language of the interface: the replies follow it. */
 export function renderReplyLanguageDelta(previous: string | undefined, current: string): Delta | null {
   if (previous === current) return null;
-  return { kind: 'reply-language', text: `[preferences update]\nWrite your replies to the person in ${current}.` };
+  return { kind: 'reply-language', text: `[preferences update]\nWrite your replies to the user in ${current}.` };
 }
 
 /** What each mode lets the model do, as it reads it: the product's name, then what runs and what is asked. */
 const MODE_NOTES: Record<PlayMode, string> = {
   lecture:
-    'Lecture: the person reads your plan before anything changes. Read what you need, then present the change as a plan with update_plan — ' +
+    'Lecture: the user reads your plan before anything changes. Read what you need, then present the change as a plan with update_plan — ' +
     'its steps, the files it touches, the questions to settle on the way. Write nothing and run nothing: such calls are refused. ' +
-    'The person launches the plan when it suits them.',
+    'The user launches the plan when it suits them.',
   repetition:
-    'Répétition: every change to a file and every command is asked to the person before it runs. Go ahead with the work; ' +
+    'Répétition: every change to a file and every command is asked to the user before it runs. Go ahead with the work; ' +
     'a refusal may come with what to do instead.',
-  plume: 'Plume: changes to files run without asking; commands are asked to the person. Go ahead with the work.',
+  plume: 'Plume: changes to files run without asking; commands are asked to the user. Go ahead with the work.',
   impro:
     'Impro: changes and commands run without asking, except files that run later (package.json, git hooks, configuration files, .env), ' +
     'which are always asked.',
@@ -110,7 +110,7 @@ const MODE_NOTES: Record<PlayMode, string> = {
 
 /** Leaving Lecture for a mode that changes things is the person launching the plan the model presented. */
 const LAUNCHED =
-  'The person launched your plan: send update_plan again with its first step in-progress, then carry the plan out, ' +
+  'The user launched your plan: send update_plan again with its first step in-progress, then carry the plan out, ' +
   'sending update_plan each time a step moves.';
 
 /** The mode the conversation runs in, when it is not the one the model was last told; `launched`: it leaves Lecture with a plan. */

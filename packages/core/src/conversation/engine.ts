@@ -2111,7 +2111,7 @@ function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
 /** What the model reads of a call its turn left unanswered: the conversation moved on without it. */
 export const NOT_RUN_UNANSWERED = 'Not run: the turn ended before this call was answered.';
 /** What the model reads of a sub-agent left waiting for the person, who moved on. */
-export const SUBAGENT_LEFT = 'Stopped: the sub-agent waited for an answer the person never gave; it returns nothing.';
+export const SUBAGENT_LEFT = 'Stopped: the sub-agent waited for an answer the user never gave; it returns nothing.';
 
 /**
  * A model turn that ended on calls nobody answered — the round limit reached, a pause the person
