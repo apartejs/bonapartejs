@@ -41,6 +41,10 @@ export const qwenLayer: FamilyLayer = {
   id: 'qwen',
   controlTokens: CONTROL_TOKENS,
   stop: [IM_END, '<|endoftext|>'],
+  // Qwen's model cards for Qwen3: thinking, Temperature=0.6, TopP=0.95, TopK=20, MinP=0 (never greedy); without,
+  // Temperature=0.7, TopP=0.8, TopK=20, MinP=0.
+  sampling: ({ thinking }) =>
+    thinking ? { temperature: 0.6, topP: 0.95, topK: 20, minP: 0 } : { temperature: 0.7, topP: 0.8, topK: 20, minP: 0 },
 
   renderSystem,
   renderSystemNote: (text) => renderSystem(disarm(text)),

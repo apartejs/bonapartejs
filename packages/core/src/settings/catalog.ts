@@ -18,6 +18,8 @@ import type { SettingField } from './resolve.js';
 
 const LIVE = ['global', 'project', 'conversation'] as SettingField['scopes'];
 
+// No store holds these for the app or a project yet: a turn samples as its model's family recommends
+// (`FamilyLayer.sampling`), with the conversation's own temperature over it (audit 2026-11-21, D6).
 export const SAMPLING_SETTINGS: SettingField[] = [
   // Decided by the suffix of the next turn only: the frozen prefix never
   // changes, so this is a live choice.

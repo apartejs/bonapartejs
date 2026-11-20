@@ -697,12 +697,13 @@ export interface ConversationSettingsView {
   defaults: { temperature: number; thinking: boolean };
 }
 
-function settingsView(meta: ConversationMeta): ConversationSettingsView {
+/** `family`: the layer its turns run in — its recommended temperature is the one a turn falls back on (audit 2026-11-21, D6). */
+function settingsView(meta: ConversationMeta, family: FamilyLayer): ConversationSettingsView {
   return {
     temperature: meta.temperature ?? null,
     thinking: meta.thinking ?? null,
     contextCap: meta.contextCap ?? null,
-    defaults: { temperature: settingDefault('temperature') as number, thinking: true },
+    defaults: { temperature: family.sampling({ thinking: meta.thinking ?? true }).temperature, thinking: true },
   };
 }
 
@@ -2450,7 +2451,7 @@ export function createCore(deps: CoreDeps): Core {
       async get(conversationId) {
         const meta = await conversationStore.get(conversationId);
         if (!meta) throw new Error(`There is no conversation ${conversationId}.`);
-        return settingsView(meta);
+        return settingsView(meta, loaded?.layer ?? remoteFamily ?? familyLayer('gemma'));
       },
       async set(conversationId, changes) {
         if (changes.temperature !== undefined && changes.temperature !== null && !(changes.temperature >= 0 && changes.temperature <= 2)) {
@@ -2459,7 +2460,7 @@ export function createCore(deps: CoreDeps): Core {
         if (changes.contextCap !== undefined && changes.contextCap !== null && !(Number.isInteger(changes.contextCap) && changes.contextCap >= 512)) {
           throw new Error('The context cap is a whole number of tokens, 512 at least.');
         }
-        return settingsView(await conversationStore.settle(conversationId, changes));
+        return settingsView(await conversationStore.settle(conversationId, changes), loaded?.layer ?? remoteFamily ?? familyLayer('gemma'));
       },
     },
 

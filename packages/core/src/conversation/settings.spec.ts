@@ -65,13 +65,25 @@ describe('the settings of one conversation', { timeout: 30_000 }, () => {
     expect(String(after['prompt']).startsWith(before.slice(0, before.lastIndexOf('<|turn>user')))).toBe(true);
   });
 
+  it('a turn samples as the model’s family recommends, the conversation’s temperature over it (audit 2026-11-21, D6)', async () => {
+    const { core, say, bodies } = await rig();
+    await say('Bonjour');
+    // Gemma 4, as Google's model card says: temperature 1.0, top_p 0.95, top_k 64 — and llama.cpp's min_p off.
+    expect(bodies.at(-1)).toMatchObject({ temperature: 1, top_p: 0.95, top_k: 64, min_p: 0 });
+    // The window's « Réglages de la conversation » falls back on that temperature.
+    expect((await core.conversationSettings.get('c1')).defaults.temperature).toBe(1);
+    await core.conversationSettings.set('c1', { temperature: 0.3 });
+    await say('Encore');
+    expect(bodies.at(-1)).toMatchObject({ temperature: 0.3, top_p: 0.95, top_k: 64, min_p: 0 });
+  });
+
   it('switched off, the entry gives the defaults back', async () => {
     const { core, say, bodies } = await rig();
     await say('Bonjour');
     await core.conversationSettings.set('c1', { temperature: 0.2, thinking: false });
     await core.plugins.setEnabled('conversation-settings', false);
     await say('Encore');
-    expect(bodies.at(-1)!['temperature']).toBeUndefined();
+    expect(bodies.at(-1)!['temperature']).toBe(1);
     expect(String(bodies.at(-1)!['prompt']).endsWith(familyLayer('gemma').beginAssistant({ thinking: true }))).toBe(true);
   });
 

@@ -805,7 +805,8 @@ export class ConversationEngine {
               idSlot: slot.id,
               cachePrompt: true,
               nPredict,
-              sampling: { stop: [...family.stop] },
+              // The summary too samples as the family recommends, its reasoning off (audit 2026-11-21, D6).
+              sampling: { ...family.sampling({ thinking: false }), stop: [...family.stop] },
               ...(signal ? { signal } : {}),
             })) {
               if (event.type === 'token') take(demux.push(event.text));
@@ -1610,7 +1611,12 @@ export class ConversationEngine {
           idSlot: slot.id,
           cachePrompt: true,
           returnProgress: true,
-          sampling: { stop: [...family.stop], ...(run.temperature !== undefined ? { temperature: run.temperature } : {}) },
+          // The family's recommended sampling, the conversation's temperature over it (audit 2026-11-21, D6).
+          sampling: {
+            ...family.sampling({ thinking: run.thinking }),
+            stop: [...family.stop],
+            ...(run.temperature !== undefined ? { temperature: run.temperature } : {}),
+          },
           ...(grammar ?? {}),
           signal: completionSignal,
         })) {

@@ -336,3 +336,10 @@ describe('Gemma 4 — a system note later in the conversation (a delta)', () => 
     expect(note.match(/<\|turn>/g)).toHaveLength(1);
   });
 });
+
+describe('the Gemma layer — sampling (audit 2026-11-21, D6)', () => {
+  it('is what Google recommends for Gemma 4, reasoning or not: 1.0 / 0.95 / 64, min_p off', () => {
+    expect(gemma.sampling({ thinking: true })).toEqual({ temperature: 1, topP: 0.95, topK: 64, minP: 0 });
+    expect(gemma.sampling({ thinking: false })).toEqual({ temperature: 1, topP: 0.95, topK: 64, minP: 0 });
+  });
+});

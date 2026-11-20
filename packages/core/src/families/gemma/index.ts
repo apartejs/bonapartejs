@@ -86,6 +86,9 @@ export const gemmaLayer: FamilyLayer = {
   controlTokens: CONTROL_TOKENS,
   // `<|tool_response>`: after a call the model hands over, and we answer.
   stop: [TURN_CLOSE, TOOL_RESPONSE_OPEN],
+  // Google's model card for Gemma 4: « temperature=1.0, top_p=0.95, top_k=64 » for every use; min_p, which
+  // llama.cpp sets to 0.05 by itself, off.
+  sampling: () => ({ temperature: 1, topP: 0.95, topK: 64, minP: 0 }),
 
   renderSystem,
   renderSystemNote: (text) => `${TURN_OPEN}system

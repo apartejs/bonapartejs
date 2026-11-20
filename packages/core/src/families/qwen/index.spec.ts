@@ -185,3 +185,10 @@ describe('Qwen — a system note later in the conversation (a delta)', () => {
     expect(note.match(/<\|im_end\|>/g)).toHaveLength(1);
   });
 });
+
+describe('the Qwen layer — sampling (audit 2026-11-21, D6)', () => {
+  it('is what Qwen recommends for Qwen3: thinking 0.6 / 0.95 / 20 / 0, without 0.7 / 0.8 / 20 / 0', () => {
+    expect(qwen.sampling({ thinking: true })).toEqual({ temperature: 0.6, topP: 0.95, topK: 20, minP: 0 });
+    expect(qwen.sampling({ thinking: false })).toEqual({ temperature: 0.7, topP: 0.8, topK: 20, minP: 0 });
+  });
+});

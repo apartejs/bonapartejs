@@ -19,6 +19,14 @@ export interface GrammarConstraint {
   preservedTokens: string[];
 }
 
+/** The sampling a family's makers recommend: /completion's temperature, top_p, top_k and min_p. */
+export interface FamilySampling {
+  temperature: number;
+  topP: number;
+  topK: number;
+  minP: number;
+}
+
 /** What the stream of an answer says, piece by piece. */
 export type DemuxEvent =
   | { type: 'text'; delta: string }
@@ -49,6 +57,11 @@ export interface FamilyLayer {
   readonly controlTokens: readonly string[];
   /** What ends an answer. */
   readonly stop: readonly string[];
+  /**
+   * How its models are sampled, as their makers recommend (audit 2026-11-21, D6): sent with every turn — llama.cpp's
+   * own defaults are no model's — the conversation's temperature over it.
+   */
+  sampling(options: { thinking: boolean }): FamilySampling;
   renderSystem(text: string): string;
   /**
    * A system turn later in the conversation — a delta: what changed since the
