@@ -46,6 +46,24 @@ describe('read_file', () => {
     expect(await call(readFileTool.handler, { path: 'a.ts', offset: 2, limit: 1 }, ctx)).toMatchObject({ content: 'two' });
   });
 
+  it('a file too long for the context is cut after a whole line, saying which lines were shown and where to go on (audit 2026-11-21, D5)', async () => {
+    const { root, ctx } = await project();
+    const lines = Array.from({ length: 1_000 }, (_, n) => `line ${String(n + 1).padStart(4, '0')} ${'.'.repeat(30)}`);
+    await writeFile(join(root, 'long.txt'), `${lines.join('\n')}\n`);
+    const whole = await call(readFileTool.handler, { path: 'long.txt' }, ctx);
+    expect(whole.content.length).toBeLessThanOrEqual(6_144);
+    const said = /\[Lines 1–(\d+) of 1000 shown\. Read the rest with offset=(\d+)\.\]$/.exec(whole.content);
+    expect(said).not.toBeNull();
+    const last = Number(said![1]);
+    expect(Number(said![2])).toBe(last + 1);
+    expect(whole.content).toContain(`${lines[last - 1]}\n[Lines`);
+    expect(whole.content).not.toContain(lines[last]!);
+    // From an offset: the lines it shows are said from there.
+    const later = await call(readFileTool.handler, { path: 'long.txt', offset: 500 }, ctx);
+    expect(later.content.startsWith(lines[499]!)).toBe(true);
+    expect(later.content).toMatch(/\[Lines 500–\d+ of 1000 shown\. Read the rest with offset=\d+\.\]$/);
+  });
+
   it('says what is wrong: no path, no file, a path outside — naming the folders', async () => {
     const { root, ctx } = await project();
     expect(await call(readFileTool.handler, {}, ctx)).toMatchObject({ failed: true, content: 'Missing argument: path.' });

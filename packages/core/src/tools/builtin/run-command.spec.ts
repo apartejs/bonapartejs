@@ -60,6 +60,22 @@ describe.runIf(process.platform === 'win32')('run_command on Windows: the npm fa
 });
 
 describe('run_command', () => {
+  it('an output past what is kept in memory keeps its head and its end — the exit code, the failures (audit 2026-11-21, D5)', async () => {
+    const script =
+      'process.stdout.write("START\\n"); const line = "y".repeat(99) + "\\n"; for (let i = 0; i < 25000; i++) process.stdout.write(line); ' +
+      'process.stdout.write("FAILED: the last test\\n"); process.exit(3)';
+    const result = await run(node(script));
+    expect(result.content.startsWith(`$ ${process.execPath} -e`)).toBe(true);
+    expect(result.content).toContain('START');
+    expect(result.content).toContain('FAILED: the last test');
+    expect(result.content).toMatch(/\[exit code 3\]$/);
+    // Everything between what the context keeps is counted, what went while it ran included (some 2.5 MB).
+    const said = /\[The output was cut in the middle: ([\d,]+) lines \(([\d,]+) characters\) were left out\.\]/.exec(result.content);
+    expect(said).not.toBeNull();
+    expect(Number(said![2]!.replace(/,/g, ''))).toBeGreaterThan(2_400_000);
+    expect(result.content.length).toBeLessThan(1_100_000);
+  });
+
   it('runs the program with its arguments, as they are: no shell reads them', async () => {
     const result = await run(node('console.log(process.argv[1])', 'a && b | c; $(d)'));
     expect(result.content).toContain('a && b | c; $(d)');

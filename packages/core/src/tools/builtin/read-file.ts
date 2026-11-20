@@ -1,5 +1,9 @@
 import { readFile } from 'node:fs/promises';
+import { maxToolOutputChars } from '../output-cap.js';
 import { lineCount } from '../preview.js';
+
+/** Room kept for the note that says which lines were shown. */
+const NOTE_ROOM = 100;
 import { describeError, inPerimeter, refused, text, wholeNumber, type BuiltinTool } from './common.js';
 
 export const readFileTool: BuiltinTool = {
@@ -32,10 +36,24 @@ export const readFileTool: BuiltinTool = {
     }
     const offset = wholeNumber(call.input, 'offset');
     const limit = wholeNumber(call.input, 'limit');
+    const lines = content.split('\n');
+    const start = Math.max(0, (offset ?? 1) - 1);
     if (offset !== undefined || limit !== undefined) {
-      const lines = content.split('\n');
-      const start = Math.max(0, (offset ?? 1) - 1);
       content = lines.slice(start, limit !== undefined ? start + Math.max(0, limit) : lines.length).join('\n');
+    }
+    // Too long for the context: whole lines up to the cap, and where to go on (audit 2026-11-21, D5) — never the
+    // registry's cut in the middle of a file.
+    const max = maxToolOutputChars(ctx.nCtx) - NOTE_ROOM;
+    if (content.length > max) {
+      const cut = content.lastIndexOf('\n', max);
+      const shown = cut > 0 ? content.slice(0, cut) : content.slice(0, max);
+      const shownLines = shown.split('\n').length;
+      const last = start + shownLines;
+      const total = lineCount(lines.join('\n'));
+      return {
+        content: `${shown}\n[Lines ${start + 1}–${last} of ${total} shown. Read the rest with offset=${last + 1}.]`,
+        structuredContent: { lines: shownLines },
+      };
     }
     // For the window's line: « Lu a.ts · 3 lignes ».
     return { content, structuredContent: { lines: lineCount(content) } };

@@ -10,13 +10,18 @@
 import { withoutSecrets } from '../../process/env.js';
 import { resolveCommand } from '../../process/command.js';
 import { spawnHidden } from '../../process/spawn.js';
+import { capToolOutput } from '../output-cap.js';
 import { describeError, inPerimeter, refused, text, wholeNumber, workRoot, type BuiltinTool } from './common.js';
 import type { ToolOutput } from '../types.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_TIMEOUT_MS = 600_000;
-/** What is kept of a long output while it runs (the registry cuts it again for the context). */
-const MAX_KEPT_CHARS = 1_000_000;
+/**
+ * What is kept of a long output while it runs: its head, and its tail as it goes — the end of a test run says what
+ * failed (audit 2026-11-21, D5). The cut for the context is made from them.
+ */
+const HEAD_KEPT_CHARS = 300_000;
+const TAIL_KEPT_CHARS = 700_000;
 
 function argumentsOf(input: unknown): string[] | null {
   const args = typeof input === 'object' && input !== null ? (input as Record<string, unknown>)['args'] : undefined;
@@ -73,12 +78,25 @@ export const runCommand: BuiltinTool = {
         return;
       }
       ctx.onOutput?.({ kind: 'start', command: shown, cwd });
-      let output = '';
+      let head = '';
+      let tail = '';
+      const dropped = { characters: 0, lines: 0 };
       let ended: 'time' | 'stop' | null = null;
       const keep = (chunk: Buffer | string): void => {
         const text = chunk.toString();
         ctx.onOutput?.({ kind: 'data', text });
-        if (output.length < MAX_KEPT_CHARS) output += text;
+        const room = HEAD_KEPT_CHARS - head.length;
+        if (room > 0) {
+          head += text.slice(0, room);
+          tail += text.slice(room);
+        } else tail += text;
+        // Trimmed now and then, not at every chunk: what goes is counted.
+        if (tail.length > 2 * TAIL_KEPT_CHARS) {
+          const gone = tail.slice(0, tail.length - TAIL_KEPT_CHARS);
+          dropped.characters += gone.length;
+          dropped.lines += gone.split('\n').length - 1;
+          tail = tail.slice(-TAIL_KEPT_CHARS);
+        }
       };
       child.stdout?.on('data', keep);
       child.stderr?.on('data', keep);
@@ -110,15 +128,17 @@ export const runCommand: BuiltinTool = {
       );
       child.on('close', (code) => {
         ctx.onOutput?.({ kind: 'exit', code });
-        const printed = output.trimEnd();
+        const printed = (head + tail).trimEnd();
         const end =
           ended === 'time'
             ? `[The command was stopped after ${timeoutMs / 1000} s: its time limit.]`
             : ended === 'stop'
               ? '[The command was stopped: the turn was stopped.]'
               : `[exit code ${code ?? 'unknown'}]`;
+        const content = `$ ${shown}\n${printed === '' ? '(no output)' : printed}\n${end}`;
         finish({
-          content: `$ ${shown}\n${printed === '' ? '(no output)' : printed}\n${end}`,
+          // Past what was kept, the cut is made here, where it is known what went between the head and the tail.
+          content: dropped.characters > 0 ? capToolOutput(content, ctx.nCtx, dropped) : content,
           structuredContent: { exitCode: code, ...(ended ? { stopped: ended } : {}) },
         });
       });
