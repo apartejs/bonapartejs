@@ -57,7 +57,7 @@ const model = (call: string) => (prompt: string) =>
 
 async function setup(call: string) {
   const prompts: string[] = [];
-  const server = await startFakeLlamaServer({ responder: model(call), onCompletion: (body) => prompts.push(String(body['prompt'])) });
+  const server = await startFakeLlamaServer({ nCtx: 8192, responder: model(call), onCompletion: (body) => prompts.push(String(body['prompt'])) });
   servers.push(server);
   const dir = await mkdtemp(join(tmpdir(), 'bp-plugins-'));
   dirs.push(dir);

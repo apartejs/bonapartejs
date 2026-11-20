@@ -4,12 +4,14 @@
  * instructions and tool calls. The reply language is an instruction of its
  * own.
  *
- *   1. `stable` — identity, how to call a tool, the amendment clause, then
- *      the tools, where the family's template puts them (Gemma: its
- *      declarations close the turn). The same for every conversation of a
- *      kind on a model: a seed of this turn serves them all (spec §7.2).
+ *   1. `stable` — identity and method (the machine's platform in it), how to
+ *      call a tool, the amendment clause, then the tools, where the family's
+ *      template puts them (Gemma: its declarations close the turn). The same
+ *      for every conversation of a kind on a model and a machine: a seed of
+ *      this turn serves them all (spec §7.2).
  *   2. `project` — this conversation's decor: the project's folders (the
- *      first is the default), the reply language, the project's instructions.
+ *      first is the default), its environment (the date, the branch, what is
+ *      not committed), the reply language, the project's instructions.
  *
  * Both are frozen when the conversation is created; a later change is a
  * delta appended to the journal (`deltas.ts`), never a re-render. The order
@@ -33,6 +35,10 @@ export interface SystemPromptOptions {
   replyLanguage?: string;
   /** AGENTS.md and the like: anyone who can commit wrote them. */
   projectInstructions?: string;
+  /** The machine's platform (« Windows »): the same for every conversation of the machine, in the shared turn. */
+  platform?: string;
+  /** This conversation's environment, rendered (`renderEnvironment`): the date, the branch, what is not committed. */
+  environment?: string;
 }
 
 export interface SystemPrompt {
@@ -40,13 +46,36 @@ export interface SystemPrompt {
   project: string;
 }
 
-const IDENTITY: Record<ConversationKind, string> = {
-  code:
-    'You are bonaparte, a local-first coding agent working on a real project on the person’s computer. ' +
-    'Be precise and concise. Verify with tools instead of assuming.',
-  discussion:
-    'You are bonaparte, a local-first assistant. In this conversation you have no access to the person’s files ' +
-    'nor to their computer: you answer from what you know, and from the web when a tool lets you. Be precise and concise.',
+/**
+ * Who the model is and how it works (audit 2026-11-21, I1): a small model needs the method more than a large one —
+ * find, read before an edit, check, never repeat a failure, no shell, how to end. Short: it rides in every prompt.
+ */
+const IDENTITY: Record<ConversationKind, (platform: string | undefined) => string> = {
+  code: (platform) =>
+    [
+      `You are bonaparte, a coding agent working in the user’s project on their computer${platform ? ` (${platform})` : ''}. ` +
+        'You act through tool calls; the user sees each call and may have to approve it.',
+      'How to work:',
+      '- Find before you read: search and list_files, then read_file only the part you need (offset and limit for a long file).',
+      '- Read a file before you edit it, and copy old_string exactly from what read_file showed.',
+      '- edit_file changes an existing file; write_file only creates a file or rewrites one whole.',
+      '- Change only what the task needs. Never commit, push or delete unless the user asks.',
+      '- After a change, check it: run the project’s tests, build or linter with run_command when it has them.',
+      '- If a call fails, read the error and fix the call: never repeat it unchanged. After two failures, stop and tell the user what blocks you.',
+      '- If the user refuses a call, do not try it again: follow their reason, or ask what they want instead.',
+      '- run_command has no shell: give the program, then each argument apart (no &&, |, > nor *). Use list_files, read_file and search rather than ls, cat or grep.',
+      'End with a short message: what you changed, how you checked it, what is left.',
+    ].join('\n'),
+  discussion: (platform) =>
+    [
+      `You are bonaparte, an assistant on the user’s computer${platform ? ` (${platform})` : ''}. ` +
+        'In this conversation you reach none of their files and run nothing: you answer from what you know, and from the web when a tool lets you.',
+      'How to work:',
+      '- For anything recent, or that you are not sure of, search the web, then read the best result before you answer.',
+      '- Say where a fact comes from: give the address of the page you read it on.',
+      '- If a call fails, read the error and change the call: never repeat it unchanged.',
+      'Be precise and concise.',
+    ].join('\n'),
 };
 
 // Without it, a delta appended later would contradict the frozen prompt.
@@ -91,10 +120,11 @@ export function renderPerimeter(roots: readonly string[]): string {
 
 export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
   const { family } = options;
-  const head = [IDENTITY[options.kind], family.renderToolConvention(), AMENDMENT].filter((block) => block !== '');
+  const head = [IDENTITY[options.kind](options.platform), family.renderToolConvention(), AMENDMENT].filter((block) => block !== '');
   const stable = head.join('\n\n') + family.renderToolInventory(toolsFor(options.kind, options.tools));
 
   const project = [renderPerimeter(options.perimeter)];
+  if (options.environment) project.push(options.environment);
   if (options.replyLanguage) project.push(`Write your replies to the person in ${options.replyLanguage}.`);
   if (options.projectInstructions) {
     project.push(`Project instructions:\n${neutralizeControlTokens(options.projectInstructions, family)}`);
@@ -108,7 +138,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
  * by its own API. Sent whole at every turn — nothing is frozen there, the service keeps no memory.
  */
 export function buildServicePrompt(options: Omit<SystemPromptOptions, 'family' | 'tools'>): string {
-  const blocks = [IDENTITY[options.kind], renderPerimeter(options.perimeter)];
+  const blocks = [IDENTITY[options.kind](options.platform), renderPerimeter(options.perimeter)];
+  if (options.environment) blocks.push(options.environment);
   if (options.replyLanguage) blocks.push(`Write your replies to the person in ${options.replyLanguage}.`);
   // A file anyone who commits wrote: disarmed for any family the service may run (audit 13.4).
   if (options.projectInstructions) blocks.push(`Project instructions:\n${disarmForService(options.projectInstructions)}`);

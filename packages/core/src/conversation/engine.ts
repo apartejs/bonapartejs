@@ -110,6 +110,12 @@ export interface ConversationEngineDeps {
   onSaveError?(error: unknown, conversationId: string): void;
   /** The project's instructions now (its `.bonaparte/instructions.md`, `AGENTS.md` or `CLAUDE.md`). */
   instructions?(meta: ConversationMeta): Promise<string | undefined>;
+  /**
+   * This conversation's environment, rendered (`renderEnvironment`: the date, the branch, what is not committed):
+   * read only when its prompt is frozen — its first turn, a compaction, a change of model — into its own turn,
+   * never into the shared one (audit 2026-11-21, I1).
+   */
+  environment?(meta: ConversationMeta): Promise<string | undefined>;
   /** The mode the core decides the calls in (Impro not confirmed again after a restart runs as Plume); the card's by default. */
   mode?(meta: ConversationMeta): Promise<PlayMode>;
 }
@@ -828,8 +834,7 @@ export class ConversationEngine {
 
       // The system prompt frozen again, with the truth of the moment: every note folded in.
       const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
-      const asked = this.deps.prompt(meta);
-      const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
+      const { asked, prompt } = await this.systemPrompt(meta, family, instructions);
       const stable = family.renderSystem(prompt.stable);
       const rendered =
         stable +
@@ -1192,6 +1197,22 @@ export class ConversationEngine {
     return { ...result, answer: last ? textOf(family, last.raw) : '' };
   }
 
+  /**
+   * The system prompt as it is frozen now: what the conversation is told of its tools, folders and language, its
+   * environment read at this moment, its instructions. Only when a prompt is frozen — never between two rebases.
+   */
+  private async systemPrompt(meta: ConversationMeta, family: FamilyLayer, instructions: string | undefined) {
+    const asked = this.deps.prompt(meta);
+    const environment = this.deps.environment ? await this.deps.environment(meta).catch(() => undefined) : undefined;
+    const prompt = buildSystemPrompt({
+      ...asked,
+      family,
+      ...(environment ? { environment } : {}),
+      ...(instructions ? { projectInstructions: instructions } : {}),
+    });
+    return { asked, prompt };
+  }
+
   private ownerOf(meta: ConversationMeta): SlotOwner {
     return { kind: 'conversation', conversationId: meta.id, branchId: meta.branchId };
   }
@@ -1263,8 +1284,7 @@ export class ConversationEngine {
     instructions: string | undefined,
   ) {
     const { family } = engine;
-    const asked = this.deps.prompt(meta);
-    const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
+    const { asked, prompt } = await this.systemPrompt(meta, family, instructions);
     const stable = family.renderSystem(prompt.stable);
     const written = branchModel(entries).family;
     const rendered = rerenderConversation(entries, {
@@ -1386,8 +1406,7 @@ export class ConversationEngine {
     // A branch frozen again (a change of model) has its system turn in that entry: one started on a service has
     // no other, and never reads a second one after the person's message (review of phase 9).
     if (!journal.entries().some((entry) => entry.kind === 'system' || (isRefrozen(entry) && entry.rendered !== undefined))) {
-      const asked = this.deps.prompt(meta);
-      const prompt = buildSystemPrompt({ ...asked, family, ...(instructions ? { projectInstructions: instructions } : {}) });
+      const { asked, prompt } = await this.systemPrompt(meta, family, instructions);
       await journal.append({
         kind: 'system',
         rendered: family.renderSystem(prompt.stable),

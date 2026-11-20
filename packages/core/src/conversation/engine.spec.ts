@@ -44,6 +44,8 @@ async function rig(
     replyLanguage?: () => string;
     perimeter?: () => string[];
     tools?: () => ToolDef[];
+    environment?: () => Promise<string | undefined>;
+    platform?: string;
   } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(join(tmpdir(), 'bp-engine-')));
@@ -70,11 +72,18 @@ async function rig(
     onSaveError: (error) => saveErrors.push(error),
     ...(options.instructions ? { instructions: options.instructions } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
+    ...(options.environment ? { environment: options.environment } : {}),
     engine: async () => {
       engineCalls += 1;
       return { client, family: gemma, live, modelPath: 'gemma.gguf', kvBytesPerToken: 100, generation, slidingWindow: 1024 };
     },
-    prompt: () => ({ kind: 'code', tools: options.tools?.() ?? [], perimeter: options.perimeter?.() ?? [], replyLanguage: options.replyLanguage?.() ?? 'French' }),
+    prompt: () => ({
+      kind: 'code',
+      tools: options.tools?.() ?? [],
+      perimeter: options.perimeter?.() ?? [],
+      replyLanguage: options.replyLanguage?.() ?? 'French',
+      ...(options.platform ? { platform: options.platform } : {}),
+    }),
   });
   const conversation = () => store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'repetition' });
   const say = async (id: string, text: string, signal?: AbortSignal) => {
@@ -158,6 +167,33 @@ describe('ConversationEngine — the memory', () => {
     expect(result.usage.cacheReadTokens).toBeGreaterThan(20);
     const seeds = await kv.usage();
     expect(seeds.entries.some((entry) => entry.kind === 'seed')).toBe(true);
+  });
+
+  it('the environment goes in the conversation’s own turn: two conversations on other days and branches share one seed (audit I1)', async () => {
+    let environment = 'Today is 2026-11-20.\nGit: branch main, nothing to commit.';
+    let reads = 0;
+    const { kv, store, conversation, say } = await rig({
+      environment: async () => {
+        reads += 1;
+        return environment;
+      },
+    });
+    const first = await conversation();
+    await say(first.id, 'Bonjour');
+    await say(first.id, 'Encore');
+    // Read once, when the prompt was frozen — never again between two rebases.
+    expect(reads).toBe(1);
+    environment = 'Today is 2026-11-21.\nGit: branch fix, 1 file not committed:\n M a.ts';
+    const second = await conversation();
+    const { result, events } = await say(second.id, 'Salut');
+    expect(events).toContainEqual({ type: 'step', name: 'seed', phase: 'start' });
+    expect(result.usage.cacheReadTokens).toBeGreaterThan(20);
+    const seeds = (await kv.usage()).entries.filter((entry) => entry.kind === 'seed');
+    expect(seeds).toHaveLength(1);
+    const [stable, own] = (await openJournal(store.dir, second.id)).entries();
+    expect(stable?.rendered).not.toContain('2026-11-21');
+    expect(own?.rendered).toContain('Today is 2026-11-21.');
+    expect(own?.rendered).toContain(' M a.ts');
   });
 
   it('a relaunched engine holds nothing: the next turn restores the conversation, and its opening says so', async () => {
@@ -298,6 +334,25 @@ describe('ConversationEngine — the memory', () => {
     expect(announcement).toMatchObject({ kind: 'restore', tokens: expect.any(Number) });
     // Opening touched no slot: the server of the new launch holds nothing.
     expect(again.server.getSlotTokens(0)).toEqual([]);
+  });
+
+  it('a conversation frozen before the prompt changed keeps its prompt: restored from its state, nothing read but the new message (audit I1)', async () => {
+    const first = await rig();
+    const meta = await first.conversation();
+    await first.say(meta.id, 'Bonjour');
+    await first.engine.flush();
+    const frozen = frozenPrompt((await openJournal(first.store.dir, meta.id)).entries());
+    // The next launch says the method, the platform and the environment: a new conversation's prompt only.
+    const again = await rig({ dir: first.dir, platform: 'Windows', environment: async () => 'Today is 2026-11-21.' });
+    const { result, events } = await again.say(meta.id, 'Encore');
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'start' });
+    expect(events).not.toContainEqual({ type: 'step', name: 'seed', phase: 'start' });
+    const sent = again.prompts.at(-1)!;
+    expect(sent.startsWith(frozen)).toBe(true);
+    expect(sent).not.toContain('Today is');
+    expect(sent).not.toContain('(Windows)');
+    // Served by the state saved before, but for the new message and the answer's opening.
+    expect(result.usage.cacheReadTokens).toBeGreaterThanOrEqual(fakeTokenize(frozen).length - 5);
   });
 
   it('with a server that already runs, saves and restores nothing, and announces nothing', async () => {
@@ -484,9 +539,9 @@ describe('ConversationEngine — when it does not go well', () => {
   });
 
   it('a message the server refuses as too long is withdrawn, and the conversation goes on', async () => {
-    const { store, conversation, say } = await rig({ server: { nCtx: 400 } });
+    const { store, conversation, say } = await rig({ server: { nCtx: 800 } });
     const meta = await conversation();
-    await expect(say(meta.id, 'mot '.repeat(300))).rejects.toBeInstanceOf(ContextFullError);
+    await expect(say(meta.id, 'mot '.repeat(600))).rejects.toBeInstanceOf(ContextFullError);
     const { result } = await say(meta.id, 'Bonjour');
     expect(result.stopped).toBeUndefined();
     const journal = await openJournal(store.dir, meta.id);

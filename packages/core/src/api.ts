@@ -109,6 +109,7 @@ import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { buildServicePrompt, toolsFor } from './prompt/system-prompt.js';
+import { platformName, readEnvironment, renderEnvironment } from './prompt/environment.js';
 import { serveOnService } from './agent/endpoint.js';
 import { builtinTools } from './tools/builtin/index.js';
 import { appliedChanges, type AppliedChange } from './checkpoints/changes.js';
@@ -1593,6 +1594,15 @@ export function createCore(deps: CoreDeps): Core {
     (ticketsReady ??= installationSecret(deps.dataDir).then((secret) =>
       createTickets(secret),
     ));
+  /** The folders a conversation's tools reach: its project's, at the same place in its own branch's worktree. */
+  const perimeterOf = (meta: ConversationMeta): string[] =>
+    !meta.projectId
+      ? []
+      : meta.worktree
+        ? projectRoots.has(meta.projectId)
+          ? branchRoots(projectRoots.get(meta.projectId)!, meta.worktree).roots
+          : [meta.worktree]
+        : (projectRoots.get(meta.projectId) ?? []);
   const conversations = new ConversationEngine({
     store: conversationStore,
     kv,
@@ -1618,15 +1628,13 @@ export function createCore(deps: CoreDeps): Core {
     prompt: (meta) => ({
       kind: meta.kind,
       tools: toolsFor(meta.kind, tools.view(visibleTo(meta.projectId, meta.id)).list()),
-      perimeter: !meta.projectId
-        ? []
-        : meta.worktree
-          ? projectRoots.has(meta.projectId)
-            ? branchRoots(projectRoots.get(meta.projectId)!, meta.worktree).roots
-            : [meta.worktree]
-          : (projectRoots.get(meta.projectId) ?? []),
+      perimeter: perimeterOf(meta),
       replyLanguage: deps.replyLanguage?.() ?? 'English',
+      // The machine's: the same in every conversation's shared turn, so one seed serves them (audit 2026-11-21, I1).
+      platform: platformName(),
     }),
+    // The date, and the branch and status of the folder relative paths resolve from: read when a prompt is frozen.
+    environment: async (meta) => renderEnvironment(await readEnvironment(meta.kind === 'code' ? perimeterOf(meta)[0] : undefined)),
     // The project's instructions (.bonaparte/instructions.md, AGENTS.md or CLAUDE.md), read at each turn:
     // frozen at the first, a change told by a note (task 4.7).
     instructions: async (meta) => {
@@ -1904,6 +1912,9 @@ export function createCore(deps: CoreDeps): Core {
           kind: meta.kind,
           perimeter: place.projectId ? place.roots : [],
           replyLanguage: deps.replyLanguage?.() ?? 'English',
+          platform: platformName(),
+          // Sent whole at every turn: a service keeps no memory, nothing is frozen there.
+          environment: renderEnvironment(await readEnvironment(meta.kind === 'code' && place.projectId ? place.roots[0] : undefined)),
           ...(instructions ? { projectInstructions: instructions } : {}),
         }),
         secret: (await installationSecret(deps.dataDir)).toString('hex'),
