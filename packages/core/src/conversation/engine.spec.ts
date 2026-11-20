@@ -931,6 +931,30 @@ describe('ConversationEngine — the project instructions', () => {
     expect((await store.get(meta.id))?.instructions).toBe(text);
   });
 
+  it('an edit past the cut tells nothing; an edit within it tells the cut text once — the whole text recorded still (review of round 2, 9)', async () => {
+    const rules = (first: string, last: string): string =>
+      '(from AGENTS.md)\n' + [first, ...Array.from({ length: 1998 }, (_, index) => `Rule ${index + 2}.`), last].join('\n');
+    let text = rules('Rule 1.', 'Rule 2000.');
+    const { store, prompts, conversation, say } = await rig({ instructions: async () => text });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    // Line 2 000 is far past the cut: the model never read it.
+    text = rules('Rule 1.', 'Rule 2000, changed.');
+    await say(meta.id, 'Encore');
+    expect(prompts.at(-1)).not.toContain('[project update]');
+    expect((await store.get(meta.id))?.instructions).toBe(text);
+    // Line 1 is within it: told once, as the model reads it — cut.
+    text = rules('Rule 1, changed.', 'Rule 2000, changed.');
+    await say(meta.id, 'Et puis ?');
+    const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
+    expect(notes).toHaveLength(1);
+    const said = notes[0]!.kind === 'delta' ? notes[0]!.delta.text : '';
+    expect(said).toContain('Rule 1, changed.');
+    expect(said).not.toContain('Rule 2000');
+    expect(said).toMatch(/is cut after line \d+/);
+    expect((await store.get(meta.id))?.instructions).toBe(text);
+  });
+
   it('a conversation frozen with the first version’s cut is not told its instructions again (audit I2)', async () => {
     const full = '(from AGENTS.md)\n' + 'Rule.\n'.repeat(5000);
     const { store, prompts, conversation, say } = await rig({ instructions: async () => full });
@@ -1033,6 +1057,45 @@ describe('ConversationEngine — the context runs out (audit 2026-11-21, D2)', (
     expect(last.indexOf('[conversation summary]')).toBeLessThan(last.indexOf('Lis a.txt'));
     expect(last).toContain('<|tool_response>');
     expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
+  });
+
+  it('a conversation saved before, near full, told a new inventory: compacted before its notes overflow it, never refused (review of round 2, 1)', async () => {
+    // A model that fills the context to about 6 700 of 8 192 tokens, as the engine counts them (four characters a token).
+    const fill = (prompt: string): string => {
+      if (prompt.includes('Summarize this conversation so far')) return SUMMARY;
+      if (!prompt.slice(prompt.lastIndexOf('<|turn>user')).includes('Remplis')) return 'ok';
+      return 'abcd'.repeat(Math.max(1, 6700 - Math.ceil(prompt.length / 4)));
+    };
+    let tools: ToolDef[] = [];
+    const { store, conversation, say } = await rig({ server: { responder: fill, nCtx: 8192 }, tools: () => tools });
+    const meta = await conversation();
+    await say(meta.id, 'Remplis');
+    // The next launch has more tools: their note weighs some 650 tokens, more than any fixed room for notes.
+    tools = [{ ...READ, name: 'browser_open', description: 'Open a page in your own browser tab. '.repeat(52) }];
+    const { result, events } = await say(meta.id, 'Et alors ?');
+    expect(result.stopped).toBeUndefined();
+    expect(events.some((event) => event.type === 'compaction' && event.phase === 'end' && event.after !== undefined)).toBe(true);
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    expect(entries.findLastIndex((entry) => entry.kind === 'rebase')).toBeLessThan(entries.findLastIndex((entry) => entry.kind === 'user'));
+    // The rebase froze the new tools: no note of them after it.
+    expect(entries.slice(entries.findLastIndex((entry) => entry.kind === 'rebase')).some((entry) => entry.kind === 'delta')).toBe(false);
+  });
+
+  it('instructions changed before an automatic compaction are frozen by its rebase, never told again after it (review of round 2, 2)', async () => {
+    let instructions = 'Indent with tabs.';
+    const { store, prompts, conversation, say } = await rig({ server: { responder: long }, instructions: async () => instructions });
+    const meta = await conversation();
+    await say(meta.id, 'Un');
+    await say(meta.id, 'Deux');
+    await say(meta.id, 'Trois');
+    instructions = 'Indent with two spaces.';
+    const { events } = await say(meta.id, 'Quatre');
+    expect(events.some((event) => event.type === 'compaction' && event.phase === 'end' && event.after !== undefined)).toBe(true);
+    const last = prompts.at(-1)!;
+    expect(last.split('Indent with two spaces.')).toHaveLength(2);
+    expect(last).not.toContain('[project update]');
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    expect(entries.slice(entries.findLastIndex((entry) => entry.kind === 'rebase')).some((entry) => entry.kind === 'delta')).toBe(false);
   });
 
   it('a conversation full to its last tokens is still compacted: the summary asked of what comes before its last turn, kept', async () => {

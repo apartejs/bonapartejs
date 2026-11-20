@@ -78,9 +78,6 @@ export function defaultThinking(window: number): boolean {
   return window > SMALL_CONTEXT;
 }
 
-/** Room counted for the notes a turn appends before its message, when it decides whether to compact first. */
-const NOTES_ROOM = 256;
-
 /** Room kept for the answer: a message that leaves less is refused before it is sent. */
 export const REPLY_ROOM = 1024;
 
@@ -1353,6 +1350,65 @@ export class ConversationEngine {
   }
 
   /**
+   * The notes a turn appends before its message, not yet appended: what changed since the model was last told —
+   * its instructions (as it reads them: cut, so that an edit past the cut tells nothing), its tools, the window's
+   * tools, its mode, its folders, its reply language. `instructions`: the whole text to record once told.
+   */
+  private async notesOf(
+    meta: ConversationMeta,
+    entries: readonly JournalEntry[],
+    options: { family: FamilyLayer; window: number; instructions: string | undefined; tools?: TurnTools },
+  ): Promise<{ notes: NewJournalEntry[]; instructions?: string }> {
+    const { family, window, instructions } = options;
+    const notes: NewJournalEntry[] = [];
+    const note = (delta: Extract<NewJournalEntry, { kind: 'delta' }>['delta']): void => {
+      notes.push({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
+    };
+    let recorded: string | undefined;
+    if (instructions !== undefined && !sameInstructions(meta.instructions ?? '', instructions)) {
+      // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
+      // Compared as the model reads them, cut to this context; the whole text recorded still (review of round 2, 9).
+      const budget = instructionsBudget(window);
+      const seen = cutInstructions(meta.instructions ?? '', budget);
+      const now = cutInstructions(instructions, budget);
+      const delta = sameInstructions(seen, now) ? null : renderInstructionsDelta(seen, now);
+      if (delta) note(delta);
+      recorded = instructions;
+    }
+    const asked = this.deps.prompt(meta);
+    // The core's tools changed (a plugin came or went, or was turned off for the project).
+    const tools = [...asked.tools];
+    const toldTools = lastToldTools(entries);
+    const inventory = toldTools === undefined ? null : renderInventoryDelta(toldTools, tools);
+    if (inventory) note({ ...inventory, tools });
+    if (options.tools) {
+      // The tools the window runs (ask_user) are not in the frozen prompt: told by a note when they change.
+      const windowTools = options.tools.defs.filter((tool) => tool.where === 'window');
+      const delta = renderInventoryDelta(lastToldWindowTools(entries), windowTools);
+      if (delta) note({ ...delta, windowTools });
+    }
+    // A discussion has no mode to be told (task 9.7): nothing to change, no plan to present.
+    if (meta.kind !== 'discussion') {
+      // The mode the calls are decided in, told when it is not the one the model last read (Répétition until told).
+      const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
+      const told = lastToldMode(entries);
+      // Leaving Lecture launches a plan only when one was presented since the model was told Lecture.
+      if (running !== told) note(renderModeDelta(running, told === 'lecture' && running !== 'lecture' && planSinceLecture(entries)));
+    }
+    // The project's folders changed (one added, one removed).
+    const roots = [...asked.perimeter];
+    const toldRoots = lastToldPerimeter(entries);
+    const perimeter = toldRoots === undefined ? null : renderPerimeterDelta(toldRoots, roots);
+    if (perimeter) note({ ...perimeter, roots });
+    // The language of the interface changed: the replies follow it.
+    const language = asked.replyLanguage;
+    const toldLanguage = lastToldReplyLanguage(entries);
+    const reply = toldLanguage === undefined || !language ? null : renderReplyLanguageDelta(toldLanguage, language);
+    if (reply) note({ ...reply, language });
+    return { notes, ...(recorded !== undefined ? { instructions: recorded } : {}) };
+  }
+
+  /**
    * What a change of model would freeze (task 7.4): the system prompt frozen again for the engine's family,
    * with the truth of the moment, then the conversation rendered again by that family.
    */
@@ -1517,61 +1573,25 @@ export class ConversationEngine {
       if (meta.rewound) meta = await this.deps.store.update(id, { rewound: undefined });
     }
     if (!input.resume) {
-      // The message would not fit beside what the conversation holds: it is compacted first, said in the thread —
-      // never a turn refused in the middle of a task, never a silent re-read (audit 2026-11-21, D2). What changed is
-      // told after the rebase, which froze it again.
+      // The notes this turn appends, measured before anything is decided: the message and its notes would not fit
+      // beside what the conversation holds — it is compacted first, said in the thread, never a turn refused in the
+      // middle of a task, never a silent re-read (audit 2026-11-21, D2). The rebase froze what changed: the notes are
+      // asked again of it, the conversation as the compaction left it (review of round 2: 1, 2).
+      let pending = await this.notesOf(meta, journal.entries(), { family, window, instructions, ...(input.tools ? { tools: input.tools } : {}) });
       const held = journal.entries();
-      const adds = (input.text === undefined ? '' : family.renderUser(input.text)) + family.beginAssistant({ thinking });
-      const needed = (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(adds) + NOTES_ROOM;
+      const adds =
+        pending.notes.map((note) => note.rendered ?? '').join('') +
+        (input.text === undefined ? '' : family.renderUser(input.text)) +
+        family.beginAssistant({ thinking });
+      const needed = (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(adds);
       if (needed + REPLY_ROOM > window && held.some((entry) => entry.kind === 'user')) {
-        await this.autoCompact(meta, journal, engine, { sink, window, ...(signal ? { signal } : {}) });
+        if (await this.autoCompact(meta, journal, engine, { sink, window, ...(signal ? { signal } : {}) })) {
+          meta = (await this.deps.store.get(id)) ?? meta;
+          pending = await this.notesOf(meta, journal.entries(), { family, window, instructions, ...(input.tools ? { tools: input.tools } : {}) });
+        }
       }
-    }
-    if (!input.resume && instructions !== undefined && !sameInstructions(meta.instructions ?? '', instructions)) {
-      // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
-      // Never on a resume: the answer it continues is still open. Cut as a frozen prompt cuts them.
-      const delta = renderInstructionsDelta(meta.instructions ?? '', cutInstructions(instructions, instructionsBudget(window)));
-      if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
-      meta = await this.deps.store.update(id, { instructions });
-    }
-    if (!input.resume) {
-      // The core's tools changed (a plugin came or went, or was turned off for the project): told by a note.
-      const current = [...this.deps.prompt(meta).tools];
-      const told = lastToldTools(journal.entries());
-      const delta = told === undefined ? null : renderInventoryDelta(told, current);
-      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, tools: current }, rendered: family.renderSystemNote(delta.text) });
-    }
-    if (!input.resume && input.tools) {
-      // The tools the window runs (ask_user) are not in the frozen prompt: told by a note when they change.
-      const windowTools = input.tools.defs.filter((tool) => tool.where === 'window');
-      const delta = renderInventoryDelta(lastToldWindowTools(journal.entries()), windowTools);
-      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, windowTools }, rendered: family.renderSystemNote(delta.text) });
-    }
-    // A discussion has no mode to be told (task 9.7): nothing to change, no plan to present.
-    if (!input.resume && meta.kind !== 'discussion') {
-      // The mode the calls are decided in, told when it is not the one the model last read (Répétition until told).
-      const running = this.deps.mode ? await this.deps.mode(meta) : meta.mode;
-      const told = lastToldMode(journal.entries());
-      if (running !== told) {
-        // Leaving Lecture launches a plan only when one was presented since the model was told Lecture.
-        const launched = told === 'lecture' && running !== 'lecture' && planSinceLecture(journal.entries());
-        const delta = renderModeDelta(running, launched);
-        await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
-      }
-    }
-    if (!input.resume) {
-      // The project's folders changed (one added, one removed): told by a note, the frozen text untouched.
-      const current = [...this.deps.prompt(meta).perimeter];
-      const told = lastToldPerimeter(journal.entries());
-      const delta = told === undefined ? null : renderPerimeterDelta(told, current);
-      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, roots: current }, rendered: family.renderSystemNote(delta.text) });
-    }
-    if (!input.resume) {
-      // The person changed the language of the interface: the replies follow it, told by a note.
-      const current = this.deps.prompt(meta).replyLanguage;
-      const told = lastToldReplyLanguage(journal.entries());
-      const delta = told === undefined || !current ? null : renderReplyLanguageDelta(told, current);
-      if (delta) await journal.append({ kind: 'delta', delta: { ...delta, language: current }, rendered: family.renderSystemNote(delta.text) });
+      for (const note of pending.notes) await journal.append(note);
+      if (pending.instructions !== undefined) meta = await this.deps.store.update(id, { instructions: pending.instructions });
     }
     const entries = journal.entries();
     const stable = stableOf(entries);
