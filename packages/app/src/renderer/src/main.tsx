@@ -8,6 +8,7 @@ import { bridge } from './bridge';
 import { messagesFor } from './i18n/index';
 import { LOCALE_CHANGED } from './settings/General';
 import { applyAppearance } from './theme/appearance';
+import { followTitleBar } from './theme/title-bar';
 import './theme/tokens.css';
 import './theme/app.css';
 
@@ -36,6 +37,8 @@ async function start(): Promise<void> {
     bridge.invoke(settingsAll, undefined).catch(() => []),
   ]);
   applyAppearance(Object.fromEntries(settings.map((entry) => [entry.key, entry.value])));
+  // The window's own buttons, drawn by the system over the app, in its colours — again at each change of look.
+  followTitleBar();
   document.documentElement.lang = info.locale;
   setupAparte(info.locale);
   createRoot(document.getElementById('root')!).render(

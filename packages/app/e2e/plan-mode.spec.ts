@@ -105,7 +105,7 @@ test('« Lancer en Plume », then away to another conversation before the reply 
   const list = page.locator('aparte-conversation-list');
   await ui.send('Autre sujet');
   await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
   await page.locator('aparte-approval-mode').getByRole('combobox').click();
   await page.getByRole('option', { name: 'Lecture' }).click();
   await ui.send('Ajoute un export CSV du récap');

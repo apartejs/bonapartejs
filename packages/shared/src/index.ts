@@ -89,7 +89,7 @@ export {
   projectsUpdate,
 } from './ipc/projects.js';
 export type { ProjectFactsView, ProjectView } from './ipc/projects.js';
-export { appInfo, localeSchema } from './ipc/app.js';
+export { appInfo, localeSchema, windowTitleBar } from './ipc/app.js';
 export type { Locale } from './ipc/app.js';
 export {
   engineLlama,

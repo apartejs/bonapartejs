@@ -69,7 +69,7 @@ test('each row says where its memory is — in the engine, or saved — by its n
   await page.getByRole('button', { name: 'Démarrer' }).click();
   await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
   await ask(page, 'Première question');
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await expect(chat(page).userMessages).toHaveCount(0);
   await ask(page, 'Deuxième question');
 
@@ -134,7 +134,7 @@ test('a narrow window folds the sidebar into icons', async ({ launch }) => {
 test("a row's menu opens on a right click; a conversation is pinned, renamed and archived from the list", async ({ launch }) => {
   const { page } = await launch({ engine: { responder: () => 'ok' } });
   await ask(page, 'Première');
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await ask(page, 'Seconde');
   const list = conversationList(page);
 

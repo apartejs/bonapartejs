@@ -105,7 +105,7 @@ test('going back to a conversation shows its own mode, even one born in this win
   const { page } = await launch({ engine: { responder: model } });
   await choose(page, 'Lecture');
   await answered(page, 'Premier sujet');
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
   await choose(page, 'Plume');
   await answered(page, 'Second sujet');
   await expect(chat(page).modeShown).toHaveText('Plume');

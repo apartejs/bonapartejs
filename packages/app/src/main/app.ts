@@ -59,6 +59,7 @@ import { createTerminalService } from './terminals/pty-host.js';
 import { findShells } from './terminals/shells.js';
 import { createMainWindow } from './windows.js';
 import { carriedRuntimeDir } from './vcruntime.js';
+import { TITLE_BAR_HEIGHT, windowChrome } from './title-bar.js';
 
 /** The language the person chose (the setting « language »), until it is read: the system's. */
 let chosenLanguage: unknown = 'system';
@@ -409,6 +410,13 @@ ${appTokens}`,
     },
     // A conversation seen: a reply ready there leaves the taskbar's badge.
     seen: () => void noticing.attention?.refresh(),
+    // The window's buttons in the app's colours (a test run notes them).
+    titleBar: (colours) => {
+      if (options.e2e) (globalThis as { __bonaparteTitleBar?: unknown }).__bonaparteTitleBar = colours;
+      if (window && !window.isDestroyed() && windowChrome(process.platform).titleBarOverlay) {
+        window.setTitleBarOverlay({ ...colours, height: TITLE_BAR_HEIGHT });
+      }
+    },
     // A pull request's page, which the core read.
     openLink: async (url) => {
       if (options.e2e) {

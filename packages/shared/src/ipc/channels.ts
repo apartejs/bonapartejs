@@ -5,7 +5,7 @@
  * serves exactly these.
  */
 
-import { appInfo } from './app.js';
+import { appInfo, windowTitleBar } from './app.js';
 import { mcpAdd, mcpOverview, mcpPaste, mcpRemove, mcpStart, mcpStop } from './mcp.js';
 import { runsList, runsStart, runsStop } from './runs.js';
 import { updatesKeep, updatesList, updatesLlama, updatesModel, updatesRestart } from './updates.js';
@@ -76,6 +76,7 @@ import { appOpenDataFolder, conversationsExport, settingsAll, settingsGet, setti
 
 export const CHANNELS = [
   appInfo,
+  windowTitleBar,
   filesList,
   filesRead,
   filesChanged,

@@ -25,7 +25,7 @@ test('the engine, the memory of each conversation, « Libérer », « Redémarre
   await page.getByRole('button', { name: 'Démarrer' }).click();
   await expect(chat(page).composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
   await ask(page, 'Première question');
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await expect(chat(page).userMessages).toHaveCount(0);
   await ask(page, 'Deuxième question');
 

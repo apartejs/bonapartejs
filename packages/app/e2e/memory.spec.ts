@@ -36,7 +36,7 @@ async function ask(page: Page, text: string): Promise<void> {
 }
 
 async function newConversation(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
   await expect(chat(page).userMessages).toHaveCount(0);
 }
 

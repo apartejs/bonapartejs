@@ -102,7 +102,7 @@ test("a project's default mode changed in the settings is the one of its next co
     await nav.getByRole('link', { name: 'Permissions' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Permissions' })).toBeVisible();
     await nav.getByRole('link', { name: 'Conversations' }).click();
-    await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+    await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
     await expect(chat(page).modeShown).toHaveText('Lecture');
   } finally {
     await rm(folder, { recursive: true, force: true });

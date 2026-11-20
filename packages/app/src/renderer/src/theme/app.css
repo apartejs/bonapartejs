@@ -4494,3 +4494,83 @@ body {
   color: var(--aparte-text-muted);
   font-size: 12px;
 }
+
+/*
+ * The title bar is the app's (main/title-bar.ts): the system's bar is hidden and its buttons are drawn over the
+ * window's top right corner, at the strip's height. The strip moves the window; whatever answers a click stays
+ * clickable in it; the conversation's header keeps the buttons' place free. Without the overlay (a Mac, a browser)
+ * the env() values are absent: no strip, nothing kept.
+ */
+:root {
+  --bonaparte-window-controls: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+
+.bonaparte-drag {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: env(titlebar-area-height, 0px);
+  pointer-events: none;
+  -webkit-app-region: drag;
+  z-index: 2147483000;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+summary,
+[role='button'],
+[role='tab'],
+[role='menuitem'],
+[role='option'],
+[role='combobox'],
+[role='textbox'],
+[contenteditable='true'] {
+  -webkit-app-region: no-drag;
+}
+
+.conversation-header {
+  padding-inline-end: calc(20px + var(--bonaparte-window-controls));
+  container: conversation-header / inline-size;
+}
+
+/* Narrow, the header keeps its icons clear of the window's buttons: the memory gives way (its words in its title),
+   and « Brancher » keeps its icon, its name said. */
+.conversation-header .conversation-header__memory {
+  flex-shrink: 1;
+  min-width: 28px;
+  overflow: hidden;
+}
+
+.conversation-header__memory-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-header__button .bonaparte-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+@container conversation-header (max-width: 760px) {
+  .conversation-branches__button > span,
+  .conversation-header__label,
+  .conversation-header__ahead {
+    display: none;
+  }
+}
+
+/* Narrowest, a chip would show one letter: the project and the branch are said by the list and « Ouvrir le dossier ». */
+@container conversation-header (max-width: 520px) {
+  .conversation-header__chip {
+    display: none;
+  }
+}
+
+/* The mascot reacts to the pointer: not a spot that moves the window. */
+.bonaparte-brand {
+  -webkit-app-region: no-drag;
+}

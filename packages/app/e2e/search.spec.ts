@@ -13,7 +13,7 @@ test('Ctrl K finds the conversation where the words were said, and opens it', as
   const ui = chat(page);
   await ui.send('Le parseur des heures se trompe');
   await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
   await ui.send('Autre sujet');
   await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
 

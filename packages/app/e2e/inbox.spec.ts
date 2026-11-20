@@ -40,7 +40,7 @@ test('Ctrl J opens « À traiter », the sidebar counts it; an approval answered
   await ui.send('Change la note');
   await expect(page.getByRole('region', { name: 'Demande d’accord' })).toBeVisible({ timeout: 15_000 });
   // The person goes elsewhere: a new conversation.
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await expect(page.getByRole('button', { name: '1 à traiter' })).toBeVisible({ timeout: 10_000 });
 
   await page.keyboard.press('Control+j');
@@ -89,7 +89,7 @@ test('a question with choices is answered from the page: its choices are buttons
   const ui = chat(page);
   await ui.send('Un choix de date');
   await expect(ui.question).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await page.keyboard.press('Control+j');
   const card = page$(page).getByRole('article', { name: /^Question/ });
   await expect(card).toContainText('Une date vide : que fais-je ?');
@@ -132,7 +132,7 @@ test('a question that follows the one answered from the page takes its place, wi
   const ui = chat(page);
   await ui.send('Un choix de date');
   await expect(ui.question).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await page.keyboard.press('Control+j');
   const card = page$(page).getByRole('article', { name: /^Question/ });
   await card.getByRole('button', { name: 'La refuser', exact: true }).click();
@@ -148,7 +148,7 @@ test('a question asked in the form of several questions says its words on the pa
   const ui = chat(page);
   await ui.send('Un choix de date');
   await expect(ui.question).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await page.keyboard.press('Control+j');
   const card = page$(page).getByRole('article', { name: /^Question/ });
   await expect(card.locator('.inbox-card__title')).toHaveText('Une date vide : que fais-je ?');
@@ -160,7 +160,7 @@ test('a question waits on the page; « Répondre » opens its conversation, wher
   const ui = chat(page);
   await ui.send('Une question de date');
   await expect(ui.question).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await page.keyboard.press('Control+j');
   const card = page$(page).getByRole('article', { name: /^Question/ });
   await expect(card).toContainText('Une date vide : je la garde vide ?');
@@ -174,7 +174,7 @@ test('a reply finished while the person looked elsewhere is « Pas encore lu »,
   const { page } = await launch({ engine: { responder: () => 'La synthèse est prête.', paceMs: 120 } });
   const ui = chat(page);
   await ui.send('Fais la synthèse');
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   const row = page.locator('aparte-conversation-list').getByRole('img', { name: 'Pas encore lu' });
   await expect(row).toBeVisible({ timeout: 20_000 });
 

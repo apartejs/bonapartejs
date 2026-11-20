@@ -44,6 +44,22 @@ export interface ConversationHeaderProps {
   onOpenPr?(): void;
 }
 
+/** A button of the header with its words; a narrow header keeps its icon alone, its name still said and shown on hover. */
+function HeaderButton(props: { icon: 'pullRequest' | 'folder'; label: string; onClick(): void }) {
+  return (
+    <button
+      type="button"
+      className="aparte-btn aparte-btn--outline aparte-btn--sm conversation-header__button"
+      aria-label={props.label}
+      title={props.label}
+      onClick={props.onClick}
+    >
+      <Icon name={props.icon} />
+      <span className="conversation-header__label">{props.label}</span>
+    </button>
+  );
+}
+
 type Action = 'rename' | 'pin' | 'unpin' | 'archive' | 'attach' | 'settings' | 'delete';
 
 export function ConversationHeader(props: ConversationHeaderProps) {
@@ -141,25 +157,20 @@ export function ConversationHeader(props: ConversationHeaderProps) {
       <span className="conversation-header__spacer" />
       {props.conversationId && props.forks ? props.forks : null}
       {props.memory ? (
-        <span className={`conversation-header__memory conversation-header__memory--${props.memory}`}>
+        <span
+          className={`conversation-header__memory conversation-header__memory--${props.memory}`}
+          title={props.messages.shell.memory[props.memory]}
+        >
           <span className="conversation-header__memory-dot" aria-hidden="true" />
-          {props.messages.shell.memory[props.memory]}
+          <span className="conversation-header__memory-text">{props.messages.shell.memory[props.memory]}</span>
         </span>
       ) : null}
       {props.pr ? (
-        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.pr.onShow}>
-          {props.messages.pr.show}
-        </button>
+        <HeaderButton icon="pullRequest" label={props.messages.pr.show} onClick={props.pr.onShow} />
       ) : props.branch && props.onOpenPr ? (
-        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.onOpenPr}>
-          {props.messages.pr.open}
-        </button>
+        <HeaderButton icon="pullRequest" label={props.messages.pr.open} onClick={props.onOpenPr} />
       ) : null}
-      {props.branch ? (
-        <button type="button" className="aparte-btn aparte-btn--outline aparte-btn--sm" onClick={props.branch.onOpenFolder}>
-          {props.messages.branches.openFolder}
-        </button>
-      ) : null}
+      {props.branch ? <HeaderButton icon="folder" label={props.messages.branches.openFolder} onClick={props.branch.onOpenFolder} /> : null}
       {props.conversationId ? (
         <span className="aparte-app-header__actions conversation-header__more">
           <button

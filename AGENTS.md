@@ -614,6 +614,19 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   it the same array while nothing it draws changed. Menus and tabs get
   aparté's keyboard through `aparte/kit.ts` (`useMenu`, which must be told
   when its elements arrive).
+- **The title bar** (`main/title-bar.ts`, `theme/title-bar.ts`, the end of
+  `theme/app.css`): on Windows and Linux the system's bar is hidden
+  (`titleBarStyle: 'hidden'`) and its buttons drawn over the top right corner
+  (`titleBarOverlay`, 40 px), in the page's `--aparte-bg` and
+  `--aparte-text-muted` as it resolves them, sent again when the look changes
+  (`window.titleBar`; a test run reads `__bonaparteTitleBar`). A fixed strip
+  (`.bonaparte-drag`, `index.html`) moves the window; whatever answers a click
+  is `no-drag`. The header keeps the buttons' place
+  (`--bonaparte-window-controls`, from `env(titlebar-area-*)`) and, narrow,
+  gives way by container query: the memory chip shrinks, the text buttons keep
+  their icon (their name in `aria-label` and `title`), the chips go under
+  520 px. A Mac keeps its own frame. `page.screenshot` does not draw the
+  system's buttons: a test measures `env(titlebar-area-*)` instead.
 - **The panes** (`renderer/src/panels/`): a column of ours beside the
   conversation (`PanelDock`, as the board draws it), its icons in the header
   (`PanelToggles`, five: Fichiers, Changements, Sous-agents, Navigateur, the

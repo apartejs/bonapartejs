@@ -88,7 +88,7 @@ test('a pull request merged archives its conversation by itself — once the per
     await page.waitForTimeout(1_500);
     await expect(chat(page).replyText).toHaveText('Fait.');
     await expect(nav(page).getByRole('button', { name: /^Change la note/ })).toHaveCount(1);
-    await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+    await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
     await expect(nav(page).getByRole('button', { name: /^Change la note/ })).toHaveCount(0, { timeout: 15_000 });
   } finally {
     await repo.remove();

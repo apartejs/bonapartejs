@@ -8,6 +8,7 @@ import { app, BrowserWindow } from 'electron';
 import { join } from 'node:path';
 import { APP_ORIGIN } from '@aparte/bonaparte-shared';
 import { isOwnPage, isPermissionAllowed } from './security.js';
+import { windowChrome } from './title-bar.js';
 
 export interface MainWindowOptions {
   devServerUrl?: string | undefined;
@@ -26,6 +27,8 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
     minHeight: 480,
     show: false,
     title: 'bonaparte',
+    // The title bar is the app's: the system's buttons drawn over it, in its colours (main/title-bar.ts).
+    ...windowChrome(process.platform),
     // The app's icon (task 12.2): the starry night of the board « Logo », drawn by scripts/make-icons.mjs.
     icon: join(app.getAppPath(), 'resources', 'icons', 'app-256.png'),
     // A test run: invisible from the first instant, whatever shows it later.

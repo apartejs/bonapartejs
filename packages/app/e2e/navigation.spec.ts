@@ -27,7 +27,7 @@ test('a reply goes on in its conversation while the person writes in another, an
   expect(server.finished).toBe(0);
 
   // Away, while A is still written: a new conversation, a message there.
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await expect(ui.userMessages).toHaveCount(0);
   await ui.send('Question B');
   await expect(ui.replyText).toHaveText('Réponse B.', { timeout: 30_000 });
@@ -48,7 +48,7 @@ test('a conversation seen long ago is let go, and comes back from storage as it 
   const ui = chat(page);
   const list = page.locator('aparte-conversation-list');
   for (let n = 1; n <= 6; n += 1) {
-    if (n > 1) await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+    if (n > 1) await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
     await ui.send(`Sujet ${n}`);
     await expect(ui.replyText).toHaveText(`Réponse au sujet ${n}.`, { timeout: 15_000 });
   }

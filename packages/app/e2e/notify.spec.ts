@@ -30,7 +30,7 @@ test('a reply done while the window is not in front: a banner, which opens its c
   await expect.poll(() => banners(app)).toEqual([{ title: 'Tour fini · Fais la synthèse', body: 'La synthèse est prête.', conversationId: expect.any(String) }]);
 
   // The person went elsewhere; the banner brings them back to the conversation.
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await expect(ui.replyText).toHaveCount(0);
   await clickBanner(app, 0);
   await expect(ui.replyText).toHaveText('La synthèse est prête.');
@@ -60,7 +60,7 @@ test('an approval waiting: a banner, the icon and the badge say it, the menu lis
   expect(labels).toContain('Change la note — attend ton accord');
 
   // Elsewhere, then the banner: the conversation, its request still there, nothing written.
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await clickBanner(app, 0);
   await expect(page.getByRole('region', { name: 'Demande d’accord' })).toBeVisible();
   expect(await readFile(join(home, 'notes.txt'), 'utf8')).toBe('old line\n');
@@ -80,7 +80,7 @@ test('« Ne pas déranger pendant 1 h » from the icon\'s menu: no banner — wh
 
   await chat(page).send('Change la note');
   await expect(page.getByRole('region', { name: 'Demande d’accord' })).toBeVisible({ timeout: 15_000 });
-  await page.getByRole('button', { name: 'Nouvelle conversation' }).first().click();
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
   await expect(page.getByRole('button', { name: '1 à traiter' })).toBeVisible({ timeout: 10_000 });
   // The badge still says it; no banner.
   await expect.poll(() => attentionShown(app)).toMatchObject({ icon: 'waiting' });

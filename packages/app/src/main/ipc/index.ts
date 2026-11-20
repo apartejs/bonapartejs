@@ -10,6 +10,7 @@ import {
   conversationsShowPr,
   engineRuntimeDownload,
   VC_RUNTIME_DOWNLOAD,
+  windowTitleBar,
   type Locale,
 } from '@aparte/bonaparte-shared';
 import type { Core } from '@aparte/bonaparte-core';
@@ -55,6 +56,8 @@ export interface AppFacts {
   updates?: AppUpdates;
   /** What can be updated changed: the window reads it again. */
   updatesChanged?(): void;
+  /** The colours of the window's own buttons, drawn by the system over the app (`main/title-bar.ts`). */
+  titleBar?(colours: { color: string; symbolColor: string }): void;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -70,6 +73,8 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   });
   // Only Microsoft's installer of the Visual C++ runtime, at its one address: the window names none.
   ipc.handle(engineRuntimeDownload, () => facts.openLink(VC_RUNTIME_DOWNLOAD));
+  // The window's buttons in the app's colours: two hex colours, checked by the channel's schema.
+  ipc.handle(windowTitleBar, (colours) => facts.titleBar?.(colours));
   // Only a pull request's page on GitHub, as the core read it for this conversation.
   ipc.handle(conversationsShowPr, async ({ id }) => {
     const pr = await core.prOf(id);
