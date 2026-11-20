@@ -24,7 +24,7 @@ import type { ToolEffect } from '@aparte/bonaparte-shared';
 import type { SpawnFn } from '../process/spawn.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolDef, ToolOutput } from '../tools/types.js';
-import { resolveCommand } from './command.js';
+import { resolveCommand } from '../process/command.js';
 import type { McpServerConfig } from './config.js';
 import { HiddenStdioTransport } from './stdio-transport.js';
 

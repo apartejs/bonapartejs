@@ -8,7 +8,7 @@
  */
 
 import { Socket } from 'node:net';
-import { resolveCommand } from '../mcp/command.js';
+import { resolveCommand } from '../process/command.js';
 import type { SpawnedProcess, SpawnFn } from '../process/spawn.js';
 import { spawnTree, stopProcessTree } from '../process/tree.js';
 import type { CommandOutputEvent } from '../tools/types.js';

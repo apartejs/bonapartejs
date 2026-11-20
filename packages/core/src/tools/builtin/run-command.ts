@@ -8,6 +8,7 @@
  */
 
 import { withoutSecrets } from '../../process/env.js';
+import { resolveCommand } from '../../process/command.js';
 import { spawnHidden } from '../../process/spawn.js';
 import { describeError, inPerimeter, refused, text, wholeNumber, workRoot, type BuiltinTool } from './common.js';
 import type { ToolOutput } from '../types.js';
@@ -59,10 +60,14 @@ export const runCommand: BuiltinTool = {
     const timeoutMs = Math.min(MAX_TIMEOUT_MS, Math.max(1, wholeNumber(call.input, 'timeoutMs') ?? DEFAULT_TIMEOUT_MS));
     const shown = [program, ...args].join(' ');
 
+    const env = withoutSecrets(process.env);
     return new Promise<ToolOutput>((resolve) => {
       let child;
       try {
-        child = spawnHidden(program, args, { cwd, env: withoutSecrets(process.env), stdio: ['ignore', 'pipe', 'pipe'] });
+        // On Windows npm, npx, pnpm and yarn are .cmd shims: they run as node and their script, never through a
+        // shell; a program the PATH does not hold is said so (audit 2026-11-21, D1).
+        const resolved = resolveCommand(program, args, { env, cwd, notFound: 'refuse' });
+        child = spawnHidden(resolved.command, resolved.args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
       } catch (error) {
         resolve(refused(`Cannot run ${program}: ${describeError(error)}`));
         return;
@@ -94,7 +99,15 @@ export const runCommand: BuiltinTool = {
         ctx.signal.removeEventListener('abort', onAbort);
         resolve(result);
       };
-      child.on('error', (error) => finish(refused(`Cannot run ${program}: ${describeError(error)}`)));
+      child.on('error', (error) =>
+        finish(
+          refused(
+            (error as NodeJS.ErrnoException).code === 'ENOENT'
+              ? `Cannot run ${program}: it was not found${/[\\/]/.test(program) ? '' : ' on the PATH'}.`
+              : `Cannot run ${program}: ${describeError(error)}`,
+          ),
+        ),
+      );
       child.on('close', (code) => {
         ctx.onOutput?.({ kind: 'exit', code });
         const printed = output.trimEnd();

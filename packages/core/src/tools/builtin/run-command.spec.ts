@@ -4,7 +4,7 @@
  * for a limited time. What it printed and how it ended are the result.
  */
 
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -26,6 +26,38 @@ async function context(signal = new AbortController().signal): Promise<ToolConte
 
 const run = async (input: unknown, ctx?: ToolContext) => runCommand.handler({ id: 't1', name: 'run_command', input }, ctx ?? (await context()));
 const node = (script: string, ...rest: string[]) => ({ program: process.execPath, args: ['-e', script, ...rest] });
+
+describe.runIf(process.platform === 'win32')('run_command on Windows: the npm family runs, without a shell (audit 2026-11-21, D1)', () => {
+  it('npm runs a script of the project, and npx answers', async () => {
+    const ctx = await context();
+    const root = ctx.roots[0]!;
+    // npm runs a script through cmd itself: the test's script is a file, never `node -e` with quotes.
+    await writeFile(join(root, 'hello.js'), 'console.log("hello from " + process.argv[2])\n');
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'bp-run-npm', private: true, scripts: { hello: 'node hello.js npm' } }));
+    const result = await run({ program: 'npm', args: ['run', 'hello'] }, ctx);
+    expect(result.failed).toBeUndefined();
+    expect(result.content).toContain('hello from npm');
+    expect(result.content).toMatch(/exit code 0/);
+    const npx = await run({ program: 'npx', args: ['--version'] }, ctx);
+    expect(npx.content).toMatch(/\d+\.\d+\.\d+/);
+    expect(npx.content).toMatch(/exit code 0/);
+  }, 60_000);
+
+  it('a program the PATH does not hold is said so in words the model can act on — not « spawn … ENOENT »', async () => {
+    const result = await run({ program: 'bonaparte-no-such-tool', args: [] });
+    expect(result).toMatchObject({ failed: true });
+    expect(result.content).toMatch(/bonaparte-no-such-tool was not found on the PATH/);
+    expect(result.content).not.toMatch(/ENOENT/);
+  });
+
+  it('a batch file of the project is refused, saying why', async () => {
+    const ctx = await context();
+    await writeFile(join(ctx.roots[0]!, 'build.bat'), '@echo off\r\necho built\r\n');
+    const result = await run({ program: 'build.bat', args: [] }, ctx);
+    expect(result).toMatchObject({ failed: true });
+    expect(result.content).toMatch(/shell/);
+  });
+});
 
 describe('run_command', () => {
   it('runs the program with its arguments, as they are: no shell reads them', async () => {

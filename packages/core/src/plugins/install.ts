@@ -14,7 +14,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { parseManifest, type PluginManifest, type PluginSource } from '@aparte/bonaparte-shared';
 import { tarCommand } from '../engine/llama-install.js';
 import { git } from '../git/git.js';
-import { resolveCommand } from '../mcp/command.js';
+import { resolveCommand } from '../process/command.js';
 import { spawnHidden, type SpawnFn } from '../process/spawn.js';
 import { PLUGIN_MANIFEST_FILE } from './host.js';
 
