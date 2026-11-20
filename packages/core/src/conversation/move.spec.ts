@@ -120,7 +120,8 @@ describe('a conversation moved to another project', () => {
     const asked = prompts.length;
     const running = say('Encore');
     // The engine writes the reply: the turn runs.
-    await expect.poll(() => prompts.length).toBe(asked + 1);
+    // Under the load of every package at once, the first completion may take more than the poll's default second.
+    await expect.poll(() => prompts.length, { timeout: 15_000 }).toBe(asked + 1);
     await expect(core.moveConversation('c1', b.id)).rejects.toMatchObject({ reason: 'busy' });
     expect(await core.conversationStore.get('c1')).toMatchObject({ projectId: a.id });
     await running;
