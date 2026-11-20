@@ -291,7 +291,12 @@ function Workspace({
   // The panes beside the conversation (task 6.2), each conversation's own — a new one has none (the browser redo,
   // step 2) —, and whether Changements opens by itself.
   const [panesBy, setPanesBy] = useState<PanesByConversation>(() => new Map());
-  const shownPaneKey = paneKey(conversationId, deck.shown);
+  // While going back (or its undo, or another branch shown) holds the conversation's chat down, a new chat stands
+  // in for it: the panes stay the conversation's, as they were — never the stand-in's none (second review of the
+  // browser redo, step 2).
+  const [heldDown, setHeldDown] = useState<string | null>(null);
+  const paneConversation = heldDown ?? conversationId;
+  const shownPaneKey = heldDown ?? paneKey(conversationId, deck.shown);
   const panes = panesOf(panesBy, shownPaneKey);
   const shownPaneKeyNow = useRef(shownPaneKey);
   shownPaneKeyNow.current = shownPaneKey;
@@ -557,19 +562,19 @@ function Workspace({
   const [reverted, setReverted] = useState(0);
   const [applied, setApplied] = useState<AppliedChangeView[]>([]);
   useEffect(() => {
-    if (!conversationId) {
+    if (!paneConversation) {
       setApplied([]);
       return;
     }
     let current = true;
     bridge
-      .invoke(changesList, { id: conversationId })
+      .invoke(changesList, { id: paneConversation })
       .then((list) => current && setApplied(list))
       .catch(() => undefined);
     return () => {
       current = false;
     };
-  }, [conversationId, turnsEnded, asked, reverted]);
+  }, [paneConversation, turnsEnded, asked, reverted]);
   const writesWaiting = approvals
     .list(conversationId ?? null)
     .filter((one) => one.name === 'edit_file' || one.name === 'write_file');
@@ -578,10 +583,10 @@ function Workspace({
   const changeCounts = total(changeCards.map((card) => countLines(card.before, card.after)));
   // The comments on the diff, per conversation (task 6.5): kept while the window lives.
   const [reviews, setReviews] = useState<Record<string, ReviewComment[]>>({});
-  const review = conversationId ? (reviews[conversationId] ?? []) : [];
+  const review = paneConversation ? (reviews[paneConversation] ?? []) : [];
   const changeReview = (change: (review: ReviewComment[]) => ReviewComment[]): void => {
-    if (!conversationId) return;
-    setReviews((was) => ({ ...was, [conversationId]: change(was[conversationId] ?? []) }));
+    if (!paneConversation) return;
+    setReviews((was) => ({ ...was, [paneConversation]: change(was[paneConversation] ?? []) }));
   };
   // They leave together, in one message, into the conversation's own chat once it is free.
   const sendReview = (): void => {
@@ -984,8 +989,14 @@ function Workspace({
     replaceMessages: async (id, shown, tree) => {
       await conversationManager.manager?.updateMessages(id, shown as Parameters<NonNullable<typeof conversationManager.manager>['updateMessages']>[1], tree as Parameters<NonNullable<typeof conversationManager.manager>['updateMessages']>[2]);
     },
-    unmount: (id) => setDeck((was) => forget(was, id)),
-    mount: (id) => setDeck((was) => openIn(was, id)),
+    unmount: (id) => {
+      if (id === shownIdRef.current) setHeldDown(id);
+      setDeck((was) => forget(was, id));
+    },
+    mount: (id) => {
+      setDeck((was) => openIn(was, id));
+      setHeldDown((was) => (was === id ? null : was));
+    },
     openBranchesAt: (id, userIndex) => {
       if (id === shownIdRef.current) forks.current?.openAt(userIndex);
     },
@@ -1931,7 +1942,7 @@ function Workspace({
               <BrowserPanel
                 messages={messages}
                 hidden={inboxOpen || settingsPage !== null}
-                scope={{ ...(conversationId ? { conversationId } : {}), ...(activeProject ? { projectId: activeProject.id } : {}) }}
+                scope={{ ...(paneConversation ? { conversationId: paneConversation } : {}), ...(activeProject ? { projectId: activeProject.id } : {}) }}
                 onAttach={(token) => attachToken(token)}
                 onSend={(text) => {
                   const id = conversationId ?? null;
@@ -1974,7 +1985,7 @@ function Workspace({
             body: (
               <ChangesPanel
                 messages={messages}
-                conversationId={conversationId}
+                conversationId={paneConversation}
                 cards={changeCards}
                 onReverted={() => setReverted((count) => count + 1)}
                 review={review}
@@ -1990,8 +2001,8 @@ function Workspace({
             body: (
               <FilesPanel
                 messages={messages}
-                scope={conversationId ? { conversationId } : activeProject ? { projectId: activeProject.id } : {}}
-                conversationId={conversationId}
+                scope={paneConversation ? { conversationId: paneConversation } : activeProject ? { projectId: activeProject.id } : {}}
+                conversationId={paneConversation}
                 pending={pendingPaths}
                 refresh={turnsEnded + asked}
               />

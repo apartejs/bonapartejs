@@ -306,7 +306,9 @@ export class BrowserViews {
     // Placed, an agent's new page is seen.
     delete tab.fresh;
     if (!rect || rect.width <= 0 || rect.height <= 0) {
-      if (this.placed === tab) this.unplace();
+      // Nowhere: the tab shown now is not on top, nor the one placed before it (a blank « Nouvel onglet » chosen
+      // over the agent's page — second review of step 2).
+      this.unplace();
       return;
     }
     if (this.placed && this.placed !== tab) this.unplace();
@@ -557,10 +559,10 @@ export class BrowserViews {
     const was = this.tabs.get(id);
     if (was && was.partition !== partitionOf(owner)) this.closeTab(id);
     const tab = this.createTab(id, owner);
-    if (!this.placed || isAgentTab(this.placed)) {
-      this.shown = id;
-      delete tab.fresh;
-    } else if (this.placedIn !== undefined && this.placedIn !== from.conversationId) tab.fresh = true;
+    // The pane last placed in another conversation: whatever it shows now, or later once uncovered, this page is
+    // shown when the person comes back to its own (second review of step 2) — never cleared here, only by a place.
+    if (this.placedIn !== undefined && this.placedIn !== from.conversationId) tab.fresh = true;
+    if (!this.placed || isAgentTab(this.placed)) this.shown = id;
     this.options.changed();
     return tab;
   }

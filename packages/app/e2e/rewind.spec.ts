@@ -67,6 +67,28 @@ test('« Revenir avant » says what would move, then takes the message and what 
   expect(await readFile(join(home, 'export.csv'), 'utf8')).toBe('a;b');
 });
 
+test('going back, then « Annuler le retour », keep the conversation’s panes as they were: the pane is never drawn again (the browser redo, step 2, second review)', async ({ launch }) => {
+  const { page } = await twoTurns(launch);
+  await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Navigateur' }).click();
+  const tabs = page.getByRole('tablist', { name: 'Onglets' });
+  await expect(tabs).toBeVisible();
+  // The pane's element marked: the same one after, or the pane was taken down and drawn again.
+  await tabs.evaluate((element) => void ((element as unknown as { bonaparteKept: boolean }).bonaparteKept = true));
+  const kept = (): Promise<boolean> => tabs.evaluate((element) => (element as unknown as { bonaparteKept?: boolean }).bonaparteKept === true);
+
+  const dialog = await goBackBefore(page);
+  await dialog.getByRole('button', { name: 'Revenir' }).click();
+  await expect(chat(page).userMessages).toHaveCount(1);
+  const banner = page.getByRole('status').filter({ hasText: 'Revenu avant « Ajoute un export »' });
+  await expect(banner).toBeVisible();
+  expect(await kept()).toBe(true);
+
+  await banner.getByRole('button', { name: 'Annuler le retour' }).click();
+  await expect(chat(page).userMessages).toHaveCount(2);
+  await expect(banner).toHaveCount(0);
+  expect(await kept()).toBe(true);
+});
+
 test('« Le code seulement »: the files go back, the conversation stays as it is', async ({ launch }) => {
   const { page, home } = await twoTurns(launch);
   const dialog = await goBackBefore(page);

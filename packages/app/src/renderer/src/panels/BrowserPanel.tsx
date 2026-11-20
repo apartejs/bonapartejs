@@ -118,11 +118,12 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
   // Where the tab shown goes: measured on every resize, and often, since something may cover it.
   useEffect(() => {
     const element = slot.current;
-    if (!element || !active) return;
+    if (!active) return;
     const measure = (): void => {
-      const covered = hidden || !element.checkVisibility() || document.querySelector('dialog[open]') !== null;
-      const box = element.getBoundingClientRect();
-      const rect = covered || !shown?.url ? null : { x: box.x, y: box.y, width: box.width, height: box.height };
+      // A tab with no page has no slot: placed nowhere, which takes the page shown before it off (second review).
+      const covered = !element || hidden || !element.checkVisibility() || document.querySelector('dialog[open]') !== null;
+      const box = element?.getBoundingClientRect();
+      const rect = covered || !box || !shown?.url ? null : { x: box.x, y: box.y, width: box.width, height: box.height };
       // Its conversation too: the main process shows an agent's page back in its own (the browser redo, step 2).
       const key = JSON.stringify([active, rect, device, conversation.current]);
       if (key === placed.current) return;
@@ -130,6 +131,7 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
       void bridge.invoke(browserPlace, { tabId: active, rect, device, conversationId: conversation.current });
     };
     measure();
+    if (!element) return;
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     window.addEventListener('resize', measure);

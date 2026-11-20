@@ -46,6 +46,23 @@ test('the pane opens a page of this machine in its tab, placed over it; « Tél�
   await expect.poll(() => placement(app)).toBeNull();
 });
 
+test('a blank « Nouvel onglet » takes the page off the pane: no page stays over it (the browser redo, step 2, second review)', async ({ launch }) => {
+  const { app, page, pages } = await launch({ engine: { responder: () => 'ok' }, pages: { '/rapport': RAPPORT } });
+  await openPane(page);
+  const address = page.getByRole('textbox', { name: 'Adresse' });
+  await address.fill(`${pages!.url}/rapport`);
+  await address.press('Enter');
+  await expect(page.getByRole('tab', { name: /Récap hebdo/ })).toBeVisible({ timeout: 15_000 });
+  await expect.poll(() => placement(app)).not.toBeNull();
+  // A blank tab shown: nothing to place, and the page before it is taken off.
+  await page.getByRole('button', { name: 'Nouvel onglet', exact: true }).click();
+  await expect(page.getByRole('tab')).toHaveCount(2);
+  await expect.poll(() => placement(app)).toBeNull();
+  // Back to the page: placed again.
+  await page.getByRole('tab', { name: /Récap hebdo/ }).click();
+  await expect.poll(() => placement(app)).not.toBeNull();
+});
+
 test('an address typed without its scheme opens; « Page précédente » goes back, « Recharger » reloads, Ctrl T opens a tab (review of phase 10)', async ({ launch }) => {
   const { page, pages } = await launch({ engine: { responder: () => 'ok' }, pages: { '/rapport': RAPPORT, '/escape': '<!doctype html><title>Autre page</title><p>autre</p>' } });
   await openPane(page);

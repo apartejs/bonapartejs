@@ -332,6 +332,40 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     await browser.agentOpen('http://localhost:5173/b', C1);
     expect(browser.shownIn('c1')).toBe('t1');
   });
+
+  it('an agent’s page opened while a page covered the person’s tab in another conversation is still shown back in its own (second review of step 2)', async () => {
+    const covers = [
+      (browser: BrowserViews) => browser.place('t1', null, 'desktop', 'c2'),
+      (browser: BrowserViews) => browser.hideAll(),
+    ];
+    for (const cover of covers) {
+      const { browser } = rig();
+      browser.openTab('t1');
+      await browser.navigate('t1', 'http://localhost:5173/mine');
+      browser.place('t1', RECT, 'desktop', 'c2');
+      // « À traiter » or the settings go over c2's pane: the person's tab is taken off.
+      cover(browser);
+      await browser.agentOpen('http://localhost:5173/a', C1);
+      // The page over the conversation goes: c2's pane places the person's tab again.
+      browser.place('t1', RECT, 'desktop', 'c2');
+      expect(browser.shownIn('c2')).toBe('t1');
+      // Back in c1, its agent's new page is the one shown.
+      expect(browser.shownIn('c1')).toBe('agent:c1');
+    }
+  });
+
+  it('a tab with nothing to show takes the page placed off: a blank « Nouvel onglet » leaves no page over the pane (second review of step 2)', async () => {
+    const { browser, views, attached } = rig();
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    browser.place('agent:c1', RECT, 'desktop', 'c1');
+    expect(attached.has(views[0]!)).toBe(true);
+    browser.openTab('t1');
+    // The pane shows the blank tab: placed nowhere, and nothing else stays placed.
+    browser.place('t1', null, 'desktop', 'c1');
+    expect(attached.size).toBe(0);
+    expect(browser.placement()).toBeNull();
+    expect(browser.shownIn('c1')).toBe('t1');
+  });
 });
 
 describe('the person’s tools on a page (task 10.2)', () => {
