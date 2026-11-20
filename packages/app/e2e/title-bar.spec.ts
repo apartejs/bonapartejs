@@ -101,6 +101,18 @@ test('the top strip moves the window, a button in it stays clickable, and the he
   expect(region.height).toBeGreaterThanOrEqual(32);
   const button = page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first();
   expect(await button.evaluate((element) => getComputedStyle(element).getPropertyValue('-webkit-app-region') || getComputedStyle(element).getPropertyValue('app-region'))).toBe('no-drag');
+  // The header and the sidebar's top move the window themselves, the title among them (Paul, 2026-11-20: the strip
+  // alone did not take everywhere on Windows) — what answers a click in them stays clickable.
+  const appRegion = (selector: string) =>
+    page.locator(selector).first().evaluate((element) => getComputedStyle(element).getPropertyValue('-webkit-app-region') || getComputedStyle(element).getPropertyValue('app-region'));
+  expect(await appRegion('.conversation-header__title')).toBe('drag');
+  expect(await appRegion('.bonaparte-sidebar__top')).toBe('drag');
+  expect(await appRegion('.conversation-header .panel-toggles button')).toBe('no-drag');
+  // A menu of the header, and its dialog, are the page's: never a spot that moves the window. A conversation has them.
+  await chat(page).send('Bonjour');
+  await expect(chat(page).replyText).toHaveText('ok', { timeout: 15_000 });
+  expect(await appRegion('.conversation-header .aparte-menu')).toBe('no-drag');
+  expect(await appRegion('.conversation-header dialog')).toBe('no-drag');
   // The buttons' place, kept at the header's end: its last icon ends before the system's buttons begin.
   const header = page.locator('.conversation-header');
   const kept = await header.evaluate((element) => Number.parseFloat(getComputedStyle(element).paddingRight));

@@ -4514,6 +4514,19 @@ body {
   z-index: 2147483000;
 }
 
+/* The bars under the strip move the window themselves, the title among them: on Windows the strip alone did not
+   take everywhere (Paul, 2026-11-20). What opens from them — a menu, a dialog — is the page's, never the window's. */
+.conversation-header,
+.bonaparte-sidebar__top {
+  -webkit-app-region: drag;
+}
+
+dialog,
+[popover],
+[role='menu'],
+[role='listbox'],
+[role='dialog'],
+.aparte-menu,
 button,
 a,
 input,
