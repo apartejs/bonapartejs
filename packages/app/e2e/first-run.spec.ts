@@ -38,6 +38,29 @@ test('two engines, the built-in one first: what it finds, the context and its ga
   expect(state).toEqual({ mode: 'managed', status: 'stopped' });
 });
 
+test('the context: the largest the card holds for the model, said with its gauge; another one picked moves the gauge and is the one launched (audit D2)', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS } });
+  await expect(page.getByText('Taille du contexte : 32 k', { exact: true })).toBeVisible();
+  const sizes = page.getByRole('radiogroup', { name: 'Taille du contexte' });
+  await expect(sizes.getByRole('radio', { name: '32 k · pour ta carte' })).toBeChecked();
+  const gauge = page.locator('.first-run__gauge');
+  const before = await gauge.getAttribute('aria-label');
+  await sizes.locator('label', { hasText: /^8 k$/ }).click();
+  await expect(page.getByText('Taille du contexte : 8 k', { exact: true })).toBeVisible();
+  await expect(gauge).not.toHaveAttribute('aria-label', before!);
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const preload = window as unknown as { bonaparte: { invoke(name: string, input: unknown): Promise<{ model?: { nCtx: number } }> } };
+          return preload.bonaparte.invoke('engine.state', undefined).then((state) => state.model?.nCtx ?? null);
+        }),
+      { timeout: 20_000 },
+    )
+    .toBe(8192);
+});
+
 test('a recommended model: its size said, downloaded on a click, then among the models found and chosen', async ({ launch }) => {
   const { page, hub } = await launch({
     managed: { models: {} },

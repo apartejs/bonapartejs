@@ -74,6 +74,8 @@ export interface EngineLoadAnnouncement {
   /** The card's; null when it was not measured — never zero. */
   gpuBytes: number | null;
   verdict: MemoryVerdict;
+  /** The context it loads with (audit 2026-11-21, D2). */
+  nCtx: number;
 }
 
 /**
@@ -211,6 +213,7 @@ export function announceLoad(model: LoadModel, settings: LoadSettings, gpu: GpuM
     vramBytes,
     gpuBytes: gpu.totalBytes,
     verdict: memoryVerdict(vramBytes, gpu.totalBytes ?? 0),
+    nCtx: settings.nCtx,
   };
 }
 

@@ -11,6 +11,7 @@
  */
 
 import {
+  engineApplySettings,
   engineLlama,
   engineLlamaInstall,
   engineLlamaPick,
@@ -36,6 +37,7 @@ import {
 } from '@aparte/bonaparte-shared';
 import { useEffect, useId, useState } from 'react';
 import { Glyph } from '../shell/icons';
+import { Choice } from '../settings/controls';
 import { TooBigCard } from '../failures/TooBigCard';
 import { FailureCard } from '../failures/FailureCard';
 import { bridge } from '../bridge';
@@ -220,6 +222,10 @@ function folderOf(path: string): string {
 
 /** Thousands of tokens, as the board writes them (« 32 »). */
 const kilo = (tokens: number): string => String(Math.round(tokens / 1024));
+
+/** The contexts offered at the first launch: 8 k to 64 k, and the one the core chose and the one shown, whatever they are. */
+const CONTEXTS = [8192, 16_384, 32_768, 65_536];
+const contextsFor = (suggested: number, shown: number): number[] => [...new Set([...CONTEXTS, suggested, shown])].sort((a, b) => a - b);
 
 // ── The service ──
 
@@ -459,6 +465,8 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
   const [fetching, setFetching] = useState<string | null>(null);
   const [fetchFailure, setFetchFailure] = useState<{ id: string; error: DownloadFailure } | null>(null);
   const [nCtx, setNCtx] = useState<number | null>(null);
+  // « Taille du contexte » picked here (audit 2026-11-21, D2); null: the one the core chose for the card.
+  const [picked, setPicked] = useState<number | null>(null);
 
   function listModels(choose?: string): Promise<void> {
     return bridge.invoke(engineModels, undefined).then((found) => {
@@ -562,13 +570,22 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
       if (next) void listModels();
     });
   };
-  const cost = chosen?.announcement ?? null;
+  const announced = chosen?.announcement ?? null;
+  // The context it loads with: the person's choice here, else the one the core chose for the card (audit D2).
+  const context = picked ?? announced?.nCtx ?? nCtx;
+  // What the load costs with that context: the core's figure, the context's share changed by the choice.
+  const cost =
+    announced && chosen && context !== null && announced.nCtx !== undefined && context !== announced.nCtx
+      ? { ...announced, vramBytes: Math.max(0, announced.vramBytes + (chosen.kvBytesPerToken ?? 0) * (context - announced.nCtx)) }
+      : announced;
 
   async function start(offload = false): Promise<void> {
     if (!chosen) return;
     setLoading(true);
     setFailure(null);
     try {
+      // A context chosen here is kept, as « Moteur et mémoire » keeps it: the load takes it.
+      if (picked !== null && picked !== announced?.nCtx) await bridge.invoke(engineApplySettings, { changes: { nCtx: picked }, restart: false });
       const result = await bridge.invoke(engineLoad, { path: chosen.path, ...(offload ? { offload } : {}) });
       if (result.ok) {
         onReady(result.state);
@@ -587,13 +604,13 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
 
   // The gauge: the model, its context, and the margin the load keeps, out of the card's memory.
   const gauge =
-    chosen && cost && nCtx !== null
+    chosen && cost && context !== null
       ? (() => {
-          const context = (chosen.kvBytesPerToken ?? 0) * nCtx;
-          const margin = Math.max(0, cost.vramBytes - chosen.sizeBytes - context);
+          const kv = (chosen.kvBytesPerToken ?? 0) * context;
+          const margin = Math.max(0, cost.vramBytes - chosen.sizeBytes - kv);
           const total = cost.gpuBytes ?? cost.vramBytes;
           const share = (bytes: number): string => `${Math.min(100, (bytes / total) * 100)}%`;
-          return { context, margin, total, share };
+          return { context: kv, margin, total, share };
         })()
       : null;
 
@@ -693,7 +710,7 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                         <span>{text.columns.file}</span>
                         <span>{text.columns.size}</span>
                         <span>{text.columns.perToken}</span>
-                        <span>{text.columns.vram(kilo(nCtx ?? 32_768))}</span>
+                        <span>{text.columns.vram(kilo(context ?? 32_768))}</span>
                       </div>
                       {models.map((model) => (
                         <label
@@ -788,9 +805,19 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                 </section>
               ) : null}
 
-              {gauge && cost && chosen && nCtx !== null ? (
+              {gauge && cost && chosen && context !== null ? (
                 <div className="first-run__context">
-                  <p className="first-run__label">{text.context.label(kilo(nCtx))}</p>
+                  <p className="first-run__label">{text.context.label(kilo(context))}</p>
+                  <Choice
+                    small
+                    label={text.context.choice}
+                    value={String(context)}
+                    options={contextsFor(announced?.nCtx ?? context, context).map((size) => ({
+                      value: String(size),
+                      label: size === announced?.nCtx ? text.context.suggested(kilo(size)) : text.context.size(kilo(size)),
+                    }))}
+                    onChange={(next) => setPicked(Number(next) === announced?.nCtx ? null : Number(next))}
+                  />
                   <div
                     className="first-run__gauge"
                     role="img"

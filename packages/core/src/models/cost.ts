@@ -43,6 +43,31 @@ export function estimateLoad(
   };
 }
 
+/** The contexts a load chooses from when the person chose none, the largest first; the last is the floor. */
+export const CONTEXT_STEPS = [32_768, 16_384, 8_192] as const;
+
+/**
+ * The context a load takes when the person chose none (audit 2026-11-21, D2): the largest step the model was trained
+ * for whose whole load — its weights, the KV cache of every slot, the margin — still fits the card with room to
+ * spare; 8 k when the card is not known. Said with the load's cost, as every cost is.
+ */
+export function autoContext(
+  info: GgufInfo,
+  fileBytes: number,
+  cacheType: KvCacheTypeName,
+  gpuBytes: number | null,
+  slots = 1,
+): number {
+  const floor = CONTEXT_STEPS[CONTEXT_STEPS.length - 1]!;
+  if (gpuBytes === null || !(gpuBytes > 0)) return floor;
+  for (const step of CONTEXT_STEPS) {
+    if (info.trainContext !== undefined && step > info.trainContext) continue;
+    const load = estimateLoad(info, fileBytes, step, cacheType);
+    if (memoryVerdict(load.weightsBytes + load.kvBytes * Math.max(1, slots) + load.overheadBytes, gpuBytes) === 'fits') return step;
+  }
+  return floor;
+}
+
 export type MemoryVerdict = 'fits' | 'tight' | 'too-big' | 'unknown';
 
 /**

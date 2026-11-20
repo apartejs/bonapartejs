@@ -96,6 +96,9 @@ export const en: Messages = {
     },
     context: {
       label: (k) => `Context size: ${k}k`,
+      choice: 'Context size',
+      size: (k) => `${k}k`,
+      suggested: (k) => `${k}k · for your card`,
       gauge: (used, total) => `${used} of ${total} of video memory`,
       total: (used, total) => `${used} of ${total}`,
       model: (size) => `model ${size}`,
@@ -163,6 +166,7 @@ export const en: Messages = {
     restore: 'Restoring the memory',
     seed: 'Preparing the start of the conversation',
     reread: 'Reading the conversation again',
+    compact: 'Context full: summarising the conversation to go on',
   },
   memory: {
     restoreTitle: (tokens) => `Memory saved: ${tokens} tokens`,
@@ -763,6 +767,8 @@ export const en: Messages = {
     later: 'Go on anyway',
     first: (duration) => `Compact first · ${duration}`,
     running: 'Compacting: the model summarises the conversation…',
+    auto: (before, after) => `Context full: the conversation was summarised to go on (${before} → ${after} tokens).`,
+    autoLabel: 'Automatic compaction',
     refused: {
       pending: 'Nothing was compacted: a call waits for your answer.',
       'not-worth': 'Nothing was compacted: the conversation is too short for a summary to be worth it.',

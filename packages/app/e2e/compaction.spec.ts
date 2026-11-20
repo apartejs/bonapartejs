@@ -121,6 +121,19 @@ test('a message sent while the summary is written stays after it: the next turn 
   expect(prompts.at(-1)).toContain('Pendant la compaction.');
 });
 
+test('a message that would not fit: the conversation is compacted on its own, said in the thread, and the message answered (audit D2)', async ({ launch }) => {
+  const { page, prompts } = await longConversation(launch, 1, 8000);
+  // The banner is left as it is: the person sends anyway.
+  await chat(page).send('Et ensuite ?');
+  await expect(chat(page).replyText).toHaveText('Suite.', { timeout: 20_000 });
+  const line = page.locator('.bonaparte-live-chat:not([hidden])').getByRole('note', { name: 'Compaction automatique' });
+  await expect(line).toContainText(/Contexte plein : la conversation a été résumée pour continuer \([\d\s  ]+ → [\d\s  ]+ jetons\)/);
+  await expect(chat(page).errors).toHaveCount(0);
+  expect(prompts.at(-1)).toContain('RÉSUMÉ DU TRAVAIL.');
+  expect(prompts.at(-1)).not.toContain('Une longue réponse');
+  expect(prompts.at(-1)).toContain('Et ensuite ?');
+});
+
 test('a conversation too short to be worth it: said, nothing changed', async ({ launch }) => {
   const { page } = await longConversation(launch, 1, 32_768);
   await command(page, /^\/compact/);

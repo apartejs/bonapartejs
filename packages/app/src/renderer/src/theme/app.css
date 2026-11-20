@@ -694,6 +694,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* A compaction the context made necessary (audit 2026-11-21, D2): a quiet line of the answer that stays. */
+.compaction-line {
+  margin: 0;
+  font-size: var(--aparte-font-size-xs);
+  color: var(--aparte-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* A call the core asks about (canvas « Conversation au travail »): amber, on the composer's axis. */
 .approval-card {
   box-sizing: border-box;

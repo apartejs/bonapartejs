@@ -667,13 +667,31 @@ describe('createCore — what the review of phase 2 found', () => {
     await expect(readFile(join(dir, 'data', 'kv-slots', 'c1_main.manifest.json'), 'utf8')).resolves.toContain('c1_main');
   }, 20_000);
 
+  it('no context chosen: a load takes the largest the card holds for the model, said with its cost; one chosen is kept (audit 2026-11-21, D2)', async () => {
+    const roomy = await setup();
+    const listed = (await roomy.core.models()).find((model) => model.path === roomy.gemma)!;
+    expect(listed.announcement).toMatchObject({ nCtx: 32_768, verdict: 'fits' });
+    await roomy.core.loadModel(roomy.gemma);
+    expect((await roomy.core.engineState()).model?.nCtx).toBe(32_768);
+    expect(await roomy.core.engineSettings()).toMatchObject({ nCtx: 32_768, nCtxAuto: true });
+    await roomy.core.applyEngineSettings({ nCtx: 8192 }, { restart: false });
+    expect(await roomy.core.engineSettings()).toEqual(expect.objectContaining({ nCtx: 8192 }));
+    expect((await roomy.core.engineSettings()).nCtxAuto).toBeUndefined();
+    expect((await roomy.core.models()).find((model) => model.path === roomy.gemma)?.announcement?.nCtx).toBe(8192);
+
+    // A card that is not known: 8 k, as before.
+    const unknown = await setup({ gpuMemory: async () => null });
+    expect((await unknown.core.models()).find((model) => model.path === unknown.gemma)?.announcement?.nCtx).toBe(8192);
+  }, 30_000);
+
   it('a setting that restarts the engine says first what it costs: the reload, the memories it makes to read again, a reply that runs', async () => {
     const { core, gemma } = await setup();
     await core.loadModel(gemma);
     await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
     await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
     await core.conversations.flush();
-    expect(await core.engineSettings()).toMatchObject({ nCtx: 8192, cacheType: 'f16' });
+    // None chosen: the largest the card holds for the model (audit 2026-11-21, D2).
+    expect(await core.engineSettings()).toMatchObject({ nCtx: 32_768, nCtxAuto: true, cacheType: 'f16' });
 
     const cache = await core.restartCost({ cacheType: 'q8_0' });
     expect(cache).toMatchObject({ kind: 'restart', setting: 'cacheType', memoriesLost: 1, replyRunning: false, loaded: true });
@@ -683,7 +701,7 @@ describe('createCore — what the review of phase 2 found', () => {
     expect(await core.restartCost({ nCtx: 16_384 })).toMatchObject({ replyRunning: true });
     release();
     // Nothing kept by asking.
-    expect(await core.engineSettings()).toMatchObject({ nCtx: 8192, cacheType: 'f16' });
+    expect(await core.engineSettings()).toMatchObject({ nCtx: 32_768, nCtxAuto: true, cacheType: 'f16' });
   }, 20_000);
 
   it('kept with a restart, the engine relaunches with them — after the reply that runs; kept for later, at the next load', async () => {
@@ -725,7 +743,7 @@ describe('createCore — what the review of phase 2 found', () => {
     await expect.poll(async () => (await core.memory()).engine.slots, { timeout: 15_000 }).toBe(2);
     expect(await core.engineSettings()).toMatchObject({ subagents: 'parallel' });
     // Each slot keeps the context asked: -c is shared between them.
-    expect((await core.engineState()).model?.nCtx).toBe(8192);
+    expect((await core.engineState()).model?.nCtx).toBe((await core.engineSettings()).nCtx);
     await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
     await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
     expect(core.conversations.slotCount).toBe(2);

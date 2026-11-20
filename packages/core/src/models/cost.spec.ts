@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { estimateLoad, estimateSwitch, memoryVerdict } from './cost.js';
+import { autoContext, estimateLoad, estimateSwitch, memoryVerdict } from './cost.js';
 import type { GgufInfo } from './gguf.js';
 
 const qwen17: GgufInfo = {
@@ -73,5 +73,22 @@ describe('estimateSwitch — what switching a conversation to another model cost
 
   it('an empty conversation has nothing to compute again', () => {
     expect(estimateSwitch({ load: estimateLoad(qwen17, GB, 8192, 'f16'), contextTokens: 0 }).reprefillTokens).toBe(0);
+  });
+});
+
+describe('autoContext — the context a load takes when the person chose none (audit 2026-11-21, D2)', () => {
+  it('the largest step that fits the card with room to spare, never past what the model was trained for', () => {
+    // Qwen3 1.7B, f16: 112 KiB a token — 3.5 GiB at 32 k.
+    expect(autoContext(qwen17, 1.1 * GB, 'f16', 24 * GB)).toBe(32_768);
+    expect(autoContext(qwen17, 1.1 * GB, 'f16', 4 * GB)).toBe(8_192);
+    expect(autoContext(qwen17, 1.1 * GB, 'f16', 6 * GB)).toBe(16_384);
+    expect(autoContext({ ...qwen17, trainContext: 16_384 }, 1.1 * GB, 'f16', 24 * GB)).toBe(16_384);
+    // Two slots hold two caches.
+    expect(autoContext(qwen17, 1.1 * GB, 'f16', 6 * GB, 2)).toBe(8_192);
+  });
+
+  it('8 k when the card is not known, or nothing fits', () => {
+    expect(autoContext(qwen17, 1.1 * GB, 'f16', null)).toBe(8_192);
+    expect(autoContext(qwen17, 30 * GB, 'f16', 24 * GB)).toBe(8_192);
   });
 });

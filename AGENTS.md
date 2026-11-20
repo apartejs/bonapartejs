@@ -585,7 +585,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   does not. A fork among the kept turns
   keeps the compaction (a rebase frozen again, the kept turns cut and copied
   after it); a fork before a compaction or a change of model never carries
-  the parent's memory.
+  the parent's memory. When the context runs out the core compacts on its
+  own (audit 2026-11-21, D2): before a message that would not leave
+  `REPLY_ROOM`, and between two tool rounds whose results would not —
+  then the turn under way is kept as it was frozen (`planCompactionKeeping`)
+  and goes on in the slot it holds. It is a rebase like any other, said
+  as it runs (the step `compact`) and as a line of the answer that stays
+  (the activity `compaction`, `aparte/compaction-line.ts`: tokens before
+  and after); the window sets no checkpoint, the divergence reads the
+  whole history. A conversation too full for a summary of the whole has
+  its last turn kept and the summary asked of what comes before it.
 - **A change of model** (`core/src/conversation/switch.ts`, the `engine`
   entry): a branch knows the model and family its prompt was frozen for. A
   turn on another model opens a new branch with an `engine` entry — the
@@ -604,7 +613,32 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   dialog. The engine says « ready » only
   when the core serves a turn, and pushes its changes (`AppEvent` `engine`).
   The launch settings (context, K/V cache) are kept only on a choice, once
-  their cost is said; « Moteur et mémoire » shows what runs.
+  their cost is said; « Moteur et mémoire » shows what runs. With no
+  context chosen, a load takes the largest of 32 k, 16 k and 8 k that the
+  model was trained for and that fits the card with room to spare
+  (`models/cost.ts` `autoContext`; 8 k when the card is not known;
+  `EngineLaunchSettings.nCtxAuto`), said in the load's announcement
+  (`nCtx`); the first launch offers « Taille du contexte », its gauge
+  following the choice, kept as « Moteur et mémoire » keeps it (audit
+  2026-11-21, D2).
+- **What the model reads** (`core/src/prompt/`, audit 2026-11-21, I1 to
+  I3): the stable system turn says who it is and how to work (find before
+  reading, read before an edit, edit_file over write_file, never commit,
+  push or delete unasked, check with the project's tests, never repeat a
+  failed call, follow a refusal, no shell, how to end), a discussion its
+  own short method, and the machine's platform — one seed per machine and
+  kind. The date, the branch and `git status --short` (`environment.ts`)
+  go in the conversation's own turn, read only when its prompt is frozen.
+  The project's instructions take about 12 % of the context
+  (`instructionsBudget`), cut after a whole line with a note naming the
+  file and the line to read on from. The five tools that make a plugin
+  are out of the inventory unless « Plugins créés en conversation » is on
+  or the conversation asked (« / plugin », `pluginTools`); `ask_user` is
+  told in one paragraph (`deltas.ts`), never its schema; a turn on 16 k or
+  less does not reason unless its conversation says so (`defaultThinking`).
+  The browser's tools say the agent's tab is its own, in a session with
+  none of the person's logins. A changed description reaches a
+  conversation frozen before as an inventory note — never a re-render.
 - **The shell** (`renderer/src/shell/`): `.aparte-app-shell` holds the
   sidebar (`Sidebar.tsx`) or its rail (`Rail.tsx`), the header
   (`ConversationHeader.tsx`) and the chat. A project is a header of ours

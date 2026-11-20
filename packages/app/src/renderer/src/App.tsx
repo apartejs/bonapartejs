@@ -49,6 +49,7 @@ import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './
 import { attachToken, ENGINE_READY, focusComposer, prefill, sendAsPerson, sendWhenFree, shownComposer, speakingForThePerson, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
+import { registerCompactionLine } from './aparte/compaction-line';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
 import { registerToolLines } from './aparte/tool-lines';
@@ -967,6 +968,7 @@ function Workspace({
   }, [messages]);
   useEffect(() => plans.current?.refresh(), [mode]);
   useEffect(() => registerRereadProgress(messages, locale), [messages, locale]);
+  useEffect(() => registerCompactionLine(messages, locale), [messages, locale]);
   // A message's buttons: aparté's « Modifier », « Copier », « Réessayer », and « Revenir avant », « Brancher » (task 7.2).
   useEffect(() => setupMessageActions(messages.rewind), [messages]);
   // Going back before a message, and the branches of a conversation (task 7.2).

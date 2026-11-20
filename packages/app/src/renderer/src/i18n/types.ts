@@ -90,6 +90,10 @@ export interface Messages {
     };
     context: {
       label(k: string): string;
+      /** The choice of it (audit 2026-11-21, D2): its name, a size, the one suggested for the card. */
+      choice: string;
+      size(k: string): string;
+      suggested(k: string): string;
       gauge(used: string, total: string): string;
       total(used: string, total: string): string;
       model(size: string): string;
@@ -134,7 +138,8 @@ export interface Messages {
     list: string;
   };
   /** What the window says while a turn waits: the core's steps, by key. */
-  steps: Record<'slot-wait' | 'restore' | 'seed' | 'reread', string>;
+  /** `compact`: the context ran out, and the conversation is compacted on its own (audit 2026-11-21, D2). */
+  steps: Record<'slot-wait' | 'restore' | 'seed' | 'reread' | 'compact', string>;
   memory: {
     restoreTitle(tokens: string): string;
     restoreLine(seconds: string, instead: string): string;
@@ -790,6 +795,9 @@ export interface Messages {
     first(duration: string): string;
     running: string;
     refused: Record<'pending' | 'not-worth' | 'no-room' | 'cut' | 'empty' | 'failed', string>;
+    /** The line a compaction the context made necessary leaves in the answer: what it held before and after. */
+    auto(before: string, after: string): string;
+    autoLabel: string;
   };
   /** A branch's pull request, and archiving a conversation on its branch (task 6.8). */
   /** Changing model (task 7.4; board « Coûts annoncés », 3): the composer's picker and its dialog. */

@@ -1,7 +1,8 @@
 /**
  * What the conversation engine says while it works, in aparté's words: its
  * text, its reasoning, its steps (the slot it waits for, a restore, a seed, a
- * re-read) and the bar of a re-read. A sub-agent's say the same, under its
+ * re-read, a compaction the context made necessary), the bar of a re-read,
+ * and the line a compaction leaves in the answer. A sub-agent's say the same, under its
  * `agentId` (task 8.1): aparté draws them on its line, never in the reply.
  */
 
@@ -9,6 +10,23 @@ import type { StreamRunEvent } from '@aparte/engine';
 import type { TurnEvent } from '../conversation/engine.js';
 
 export function turnEventToWire(event: TurnEvent, rereading: { on: boolean }, agentId?: string): StreamRunEvent[] {
+  if (event.type === 'compaction') {
+    // The conversation compacted on its own (audit 2026-11-21, D2): its step while it runs, then a line in the
+    // answer that stays — what it held before and after.
+    const mine = agentId ? { agentId } : {};
+    if (event.phase === 'start') return [{ type: 'step-start', name: 'compact', ...mine }];
+    const done: StreamRunEvent[] = [{ type: 'step-end', name: 'compact', ...mine }];
+    if (event.before !== undefined && event.after !== undefined) {
+      done.push({
+        type: 'activity',
+        id: `compaction-${Date.now()}`,
+        activityType: 'compaction',
+        content: { before: event.before, after: event.after },
+        ...mine,
+      });
+    }
+    return done;
+  }
   const one = turnEventToLine(event, rereading, agentId);
   if (event.type === 'round') {
     // The text of the round before is flushed first: aparté's parser holds a text that ends on a backtick or on half a

@@ -963,6 +963,95 @@ describe('ConversationEngine — reasoning on a small context (audit 2026-11-21,
   });
 });
 
+describe('ConversationEngine — the context runs out (audit 2026-11-21, D2)', () => {
+  const SUMMARY = 'Facts:\n- The code word is MARJORAM.\nWork: three long answers were given.';
+  /** A model that writes long answers, a short summary when asked for one, and calls read_file when told to read. */
+  const long = (prompt: string): string => {
+    if (prompt.includes('Summarize this conversation so far')) return SUMMARY;
+    const user = prompt.lastIndexOf('<|turn>user');
+    if (prompt.slice(user).includes('Lis')) {
+      return prompt.lastIndexOf('<|tool_response>') > user ? 'Fini.' : '<|tool_call>call:read_file{path:<|"|>a.txt<|"|>}<tool_call|>';
+    }
+    return 'Une longue réponse. '.repeat(450);
+  };
+  const READ: ToolDef = {
+    name: 'read_file',
+    description: 'Read a file.',
+    inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+    effect: 'read',
+    source: 'builtin',
+    where: 'core',
+  };
+
+  it('a message that would not fit: the conversation is compacted first, said in the turn, and the message answered', async () => {
+    const { store, prompts, conversation, say } = await rig({ server: { responder: long } });
+    const meta = await conversation();
+    await say(meta.id, 'Un');
+    await say(meta.id, 'Deux');
+    await say(meta.id, 'Trois');
+    const { result, events } = await say(meta.id, 'Quatre');
+    expect(result.stopped).toBeUndefined();
+    const start = events.findIndex((event) => event.type === 'compaction' && event.phase === 'start');
+    const end = events.find((event): event is Extract<TurnEvent, { type: 'compaction'; phase: 'end' }> => event.type === 'compaction' && event.phase === 'end');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end?.before).toBeGreaterThan(end?.after ?? Number.POSITIVE_INFINITY);
+    // A rebase, an explicit entry of the journal, before the message; the answer read from it.
+    const kinds = (await openJournal(store.dir, meta.id)).entries().map((entry) => entry.kind);
+    expect(kinds.lastIndexOf('rebase')).toBeLessThan(kinds.lastIndexOf('user'));
+    expect(prompts.at(-1)).toContain('[conversation summary]');
+    expect(prompts.at(-1)).toContain('MARJORAM');
+    expect(prompts.at(-1)).toContain('Quatre');
+  });
+
+  it('results that would not fit: compacted between two rounds, the turn under way kept as it was, and it goes on', async () => {
+    const { store, prompts, conversation, engine } = await rig({ server: { responder: long } });
+    const meta = await conversation();
+    const say = (text: string) => engine.turn(meta.id, { text }, () => undefined);
+    await say('Un');
+    await say('Deux');
+    const events: TurnEvent[] = [];
+    const result = await engine.turn(
+      meta.id,
+      {
+        text: 'Lis a.txt',
+        tools: {
+          defs: [READ],
+          onCalls: async (calls) => ({ results: calls.map((call) => ({ toolCallId: call.id, name: call.name, content: 'ligne du fichier\n'.repeat(500) })) }),
+        },
+      },
+      (event) => events.push(event),
+    );
+    expect(result.stopped).toBeUndefined();
+    expect(events.some((event) => event.type === 'compaction' && event.phase === 'end' && event.after !== undefined)).toBe(true);
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    const rebase = entries.findLast((entry) => entry.kind === 'rebase');
+    const current = entries.findLast((entry) => entry.kind === 'user');
+    expect(rebase).toMatchObject({ keptFrom: current?.id });
+    // The model read on from its own turn: its call and the result, after the summary.
+    const last = prompts.at(-1)!;
+    expect(last).toContain('[conversation summary]');
+    expect(last.indexOf('[conversation summary]')).toBeLessThan(last.indexOf('Lis a.txt'));
+    expect(last).toContain('<|tool_response>');
+    expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
+  });
+
+  it('a conversation full to its last tokens is still compacted: the summary asked of what comes before its last turn, kept', async () => {
+    const { store, conversation, engine, say } = await rig({ server: { responder: long } });
+    const meta = await conversation();
+    await say(meta.id, 'Un');
+    await say(meta.id, 'Deux');
+    await say(meta.id, 'Trois');
+    // So little room left that a summary of the whole could not be written.
+    const held = (await openJournal(store.dir, meta.id)).entries();
+    const counted = held.findLast((entry) => entry.kind === 'assistant')!;
+    await store.update(meta.id, { contextCap: (counted.kind === 'assistant' ? counted.usage!.contextTokens! : 0) + 200 });
+    const done = await engine.compact(meta.id, () => undefined);
+    expect(done.keptTurns).toBe(1);
+    const rebase = (await openJournal(store.dir, meta.id)).entries().findLast((entry) => entry.kind === 'rebase');
+    expect(rebase?.kind === 'rebase' ? rebase.rendered : '').toContain('Trois');
+  });
+});
+
 describe('ConversationEngine — the mode, as the model knows it', () => {
   it('a conversation in Lecture tells the model at its first turn: plan with update_plan, change nothing', async () => {
     const { store, prompts, say } = await rig();

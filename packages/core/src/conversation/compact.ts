@@ -72,6 +72,28 @@ function conversationPart(entries: readonly JournalEntry[]): { part: readonly Jo
   return { part: first < 0 ? [] : entries.slice(first), folded: [] };
 }
 
+/**
+ * A compaction that keeps everything from `keepFrom` on, as it was frozen, and folds what came before (audit
+ * 2026-11-21, D2): the turn under way when its context ran out — its calls and their results, which the model goes
+ * on from — or the last turn when the whole conversation leaves no room for the question and its summary: the
+ * summary is then asked of what comes before it, a prefix the engine holds. Not worth it when what it folds is little.
+ */
+export function planCompactionKeeping(entries: readonly JournalEntry[], keepFrom: string, estimate: (text: string) => number): CompactionPlan {
+  if (entries.at(-1)?.kind === 'pending') throw new CompactionError('pending', 'A call waits for an answer: answer it before compacting.');
+  const { part, folded } = conversationPart(entries);
+  const at = part.findIndex((entry) => entry.id === keepFrom);
+  if (at < 0) throw new CompactionError('not-worth', 'What would be kept is not in this part of the conversation: nothing was compacted.');
+  const weigh = (list: readonly JournalEntry[]): number => estimate(list.map((entry) => entry.rendered ?? '').join(''));
+  const kept = part.slice(at);
+  const compactedTokens = weigh([...folded, ...part.slice(0, at)]);
+  if (compactedTokens < MIN_COMPACTED_TOKENS) {
+    throw new CompactionError('not-worth', 'The conversation is too short for a summary to be worth it: nothing was compacted.');
+  }
+  const keptTurns = kept.filter((entry) => entry.kind === 'user').length;
+  const compactedTurns = part.slice(0, at).filter((entry) => entry.kind === 'user').length;
+  return { kept, keptTurns, compactedTurns, compactedTokens };
+}
+
 /** What a compaction would fold and keep — or why it is not worth it. */
 export function planCompaction(entries: readonly JournalEntry[], estimate: (text: string) => number): CompactionPlan {
   if (entries.at(-1)?.kind === 'pending') throw new CompactionError('pending', 'A call waits for an answer: answer it before compacting.');

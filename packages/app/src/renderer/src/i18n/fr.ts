@@ -96,6 +96,9 @@ export const fr: Messages = {
     },
     context: {
       label: (k) => `Taille du contexte : ${k} k`,
+      choice: 'Taille du contexte',
+      size: (k) => `${k} k`,
+      suggested: (k) => `${k} k · pour ta carte`,
       gauge: (used, total) => `${used} sur ${total} de mémoire vidéo`,
       total: (used, total) => `${used} sur ${total}`,
       model: (size) => `modèle ${size}`,
@@ -163,6 +166,7 @@ export const fr: Messages = {
     restore: 'Reprend la mémoire',
     seed: 'Prépare le début de la conversation',
     reread: 'Relit la conversation',
+    compact: 'Contexte plein : résume la conversation pour continuer',
   },
   memory: {
     restoreTitle: (tokens) => `Mémoire sauvée : ${tokens} jetons`,
@@ -765,6 +769,8 @@ export const fr: Messages = {
     later: 'Continuer quand même',
     first: (duration) => `Compacter d’abord · ${duration}`,
     running: 'Compaction en cours : le modèle résume la conversation…',
+    auto: (before, after) => `Contexte plein : la conversation a été résumée pour continuer (${before} → ${after} jetons).`,
+    autoLabel: 'Compaction automatique',
     refused: {
       pending: 'Rien n’a été compacté : un appel attend ta réponse.',
       'not-worth': 'Rien n’a été compacté : la conversation est trop courte pour qu’un résumé vaille la peine.',

@@ -56,6 +56,7 @@ import {
 } from './families/index.js';
 import { readJsonFile } from './fs/json-file.js';
 import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
+import { autoContext } from './models/cost.js';
 import {
   defaultScanRoots,
   scanModels,
@@ -314,6 +315,8 @@ export interface ModelChoice {
 /** The settings llama.cpp is launched with (task 7.4): the context of each conversation, the K/V cache type. */
 export interface EngineLaunchSettings {
   nCtx: number;
+  /** None chosen: the context is the largest the card holds for the model (audit 2026-11-21, D2). */
+  nCtxAuto?: boolean;
   cacheType: 'f16' | 'q8_0' | 'q4_0';
   gpuLayers: number | 'all';
   /** The sub-agents of the built-in engine (task 8.3): one after another in one slot, or in parallel in two. */
@@ -831,13 +834,42 @@ export function createCore(deps: CoreDeps): Core {
     const model = forPath ?? loaded?.path;
     const gpuLayers =
       typeof kept === 'number' && typeof layersFor === 'string' && model !== undefined && !samePath(layersFor, model) ? 'all' : kept;
+    const cacheType = (read.engine?.cacheType ?? settingDefault('cacheType')) as KvCacheType;
+    const parallel = (subagents === 'parallel' ? 'parallel' : 'sequential') as EngineLaunchSettings['subagents'];
+    // None chosen: the largest the card holds for this model (audit 2026-11-21, D2) — the one a load would bring back
+    // when none is named and none runs.
+    const chosen = read.engine?.nCtx;
+    const nCtx = chosen ?? (await autoNCtx(model ?? (await resumeOf()).resume?.path, cacheType, slotsFor({ subagents: parallel })));
     return {
-      nCtx: read.engine?.nCtx ?? (settingDefault('nCtx') as number),
-      cacheType: (read.engine?.cacheType ??
-        settingDefault('cacheType')) as KvCacheType,
+      nCtx,
+      ...(chosen === undefined ? { nCtxAuto: true } : {}),
+      cacheType,
       gpuLayers,
-      subagents: (subagents === 'parallel' ? 'parallel' : 'sequential') as EngineLaunchSettings['subagents'],
+      subagents: parallel,
     };
+  }
+
+  // What a model's header says, read once a file: the context a load chooses depends on it.
+  const headers = new Map<string, Promise<{ info: GgufInfo; bytes: number } | null>>();
+  /** The context a load of `path` takes when the person chose none: the card's room for it; 8 k when unknown. */
+  async function autoNCtx(path: string | undefined, cacheType: KvCacheType, slots: number): Promise<number> {
+    const floor = settingDefault('nCtx') as number;
+    if (!path) return floor;
+    const read =
+      loaded && samePath(loaded.path, path)
+        ? { info: loaded.info, bytes: (await stat(path).catch(() => null))?.size ?? 0 }
+        : await (headers.get(path) ??
+            headers
+              .set(
+                path,
+                Promise.all([readGgufInfo(path), stat(path)]).then(
+                  ([info, file]) => ({ info, bytes: file.size }),
+                  () => null,
+                ),
+              )
+              .get(path)!);
+    if (!read) return floor;
+    return autoContext(read.info, read.bytes, cacheType, await gpuBytes(), slots);
   }
 
   /** The slots llama.cpp runs: one, or two when the sub-agents work in parallel (task 8.3). */
@@ -1315,8 +1347,13 @@ export function createCore(deps: CoreDeps): Core {
               fileBytes: model.sizeBytes,
               ...(loadSeconds !== undefined ? { loadSeconds } : {}),
             },
-            // In parallel, the second slot's KV cache too (review of phase 8).
-            { ...settings, slots: slotsFor(settings) },
+            // In parallel, the second slot's KV cache too (review of phase 8). None chosen: the context this model
+            // would take on this card (audit 2026-11-21, D2).
+            {
+              ...settings,
+              nCtx: settings.nCtxAuto ? autoContext(info, model.sizeBytes, settings.cacheType, totalBytes, slotsFor(settings)) : settings.nCtx,
+              slots: slotsFor(settings),
+            },
             { totalBytes },
           ),
         };

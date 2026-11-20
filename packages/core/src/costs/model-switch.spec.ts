@@ -16,6 +16,7 @@ const load: EngineLoadAnnouncement = {
   vramBytes: 4.7 * GiB,
   gpuBytes: 24 * GiB,
   verdict: 'fits',
+  nCtx: 8192,
 };
 
 describe('announceModelSwitch', () => {

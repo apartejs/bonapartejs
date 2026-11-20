@@ -41,6 +41,8 @@ export const loadAnnouncementSchema = z.object({
   vramBytes: z.number(),
   gpuBytes: z.number().nullable(),
   verdict: z.enum(['fits', 'tight', 'too-big', 'unknown']),
+  /** The context it loads with: the person's, else the largest the card holds for the model (audit 2026-11-21, D2). */
+  nCtx: z.number().optional(),
 });
 
 export const modelChoiceSchema = z.object({
@@ -239,6 +241,8 @@ export const engineSwitch = defineChannel(
 /** The settings llama.cpp is launched with (task 7.4): the context of each conversation, the K/V cache type. */
 export const engineLaunchSettingsSchema = z.object({
   nCtx: z.number(),
+  /** None chosen: the largest context the card holds for the model (audit 2026-11-21, D2). */
+  nCtxAuto: z.boolean().optional(),
   cacheType: z.enum(['f16', 'q8_0', 'q4_0']),
   gpuLayers: z.union([z.literal('all'), z.number()]),
   /** The built-in engine's sub-agents (task 8.3): one after another, or in parallel in a second slot. */
