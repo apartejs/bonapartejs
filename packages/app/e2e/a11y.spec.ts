@@ -84,13 +84,14 @@ test('the shell and a conversation: every button has a name; Tab follows the rea
   await page.evaluate(() => document.querySelector('.a11y-probe')?.remove());
   expect(await unnamedButtons(page)).toEqual([]);
   // The reading order: the sidebar top to bottom, the header, the panes, the thread, the composer and its toolbar.
-  expect(await tabStops(page, 23)).toEqual([
+  expect(await tabStops(page, 24)).toEqual([
     'Réduire la barre latérale',
     'Nouvelle conversation',
     'Rechercher dans les conversations',
     'À traiter',
     'Nouveau projet',
     'maison, 1 conversation',
+    'Nouvelle conversation dans maison',
     'Bonjour',
     'Actions de la conversation',
     'Nouvelle discussion',

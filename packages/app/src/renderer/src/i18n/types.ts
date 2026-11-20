@@ -300,6 +300,8 @@ export interface Messages {
     discussions: string;
     /** A project's row: its name and how many conversations it holds. */
     project(name: string, count: number): string;
+    /** A project's « + »: a conversation in that project. */
+    newConversationIn(name: string): string;
     /** Where a conversation's memory is (§12): said by a name, never by a colour alone. */
     memory: { engine: string; saved: string; reread: string };
     /** A conversation in the folded sidebar: its title, and that it waits for the person. */

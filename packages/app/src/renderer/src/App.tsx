@@ -576,6 +576,18 @@ function Workspace({
     [],
   );
   const newConversation = (): void => goTo(null);
+  // A project's « + »: a fresh conversation in that project and its mode, whichever was open.
+  const newConversationIn = (projectId: string): void => {
+    const target = projects.find((one) => one.id === projectId);
+    if (!target) return;
+    discussionAsked.current = false;
+    project.current = target;
+    setActiveProject(target);
+    chosen.current = startingMode(target.defaultMode);
+    setMode(startingMode(target.defaultMode));
+    picked.current = false;
+    goTo(null);
+  };
   // « Nouvelle discussion » (task 9.7): a new conversation outside every project.
   const discussionAsked = useRef(false);
   const newDiscussion = (): void => {
@@ -1290,6 +1302,7 @@ function Workspace({
           onNewDiscussion={newDiscussion}
           onSearch={() => setSearching(true)}
           onNewProject={() => setCreatingProject(true)}
+          onNewConversationIn={newConversationIn}
           inbox={{
             count: inboxCount,
             open: inboxOpen,

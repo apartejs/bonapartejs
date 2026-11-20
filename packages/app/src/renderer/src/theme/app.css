@@ -1786,6 +1786,35 @@ body {
   height: 24px;
 }
 
+/* A project's head: its header, and its « + » shown on hover or focus — always in the Tab order. */
+.bonaparte-project__head {
+  display: flex;
+  align-items: center;
+  gap: var(--aparte-space-1);
+  min-width: 0;
+}
+
+.bonaparte-project__head > .bonaparte-project__header {
+  flex: 1;
+  min-width: 0;
+}
+
+.bonaparte-project__head > .bonaparte-tip {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.bonaparte-project__head:hover > .bonaparte-tip,
+.bonaparte-project__head:focus-within > .bonaparte-tip {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bonaparte-project__head > .bonaparte-tip {
+    transition: none;
+  }
+}
+
 .bonaparte-project__header {
   display: flex;
   align-items: center;

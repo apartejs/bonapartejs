@@ -54,6 +54,8 @@ export interface SidebarProps {
   onNewConversation(): void;
   onSearch(): void;
   onNewProject(): void;
+  /** A project's « + »: a conversation in that project. */
+  onNewConversationIn?(projectId: string): void;
   /** « Nouvelle discussion » (task 9.7). */
   onNewDiscussion?(): void;
   onSettings(): void;
@@ -102,27 +104,40 @@ function ProjectGroup({
   items,
   activeId,
   messages,
+  onNew,
 }: {
   project: ProjectView;
   items: readonly Row[];
   activeId: string | null;
   messages: Messages;
+  onNew?: (projectId: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   return (
     <div role="group" aria-label={project.name} className="bonaparte-project">
-      <button
-        type="button"
-        className="bonaparte-project__header"
-        aria-expanded={open}
-        aria-label={messages.shell.project(project.name, items.length)}
-        onClick={() => setOpen((was) => !was)}
-      >
-        <Icon name={open ? 'chevronDown' : 'chevronRight'} />
-        <Icon name="folder" />
-        <span className="bonaparte-project__name">{project.name}</span>
-        <span className="bonaparte-project__count">{items.length}</span>
-      </button>
+      <div className="bonaparte-project__head">
+        <button
+          type="button"
+          className="bonaparte-project__header"
+          aria-expanded={open}
+          aria-label={messages.shell.project(project.name, items.length)}
+          onClick={() => setOpen((was) => !was)}
+        >
+          <Icon name={open ? 'chevronDown' : 'chevronRight'} />
+          <Icon name="folder" />
+          <span className="bonaparte-project__name">{project.name}</span>
+          <span className="bonaparte-project__count">{items.length}</span>
+        </button>
+        {onNew ? (
+          <TipButton
+            label={messages.shell.newConversationIn(project.name)}
+            icon="plus"
+            side="bottom-end"
+            className="bonaparte-project__new"
+            onClick={() => onNew(project.id)}
+          />
+        ) : null}
+      </div>
       {open && items.length > 0 ? <List items={items} activeId={activeId} flat words={messages} /> : null}
     </div>
   );
@@ -194,7 +209,7 @@ export function Sidebar(props: SidebarProps) {
             <section className="bonaparte-section">
               <div className="bonaparte-section__head">
                 <h2 className="bonaparte-section__title">{words.projects}</h2>
-                <TipButton label={messages.newProject.open} icon="plus" onClick={props.onNewProject} />
+                <TipButton label={messages.newProject.open} icon="plus" side="bottom-end" onClick={props.onNewProject} />
               </div>
               {projects.map((project) => (
                 <ProjectGroup
@@ -203,6 +218,7 @@ export function Sidebar(props: SidebarProps) {
                   items={conversations.filter((conversation) => inProject(conversation.id) === project.id)}
                   activeId={activeId}
                   messages={messages}
+                  {...(props.onNewConversationIn ? { onNew: props.onNewConversationIn } : {})}
                 />
               ))}
             </section>
@@ -212,7 +228,7 @@ export function Sidebar(props: SidebarProps) {
                   {words.discussions}
                 </h2>
                 {/* A conversation without a project (task 9.7): the web and what it knows, no file. */}
-                {props.onNewDiscussion ? <TipButton label={words.newDiscussion} icon="plus" onClick={props.onNewDiscussion} /> : null}
+                {props.onNewDiscussion ? <TipButton label={words.newDiscussion} icon="plus" side="bottom-end" onClick={props.onNewDiscussion} /> : null}
               </div>
               {discussions.length > 0 ? <List items={discussions} activeId={activeId} flat words={messages} /> : null}
             </section>

@@ -360,6 +360,7 @@ export const fr: Messages = {
     projects: 'Projets',
     discussions: 'Discussions',
     project: (name, count) => `${name}, ${count} conversation${count > 1 ? 's' : ''}`,
+    newConversationIn: (name) => `Nouvelle conversation dans ${name}`,
     memory: { engine: 'Contexte dans le moteur', saved: 'Mémoire sauvée', reread: 'À relire' },
     railConversation: (title, waiting) => (waiting ? `${title}, attend ta réponse` : title),
     engine: (model) => `Moteur : ${model}, prêt`,

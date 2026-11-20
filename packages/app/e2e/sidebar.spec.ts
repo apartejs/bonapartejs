@@ -169,3 +169,41 @@ test('« Nouvelle discussion » is offered in every shape of the sidebar: one li
   const rail = page.getByRole('navigation', { name: 'Projets et conversations, barre réduite' });
   await expect(rail.getByRole('button', { name: 'Nouvelle discussion' })).toBeVisible();
 });
+
+test('the tooltips of the sections’ « + » stay whole inside the sidebar: never cut by its edge', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' } });
+  const sidebar = page.locator('.aparte-sidebar').first();
+  await expect(sidebar).toBeVisible();
+  const edge = (await sidebar.boundingBox())!;
+  for (const name of ['Nouveau projet', 'Nouvelle discussion']) {
+    const button = page.locator('.bonaparte-section__head').getByRole('button', { name, exact: true });
+    await button.hover();
+    const tip = page.locator('.bonaparte-section__head .aparte-tooltip', { hasText: name });
+    await expect(tip).toBeVisible();
+    const box = (await tip.boundingBox())!;
+    expect(box.x + box.width, name).toBeLessThanOrEqual(edge.x + edge.width);
+    expect(box.x, name).toBeGreaterThanOrEqual(edge.x);
+  }
+});
+
+test('a project’s « + » opens a conversation in that project, whichever was open before', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'spanwise-'));
+  try {
+    const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    const nav = page.getByRole('navigation', { name: 'Projets et conversations', exact: true });
+    // A second project, made last: the open one.
+    await nav.getByRole('button', { name: 'Nouveau projet' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
+    await dialog.getByRole('button', { name: 'Choisir un dossier…' }).click();
+    await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+    await expect(dialog).toBeHidden();
+
+    const home = nav.getByRole('group', { name: 'maison', exact: true });
+    await home.getByRole('button', { name: 'Nouvelle conversation dans maison', exact: true }).click();
+    await ask(page, 'Dans la maison');
+    await expect(home).toContainText('Dans la maison');
+    await expect(nav.getByRole('group', { name: /^spanwise-/ })).not.toContainText('Dans la maison');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
