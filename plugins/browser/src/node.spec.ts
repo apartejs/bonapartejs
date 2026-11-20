@@ -46,6 +46,16 @@ describe('the built-in browser plugin (task 10.1)', () => {
     ]);
   });
 
+  it('says to the person that it works on the agent’s own page, in its conversation — never the page shown (the browser redo, step 2, review)', () => {
+    const said = browserManifest.effects.filter((one) => one.effect !== 'network').map((one) => one.what);
+    expect(said).toHaveLength(2);
+    for (const what of said) {
+      expect(typeof what === 'string' ? what : what['en']).toMatch(/the agent’s own page, in its conversation/);
+      expect(typeof what === 'string' ? what : what['fr']).toMatch(/la page de l’agent, dans sa conversation/);
+      expect(JSON.stringify(what)).not.toMatch(/shown|affichée|sees|voit/);
+    }
+  });
+
   it('opens a file of the conversation’s folders — a page the agent wrote — in its perimeter, and says why not (Paul, 2026-11-20)', async () => {
     const asked: [string, { conversationId: string; roots: readonly string[] }][] = [];
     const call = await rig(

@@ -4,7 +4,23 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { browserOpens, close, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle, type OpenPanes } from './panes';
+import {
+  browserOpens,
+  close,
+  forgetPanes,
+  movePanes,
+  opened,
+  opensByItself,
+  paneKey,
+  panesOf,
+  pluginOfPane,
+  pluginPane,
+  shownPanes,
+  toggle,
+  withPanes,
+  type OpenPanes,
+  type PanesByConversation,
+} from './panes';
 
 describe('the panes', () => {
   it('each icon opens and closes its own pane; they stack in one order', () => {
@@ -54,5 +70,30 @@ describe('a page the agent opened (the browser redo, step 1)', () => {
     // Narrow, the pane would cover an approval or a question that waits.
     expect(browserOpens({ ...shown, narrow: true, waits: true })).toBe('mark');
     expect(browserOpens({ ...shown, narrow: true })).toBe('open');
+  });
+
+  it('each conversation has its own panes; a new one none, until its first message makes it a conversation (the browser redo, step 2)', () => {
+    let all: PanesByConversation = new Map();
+    const a = paneKey('a', 'chat-1');
+    const fresh = paneKey(null, 'chat-2');
+    expect(a).toBe('a');
+    expect(fresh).not.toBe(paneKey(null, 'chat-3'));
+    all = withPanes(all, a, (open) => opened(open, 'browser'));
+    expect(panesOf(all, a)).toEqual(['browser']);
+    // Another conversation, and a new one, have none — the same empty list each time, for React.
+    expect(panesOf(all, 'b')).toEqual([]);
+    expect(panesOf(all, fresh)).toBe(panesOf(all, 'b'));
+    // Nothing changed: the same map, so nothing draws again.
+    expect(withPanes(all, a, (open) => opened(open, 'browser'))).toBe(all);
+    // A new conversation's panes follow it once its first message makes it one.
+    all = withPanes(all, fresh, (open) => opened(open, 'terminal'));
+    all = movePanes(all, fresh, 'c');
+    expect(panesOf(all, 'c')).toEqual(['terminal']);
+    expect(panesOf(all, fresh)).toEqual([]);
+    expect(movePanes(all, 'none', 'd')).toBe(all);
+    // A conversation deleted or archived: its panes go.
+    all = forgetPanes(all, a);
+    expect(panesOf(all, a)).toEqual([]);
+    expect(forgetPanes(all, a)).toBe(all);
   });
 });

@@ -1,7 +1,8 @@
 /**
  * The built-in browser (task 10.1): its manifest, read before anything of it runs, and its Node half. Its pages
  * are the app's — a native view a tab in the main process, never with Node nor the window's bridge — and its
- * pane is the app's. Its tools work on the tab the person sees.
+ * pane is the app's. Its tools work on the agent's own tab in its conversation, never on one of the person's (the
+ * browser redo, step 2).
  */
 
 import { defineManifest } from '@aparte/bonaparte-plugin-sdk';
@@ -15,8 +16,8 @@ export const browserManifest = defineManifest({
   description: { en: 'Pages the agent can read: console, DOM, screenshot.', fr: 'Des pages que l’agent peut lire : console, DOM, capture d’écran.' },
   effects: [
     { effect: 'network', what: { en: 'opens pages of the internet, and of this machine', fr: 'ouvre des pages d’Internet, et de cette machine' } },
-    { effect: 'read', what: { en: 'reads and pictures the page shown', fr: 'lit et capture la page affichée' } },
-    { effect: 'execute', what: { en: 'clicks and types in the page shown', fr: 'clique et tape dans la page affichée' } },
+    { effect: 'read', what: { en: 'reads and pictures the agent’s own page, in its conversation', fr: 'lit et capture la page de l’agent, dans sa conversation' } },
+    { effect: 'execute', what: { en: 'clicks and types in the agent’s own page, in its conversation', fr: 'clique et tape dans la page de l’agent, dans sa conversation' } },
   ],
   contributes: {
     tools: [

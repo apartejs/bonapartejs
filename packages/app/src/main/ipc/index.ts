@@ -68,7 +68,12 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   registerMcpChannels(ipc, core);
   registerRunChannels(ipc, core);
   if (facts.browser) registerBrowserChannels(ipc, facts.browser);
-  registerConversationChannels(ipc, core, facts.seen ? { seen: facts.seen } : {});
+  const browser = facts.browser;
+  registerConversationChannels(ipc, core, {
+    ...(facts.seen ? { seen: facts.seen } : {}),
+    // A conversation deleted or archived: its agent's tab goes with it (the browser redo, step 2, review).
+    ...(browser ? { gone: (id: string) => browser.views.closeAgentTab(id) } : {}),
+  });
   ipc.handle(conversationsOpenFolder, async ({ id }) => {
     const branch = await core.branchOf(id);
     if (branch) await facts.openFolder(branch.worktree);

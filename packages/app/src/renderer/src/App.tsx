@@ -44,7 +44,7 @@ import {
   type InboxView,
   updatesList,
 } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
 import { attachToken, ENGINE_READY, focusComposer, prefill, sendAsPerson, sendWhenFree, shownComposer, speakingForThePerson, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
@@ -70,7 +70,23 @@ import { PanelDock } from './panels/PanelDock';
 import { BrowserPanel } from './panels/BrowserPanel';
 import { PanelToggles } from './panels/PanelToggles';
 import { PluginFrame } from './panels/PluginFrame';
-import { browserOpens, close as closePane, opened, opensByItself, pluginOfPane, pluginPane, shownPanes, toggle as togglePane, type OpenPanes } from './panels/panes';
+import {
+  browserOpens,
+  close as closePane,
+  forgetPanes,
+  movePanes,
+  opened,
+  opensByItself,
+  paneKey,
+  panesOf,
+  pluginOfPane,
+  pluginPane,
+  shownPanes,
+  toggle as togglePane,
+  withPanes,
+  type OpenPanes,
+  type PanesByConversation,
+} from './panels/panes';
 import { created, forget, mountHidden, newDeck, openIn, prune, shownConversation, type Deck, type LiveChat } from './chat/deck';
 import { MemoryBanner } from './chat/MemoryBanner';
 import { RewindBanner } from './chat/RewindBanner';
@@ -272,8 +288,18 @@ function Workspace({
     window.addEventListener(SETTING_CHANGED, follow);
     return () => window.removeEventListener(SETTING_CHANGED, follow);
   }, []);
-  // The panes beside the conversation (task 6.2), and whether Changements opens by itself.
-  const [panes, setPanes] = useState<OpenPanes>([]);
+  // The panes beside the conversation (task 6.2), each conversation's own — a new one has none (the browser redo,
+  // step 2) —, and whether Changements opens by itself.
+  const [panesBy, setPanesBy] = useState<PanesByConversation>(() => new Map());
+  const shownPaneKey = paneKey(conversationId, deck.shown);
+  const panes = panesOf(panesBy, shownPaneKey);
+  const shownPaneKeyNow = useRef(shownPaneKey);
+  shownPaneKeyNow.current = shownPaneKey;
+  /** The panes of the conversation shown change — or of the one named. */
+  const setPanes = useCallback(
+    (change: (open: OpenPanes) => OpenPanes, key: string = shownPaneKeyNow.current): void => setPanesBy((all) => withPanes(all, key, change)),
+    [],
+  );
   // The plugins (task 11.2): the panes of those of third parties, each a view in a sandboxed frame.
   const [plugins, setPlugins] = useState<PluginStatus[]>([]);
   const pluginsProject = activeProject?.id;
@@ -720,6 +746,7 @@ function Workspace({
   const archiveNow = (id: string): void => {
     void archive(id);
     setDeck((was) => forget(was, id));
+    setPanesBy((all) => forgetPanes(all, id));
   };
   // The core says what is not committed (none without a branch): the rows' states may not know the branch yet.
   const askArchive = (id: string, title: string): void => {
@@ -920,7 +947,7 @@ function Workspace({
       narrow: narrowNow.current,
       waits: statusesNow.current[id]?.waiting === true,
     });
-    if (decision === 'open') setPanes((was) => opened(was, 'browser'));
+    if (decision === 'open') setPanes((was) => opened(was, 'browser'), id);
     setBrowserMarks((was) => {
       if (decision === 'open' ? !was.has(id) : was.has(id)) return was;
       const next = new Set(was);
@@ -1605,6 +1632,7 @@ function Workspace({
           if (!openConversation) return;
           void remove(openConversation.id);
           setDeck((was) => forget(was, openConversation.id));
+          setPanesBy((all) => forgetPanes(all, openConversation.id));
         }}
         {...(discussion && openConversation
           ? {
@@ -1673,6 +1701,8 @@ function Workspace({
         handles={handles}
         onCreated={(key, id) => {
           setDeck((was) => created(was, key, id));
+          // The panes opened before its first message are its own.
+          setPanesBy((all) => movePanes(all, paneKey(null, key), id));
           bornHere.current.add(id);
           bornIn.current.set(id, project.current?.id ?? null);
         }}

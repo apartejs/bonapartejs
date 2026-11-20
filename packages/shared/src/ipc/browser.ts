@@ -48,10 +48,18 @@ export const browserNavigate = defineChannel(
 export const browserBack = defineChannel('browser.back', z.object({ tabId }), z.void());
 export const browserReload = defineChannel('browser.reload', z.object({ tabId }), z.void());
 const rect = z.object({ x: z.number(), y: z.number(), width: z.number().min(0), height: z.number().min(0) });
-/** Where the tab shown goes, in the window's pixels; null: hidden (its pane closed or covered). */
+/**
+ * Where the tab shown goes, in the window's pixels; null: hidden (its pane closed or covered). The pane says its
+ * conversation (null: a new one), so that an agent's page opened while the person looks elsewhere is shown back.
+ */
 export const browserPlace = defineChannel(
   'browser.place',
-  z.object({ tabId, rect: rect.nullable(), device: z.enum(['desktop', 'phone']) }),
+  z.object({
+    tabId,
+    rect: rect.nullable(),
+    device: z.enum(['desktop', 'phone']),
+    conversationId: z.string().min(1).max(128).nullable().optional(),
+  }),
   z.void(),
 );
 /** Nothing of the browser on top: a page or a menu goes over its pane. */

@@ -643,8 +643,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **The panes** (`renderer/src/panels/`): a column of ours beside the
   conversation (`PanelDock`, as the board draws it), its icons in the header
   (`PanelToggles`, five: Fichiers, Changements, Sous-agents, Navigateur, the
-  terminal); under 1 100 px the pane opened goes
-  over the conversation, alone. A page over the conversation (« À traiter »)
+  terminal), each conversation's own (`PanesByConversation`: a new one has
+  none, and keeps what it opened once its first message makes it one); under
+  1 100 px the pane opened goes over the conversation, alone. A page over the conversation (« À traiter »)
   hides them, mounted (a terminal keeps its view). Fichiers reads
   the core's `files.list`/`files.read` (`core/src/files/browse.ts`, always
   through `resolveInPerimeter`). Changements: the core's preview of a call
@@ -763,8 +764,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   one `WebContentsView` a tab, in a session made by one factory that puts
   the four guards on every one (`main/browser/sessions.ts`): the person's
   tabs in `persist:bonaparte-browser`, an agent's in its project's
-  `persist:bonaparte-agent-<project>`, or `bonaparte-agent` in memory with
-  no project — never the person's cookies (the browser redo, step 2),
+  `persist:bonaparte-agent-<project>`, or in memory one per conversation
+  with no project (`bonaparte-agent-conversation-<id>`, hashed when the id is
+  no safe name) — never the person's cookies (the browser redo, step 2); in
+  an agent's session a request no page names (a service worker's) is judged
+  as its page's (`blockedWithoutPage`), in the person's it passes —,
   http(s) only, never `bonaparte://` — and one `file:`: a file of the
   conversation's folders the agent opened (`browser_open_file`, read; a
   `file:///` given to `browser_open` goes the same way), checked by the host
@@ -783,7 +787,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (read) and `browser_act` (execute) work on their conversation's own tab
   (`agent:<conversation>`, made at its first page, marked « Agent » in that
   conversation's pane and in no other's, shown unless the person looks at a
-  tab of their own) and never on a tab of the person's, through
+  tab of their own — in another conversation's pane, it is `fresh` and shown
+  when the person comes back, the pane saying its conversation in
+  `browser.place` —; closed when its conversation is deleted or archived,
+  `closeAgentTab`) and never on a tab of the person's, through
   `BrowserService` — each call carries its conversation, and the host adds
   the project the core knows it in (`fileAccess`) —, given by the host only
   to a plugin that declares the network. `__bonaparteBrowser` is the

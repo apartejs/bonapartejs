@@ -3,7 +3,8 @@
  * no permission), never with Node nor the window's bridge. The person's tabs are theirs; each conversation's agent
  * has one tab of its own (`agent:<conversation>`), made at its first page in its project's session, and works on
  * that one only — it never reads, pictures nor acts on a tab of the person's (the browser redo, step 2; Paul,
- * 2026-11-20). The pane shows the person's tabs and its conversation's agent tab.
+ * 2026-11-20). The pane shows the person's tabs and its conversation's agent tab; a conversation deleted or
+ * archived takes its agent's tab with it.
  *
  * v0's traps, kept: a native view sits above the window's page — it is placed only where the pane says, and
  * taken off when its tab, its pane or the window's other pages hide it (a view placed with no rectangle covered
@@ -152,10 +153,10 @@ export interface BrowserViewsOptions {
   /** Tests only: how a host's addresses are found. */
   lookup?: (host: string) => Promise<string[]>;
   /**
-   * How the pages' own network stack resolved a host — Chromium's cache, stale entries too: what the page really
-   * connected to, not a second answer of the name's server (audit 13.4).
+   * How the pages' own network stack resolved a host, in a session (its partition) — Chromium's cache, stale
+   * entries too: what the page really connected to, not a second answer of the name's server (audit 13.4).
    */
-  pageLookup?: (host: string, owner: TabOwner) => Promise<string[]>;
+  pageLookup?: (host: string, partition: string) => Promise<string[]>;
 }
 
 const PHONE_WIDTH = 360;
@@ -178,6 +179,11 @@ interface Tab {
   fileRoot?: string;
   /** Its page stays off the network: the conversation may not reach it without asking (review of 2026-11-20). */
   fileOffline?: boolean;
+  /**
+   * An agent's tab that got a page while the person looked at a tab of their own in another conversation's pane:
+   * its conversation's pane shows it when the person comes back, until it is placed (review of step 2).
+   */
+  fresh?: boolean;
 }
 
 /**
@@ -228,6 +234,8 @@ export class BrowserViews {
   private readonly tabs = new Map<string, Tab>();
   private shown: string | null = null;
   private placed: Tab | null = null;
+  /** The conversation whose pane placed the tab shown, when it said (null: a new conversation). */
+  private placedIn: string | null | undefined;
   private bounds: Rect | null = null;
   private readonly resolve: (host: string) => Promise<string[]>;
 
@@ -270,6 +278,11 @@ export class BrowserViews {
     return tab;
   }
 
+  /** A conversation deleted or archived: its agent's tab goes with it (review of step 2). */
+  closeAgentTab(conversationId: string): void {
+    this.closeTab(agentTabId(conversationId));
+  }
+
   closeTab(tabId: string): void {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
@@ -280,11 +293,18 @@ export class BrowserViews {
     this.options.changed();
   }
 
-  /** Where the pane shows the tab; null: hidden. Only one tab is placed at a time — the one shown. */
-  place(tabId: string, rect: Rect | null, device: Device): void {
+  /**
+   * Where the pane shows the tab; null: hidden. Only one tab is placed at a time — the one shown. The pane says its
+   * conversation, so that an agent's page opened while the person looks at their own tab elsewhere is shown back in
+   * its own conversation.
+   */
+  place(tabId: string, rect: Rect | null, device: Device, conversationId?: string | null): void {
     const tab = this.tabs.get(tabId);
     if (!tab) return;
     this.shown = tabId;
+    this.placedIn = conversationId;
+    // Placed, an agent's new page is seen.
+    delete tab.fresh;
     if (!rect || rect.width <= 0 || rect.height <= 0) {
       if (this.placed === tab) this.unplace();
       return;
@@ -350,8 +370,13 @@ export class BrowserViews {
     }));
   }
 
-  /** The tab to show in a conversation's pane, when it is one of its tabs: the one placed last, or the agent's page. */
+  /**
+   * The tab to show in a conversation's pane, when it is one of its tabs: its agent's page not seen yet, else the
+   * one placed last, or the agent's page.
+   */
   shownIn(conversationId: string | null): string | null {
+    const own = conversationId === null ? undefined : this.tabs.get(agentTabId(conversationId));
+    if (own?.fresh) return own.id;
     return this.shown && this.inScope(conversationId).some((tab) => tab.id === this.shown) ? this.shown : null;
   }
 
@@ -414,6 +439,20 @@ export class BrowserViews {
     // A file's page kept off the network: nothing of it leaves the machine, this machine's own servers included.
     if (tab?.fileOffline) return true;
     if (!tab || !isAgentTab(tab)) return false;
+    return this.reachesPrivate(url, tab.partition);
+  }
+
+  /**
+   * A request no page names (a service worker's) in an agent's session (review of step 2): judged as a page the agent
+   * opened — a private address written as one, or a name that session resolves to one —; never a file of the disk.
+   */
+  async blockedWithoutPage(url: string, partition: string): Promise<boolean> {
+    if (/^file:/i.test(url)) return true;
+    return this.reachesPrivate(url, partition);
+  }
+
+  /** A request to the network this machine is in: written as one, or a name the session's own resolver gives such. */
+  private async reachesPrivate(url: string, partition: string): Promise<boolean> {
     let host: string;
     try {
       host = new URL(url).hostname;
@@ -423,7 +462,7 @@ export class BrowserViews {
     if (privateLiteral(host)) return true;
     const bare = host.replace(/^\[|\]$/g, '');
     if (isIP(bare) || bare === 'localhost' || !this.options.pageLookup) return false;
-    const seen = await this.options.pageLookup(bare, tab.owner).catch(() => []);
+    const seen = await this.options.pageLookup(bare, partition).catch(() => []);
     return seen.some((address) => !isLoopback(address) && !isPublicAddress(address));
   }
 
@@ -509,7 +548,8 @@ export class BrowserViews {
 
   /**
    * The caller's own tab, made at its first page in its project's session — again when the conversation moved to
-   * another project. It is shown, unless the person looks at a tab of their own in a visible pane.
+   * another project. It is shown, unless the person looks at a tab of their own in a visible pane: in its own
+   * conversation's, it waits behind theirs; in another's, it is shown when the person comes back (`fresh`).
    */
   private agentTab(from: AgentCaller): Tab {
     const id = agentTabId(from.conversationId);
@@ -517,7 +557,10 @@ export class BrowserViews {
     const was = this.tabs.get(id);
     if (was && was.partition !== partitionOf(owner)) this.closeTab(id);
     const tab = this.createTab(id, owner);
-    if (!this.placed || isAgentTab(this.placed)) this.shown = id;
+    if (!this.placed || isAgentTab(this.placed)) {
+      this.shown = id;
+      delete tab.fresh;
+    } else if (this.placedIn !== undefined && this.placedIn !== from.conversationId) tab.fresh = true;
     this.options.changed();
     return tab;
   }
@@ -577,7 +620,7 @@ export class BrowserViews {
     // What the page's own resolver holds for the name: a name that answered Node one address and Chromium another.
     const bare = host.replace(/^\[|\]$/g, '');
     if (this.options.pageLookup && !isIP(bare) && bare !== 'localhost') {
-      const seen = await this.options.pageLookup(bare, tab.owner).catch(() => []);
+      const seen = await this.options.pageLookup(bare, tab.partition).catch(() => []);
       if (seen.some((address) => !isLoopback(address) && !isPublicAddress(address))) throw new Error(answered);
     }
   }

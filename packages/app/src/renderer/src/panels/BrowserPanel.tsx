@@ -68,12 +68,12 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
 
   const ask = () => bridge.invoke(browserTabs, { conversationId: conversation.current });
 
-  // A pane always has a tab of the person's: in a conversation whose agent opened none, a fresh one — once, however
-  // many reads cross.
+  // A pane always has a tab of the person's — their last one closed, or only the agent's there —: a fresh one, once,
+  // however many reads cross.
   const opening = useRef<Promise<void> | null>(null);
   const withATab = async (): Promise<Awaited<ReturnType<typeof ask>>> => {
     const first = await ask();
-    if (first.tabs.length > 0) return first;
+    if (first.tabs.some((tab) => !tab.agent)) return first;
     opening.current ??= bridge.invoke(browserOpenTab, { tabId: newTabId() }).finally(() => (opening.current = null));
     await opening.current;
     return ask();
@@ -123,10 +123,11 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
       const covered = hidden || !element.checkVisibility() || document.querySelector('dialog[open]') !== null;
       const box = element.getBoundingClientRect();
       const rect = covered || !shown?.url ? null : { x: box.x, y: box.y, width: box.width, height: box.height };
-      const key = JSON.stringify([active, rect, device]);
+      // Its conversation too: the main process shows an agent's page back in its own (the browser redo, step 2).
+      const key = JSON.stringify([active, rect, device, conversation.current]);
       if (key === placed.current) return;
       placed.current = key;
-      void bridge.invoke(browserPlace, { tabId: active, rect, device });
+      void bridge.invoke(browserPlace, { tabId: active, rect, device, conversationId: conversation.current });
     };
     measure();
     const observer = new ResizeObserver(measure);

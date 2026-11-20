@@ -37,6 +37,7 @@ export function createBuiltinBrowser(options: {
     fromPartition: (partition) => sessions.fromPartition(partition),
     guards: {
       blocked: (webContentsId, url) => views.blocked(webContentsId, url),
+      blockedWithoutPage: (url, partition) => views.blockedWithoutPage(url, partition),
       responded: (webContentsId, ip) => views.responded(webContentsId, ip),
     },
   });
@@ -71,8 +72,8 @@ export function createBuiltinBrowser(options: {
     changed: options.changed,
     // Chromium's own answers for a name, in the tab's own session, its cache read, stale ones included: what the
     // page connected to.
-    pageLookup: async (host, owner) =>
-      (await sessionOf(owner).resolveHost(host, { cacheUsage: 'staleAllowed', source: 'any' })).endpoints.map((endpoint) => endpoint.address),
+    pageLookup: async (host, partition) =>
+      (await sessionFor(partition).resolveHost(host, { cacheUsage: 'staleAllowed', source: 'any' })).endpoints.map((endpoint) => endpoint.address),
   });
 
   // A page the agent opened is shown to the person: the window opens its pane.

@@ -59,3 +59,45 @@ export function shownPanes(open: OpenPanes, narrow: boolean): PaneName[] {
 export function opensByItself(setting: unknown): boolean {
   return setting !== 'never';
 }
+
+/**
+ * The panes open in each conversation (the browser redo, step 2): what is open in one stays that conversation's.
+ * A new conversation is named by its chat until its first message makes it one (`paneKey`, `movePanes`).
+ */
+export type PanesByConversation = ReadonlyMap<string, OpenPanes>;
+
+const NONE: OpenPanes = [];
+
+/** Whose panes: the conversation's, or the new chat's while it has no conversation yet. */
+export const paneKey = (conversationId: string | null, chatKey: string): string => conversationId ?? `new:${chatKey}`;
+
+export const panesOf = (all: PanesByConversation, key: string): OpenPanes => all.get(key) ?? NONE;
+
+/** One conversation's panes changed; the same map when nothing did. */
+export function withPanes(all: PanesByConversation, key: string, change: (open: OpenPanes) => OpenPanes): PanesByConversation {
+  const was = panesOf(all, key);
+  const next = change(was);
+  if (next === was || (next.length === was.length && next.every((pane, index) => pane === was[index]))) return all;
+  const copy = new Map(all);
+  if (next.length === 0) copy.delete(key);
+  else copy.set(key, next);
+  return copy;
+}
+
+/** A new chat's first message made its conversation: its panes follow it. */
+export function movePanes(all: PanesByConversation, from: string, to: string): PanesByConversation {
+  const moving = all.get(from);
+  if (!moving) return all;
+  const copy = new Map(all);
+  copy.delete(from);
+  copy.set(to, moving);
+  return copy;
+}
+
+/** A conversation deleted or archived: its panes go. */
+export function forgetPanes(all: PanesByConversation, key: string): PanesByConversation {
+  if (!all.has(key)) return all;
+  const copy = new Map(all);
+  copy.delete(key);
+  return copy;
+}

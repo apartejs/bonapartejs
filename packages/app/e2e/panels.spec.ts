@@ -10,6 +10,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
+import { conversationList } from './fixtures/conversations.js';
 
 const Q = '<|"|>';
 const EDIT = `<|tool_call>call:edit_file{path:${Q}notes.txt${Q},old_string:${Q}first${Q},new_string:${Q}second${Q}}<tool_call|>`;
@@ -47,6 +48,36 @@ test('five icons open and close their panes; the panes stack, the terminal 300 p
   await expect.poll(async () => (await terminalPane.boundingBox())!.height).toBeGreaterThan(400);
   await terminal.click();
   await expect(terminalPane).toHaveCount(0);
+});
+
+test('the panes are each conversation’s own: open in one, closed in another and in a new one, open again back in the first (the browser redo, step 2)', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: () => 'ok' } });
+  const ui = chat(page);
+  const browser = page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Navigateur', exact: true });
+  const tabs = page.getByRole('tablist', { name: 'Onglets' });
+  await ui.send('Conversation A');
+  await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+  await browser.click();
+  await expect(browser).toHaveAttribute('aria-pressed', 'true');
+  await expect(tabs).toBeVisible();
+
+  // A new conversation starts with none.
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
+  await expect(ui.editor).toBeVisible();
+  await expect(browser).toHaveAttribute('aria-pressed', 'false');
+  await expect(tabs).toHaveCount(0);
+  await ui.send('Conversation B');
+  await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
+  await expect(browser).toHaveAttribute('aria-pressed', 'false');
+
+  // Back in A, its pane is open again; in B, still closed.
+  const sidebar = conversationList(page);
+  await sidebar.row('Conversation A').click();
+  await expect(browser).toHaveAttribute('aria-pressed', 'true');
+  await expect(tabs).toBeVisible();
+  await sidebar.row('Conversation B').click();
+  await expect(browser).toHaveAttribute('aria-pressed', 'false');
+  await expect(tabs).toHaveCount(0);
 });
 
 test('a change waiting for the person puts a mark on Changements, and opens it by itself', async ({ launch }) => {

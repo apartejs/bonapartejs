@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { TabOwner } from './sessions.js';
+import { PERSON_PARTITION, partitionOf, type TabOwner } from './sessions.js';
 import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
 
 /** The conversation whose agent calls, and another one. */
@@ -187,8 +187,10 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
   it('two conversations’ agents each open and read their own page; the person’s tab is left as it was', async () => {
     const pages = new Map<string, string>();
     const views: FakeView[] = [];
+    const owners: TabOwner[] = [];
     const browser = new BrowserViews({
-      create: () => {
+      create: (owner) => {
+        owners.push(owner);
         const view = fakeView();
         // Each page says where it is.
         view.webContents.executeJavaScript = async (code) => {
@@ -211,6 +213,9 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     expect(await browser.agentRead(C2)).toMatchObject({ text: 'page B' });
     expect(await browser.agentAct({ kind: 'click', selector: 'button' }, C2)).not.toHaveProperty('error');
     expect(views).toHaveLength(3);
+    // Each tab built in its owner's session: the person's, then each conversation's agent's — never the person's.
+    expect(owners).toEqual(['person', C1, C2]);
+    expect(owners.slice(1).map((owner) => partitionOf(owner))).not.toContain(PERSON_PARTITION);
     expect(views[0]!.loaded).toEqual(['http://localhost:5173/mine']);
     expect(views[0]!.scripts).toEqual([]);
     // A conversation whose agent opened nothing has nothing to read.
@@ -230,6 +235,46 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     ]);
     expect(browser.states('c2').map((tab) => tab.tabId)).toEqual(['t1', 'agent:c2']);
     expect(browser.states(null).map((tab) => tab.tabId)).toEqual(['t1']);
+  });
+
+  it('an agent’s tab is never built in the person’s session, whatever opens it: a page, a file (review of step 2)', async () => {
+    const { browser, owners } = rig();
+    browser.openTab('t1');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    await browser.agentOpenFile(join(tmpdir(), 'page.html'), tmpdir(), { network: false, ...C2 });
+    await browser.agentOpen('http://localhost:5173/b', { conversationId: 'c3' });
+    expect(owners).toEqual(['person', C1, C2, { conversationId: 'c3' }]);
+    expect(owners.map((owner) => partitionOf(owner) === PERSON_PARTITION)).toEqual([true, false, false, false]);
+  });
+
+  it('a conversation never reads another conversation’s file page (review of step 2)', async () => {
+    const { browser, views } = rig({ read: { title: 'Snake', text: 'secret of c1' } });
+    await browser.agentOpenFile(join(tmpdir(), 'snake.html'), tmpdir(), { network: false, ...C1 });
+    expect(await browser.agentRead(C2)).toBeNull();
+    expect(await browser.agentScreenshot(C2)).toBeNull();
+    expect(await browser.agentAct({ kind: 'click', selector: 'a' }, C2)).toMatchObject({ error: expect.stringMatching(/No page/) });
+    expect(views[0]!.scripts).toEqual([]);
+    expect(browser.states('c2').map((tab) => tab.tabId)).toEqual([]);
+  });
+
+  it('a conversation deleted or archived takes its agent’s tab with it, and only its own (review of step 2)', async () => {
+    const closed: number[] = [];
+    const { browser, views, attached } = rig();
+    browser.openTab('t1');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    await browser.agentOpen('http://localhost:5173/b', C2);
+    for (const view of views) view.webContents.close = () => void closed.push(view.webContents.id);
+    browser.place('agent:c1', RECT, 'desktop');
+    expect(attached.has(views[1]!)).toBe(true);
+    browser.closeAgentTab('c1');
+    expect(closed).toEqual([views[1]!.webContents.id]);
+    expect(attached.size).toBe(0);
+    expect(browser.states('c1').map((tab) => tab.tabId)).toEqual(['t1']);
+    expect(browser.states('c2').map((tab) => tab.tabId)).toEqual(['t1', 'agent:c2']);
+    expect(await browser.agentRead(C1)).toBeNull();
+    // A conversation whose agent opened nothing: nothing to close.
+    browser.closeAgentTab('c9');
+    expect(closed).toHaveLength(1);
   });
 
   it('the window cannot open a tab in the agent’s name', () => {
@@ -267,6 +312,25 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     browser.hideAll();
     await browser.agentOpen('http://localhost:5173/c', C1);
     expect(browser.shownIn('c1')).toBe('agent:c1');
+  });
+
+  it('a page the agent opened while the person looked at their own tab in another conversation is shown back in its own (review of step 2)', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://localhost:5173/mine');
+    // The person looks at their tab in c2's pane while c1's agent opens a page.
+    browser.place('t1', RECT, 'desktop', 'c2');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    // c2's pane keeps the person's tab; back in c1, its agent's new page is the one shown.
+    expect(browser.shownIn('c2')).toBe('t1');
+    expect(browser.shownIn('c1')).toBe('agent:c1');
+    // Placed in c1's pane, it is seen: the person's next choice is followed again.
+    browser.place('agent:c1', RECT, 'desktop', 'c1');
+    browser.place('t1', RECT, 'desktop', 'c1');
+    expect(browser.shownIn('c1')).toBe('t1');
+    // In its own conversation's pane, the person's tab keeps its place: the agent's page waits behind its own tab.
+    await browser.agentOpen('http://localhost:5173/b', C1);
+    expect(browser.shownIn('c1')).toBe('t1');
   });
 });
 
@@ -501,6 +565,35 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     expect(await browser.agentAct({ kind: 'click', selector: 'button' }, C1)).toMatchObject({ error: expect.stringMatching(/No page/) });
     expect(views[0]!.scripts).toEqual([]);
     expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.50/api/save')).toBe(false);
+  });
+
+  it('a request no page names, in an agent’s session, is judged like its page’s: a private address, or a name its session resolves to one (review of step 2)', async () => {
+    const asked: [string, string][] = [];
+    const browser = new BrowserViews({
+      create: () => fakeView(),
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+      lookup: async () => ['93.184.216.34'],
+      pageLookup: async (host, partition) => {
+        asked.push([host, partition]);
+        return host === 'router.lan' ? ['192.168.1.1'] : host === 'dev.local' ? ['127.0.0.1'] : ['93.184.216.34'];
+      },
+    });
+    const partition = 'persist:bonaparte-agent-p1';
+    expect(await browser.blockedWithoutPage('http://10.0.0.5/sw-sync', partition)).toBe(true);
+    expect(await browser.blockedWithoutPage('http://[fd00::1]/', partition)).toBe(true);
+    expect(await browser.blockedWithoutPage('http://router.lan/apply.cgi', partition)).toBe(true);
+    expect(await browser.blockedWithoutPage('http://dev.local:3000/', partition)).toBe(false);
+    expect(await browser.blockedWithoutPage('http://127.0.0.1:5173/', partition)).toBe(false);
+    expect(await browser.blockedWithoutPage('https://cdn.example/x.js', partition)).toBe(false);
+    // No file of the disk for a request no page names.
+    expect(await browser.blockedWithoutPage(pathToFileURL(join(tmpdir(), 'x.html')).href, partition)).toBe(true);
+    // Resolved in the session it came from.
+    expect(asked).toEqual([
+      ['router.lan', partition],
+      ['dev.local', partition],
+      ['cdn.example', partition],
+    ]);
   });
 
   it('a name Chromium resolved to a private address is refused, whatever Node answers', async () => {

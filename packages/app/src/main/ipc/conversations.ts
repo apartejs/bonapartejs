@@ -81,6 +81,8 @@ interface ConversationCore {
 export interface ConversationHooks {
   /** A conversation was seen: a reply ready there is no longer one to show in the notification area. */
   seen?(): void;
+  /** A conversation was deleted or archived: what lived for it goes (its agent's tab in the browser). */
+  gone?(id: string): void;
 }
 
 export function registerConversationChannels(ipc: IpcRegistry, core: ConversationCore, hooks: ConversationHooks = {}): void {
@@ -112,6 +114,7 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsArchive, async ({ id }) => {
     await store.mark(id, { archivedAt: now() });
     await core.conversationArchived(id, true).catch(() => undefined);
+    hooks.gone?.(id);
   });
   ipc.handle(conversationsUnarchive, async ({ id }) => {
     await store.mark(id, { archivedAt: undefined });
@@ -149,7 +152,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     if (title !== meta.title) await store.rename(document.id, title);
   });
 
-  ipc.handle(conversationsDelete, ({ id }) => core.removeConversation(id));
+  ipc.handle(conversationsDelete, async ({ id }) => {
+    await core.removeConversation(id);
+    hooks.gone?.(id);
+  });
 
   ipc.handle(conversationsMemory, async ({ id }): Promise<ConversationMemoryView> => {
     const announcement = await core.conversations.open(id);

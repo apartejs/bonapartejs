@@ -2,12 +2,15 @@
  * One agent's tab per conversation (the browser redo, step 2), end to end: two conversations' agents each open and
  * read their own page while the person's tab stays where the person left it — the agent never works on a tab of
  * the person's (Paul, 2026-11-20) —; the agent's tab is in its conversation's pane, marked « Agent », and in no
- * other conversation's.
+ * other conversation's. The agent's session is never the person's: a cookie the person's page set is not the
+ * agent's; a conversation deleted takes its agent's tab with it; the pane always has a tab of the person's (review
+ * of step 2).
  */
 
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
+import { conversationList } from './fixtures/conversations.js';
 
 const page = (title: string, text: string): string =>
   `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body><main><p>${text}</p></main></body></html>`;
@@ -16,6 +19,14 @@ const PAGES = {
   '/mine': page('Ma page', 'la page de la personne'),
   '/a': page('Page A', 'contenu de A'),
   '/b': page('Page B', 'contenu de B'),
+  // The person's page sets a cookie, and says in its title that its session holds it.
+  '/set-cookie':
+    '<!doctype html><html><head><meta charset="utf-8"><title>Ma page</title></head><body><main><p>cookie posé</p></main>' +
+    "<script>document.cookie = 'personne=SECRET-DE-LA-PERSONNE; path=/; max-age=3600'; document.title = document.cookie.includes('SECRET') ? 'Ma page avec cookie' : 'Ma page sans cookie';</script></body></html>",
+  // The agent's page prints the cookies its session holds for the same address.
+  '/c':
+    '<!doctype html><html><head><meta charset="utf-8"><title>Page C</title></head><body><main><p id="said"></p></main>' +
+    "<script>document.getElementById('said').textContent = 'cookies: [' + document.cookie + ']';</script></body></html>",
 };
 
 const Q = '<|"|>';
@@ -26,7 +37,7 @@ function model(prompts: string[]) {
   return (prompt: string): string => {
     prompts.push(prompt);
     const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
-    const which = /page ([AB])/.exec(turn)?.[1];
+    const which = /page ([ABC])/.exec(turn)?.[1];
     if (!which) return 'ok';
     const results = turn.split('<|tool_response>').length - 1;
     if (results === 0) return `<|tool_call>call:browser_open{url:${Q}${pagesUrl}/${which.toLowerCase()}${Q}}<tool_call|>`;
@@ -51,7 +62,7 @@ async function openPane(ui: Page): Promise<void> {
 }
 
 /** The person asks to look at a page; the opening is the network, asked: allowed. */
-async function lookAt(ui: Page, which: 'A' | 'B'): Promise<void> {
+async function lookAt(ui: Page, which: 'A' | 'B' | 'C'): Promise<void> {
   await chat(ui).send(`Regarde la page ${which}`);
   const card = ui.getByRole('region', { name: 'Demande d’accord' });
   await expect(card).toBeVisible({ timeout: 15_000 });
@@ -113,4 +124,68 @@ test('the agent’s tab shows as « Agent » in its conversation’s pane, and i
   // Back in its conversation, it is there again.
   await nav(ui).getByRole('button', { name: /^Regarde la page A/ }).first().click();
   await expect(ui.getByRole('tab', { name: /Agent.*Page A/ })).toBeVisible({ timeout: 15_000 });
+});
+
+/** A conversation's agent tab, as the main process holds it. */
+const agentTabs = (app: ElectronApplication, conversationId: string) =>
+  app.evaluate(
+    (_electron, id) =>
+      (globalThis as unknown as { __bonaparteBrowser: { states(conversationId: string | null): { tabId: string; agent?: boolean }[] } }).__bonaparteBrowser
+        .states(id)
+        .filter((tab) => tab.agent)
+        .map((tab) => tab.tabId),
+    conversationId,
+  );
+
+test('the agent’s session is never the person’s: a cookie the person’s page set is not the agent’s (review of step 2)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const launched = await launch({ engine: { responder: (prompt) => model(prompts)(prompt), nCtx: 16_384 }, pages: PAGES });
+  pagesUrl = launched.pages!.url;
+  const { page: ui } = launched;
+  await openPane(ui);
+  const address = ui.getByRole('textbox', { name: 'Adresse' });
+  await address.fill(`${pagesUrl}/set-cookie`);
+  await address.press('Enter');
+  // The person's session holds the cookie: their page says so.
+  await expect(ui.getByRole('tab', { name: /Ma page avec cookie/ })).toBeVisible({ timeout: 15_000 });
+
+  // The agent opens a page of the same address that prints its cookies: none of the person's.
+  await lookAt(ui, 'C');
+  const read = prompts.findLast((prompt) => prompt.includes('<|tool_response>') && prompt.includes('cookies: [')) ?? '';
+  expect(read).toContain('cookies: []');
+  expect(read).not.toContain('SECRET-DE-LA-PERSONNE');
+});
+
+test('a conversation deleted takes its agent’s tab with it (review of step 2)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const launched = await launch({ engine: { responder: (prompt) => model(prompts)(prompt), nCtx: 16_384 }, pages: PAGES });
+  pagesUrl = launched.pages!.url;
+  const { app, page: ui } = launched;
+  await lookAt(ui, 'A');
+  const sidebar = conversationList(ui);
+  const id = await sidebar.row('Regarde la page A').first().getAttribute('data-conv-id');
+  expect(id).toBeTruthy();
+  expect(await agentTabs(app, id!)).toEqual([`agent:${id}`]);
+
+  await sidebar.openMenu('Regarde la page A');
+  await ui.getByRole('menuitem', { name: 'Supprimer' }).click();
+  await ui.getByRole('dialog', { name: /Supprimer « Regarde la page A »/ }).getByRole('button', { name: 'Supprimer' }).click();
+  await expect(sidebar.row('Regarde la page A')).toHaveCount(0);
+  await expect.poll(() => agentTabs(app, id!)).toEqual([]);
+});
+
+test('the pane always has a tab of the person’s: beside the agent’s, and again once the person closed their last one (review of step 2)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const launched = await launch({ engine: { responder: (prompt) => model(prompts)(prompt), nCtx: 16_384 }, pages: PAGES });
+  pagesUrl = launched.pages!.url;
+  const { page: ui } = launched;
+  await lookAt(ui, 'A');
+  // The pane opened by itself on the agent's page; a tab of the person's beside it.
+  await expect(ui.getByRole('tab', { name: /Agent.*Page A/ })).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 });
+  const fresh = ui.getByRole('tab', { name: /^Nouvel onglet$/ });
+  await expect(fresh).toHaveCount(1);
+  // Closed, the person's last tab is replaced by a fresh one: the agent's is not theirs.
+  await ui.getByRole('button', { name: 'Fermer Nouvel onglet' }).click();
+  await expect(fresh).toHaveCount(1);
+  await expect(ui.getByRole('tablist', { name: 'Onglets' }).getByRole('tab')).toHaveCount(2);
 });

@@ -74,7 +74,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
       removed.push(id);
       await store.remove(id);
     },
-  }, { seen: () => void marked.push('told') });
+  }, { seen: () => void marked.push('told'), gone: (id) => void marked.push(`gone ${id}`) });
   const call = (name: string, input: unknown) => listeners.get(name)!({ senderFrame: { url: ours } }, input);
   return { call, store, removed, marked };
 }
@@ -105,6 +105,15 @@ describe('the conversation channels', () => {
     await call('conversations.delete', { id: 'c-1' });
     expect(removed).toEqual(['c-1']);
     await expect(call('conversations.loadAll', undefined)).resolves.toEqual([]);
+  });
+
+  it('a conversation deleted or archived is said gone — its agent’s tab goes with it —; taken out of the archive, it is not (the browser redo, step 2, review)', async () => {
+    const { call, marked } = await setup();
+    await call('conversations.save', { document: DOC });
+    await call('conversations.archive', { id: 'c-1' });
+    await call('conversations.unarchive', { id: 'c-1' });
+    await call('conversations.delete', { id: 'c-1' });
+    expect(marked).toEqual(['gone c-1', 'gone c-1']);
   });
 
   it('say what opening a conversation costs', async () => {
