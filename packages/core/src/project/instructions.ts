@@ -92,10 +92,16 @@ export async function readProjectInstructions(roots: string[]): Promise<ProjectI
   return { text: text.slice(0, MAX_READ_CHARS), sources };
 }
 
-/** What the instructions may take of a prompt for a context of `window` tokens (characters). */
+/** The context assumed when it is not known (an engine elsewhere that does not say it): the smallest a load takes. */
+export const UNKNOWN_CONTEXT = 8192;
+
+/**
+ * What the instructions may take of a prompt for a context of `window` tokens (characters). A context not known
+ * is taken as a small one: an infinite one would freeze the most, more than a small context holds (review of round 2, 3).
+ */
 export function instructionsBudget(window: number): number {
-  if (!Number.isFinite(window) || window <= 0) return MAX_INSTRUCTIONS_CHARS;
-  return Math.min(MAX_INSTRUCTIONS_CHARS, Math.floor(window * INSTRUCTIONS_SHARE) * CHARS_PER_TOKEN);
+  const context = Number.isFinite(window) && window > 0 ? window : UNKNOWN_CONTEXT;
+  return Math.min(MAX_INSTRUCTIONS_CHARS, Math.floor(context * INSTRUCTIONS_SHARE) * CHARS_PER_TOKEN);
 }
 
 /** Where each labelled file starts in the text: its label, and where its content begins. */

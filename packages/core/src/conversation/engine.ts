@@ -78,6 +78,9 @@ export function defaultThinking(window: number): boolean {
   return window > SMALL_CONTEXT;
 }
 
+/** A model a conversation may go to: its family, its file, and the context it runs with when it is known (tokens). */
+export type ModelTarget = Pick<EngineView, 'family' | 'modelPath'> & { nCtx?: number };
+
 /** Room kept for the answer: a message that leaves less is refused before it is sent. */
 export const REPLY_ROOM = 1024;
 
@@ -1415,11 +1418,13 @@ export class ConversationEngine {
   private async refreezeFor(
     meta: ConversationMeta,
     entries: readonly JournalEntry[],
-    engine: Pick<EngineView, 'family'> & Partial<Pick<EngineView, 'live'>>,
+    engine: ModelTarget & Partial<Pick<EngineView, 'live'>>,
     instructions: string | undefined,
   ) {
     const { family } = engine;
-    const { asked, prompt } = await this.systemPrompt(meta, family, instructions, this.windowOf(meta, engine));
+    // The context the target runs with: its own, else the one its load takes (review of round 2, 3).
+    const window = this.windowOf(meta, engine, engine.nCtx || engine.live?.nCtx || undefined);
+    const { asked, prompt } = await this.systemPrompt(meta, family, instructions, window);
     const stable = family.renderSystem(prompt.stable);
     const written = branchModel(entries).family;
     const rendered = rerenderConversation(entries, {
@@ -1435,7 +1440,7 @@ export class ConversationEngine {
    * before): rendered again for it when its branch is frozen for another model; nothing when its memory is
    * saved; else its frozen prompt. Nothing for a conversation with no message yet.
    */
-  async rereadOn(id: string, target: Pick<EngineView, 'family' | 'modelPath'>): Promise<number> {
+  async rereadOn(id: string, target: ModelTarget): Promise<number> {
     const meta = await this.deps.store.get(id);
     if (!meta) return 0;
     const entries = (await openJournal(this.deps.store.dir, id, meta.branchId)).entries();
@@ -1452,7 +1457,7 @@ export class ConversationEngine {
    * document — opened by a change of model to `target`; the original keeps its model and its memory. A
    * worktree belongs to one conversation: the copy works in the project's folder, its prompt says so.
    */
-  copy(id: string, target: Pick<EngineView, 'family' | 'modelPath'>): Promise<ConversationMeta> {
+  copy(id: string, target: ModelTarget): Promise<ConversationMeta> {
     return this.exclusive.run(id, async () => {
       const meta = await this.deps.store.get(id);
       if (!meta) throw new Error(`There is no conversation ${id}.`);
@@ -1496,11 +1501,13 @@ export class ConversationEngine {
     journal: Journal,
     engine: EngineView,
     instructions: string | undefined,
+    engineWindow: number,
   ): Promise<{ meta: ConversationMeta; journal: Journal }> {
     const entries = journal.entries();
     const last = entries.at(-1);
     const moved = last ? await this.fork(meta, journal, last.id, { memory: false }) : { meta, journal };
-    const { asked, stable, rendered } = await this.refreezeFor(moved.meta, entries, engine, instructions);
+    const target = Number.isFinite(engineWindow) ? { ...engine, nCtx: engineWindow } : engine;
+    const { asked, stable, rendered } = await this.refreezeFor(moved.meta, entries, target, instructions);
     await moved.journal.append({
       kind: 'engine',
       engineId: meta.engineId,
@@ -1541,7 +1548,7 @@ export class ConversationEngine {
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     // A branch frozen for another model goes on in a new branch, the conversation rendered again (task 7.4).
     if (onAnotherModel(branchModel(journal.entries()), engine)) {
-      ({ meta, journal } = await this.changeModel(meta, journal, engine, instructions));
+      ({ meta, journal } = await this.changeModel(meta, journal, engine, instructions, engineWindow));
     }
     // A branch frozen again (a change of model) has its system turn in that entry: one started on a service has
     // no other, and never reads a second one after the person's message (review of phase 9).

@@ -108,7 +108,9 @@ describe('the instructions on a small context (audit 2026-11-21, I2)', () => {
     expect(instructionsBudget(8192)).toBeLessThan(4100);
     expect(instructionsBudget(16_384)).toBe(2 * instructionsBudget(8192));
     expect(instructionsBudget(1_000_000)).toBe(MAX_INSTRUCTIONS_CHARS);
-    expect(instructionsBudget(Number.POSITIVE_INFINITY)).toBe(MAX_INSTRUCTIONS_CHARS);
+    // A context not known is taken as a small one, never as an infinite one (review of round 2, 3).
+    expect(instructionsBudget(Number.POSITIVE_INFINITY)).toBe(instructionsBudget(8192));
+    expect(instructionsBudget(0)).toBe(instructionsBudget(8192));
   });
 
   it('cut after a whole line, the note naming the file and the line to read on from', async () => {

@@ -2156,7 +2156,10 @@ export function createCore(deps: CoreDeps): Core {
       if (!target.announcement) throw new Error(`The model ${target.name} cannot be read: it cannot be loaded.`);
       const layer = layerForModel(await readGgufInfo(target.path));
       const running = (await currentEngine()) && loaded ? listed.find((model) => samePath(model.path, loaded!.path)) : undefined;
-      const rereadTokens = conversationId ? await conversations.rereadOn(conversationId, { family: layer, modelPath: target.path }) : 0;
+      // Read again for the context the load would take (review of round 2, 3).
+      const rereadTokens = conversationId
+        ? await conversations.rereadOn(conversationId, { family: layer, modelPath: target.path, nCtx: target.announcement.nCtx })
+        : 0;
       const prefill = measures.get(target.path)?.prefillTokensPerSecond;
       return {
         to: { path: target.path, name: target.name },
@@ -2181,7 +2184,8 @@ export function createCore(deps: CoreDeps): Core {
         if (meta && meta.engineId !== BUILTIN_PROVIDER.id) await conversationStore.update(options.conversationId, { engineId: BUILTIN_PROVIDER.id, modelId: path });
       }
       if (options.as === 'copy' && options.conversationId && loaded) {
-        const copy = await conversations.copy(options.conversationId, { family: loaded.layer, modelPath: loaded.path });
+        const nCtx = supervisor.loaded?.nCtx ?? supervisor.live?.nCtx;
+        const copy = await conversations.copy(options.conversationId, { family: loaded.layer, modelPath: loaded.path, ...(nCtx ? { nCtx } : {}) });
         return { state, conversationId: copy.id };
       }
       return { state, ...(options.conversationId ? { conversationId: options.conversationId } : {}) };

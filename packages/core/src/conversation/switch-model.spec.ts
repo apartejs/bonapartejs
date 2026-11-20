@@ -35,7 +35,7 @@ afterEach(async () => {
   dirs = [];
 });
 
-async function rig() {
+async function rig(options: { instructions?: () => Promise<string | undefined> } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-switch-'));
   dirs.push(dir);
   const kvDir = join(dir, 'kv-slots');
@@ -55,6 +55,7 @@ async function rig() {
     store,
     kv,
     engine: async () => loaded,
+    ...(options.instructions ? { instructions: options.instructions } : {}),
     prompt: () => ({ kind: 'code', tools: [], perimeter: [], replyLanguage: 'French' }),
   });
   const { id } = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma.gguf', mode: 'plume' });
@@ -216,6 +217,31 @@ describe('what changing model would read', { timeout: 30_000 }, () => {
 });
 
 describe('a copy on another model (« Brancher sur ce modèle »)', { timeout: 30_000 }, () => {
+  const agents = '(from AGENTS.md)\n' + 'A rule of the project, written in full.\n'.repeat(1050);
+
+  it('freezes the instructions for the context the target runs with: about 12 % of 8 k, its cost said as much (review of round 2, 3)', async () => {
+    const { id, engine, store, say } = await rig({ instructions: async () => agents });
+    await say('Bonjour');
+    const target = { family: qwen, modelPath: 'qwen.gguf', nCtx: 8192 };
+    // 32 000 characters of instructions alone would be some 10 700 tokens: more than the target's whole context.
+    expect(await engine.rereadOn(id, target)).toBeLessThan(3000);
+    const copy = await engine.copy(id, target);
+    const head = (await openJournal(store.dir, copy.id)).entries().at(-1)!;
+    const rendered = head.rendered ?? '';
+    const said = rendered.slice(rendered.indexOf('(from AGENTS.md)'), rendered.indexOf('<|im_end|>', rendered.indexOf('(from AGENTS.md)')));
+    expect(said.length).toBeLessThanOrEqual(4000);
+    expect(said).toMatch(/is cut after line \d+/);
+  });
+
+  it('a target whose context is not known freezes them for a small one, never for an infinite one (review of round 2, 3)', async () => {
+    const { id, engine, store, say } = await rig({ instructions: async () => agents });
+    await say('Bonjour');
+    const copy = await engine.copy(id, { family: qwen, modelPath: 'qwen.gguf' });
+    const rendered = (await openJournal(store.dir, copy.id)).entries().at(-1)!.rendered ?? '';
+    const said = rendered.slice(rendered.indexOf('(from AGENTS.md)'), rendered.indexOf('<|im_end|>', rendered.indexOf('(from AGENTS.md)')));
+    expect(said.length).toBeLessThanOrEqual(4000);
+  });
+
   it('a new conversation: the branch shown, its document, and a change of model at its head; the original untouched', async () => {
     const { id, engine, store, say, branch } = await rig();
     await say('Bonjour');
