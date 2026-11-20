@@ -5,8 +5,8 @@
  * together, in one message; the two tools exclude each other; the console counts its errors and warnings, and
  * « Joindre les erreurs à la conversation » attaches them.
  *
- * The click in the page is a click of the page itself (`element.click()` through the agent's own action):
- * Playwright drives the window, not the native view the page lives in.
+ * The click in the page is a click of the page itself (`element.click()` through the test handle, in the person's
+ * tab): Playwright drives the window, not the native view the page lives in.
  */
 
 import type { ElectronApplication, Page } from '@playwright/test';
@@ -22,14 +22,16 @@ const RAPPORT = [
 ].join('');
 
 const clickInPage = (app: ElectronApplication, selector: string) =>
-  app.evaluate(
-    (_electron, target) =>
-      (globalThis as unknown as { __bonaparteBrowser: { agentAct(action: { kind: 'click'; selector: string }): Promise<unknown> } }).__bonaparteBrowser.agentAct({
-        kind: 'click',
-        selector: target,
-      }),
-    selector,
-  );
+  app.evaluate((_electron, target) => {
+    // A click of the person's in the tab shown: the agent never acts on a tab of the person's (the browser redo, step 2).
+    const browser = (
+      globalThis as unknown as {
+        __bonaparteBrowser: { placement(): { tabId: string } | null; click(tabId: string, selector: string): Promise<boolean> };
+      }
+    ).__bonaparteBrowser;
+    const placed = browser.placement();
+    return placed ? browser.click(placed.tabId, target) : false;
+  }, selector);
 
 async function openRapport(page: Page, url: string): Promise<void> {
   await expect(chat(page).editor).toBeVisible();

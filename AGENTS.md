@@ -760,7 +760,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`core/src/doctor/`) is what `bonaparte doctor` prints.
 - **The built-in browser** (task 10.1, `main/browser/views.ts`,
   `main/browser/service.ts`, `plugins/browser`, `panels/BrowserPanel.tsx`):
-  one `WebContentsView` a tab, in its own session (`bonaparte-browser`),
+  one `WebContentsView` a tab, in a session made by one factory that puts
+  the four guards on every one (`main/browser/sessions.ts`): the person's
+  tabs in `persist:bonaparte-browser`, an agent's in its project's
+  `persist:bonaparte-agent-<project>`, or `bonaparte-agent` in memory with
+  no project — never the person's cookies (the browser redo, step 2),
   http(s) only, never `bonaparte://` — and one `file:`: a file of the
   conversation's folders the agent opened (`browser_open_file`, read; a
   `file:///` given to `browser_open` goes the same way), checked by the host
@@ -776,11 +780,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   conversation, the pane hidden — since a native view sits above the
   window's page. The agent's `browser_open` (network: loopback and public
   addresses, never a private one), `browser_read` and `browser_screenshot`
-  (read) and `browser_act` (execute) work on the tab the person sees,
-  through `BrowserService`, given by the host only to a plugin that declares
-  the network. `__bonaparteBrowser` is the end-to-end tests' handle: a test
-  clicks in a page with `agentAct`, since Playwright drives the window, not
-  the native view.
+  (read) and `browser_act` (execute) work on their conversation's own tab
+  (`agent:<conversation>`, made at its first page, marked « Agent » in that
+  conversation's pane and in no other's, shown unless the person looks at a
+  tab of their own) and never on a tab of the person's, through
+  `BrowserService` — each call carries its conversation, and the host adds
+  the project the core knows it in (`fileAccess`) —, given by the host only
+  to a plugin that declares the network. `__bonaparteBrowser` is the
+  end-to-end tests' handle (`placement`, `states`, `click(tabId, selector)`,
+  `capture(tabId)`): a test clicks in a person's page with `click`, since
+  Playwright drives the window, not the native view.
 - **The person's tools on a page** (task 10.2, `views.pick`/`cancelPick`/
   `pins`, `panels/PageTools.tsx`, `panels/BrowserConsole.tsx`): an injected
   script outlines what the pointer is over, in the accent the window resolves

@@ -82,27 +82,28 @@ export const browser = definePlugin({
       return openFile(path, { conversationId, roots });
     });
 
-    ctx.registerToolHandler('browser_read', async () => {
+    // Each tool works on its conversation's own tab, never another's nor the person's (the browser redo, step 2).
+    ctx.registerToolHandler('browser_read', async ({ conversationId }) => {
       if (!ctx.browser) return UNAVAILABLE;
-      const page = await ctx.browser.read();
+      const page = await ctx.browser.read({ conversationId });
       if (!page) return NO_PAGE;
       return { content: `${page.title || 'Untitled'} — ${page.url}\n\n${page.text.trim()}\n\n${consoleText(page.console)}` };
     });
 
-    ctx.registerToolHandler('browser_screenshot', async () => {
+    ctx.registerToolHandler('browser_screenshot', async ({ conversationId }) => {
       if (!ctx.browser) return UNAVAILABLE;
-      const shot = await ctx.browser.screenshot();
+      const shot = await ctx.browser.screenshot({ conversationId });
       if (!shot) return NO_PAGE;
       return {
         content: `A screenshot of ${shot.url} (${shot.width} × ${shot.height}) was taken and kept for the person (${shot.saved}); you cannot see it — read the page with browser_read.`,
       };
     });
 
-    ctx.registerToolHandler('browser_act', async ({ input }) => {
+    ctx.registerToolHandler('browser_act', async ({ input, conversationId }) => {
       if (!ctx.browser) return UNAVAILABLE;
       const action = actionOf((input ?? {}) as Record<string, unknown>);
       if (!action) return { content: 'Give "action": click or type (with a "selector"), or scroll.', failed: true };
-      const result = await ctx.browser.act(action);
+      const result = await ctx.browser.act(action, { conversationId });
       if ('error' in result) return { content: result.error, failed: true };
       return { content: `Done: ${result.done}.` };
     });

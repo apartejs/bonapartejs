@@ -1,7 +1,9 @@
 /**
  * The built-in browser's pane (task 10.1, board « Le navigateur et ses outils »): its tabs (« + », Ctrl T),
  * back, reload, the address, the screen size (« Ordinateur » or « Téléphone », 360 px), and « L'agent lit la
- * page » while the agent reads it. The pages are native views of the main process: this pane keeps a slot and
+ * page » while the agent reads it. Its tabs are the person's and its conversation's agent's, marked « Agent »: the
+ * agent's new page is shown unless the person looks at a tab of their own (the browser redo, step 2). The pages
+ * are native views of the main process: this pane keeps a slot and
  * says where it is — and says « nowhere » whenever anything covers it (a dialog, a page over the
  * conversation, the pane hidden), since a native view sits above the window's page.
  */
@@ -58,21 +60,44 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
   const [failure, setFailure] = useState<string | null>(null);
   const slot = useRef<HTMLDivElement>(null);
   const placed = useRef<string>('');
+  // The conversation whose tabs are shown — its agent's among them —, and the tab the main process said to show
+  // last: followed only when it changes, so that a tab the person just chose is not taken back.
+  const conversation = useRef<string | null>(scope.conversationId ?? null);
+  conversation.current = scope.conversationId ?? null;
+  const followed = useRef<string | null>(null);
+
+  const ask = () => bridge.invoke(browserTabs, { conversationId: conversation.current });
+
+  // A pane always has a tab of the person's: in a conversation whose agent opened none, a fresh one — once, however
+  // many reads cross.
+  const opening = useRef<Promise<void> | null>(null);
+  const withATab = async (): Promise<Awaited<ReturnType<typeof ask>>> => {
+    const first = await ask();
+    if (first.tabs.length > 0) return first;
+    opening.current ??= bridge.invoke(browserOpenTab, { tabId: newTabId() }).finally(() => (opening.current = null));
+    await opening.current;
+    return ask();
+  };
 
   const read = (): void => {
-    void bridge.invoke(browserTabs, undefined).then((state) => {
+    void withATab().then((state) => {
       setTabs(state.tabs);
       setReading(state.reading);
-      setActive((current) => (current && state.tabs.some((tab) => tab.tabId === current) ? current : (state.tabs.at(-1)?.tabId ?? null)));
+      const moved = state.shown !== followed.current;
+      followed.current = state.shown;
+      const known = (id: string | null): id is string => id !== null && state.tabs.some((tab) => tab.tabId === id);
+      setActive((current) => (moved && known(state.shown) ? state.shown : known(current) ? current : (state.shown ?? state.tabs.at(-1)?.tabId ?? null)));
     });
   };
 
-  // A first tab, and the tabs read again whenever the main process says something changed.
+  // Another conversation shown: its tabs, and the one it shows.
   useEffect(() => {
-    void bridge.invoke(browserTabs, undefined).then(async (state) => {
-      if (state.tabs.length === 0) await bridge.invoke(browserOpenTab, { tabId: newTabId() });
-      read();
-    });
+    followed.current = null;
+    read();
+  }, [scope.conversationId]);
+
+  // The tabs read again whenever the main process says something changed (the first read is the conversation's).
+  useEffect(() => {
     const off = bridge.on((event) => {
       if (event.kind === 'browser') read();
     });
@@ -131,8 +156,7 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
 
   const closeTab = async (tabId: string): Promise<void> => {
     await bridge.invoke(browserCloseTab, { tabId });
-    // Closing the last tab opens a fresh one.
-    if (tabs.length <= 1) await bridge.invoke(browserOpenTab, { tabId: newTabId() });
+    // Closing the last tab opens a fresh one: the read does (`withATab`).
     read();
   };
 
@@ -196,6 +220,7 @@ export function BrowserPanel({ messages, hidden, scope, onAttach, onSend }: Brow
                   onClick={() => setActive(tab.tabId)}
                 >
                   <Icon name="globe" />
+                  {tab.agent ? <span className="aparte-badge aparte-badge--primary aparte-badge--soft aparte-badge--sm browser-tab__agent">{words.agentTab}</span> : null}
                   <span className="browser-tab__text">{label}</span>
                 </button>
                 <button type="button" className="browser-tab__close" aria-label={words.closeTab(label)} onClick={() => void closeTab(tab.tabId)}>

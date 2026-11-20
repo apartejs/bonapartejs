@@ -10,7 +10,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { TabOwner } from './sessions.js';
 import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
+
+/** The conversation whose agent calls, and another one. */
+const C1 = { conversationId: 'c1', projectId: 'p1' };
+const C2 = { conversationId: 'c2', projectId: 'p1' };
 
 interface FakeView extends PageView {
   loaded: string[];
@@ -64,18 +69,20 @@ function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; re
 
 function rig(page: Parameters<typeof fakeView>[0] = {}) {
   const views: FakeView[] = [];
+  const owners: TabOwner[] = [];
   const attached = new Set<FakeView>();
   const changes: number[] = [];
   const browser = new BrowserViews({
-    create: () => {
+    create: (owner) => {
       const view = fakeView(page);
       views.push(view);
+      owners.push(owner);
       return view;
     },
     host: { attach: (view) => void attached.add(view as FakeView), detach: (view) => void attached.delete(view as FakeView) },
     changed: () => changes.push(1),
   });
-  return { browser, views, attached, changes };
+  return { browser, views, owners, attached, changes };
 }
 
 const RECT = { x: 400, y: 100, width: 800, height: 600 };
@@ -134,7 +141,7 @@ describe('the built-in browser’s pages (task 10.1)', () => {
     const { browser } = rig({ failLoad: true });
     browser.openTab('t1');
     expect(await browser.navigate('t1', 'http://localhost:9')).toMatchObject({ error: expect.stringMatching(/REFUSED/) });
-    expect(browser.states()[0]).toMatchObject({ tabId: 't1', error: expect.stringMatching(/REFUSED/) });
+    expect(browser.states(null)[0]).toMatchObject({ tabId: 't1', error: expect.stringMatching(/REFUSED/) });
   });
 
   it('the console is kept, counted: errors and warnings', () => {
@@ -143,7 +150,7 @@ describe('the built-in browser’s pages (task 10.1)', () => {
     views[0]!.emit('console-message', { level: 'error', message: 'TypeError: x', lineNumber: 42, sourceId: 'weekly.ts' });
     views[0]!.emit('console-message', { level: 'warning', message: 'no alt', lineNumber: 1, sourceId: 'a.ts' });
     views[0]!.emit('console-message', { level: 'info', message: 'ready', lineNumber: 1, sourceId: 'a.ts' });
-    expect(browser.states()[0]).toMatchObject({ errors: 1, warnings: 1 });
+    expect(browser.states(null)[0]).toMatchObject({ errors: 1, warnings: 1 });
     expect(browser.console('t1')).toEqual([
       { level: 'error', text: 'TypeError: x', source: 'weekly.ts:42' },
       { level: 'warning', text: 'no alt', source: 'a.ts:1' },
@@ -151,26 +158,115 @@ describe('the built-in browser’s pages (task 10.1)', () => {
     ]);
   });
 
-  it('the agent opens, reads and acts on the tab shown; with none open, it opens one for it', async () => {
-    const { browser, views } = rig({ title: 'Récap', read: { title: 'Récap', text: 'Total 7 h 15' } });
-    expect(await browser.agentOpen('http://localhost:5173/rapport')).toMatchObject({ url: 'http://localhost:5173/rapport', title: 'Récap' });
+  it('the agent opens, reads and acts on its conversation’s own tab, made at its first page in its project’s session', async () => {
+    const { browser, views, owners } = rig({ title: 'Récap', read: { title: 'Récap', text: 'Total 7 h 15' } });
+    expect(await browser.agentOpen('http://localhost:5173/rapport', C1)).toMatchObject({ url: 'http://localhost:5173/rapport', title: 'Récap' });
     expect(views).toHaveLength(1);
-    expect(await browser.agentRead()).toMatchObject({ url: 'http://localhost:5173/rapport', text: 'Total 7 h 15' });
-    await browser.agentAct({ kind: 'click', selector: 'button.export"]' });
+    expect(owners).toEqual([C1]);
+    expect(browser.states('c1').map((tab) => [tab.tabId, tab.agent])).toEqual([['agent:c1', true]]);
+    expect(await browser.agentRead(C1)).toMatchObject({ url: 'http://localhost:5173/rapport', text: 'Total 7 h 15' });
+    await browser.agentAct({ kind: 'click', selector: 'button.export"]' }, C1);
     // The selector reaches the page as JSON: a quote cannot close the script's string.
     expect(views[0]!.scripts.at(-1)).toContain(JSON.stringify('button.export"]'));
   });
 
   it('the agent may open this machine’s own pages (a dev server), never the network it is in', async () => {
     const { browser } = rig();
-    expect(await browser.agentOpen('http://192.168.1.10/admin')).toMatchObject({ error: expect.stringMatching(/private/) });
-    expect(await browser.agentOpen('http://127.0.0.1:3000/')).toMatchObject({ url: 'http://127.0.0.1:3000/' });
+    expect(await browser.agentOpen('http://192.168.1.10/admin', C1)).toMatchObject({ error: expect.stringMatching(/private/) });
+    expect(await browser.agentOpen('http://127.0.0.1:3000/', C1)).toMatchObject({ url: 'http://127.0.0.1:3000/' });
   });
 
   it('a screenshot of the tab shown: its size, the image kept for the window', async () => {
     const { browser } = rig();
-    await browser.agentOpen('http://localhost:5173/');
-    expect(await browser.agentScreenshot()).toMatchObject({ width: 800, height: 600, png: new Uint8Array([1, 2, 3]) });
+    await browser.agentOpen('http://localhost:5173/', C1);
+    expect(await browser.agentScreenshot(C1)).toMatchObject({ width: 800, height: 600, png: new Uint8Array([1, 2, 3]) });
+  });
+});
+
+describe('one agent’s tab per conversation, never the person’s (the browser redo, step 2)', () => {
+  it('two conversations’ agents each open and read their own page; the person’s tab is left as it was', async () => {
+    const pages = new Map<string, string>();
+    const views: FakeView[] = [];
+    const browser = new BrowserViews({
+      create: () => {
+        const view = fakeView();
+        // Each page says where it is.
+        view.webContents.executeJavaScript = async (code) => {
+          view.scripts.push(code);
+          return { title: 'Page', text: pages.get(view.webContents.getURL()) ?? '' };
+        };
+        views.push(view);
+        return view;
+      },
+      host: { attach: () => undefined, detach: () => undefined },
+      changed: () => undefined,
+    });
+    pages.set('http://localhost:5173/mine', 'the person’s').set('http://localhost:5173/a', 'page A').set('http://localhost:5173/b', 'page B');
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://localhost:5173/mine');
+    browser.place('t1', RECT, 'desktop');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    await browser.agentOpen('http://localhost:5173/b', C2);
+    expect(await browser.agentRead(C1)).toMatchObject({ text: 'page A' });
+    expect(await browser.agentRead(C2)).toMatchObject({ text: 'page B' });
+    expect(await browser.agentAct({ kind: 'click', selector: 'button' }, C2)).not.toHaveProperty('error');
+    expect(views).toHaveLength(3);
+    expect(views[0]!.loaded).toEqual(['http://localhost:5173/mine']);
+    expect(views[0]!.scripts).toEqual([]);
+    // A conversation whose agent opened nothing has nothing to read.
+    expect(await browser.agentRead({ conversationId: 'c3' })).toBeNull();
+    expect(await browser.agentScreenshot({ conversationId: 'c3' })).toBeNull();
+    expect(await browser.agentAct({ kind: 'scroll', by: 100 }, { conversationId: 'c3' })).toEqual({ error: 'No page is open in the browser: open one with browser_open.' });
+  });
+
+  it('the pane lists the person’s tabs and its own conversation’s agent tab only, marked', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    await browser.agentOpen('http://localhost:5173/b', C2);
+    expect(browser.states('c1').map((tab) => [tab.tabId, tab.agent ?? false])).toEqual([
+      ['t1', false],
+      ['agent:c1', true],
+    ]);
+    expect(browser.states('c2').map((tab) => tab.tabId)).toEqual(['t1', 'agent:c2']);
+    expect(browser.states(null).map((tab) => tab.tabId)).toEqual(['t1']);
+  });
+
+  it('the window cannot open a tab in the agent’s name', () => {
+    const { browser, owners } = rig();
+    browser.openTab('agent:c1');
+    expect(browser.states('c1')).toEqual([]);
+    browser.openTab('t1');
+    expect(owners).toEqual(['person']);
+  });
+
+  it('a conversation without a project has an agent’s tab too; moved to another project, its next page opens in that project’s session', async () => {
+    const { browser, owners } = rig();
+    await browser.agentOpen('http://localhost:5173/', { conversationId: 'c9' });
+    await browser.agentOpen('http://localhost:5173/', { conversationId: 'c9' });
+    await browser.agentOpen('http://localhost:5173/', { conversationId: 'c9', projectId: 'p2' });
+    expect(owners).toEqual([{ conversationId: 'c9' }, { conversationId: 'c9', projectId: 'p2' }]);
+    expect(browser.states('c9').map((tab) => tab.tabId)).toEqual(['agent:c9']);
+  });
+
+  it('the agent’s page is shown unless the person looks at a tab of their own in a visible pane', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://localhost:5173/mine');
+    // The pane closed: the agent's tab becomes the one shown.
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    expect(browser.shownIn('c1')).toBe('agent:c1');
+    // Not in another conversation's pane.
+    expect(browser.shownIn('c2')).toBeNull();
+    // The person shows their own tab: the agent's next page does not take its place.
+    browser.place('t1', RECT, 'desktop');
+    expect(browser.shownIn('c1')).toBe('t1');
+    await browser.agentOpen('http://localhost:5173/b', C1);
+    expect(browser.shownIn('c1')).toBe('t1');
+    // Hidden again, it is.
+    browser.hideAll();
+    await browser.agentOpen('http://localhost:5173/c', C1);
+    expect(browser.shownIn('c1')).toBe('agent:c1');
   });
 });
 
@@ -180,7 +276,7 @@ describe('the person’s tools on a page (task 10.2)', () => {
     browser.openTab('t1');
     views[0]!.emit('console-message', { level: 'warning', message: 'Electron Security Warning (Insecure Content-Security-Policy) This renderer…', lineNumber: 0, sourceId: 'x' });
     views[0]!.emit('console-message', { level: 'warning', message: 'no alt', lineNumber: 1, sourceId: 'a.ts' });
-    expect(browser.states()[0]).toMatchObject({ warnings: 1 });
+    expect(browser.states(null)[0]).toMatchObject({ warnings: 1 });
     expect(browser.console('t1').map((line) => line.text)).toEqual(['no alt']);
   });
 
@@ -189,15 +285,15 @@ describe('the person’s tools on a page (task 10.2)', () => {
 
   it('« Sélectionner un élément » gives back what the page says of the element clicked, outlined in the accent', async () => {
     const { browser, views } = rig({ read: PICKED });
-    await browser.agentOpen('http://localhost:5173/');
-    expect(await browser.pick(browser.states()[0]!.tabId, '#087ea4')).toEqual(PICKED);
+    await browser.agentOpen('http://localhost:5173/', C1);
+    expect(await browser.pick(browser.states('c1')[0]!.tabId, '#087ea4')).toEqual(PICKED);
     expect(views[0]!.scripts.at(-1)).toContain('#087ea4');
   });
 
   it('a colour that is not one never reaches the page’s style', async () => {
     const { browser, views } = rig({ read: null });
-    await browser.agentOpen('http://localhost:5173/');
-    const tabId = browser.states()[0]!.tabId;
+    await browser.agentOpen('http://localhost:5173/', C1);
+    const tabId = browser.states('c1')[0]!.tabId;
     await browser.pick(tabId, "red; } body { display: none } .x { color: red");
     expect(views[0]!.scripts.at(-1)).not.toContain('display: none');
     await browser.pins(tabId, [{ n: 1, x: 10, y: 20 }], "red'); alert('x", "#fff'); alert('y");
@@ -214,8 +310,8 @@ describe('the person’s tools on a page (task 10.2)', () => {
 
   it('the pins are drawn numbered, where they were placed; « Échap » leaves the picker', async () => {
     const { browser, views } = rig({ read: true });
-    await browser.agentOpen('http://localhost:5173/');
-    const tabId = browser.states()[0]!.tabId;
+    await browser.agentOpen('http://localhost:5173/', C1);
+    const tabId = browser.states('c1')[0]!.tabId;
     await browser.pins(tabId, [{ n: 1, x: 10.4, y: 20.6 }, { n: 2, x: 300, y: 40 }], '#087ea4', 'rgb(255, 255, 255)');
     // Its ink is the one the window gives, never a colour written here.
     expect(views[0]!.scripts.at(-1)).toContain('rgb(255, 255, 255)');
@@ -288,32 +384,40 @@ describe('« L’agent lit la page » (review of phase 10)', () => {
 describe('the network this machine is in, after a redirect (review of phase 10)', () => {
   it('a page the agent opened that ends on a private address is neither read, nor pictured, nor acted on', async () => {
     const { browser } = rig({ redirectTo: 'http://192.168.1.1/admin', read: { title: 'Routeur', text: 'admin password' } });
-    expect(await browser.agentOpen('http://93.184.216.34/')).toMatchObject({ url: 'http://192.168.1.1/admin' });
-    await expect(browser.agentRead()).rejects.toThrow(/private address/);
-    await expect(browser.agentScreenshot()).rejects.toThrow(/private address/);
-    expect(await browser.agentAct({ kind: 'click', selector: 'button' })).toMatchObject({ error: expect.stringMatching(/private address/) });
+    expect(await browser.agentOpen('http://93.184.216.34/', C1)).toMatchObject({ url: 'http://192.168.1.1/admin' });
+    await expect(browser.agentRead(C1)).rejects.toThrow(/private address/);
+    await expect(browser.agentScreenshot(C1)).rejects.toThrow(/private address/);
+    expect(await browser.agentAct({ kind: 'click', selector: 'button' }, C1)).toMatchObject({ error: expect.stringMatching(/private address/) });
   });
 
   it('a page the agent opened is not redirected into that network; the person’s page may go there', async () => {
     const { browser, views } = rig();
-    await browser.agentOpen('http://93.184.216.34/');
-    const redirect = (to: string): boolean => {
+    await browser.agentOpen('http://93.184.216.34/', C1);
+    const redirect = (view: FakeView, to: string): boolean => {
       let prevented = false;
-      views[0]!.emit('will-redirect', { preventDefault: () => (prevented = true) }, to);
+      view.emit('will-redirect', { preventDefault: () => (prevented = true) }, to);
       return prevented;
     };
-    expect(redirect('http://10.0.0.1/')).toBe(true);
-    expect(redirect('http://127.0.0.1:5173/')).toBe(false);
-    expect(redirect('https://93.184.216.35/')).toBe(false);
-    await browser.navigate(browser.states()[0]!.tabId, 'http://93.184.216.34/');
-    expect(redirect('http://10.0.0.1/')).toBe(false);
+    expect(redirect(views[0]!, 'http://10.0.0.1/')).toBe(true);
+    expect(redirect(views[0]!, 'http://127.0.0.1:5173/')).toBe(false);
+    expect(redirect(views[0]!, 'https://93.184.216.35/')).toBe(false);
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://93.184.216.34/');
+    expect(redirect(views[1]!, 'http://10.0.0.1/')).toBe(false);
+    // The agent's tab stays the agent's, whoever drives it: the person typing in it does not take it there either.
+    expect(await browser.navigate('agent:c1', 'http://192.168.1.1/')).toMatchObject({ error: expect.stringMatching(/private/) });
+    expect(redirect(views[0]!, 'http://10.0.0.1/')).toBe(true);
   });
 
-  it('a page the person opened there is theirs to show the agent', async () => {
-    const { browser } = rig({ read: { title: 'Routeur', text: 'status' } });
+  it('a page the person opened is never the agent’s: not read, pictured nor acted on, even shown (Paul, 2026-11-20)', async () => {
+    const { browser, views } = rig({ read: { title: 'Routeur', text: 'status' } });
     browser.openTab('t1');
     await browser.navigate('t1', 'http://192.168.1.1/');
-    expect(await browser.agentRead()).toMatchObject({ text: 'status' });
+    browser.place('t1', RECT, 'desktop');
+    expect(await browser.agentRead(C1)).toBeNull();
+    expect(await browser.agentScreenshot(C1)).toBeNull();
+    expect(await browser.agentAct({ kind: 'click', selector: 'button' }, C1)).toEqual({ error: 'No page is open in the browser: open one with browser_open.' });
+    expect(views[0]!.scripts).toEqual([]);
   });
 });
 
@@ -330,14 +434,14 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
       changed: () => undefined,
       lookup: async () => ['93.184.216.34'],
     });
-    expect(await watched.agentOpen('http://rebind.example/')).toMatchObject({ url: 'http://rebind.example/' });
+    expect(await watched.agentOpen('http://rebind.example/', C1)).toMatchObject({ url: 'http://rebind.example/' });
     // The name answered a public address to Node, then a private one to Chromium.
     watched.responded(views[0]!.webContents.id, '192.168.1.1');
-    await expect(watched.agentRead()).rejects.toThrow(/private/);
+    await expect(watched.agentRead(C1)).rejects.toThrow(/private/);
     // A new page the agent opens starts clean.
-    expect(await watched.agentOpen('http://other.example/')).toMatchObject({ url: 'http://other.example/' });
+    expect(await watched.agentOpen('http://other.example/', C1)).toMatchObject({ url: 'http://other.example/' });
     watched.responded(views[0]!.webContents.id, '93.184.216.34');
-    await expect(watched.agentRead()).resolves.toMatchObject({ url: 'http://other.example/' });
+    await expect(watched.agentRead(C1)).resolves.toMatchObject({ url: 'http://other.example/' });
   });
 
   it('a request of an agent’s page to a NAME of the network this machine is in is cancelled too (audit 13.4, second pass)', async () => {
@@ -353,7 +457,7 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
       lookup: async () => ['93.184.216.34'],
       pageLookup: async (host) => (host === 'router.lan' ? ['192.168.1.1'] : host === 'dev.local' ? ['127.0.0.1'] : ['93.184.216.34']),
     });
-    await browser.agentOpen('http://public.example/');
+    await browser.agentOpen('http://public.example/', C1);
     const id = views[0]!.webContents.id;
     expect(await browser.blocked(id, 'http://router.lan/apply.cgi')).toBe(true);
     expect(await browser.blocked(id, 'ws://router.lan:8123/api/websocket')).toBe(true);
@@ -361,7 +465,7 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     expect(await browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
   });
 
-  it('a page the person loaded becomes the agent’s once the agent acts on it: where it then goes is checked', async () => {
+  it('the agent never acts on a page the person loaded: it stays theirs, where it goes is not the agent’s (Paul, 2026-11-20)', async () => {
     const views: FakeView[] = [];
     const browser = new BrowserViews({
       create: () => {
@@ -375,11 +479,12 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     });
     browser.openTab('t1');
     await browser.navigate('t1', 'https://forum.example/');
-    await browser.agentAct({ kind: 'click', selector: 'a' });
-    expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.1/')).toBe(true);
+    expect(await browser.agentAct({ kind: 'click', selector: 'a' }, C1)).toMatchObject({ error: expect.stringMatching(/No page/) });
+    expect(views[0]!.scripts).toEqual([]);
+    expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.1/')).toBe(false);
   });
 
-  it('a page of the network this machine is in that the person showed stays theirs when the agent acts on it (review of phase 13)', async () => {
+  it('a page of the network this machine is in that the person opened stays theirs: the agent cannot act on it (review of phase 13)', async () => {
     const views: FakeView[] = [];
     const browser = new BrowserViews({
       create: () => {
@@ -393,7 +498,8 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     });
     browser.openTab('t1');
     await browser.navigate('t1', 'http://192.168.1.50/admin');
-    await browser.agentAct({ kind: 'click', selector: 'button' });
+    expect(await browser.agentAct({ kind: 'click', selector: 'button' }, C1)).toMatchObject({ error: expect.stringMatching(/No page/) });
+    expect(views[0]!.scripts).toEqual([]);
     expect(await browser.blocked(views[0]!.webContents.id, 'http://192.168.1.50/api/save')).toBe(false);
   });
 
@@ -410,8 +516,8 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
       lookup: async () => ['93.184.216.34'],
       pageLookup: async () => ['10.0.0.7'],
     });
-    await browser.agentOpen('http://rebind.example/');
-    await expect(browser.agentRead()).rejects.toThrow(/private/);
+    await browser.agentOpen('http://rebind.example/', C1);
+    await expect(browser.agentRead(C1)).rejects.toThrow(/private/);
   });
 
   it('a request of an agent’s page to a private address written as one is cancelled; a person’s page is theirs', async () => {
@@ -426,7 +532,7 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
       changed: () => undefined,
       lookup: async () => ['93.184.216.34'],
     });
-    await browser.agentOpen('http://public.example/');
+    await browser.agentOpen('http://public.example/', C1);
     const id = views[0]!.webContents.id;
     expect(await browser.blocked(id, 'http://10.0.0.5/router.cgi')).toBe(true);
     expect(await browser.blocked(id, 'http://[fd00::1]/')).toBe(true);
@@ -462,14 +568,14 @@ describe('a file of the conversation’s folders, opened by the agent (Paul, 202
 
   it('loads the file, and the agent reads it', async () => {
     const { browser, views } = rig({ title: 'Snake', read: { title: 'Snake', text: 'Score: 0' } });
-    expect(await browser.agentOpenFile(page, root, { network: false })).toMatchObject({ url: pathToFileURL(page).href, title: 'Snake' });
+    expect(await browser.agentOpenFile(page, root, { network: false, ...C1 })).toMatchObject({ url: pathToFileURL(page).href, title: 'Snake' });
     expect(views[0]!.loaded).toEqual([pathToFileURL(page).href]);
-    expect(await browser.agentRead()).toMatchObject({ text: 'Score: 0' });
+    expect(await browser.agentRead(C1)).toMatchObject({ text: 'Score: 0' });
   });
 
   it('its page loads from its folder only: the rest of the disk is cancelled, and so is a file in any other tab', async () => {
     const { browser, views } = rig();
-    await browser.agentOpenFile(page, root, { network: true });
+    await browser.agentOpenFile(page, root, { network: true, ...C1 });
     const id = views[0]!.webContents.id;
     expect(await browser.blocked(id, pathToFileURL(join(root, 'bac', 'snake.js')).href)).toBe(false);
     expect(await browser.blocked(id, elsewhere)).toBe(true);
@@ -479,13 +585,13 @@ describe('a file of the conversation’s folders, opened by the agent (Paul, 202
     browser.openTab('t2');
     await browser.navigate('t2', 'http://localhost:5173/');
     expect(await browser.blocked(views[1]!.webContents.id, pathToFileURL(page).href)).toBe(true);
-    await browser.agentOpen('http://localhost:5173/');
-    expect(await browser.blocked(views[1]!.webContents.id, pathToFileURL(page).href)).toBe(true);
+    await browser.agentOpen('http://localhost:5173/', C1);
+    expect(await browser.blocked(views[0]!.webContents.id, pathToFileURL(page).href)).toBe(true);
   });
 
   it('a link of the project that leads out of it is judged where it leads: cancelled (security rule 6, review of 2026-11-20)', async () => {
     const { browser, views } = rig();
-    await browser.agentOpenFile(page, root, { network: false });
+    await browser.agentOpenFile(page, root, { network: false, ...C1 });
     const through = pathToFileURL(join(root, 'docs', 'secret.html')).href;
     expect(await browser.blocked(views[0]!.webContents.id, through)).toBe(true);
     let prevented = false;
@@ -495,22 +601,22 @@ describe('a file of the conversation’s folders, opened by the agent (Paul, 202
 
   it('its page reaches the network only where the conversation may without asking: else it stays offline (review of 2026-11-20)', async () => {
     const offline = rig();
-    await offline.browser.agentOpenFile(page, root, { network: false });
+    await offline.browser.agentOpenFile(page, root, { network: false, ...C1 });
     const id = offline.views[0]!.webContents.id;
     expect(await offline.browser.blocked(id, 'https://cdn.example/x.js')).toBe(true);
     expect(await offline.browser.blocked(id, 'http://127.0.0.1:5173/beacon')).toBe(true);
     expect(await offline.browser.blocked(id, 'ws://localhost:8080/')).toBe(true);
     const online = rig();
-    await online.browser.agentOpenFile(page, root, { network: true });
+    await online.browser.agentOpenFile(page, root, { network: true, ...C1 });
     expect(await online.browser.blocked(online.views[0]!.webContents.id, 'https://cdn.example/x.js')).toBe(false);
     // The agent's next page of the internet is asked as the network: it is not the file's.
-    await offline.browser.agentOpen('http://127.0.0.1:5173/');
+    await offline.browser.agentOpen('http://127.0.0.1:5173/', C1);
     expect(await offline.browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
   });
 
   it('a link of the page goes to a file of its folder, never elsewhere on the disk, nor to the internet when it is offline', async () => {
     const { browser, views } = rig();
-    await browser.agentOpenFile(page, root, { network: false });
+    await browser.agentOpenFile(page, root, { network: false, ...C1 });
     const tried = (url: string): boolean => {
       let prevented = false;
       views[0]!.emit('will-navigate', { preventDefault: () => (prevented = true) }, url);

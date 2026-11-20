@@ -535,11 +535,62 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     const reader = capture();
     await host.activate('opener', opener);
     await host.activate('reader', reader);
-    await expect(opener.ctx!.browser!.read()).rejects.toThrow(/read/);
-    await expect(opener.ctx!.browser!.screenshot()).rejects.toThrow(/read/);
-    await expect(opener.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
-    expect(await reader.ctx!.browser!.read()).toMatchObject({ text: 'secret' });
-    await expect(reader.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
+    const from = { conversationId: 'c1' };
+    await expect(opener.ctx!.browser!.read(from)).rejects.toThrow(/read/);
+    await expect(opener.ctx!.browser!.screenshot(from)).rejects.toThrow(/read/);
+    await expect(opener.ctx!.browser!.act({ kind: 'click', selector: 'button' }, from)).rejects.toThrow(/execute/);
+    expect(await reader.ctx!.browser!.read(from)).toMatchObject({ text: 'secret' });
+    await expect(reader.ctx!.browser!.act({ kind: 'click', selector: 'button' }, from)).rejects.toThrow(/execute/);
+  });
+
+  it('every call to the browser carries its conversation, and the project the core knows it in — never one the plugin names (the browser redo, step 2)', async () => {
+    const calls: [string, unknown][] = [];
+    const browser = {
+      open: async (url: string, from: unknown) => {
+        calls.push(['open', from]);
+        return { url, title: 'Page' };
+      },
+      openFile: async (_path: string, _root: string, options: unknown) => {
+        calls.push(['openFile', options]);
+        return { url: 'file:///x', title: 'X' };
+      },
+      read: async (from: unknown) => {
+        calls.push(['read', from]);
+        return null;
+      },
+      screenshot: async (from: unknown) => {
+        calls.push(['screenshot', from]);
+        return null;
+      },
+      act: async (_action: unknown, from: unknown) => {
+        calls.push(['act', from]);
+        return { done: 'clicked' };
+      },
+    };
+    const project = await tempDir('bp-host-caller-');
+    await writeFile(join(project, 'a.html'), '<title>A</title>');
+    const fileAccess = async (conversationId: string) =>
+      conversationId === 'free' ? { files: false, network: false } : { files: true, network: false, projectId: `project-of-${conversationId}` };
+    const host = new PluginHost({ registry: new ToolRegistry(), browser, fileAccess });
+    host.add(manifest('pages', { effects: [{ effect: 'network', what: 'pages' }, { effect: 'read', what: 'pages' }, { effect: 'execute', what: 'pages' }] }), { builtin: true });
+    const pages = capture();
+    await host.activate('pages', pages);
+    const named = { conversationId: 'c1', projectId: 'someone-else' } as { conversationId: string };
+    await pages.ctx!.browser!.open('http://localhost:5173/', named);
+    await pages.ctx!.browser!.read(named);
+    await pages.ctx!.browser!.screenshot(named);
+    await pages.ctx!.browser!.act({ kind: 'scroll', by: 10 }, named);
+    await pages.ctx!.browser!.openFile('a.html', { conversationId: 'c1', roots: [project] });
+    await pages.ctx!.browser!.read({ conversationId: 'free' });
+    const c1 = { conversationId: 'c1', projectId: 'project-of-c1' };
+    expect(calls).toEqual([
+      ['open', c1],
+      ['read', c1],
+      ['screenshot', c1],
+      ['act', c1],
+      ['openFile', { network: false, ...c1 }],
+      ['read', { conversationId: 'free' }],
+    ]);
   });
 
   it('a file of the conversation’s folders opens as a read, its folder the only one its page may load from; nothing outside them (Paul, 2026-11-20)', async () => {
@@ -548,10 +599,10 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     await mkdir(join(project, 'bac'));
     await writeFile(join(project, 'bac', 'snake.html'), '<title>Snake</title>');
     await writeFile(join(elsewhere, 'secret.html'), 'no');
-    const opened: [string, string, { network: boolean; conversationId: string }][] = [];
+    const opened: [string, string, { network: boolean; conversationId: string; projectId?: string }][] = [];
     const browser = {
       open: async (url: string) => ({ url, title: 'Page' }),
-      openFile: async (path: string, root: string, options: { network: boolean; conversationId: string }) => {
+      openFile: async (path: string, root: string, options: { network: boolean; conversationId: string; projectId?: string }) => {
         opened.push([path, root, options]);
         return { url: `file:///${path}`, title: 'Snake' };
       },

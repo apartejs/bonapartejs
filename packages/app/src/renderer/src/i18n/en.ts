@@ -893,6 +893,7 @@ export const en: Messages = {
   browser: {
     tabs: 'Tabs',
     newTab: 'New tab',
+    agentTab: 'Agent',
     newTabTip: 'New tab · Ctrl T',
     closeTab: (label) => `Close ${label}`,
     back: 'Previous page',

@@ -279,7 +279,17 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
     opened: (conversationId) => push({ kind: 'browser-opened', conversationId }),
   });
   app.once('will-quit', () => builtinBrowser.dispose());
-  if (options.e2e) (globalThis as { __bonaparteBrowser?: unknown }).__bonaparteBrowser = builtinBrowser.views;
+  // The end-to-end tests' handle (Playwright drives the window, not the native views): where the tab shown is, the
+  // tabs of a conversation's pane, a click of the person's in a tab, and its picture.
+  if (options.e2e) {
+    const views = builtinBrowser.views;
+    (globalThis as { __bonaparteBrowser?: unknown }).__bonaparteBrowser = {
+      placement: () => views.placement(),
+      states: (conversationId: string | null) => views.states(conversationId),
+      click: (tabId: string, selector: string) => views.testClick(tabId, selector),
+      capture: (tabId: string) => views.testCapture(tabId),
+    };
+  }
   const core = createCore({
     dataDir,
     // The services' keys (task 9.1): encrypted by the system, in one file of the data folder.

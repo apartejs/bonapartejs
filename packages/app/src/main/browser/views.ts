@@ -1,8 +1,9 @@
 /**
- * The pages of the built-in browser (task 10.1): one native view a tab, in a session of its own (made by the
- * caller: no persistence, no preload, no permission), never with Node nor the window's bridge. The person's
- * gestures (tabs, address, back, reload, screen size) and the agent's tools (open, read, screenshot, act) work
- * on the same pages; the agent works on the tab shown, and opens one when none is.
+ * The pages of the built-in browser (task 10.1): one native view a tab, in a session made by the caller (no preload,
+ * no permission), never with Node nor the window's bridge. The person's tabs are theirs; each conversation's agent
+ * has one tab of its own (`agent:<conversation>`), made at its first page in its project's session, and works on
+ * that one only — it never reads, pictures nor acts on a tab of the person's (the browser redo, step 2; Paul,
+ * 2026-11-20). The pane shows the person's tabs and its conversation's agent tab.
  *
  * v0's traps, kept: a native view sits above the window's page — it is placed only where the pane says, and
  * taken off when its tab, its pane or the window's other pages hide it (a view placed with no rectangle covered
@@ -20,6 +21,18 @@ import { isAbsolute, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isPublicAddress } from '@aparte/bonaparte-core';
 import type { PickedElement } from '@aparte/bonaparte-shared';
+import { partitionOf, type TabOwner } from './sessions.js';
+
+/** Whose agent calls: its conversation, and the project the core knows it in. */
+export interface AgentCaller {
+  conversationId: string;
+  projectId?: string;
+}
+
+const AGENT_TAB = 'agent:';
+/** A conversation's agent's own tab. */
+export const agentTabId = (conversationId: string): string => `${AGENT_TAB}${conversationId}`;
+const NO_PAGE = 'No page is open in the browser: open one with browser_open.';
 
 export interface Rect {
   x: number;
@@ -124,12 +137,15 @@ export interface BrowserTabState {
   error?: string;
   errors: number;
   warnings: number;
+  /** The tab of the conversation's agent. */
+  agent?: true;
 }
 
 export type AgentAction = { kind: 'click'; selector: string } | { kind: 'type'; selector: string; text: string } | { kind: 'scroll'; by: number };
 
 export interface BrowserViewsOptions {
-  create(): PageView;
+  /** A tab's page, in its owner's session: the person's, or the agent's project's. */
+  create(owner: TabOwner): PageView;
   host: BrowserHostWindow;
   /** A tab changed (its address, its title, its console): the pane reads the states again. */
   changed(): void;
@@ -139,7 +155,7 @@ export interface BrowserViewsOptions {
    * How the pages' own network stack resolved a host — Chromium's cache, stale entries too: what the page really
    * connected to, not a second answer of the name's server (audit 13.4).
    */
-  pageLookup?: (host: string) => Promise<string[]>;
+  pageLookup?: (host: string, owner: TabOwner) => Promise<string[]>;
 }
 
 const PHONE_WIDTH = 360;
@@ -149,11 +165,13 @@ const MAX_TEXT = 60_000;
 interface Tab {
   id: string;
   view: PageView;
+  /** The person's, or a conversation's agent's: what the agent may reach is checked in its tab, whoever drives it. */
+  owner: TabOwner;
+  /** The session it lives in. */
+  partition: string;
   loading: boolean;
   error?: string;
   console: ConsoleLine[];
-  /** Who loaded the page shown: the person may show the agent any page; the agent alone never the network it is in. */
-  loadedBy?: 'person' | 'agent';
   /** A page the agent opened answered from the network this machine is in, by Chromium's own resolution (audit 13.4). */
   reachedPrivate?: boolean;
   /** A file the agent opened: the only folder of the disk its page loads from (real, its links resolved). */
@@ -199,6 +217,8 @@ const privateLiteral = (host: string): boolean => {
   return isIP(bare) !== 0 && !isLoopback(bare) && !isPublicAddress(bare);
 };
 
+const isAgentTab = (tab: Tab): boolean => tab.owner !== 'person';
+
 const READ_PAGE = `(() => {
   const root = document.querySelector('article, main, [role="main"]') || document.body;
   return { title: document.title || '', text: root ? (root.innerText || '').slice(0, ${MAX_TEXT}) : '' };
@@ -215,10 +235,19 @@ export class BrowserViews {
     this.resolve = options.lookup ?? (async (host) => (await lookup(host, { all: true })).map((found) => found.address));
   }
 
+  /** A tab of the person's. An agent's tab is the agent's to make: never in its name. */
   openTab(tabId: string): void {
-    if (this.tabs.has(tabId)) return;
-    const view = this.options.create();
-    const tab: Tab = { id: tabId, view, loading: false, console: [] };
+    if (tabId.startsWith(AGENT_TAB)) return;
+    this.createTab(tabId, 'person');
+    this.shown ??= tabId;
+    this.options.changed();
+  }
+
+  private createTab(tabId: string, owner: TabOwner): Tab {
+    const existing = this.tabs.get(tabId);
+    if (existing) return existing;
+    const view = this.options.create(owner);
+    const tab: Tab = { id: tabId, view, owner, partition: partitionOf(owner), loading: false, console: [] };
     // A page never opens a window of its own, nor goes where a person could not.
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     const guard = (event: unknown, url: unknown): void => {
@@ -230,7 +259,7 @@ export class BrowserViews {
         (event as { preventDefault(): void }).preventDefault();
       } else if (typeof url !== 'string' || pageUrl(url) === null || !/^https?:/i.test(url)) (event as { preventDefault(): void }).preventDefault();
       // A page the agent opened does not take it into the network this machine is in (a redirect, a script).
-      else if (tab.loadedBy === 'agent' && privateLiteral(new URL(url).hostname)) (event as { preventDefault(): void }).preventDefault();
+      else if (isAgentTab(tab) && privateLiteral(new URL(url).hostname)) (event as { preventDefault(): void }).preventDefault();
     };
     view.webContents.on('will-navigate', guard);
     view.webContents.on('will-redirect', guard);
@@ -238,8 +267,7 @@ export class BrowserViews {
     view.webContents.on('did-navigate', () => this.options.changed());
     view.webContents.on('page-title-updated', () => this.options.changed());
     this.tabs.set(tabId, tab);
-    this.shown ??= tabId;
-    this.options.changed();
+    return tab;
   }
 
   closeTab(tabId: string): void {
@@ -287,7 +315,12 @@ export class BrowserViews {
     if (!tab) return { error: 'There is no such tab.' };
     const url = pageUrl(typed);
     if (!url) return { error: 'Only http and https addresses are opened.' };
-    tab.loadedBy = 'person';
+    // The agent's tab stays the agent's, whoever types in it: never the network this machine is in.
+    if (isAgentTab(tab)) {
+      const refused = await this.refusedForAgent(new URL(url).hostname);
+      if (refused) return { error: refused };
+      delete tab.reachedPrivate;
+    }
     delete tab.fileRoot;
     delete tab.fileOffline;
     return this.load(tab, url);
@@ -302,8 +335,9 @@ export class BrowserViews {
     this.tabs.get(tabId)?.view.webContents.reload();
   }
 
-  states(): BrowserTabState[] {
-    return [...this.tabs.values()].map((tab) => ({
+  /** The tabs a conversation's pane shows: the person's, and that conversation's agent's — no other agent's. */
+  states(conversationId: string | null): BrowserTabState[] {
+    return this.inScope(conversationId).map((tab) => ({
       tabId: tab.id,
       url: tab.view.webContents.getURL(),
       title: tab.view.webContents.getTitle(),
@@ -312,22 +346,32 @@ export class BrowserViews {
       ...(tab.error ? { error: tab.error } : {}),
       errors: tab.console.filter((line) => line.level === 'error').length,
       warnings: tab.console.filter((line) => line.level === 'warning').length,
+      ...(isAgentTab(tab) ? { agent: true as const } : {}),
     }));
+  }
+
+  /** The tab to show in a conversation's pane, when it is one of its tabs: the one placed last, or the agent's page. */
+  shownIn(conversationId: string | null): string | null {
+    return this.shown && this.inScope(conversationId).some((tab) => tab.id === this.shown) ? this.shown : null;
+  }
+
+  private inScope(conversationId: string | null): Tab[] {
+    const own = conversationId === null ? null : agentTabId(conversationId);
+    return [...this.tabs.values()].filter((tab) => !isAgentTab(tab) || tab.id === own);
   }
 
   console(tabId: string): ConsoleLine[] {
     return [...(this.tabs.get(tabId)?.console ?? [])];
   }
 
-  // ── The agent's side: the tab shown, or one opened for it ──
+  // ── The agent's side: its conversation's own tab, never another ──
 
-  async agentOpen(typed: string): Promise<{ url: string; title: string } | { error: string }> {
+  async agentOpen(typed: string, from: AgentCaller): Promise<{ url: string; title: string } | { error: string }> {
     const url = pageUrl(typed);
     if (!url) return { error: 'Only http and https addresses are opened.' };
     const refused = await this.refusedForAgent(new URL(url).hostname);
     if (refused) return { error: refused };
-    const tab = this.agentTab();
-    tab.loadedBy = 'agent';
+    const tab = this.agentTab(from);
     delete tab.reachedPrivate;
     delete tab.fileRoot;
     delete tab.fileOffline;
@@ -338,9 +382,8 @@ export class BrowserViews {
    * A file the core checked (in the conversation's folders): its page loads from `root` alone (Paul, 2026-11-20),
    * and reaches the network only when the conversation may without asking — else nothing of it leaves the machine.
    */
-  async agentOpenFile(path: string, root: string, options: { network: boolean }): Promise<{ url: string; title: string } | { error: string }> {
-    const tab = this.agentTab();
-    tab.loadedBy = 'agent';
+  async agentOpenFile(path: string, root: string, options: { network: boolean } & AgentCaller): Promise<{ url: string; title: string } | { error: string }> {
+    const tab = this.agentTab(options);
     delete tab.reachedPrivate;
     tab.fileRoot = root;
     if (options.network) delete tab.fileOffline;
@@ -355,7 +398,7 @@ export class BrowserViews {
    */
   responded(webContentsId: number, ip: string | undefined): void {
     const tab = this.tabOf(webContentsId);
-    if (!tab || tab.loadedBy !== 'agent' || !ip) return;
+    if (!tab || !isAgentTab(tab) || !ip) return;
     const bare = ip.replace(/^\[|\]$/g, '');
     if (!isLoopback(bare) && !isPublicAddress(bare)) tab.reachedPrivate = true;
   }
@@ -370,7 +413,7 @@ export class BrowserViews {
     if (/^file:/i.test(url)) return !fileIn(tab?.fileRoot, url);
     // A file's page kept off the network: nothing of it leaves the machine, this machine's own servers included.
     if (tab?.fileOffline) return true;
-    if (!tab || tab.loadedBy !== 'agent') return false;
+    if (!tab || !isAgentTab(tab)) return false;
     let host: string;
     try {
       host = new URL(url).hostname;
@@ -380,7 +423,7 @@ export class BrowserViews {
     if (privateLiteral(host)) return true;
     const bare = host.replace(/^\[|\]$/g, '');
     if (isIP(bare) || bare === 'localhost' || !this.options.pageLookup) return false;
-    const seen = await this.options.pageLookup(bare).catch(() => []);
+    const seen = await this.options.pageLookup(bare, tab.owner).catch(() => []);
     return seen.some((address) => !isLoopback(address) && !isPublicAddress(address));
   }
 
@@ -388,16 +431,16 @@ export class BrowserViews {
     return [...this.tabs.values()].find((tab) => tab.view.webContents.id === webContentsId);
   }
 
-  async agentRead(): Promise<{ url: string; title: string; text: string; console: ConsoleLine[] } | null> {
-    const tab = this.shownTab();
+  async agentRead(from: AgentCaller): Promise<{ url: string; title: string; text: string; console: ConsoleLine[] } | null> {
+    const tab = this.ownTab(from);
     if (!tab || !tab.view.webContents.getURL()) return null;
     await this.mayReach(tab);
     const read = (await tab.view.webContents.executeJavaScript(READ_PAGE, true)) as { title: string; text: string };
     return { url: tab.view.webContents.getURL(), title: read.title, text: read.text, console: [...tab.console] };
   }
 
-  async agentScreenshot(): Promise<{ url: string; png: Uint8Array; width: number; height: number } | null> {
-    const tab = this.shownTab();
+  async agentScreenshot(from: AgentCaller): Promise<{ url: string; png: Uint8Array; width: number; height: number } | null> {
+    const tab = this.ownTab(from);
     if (!tab || !tab.view.webContents.getURL()) return null;
     await this.mayReach(tab);
     const image = await tab.view.webContents.capturePage();
@@ -405,18 +448,14 @@ export class BrowserViews {
     return { url: tab.view.webContents.getURL(), png: image.toPNG(), width: size.width, height: size.height };
   }
 
-  async agentAct(action: AgentAction): Promise<{ done: string } | { error: string }> {
-    const tab = this.shownTab();
-    if (!tab || !tab.view.webContents.getURL()) return { error: 'No page is open in the browser.' };
+  async agentAct(action: AgentAction, from: AgentCaller): Promise<{ done: string } | { error: string }> {
+    const tab = this.ownTab(from);
+    if (!tab || !tab.view.webContents.getURL()) return { error: NO_PAGE };
     try {
       await this.mayReach(tab);
     } catch (error) {
       return { error: (error as Error).message };
     }
-    // From the agent's first act on it, a page of the internet or of this machine goes where the agent takes it:
-    // checked as one it opened (audit 13.4). A page of the network this machine is in that the person showed stays
-    // theirs: they use it still (review of phase 13).
-    if (tab.loadedBy !== 'agent' && (await this.refusedForAgent(new URL(tab.view.webContents.getURL()).hostname)) === null) tab.loadedBy = 'agent';
     // Selectors and text reach the page as JSON: a quote cannot close the script's string.
     const script =
       action.kind === 'scroll'
@@ -463,16 +502,44 @@ export class BrowserViews {
     this.tabs.clear();
   }
 
-  private shownTab(): Tab | undefined {
-    return this.shown ? this.tabs.get(this.shown) : undefined;
+  /** The caller's own tab, when its agent opened one: never the person's, never another conversation's. */
+  private ownTab(from: AgentCaller): Tab | undefined {
+    return this.tabs.get(agentTabId(from.conversationId));
   }
 
-  private agentTab(): Tab {
-    const shown = this.shownTab();
-    if (shown) return shown;
-    const id = `agent-${this.tabs.size + 1}`;
-    this.openTab(id);
-    return this.tabs.get(id)!;
+  /**
+   * The caller's own tab, made at its first page in its project's session — again when the conversation moved to
+   * another project. It is shown, unless the person looks at a tab of their own in a visible pane.
+   */
+  private agentTab(from: AgentCaller): Tab {
+    const id = agentTabId(from.conversationId);
+    const owner: TabOwner = { conversationId: from.conversationId, ...(from.projectId ? { projectId: from.projectId } : {}) };
+    const was = this.tabs.get(id);
+    if (was && was.partition !== partitionOf(owner)) this.closeTab(id);
+    const tab = this.createTab(id, owner);
+    if (!this.placed || isAgentTab(this.placed)) this.shown = id;
+    this.options.changed();
+    return tab;
+  }
+
+  // ── End-to-end tests only: the person's own gestures in a page, which Playwright cannot reach (a native view) ──
+
+  /** A click of the person's in a tab: the page's own `element.click()`. */
+  async testClick(tabId: string, selector: string): Promise<boolean> {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.view.webContents.getURL()) return false;
+    return (await tab.view.webContents.executeJavaScript(
+      `(() => { const element = document.querySelector(${JSON.stringify(selector)}); if (!element) return false; element.click(); return true; })()`,
+      true,
+    )) as boolean;
+  }
+
+  /** A picture of a tab: a native view is absent from a picture of the window. */
+  async testCapture(tabId: string): Promise<{ png: Uint8Array; width: number; height: number } | null> {
+    const tab = this.tabs.get(tabId);
+    if (!tab || !tab.view.webContents.getURL()) return null;
+    const image = await tab.view.webContents.capturePage();
+    return { png: image.toPNG(), ...image.getSize() };
   }
 
   private async load(tab: Tab, url: string): Promise<{ url: string; title: string } | { error: string }> {
@@ -493,12 +560,10 @@ export class BrowserViews {
   }
 
   /**
-   * Where a page the agent opened has ended — after a redirect, a script, a link — is checked again before the
-   * agent reads, pictures or acts on it: the first address was only where it started (review of phase 10). A page
-   * the person loaded is theirs to show.
+   * Where the agent's page has ended — after a redirect, a script, a link — is checked again before the agent
+   * reads, pictures or acts on it: the first address was only where it started (review of phase 10).
    */
   private async mayReach(tab: Tab): Promise<void> {
-    if (tab.loadedBy === 'person') return;
     const shown = tab.view.webContents.getURL();
     if (/^file:/i.test(shown)) {
       if (fileIn(tab.fileRoot, shown)) return;
@@ -512,7 +577,7 @@ export class BrowserViews {
     // What the page's own resolver holds for the name: a name that answered Node one address and Chromium another.
     const bare = host.replace(/^\[|\]$/g, '');
     if (this.options.pageLookup && !isIP(bare) && bare !== 'localhost') {
-      const seen = await this.options.pageLookup(bare).catch(() => []);
+      const seen = await this.options.pageLookup(bare, tab.owner).catch(() => []);
       if (seen.some((address) => !isLoopback(address) && !isPublicAddress(address))) throw new Error(answered);
     }
   }

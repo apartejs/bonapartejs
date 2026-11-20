@@ -25,6 +25,7 @@ export type {
   WebSearchResult,
   WebSearchService,
   BrowserService,
+  BrowserCaller,
   PluginBrowser,
   BrowserAction,
   BrowserConsoleLine,

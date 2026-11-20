@@ -275,27 +275,39 @@ export interface BrowserConsoleLine {
   source: string;
 }
 
-/** What the agent does in the built-in browser (task 10.1): on the tab the person sees, or one opened for it. */
+/** What the agent does in the built-in browser (task 10.1): on its conversation's own tab. */
 export type BrowserAction = { kind: 'click'; selector: string } | { kind: 'type'; selector: string; text: string } | { kind: 'scroll'; by: number };
+
+/**
+ * Whose agent calls the browser (the browser redo, step 2): its conversation, whose own tab it works on, and the
+ * project the core knows that conversation in — whose session (cookies, storage) the tab lives in; none: a session
+ * in memory. Said by the core, never by a plugin.
+ */
+export interface BrowserCaller {
+  conversationId: string;
+  projectId?: string;
+}
 
 /**
  * The built-in browser, as the app gives it to a plugin that declares `network`: its pages live in the main
  * process, never with Node nor the window's bridge; this machine's own pages open, the network it is in does not.
+ * Each conversation's agent has one tab of its own, in a session apart from the person's: it never sees, reads,
+ * pictures nor acts on a tab of the person's (Paul, 2026-11-20).
  */
 export interface BrowserService {
-  /** `conversationId`: whose agent opens it — the window shows that conversation's pane (the browser redo, step 1). */
-  open(url: string, conversationId: string): Promise<{ url: string; title: string } | { error: string }>;
+  /** Opened in the caller's own tab — the window shows that conversation's pane (the browser redo, step 1). */
+  open(url: string, from: BrowserCaller): Promise<{ url: string; title: string } | { error: string }>;
   /**
    * A file of this machine, already checked by the core (`path` absolute, real, in the conversation's folders):
    * its page loads from `root`, the folder of the perimeter that holds it, and nothing else of the disk; it reaches
    * the network only with `network` — the conversation may go there without asking —, else it stays offline.
    */
-  openFile(path: string, root: string, options: { network: boolean; conversationId: string }): Promise<{ url: string; title: string } | { error: string }>;
-  /** The text of the page shown, and its console; null with no page open. The pane says « L'agent lit la page ». */
-  read(): Promise<{ url: string; title: string; text: string; console: BrowserConsoleLine[] } | null>;
-  /** A picture of the page shown, kept in the app's data folder (`saved`); null with no page open. */
-  screenshot(): Promise<{ url: string; width: number; height: number; saved: string } | null>;
-  act(action: BrowserAction): Promise<{ done: string } | { error: string }>;
+  openFile(path: string, root: string, options: { network: boolean } & BrowserCaller): Promise<{ url: string; title: string } | { error: string }>;
+  /** The text of the caller's page, and its console; null with no page open. The pane says « L'agent lit la page ». */
+  read(from: BrowserCaller): Promise<{ url: string; title: string; text: string; console: BrowserConsoleLine[] } | null>;
+  /** A picture of the caller's page, kept in the app's data folder (`saved`); null with no page open. */
+  screenshot(from: BrowserCaller): Promise<{ url: string; width: number; height: number; saved: string } | null>;
+  act(action: BrowserAction, from: BrowserCaller): Promise<{ done: string } | { error: string }>;
 }
 
 export interface TerminalService {
@@ -353,14 +365,18 @@ export interface PluginNodeContext {
 /**
  * The built-in browser as a plugin sees it: a file is named as the model named it, with the call it comes from (its
  * conversation and perimeter, the invocation's own) — the host checks it is a file there, and what the conversation
- * may, before anything opens. A file is read.
+ * may, before anything opens. A file is read. Every call names its conversation, whose agent's tab it works on; the
+ * host adds the project the core knows it in (the browser redo, step 2).
  */
-export interface PluginBrowser extends Omit<BrowserService, 'open' | 'openFile'> {
+export interface PluginBrowser {
   open(url: string, from: { conversationId: string }): Promise<{ url: string; title: string } | { error: string }>;
   openFile(
     path: string,
     from: { conversationId: string; roots: readonly string[] },
   ): Promise<{ url: string; title: string; offline?: boolean } | { error: string }>;
+  read(from: { conversationId: string }): ReturnType<BrowserService['read']>;
+  screenshot(from: { conversationId: string }): ReturnType<BrowserService['screenshot']>;
+  act(action: BrowserAction, from: { conversationId: string }): ReturnType<BrowserService['act']>;
 }
 
 export interface PluginNodeModule {

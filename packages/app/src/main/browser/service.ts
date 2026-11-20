@@ -1,20 +1,23 @@
 /**
- * The built-in browser's glue with Electron (task 10.1): its pages are WebContentsViews in a session of their
- * own — in memory, no preload, no permission —, placed on the main window's content view; the agent's side is
- * the `BrowserService` the core gives the browser plugin. A screenshot is kept in the data folder, for the
- * person; the window hears that something changed and reads the tabs again.
+ * The built-in browser's glue with Electron (task 10.1): its pages are WebContentsViews — no preload, no
+ * permission —, placed on the main window's content view; the agent's side is the `BrowserService` the core gives
+ * the browser plugin. Each tab lives in its owner's session, every one made by one factory that guards it
+ * (`sessions.ts`): the person's, kept; each project's agent's, kept; an agent's with no project, in memory (the
+ * browser redo, step 2). A screenshot is kept in the data folder, for the person; the window hears that something
+ * changed and reads the tabs again.
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { BrowserService } from '@aparte/bonaparte-shared';
-import { session as sessions, WebContentsView, type BrowserWindow } from 'electron';
+import { session as sessions, WebContentsView, type BrowserWindow, type Session } from 'electron';
+import { browserSessions, partitionOf, type TabOwner } from './sessions.js';
 import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
 
 export interface BuiltinBrowser {
   views: BrowserViews;
   service: BrowserService;
-  /** The agent reads the page shown now. */
+  /** The agent reads a page now. */
   reading(): boolean;
   dispose(): void;
 }
@@ -26,15 +29,22 @@ export function createBuiltinBrowser(options: {
   /** The agent of a conversation opened a page: the window shows it (the browser redo, step 1). */
   opened?: (conversationId: string) => void;
 }): BuiltinBrowser {
-  const session = sessions.fromPartition('bonaparte-browser');
-  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
-  session.on('will-download', (event) => event.preventDefault());
   // « L'agent lit la page » shows for 1.5 s at least: a read is over in milliseconds.
   const reading = readingSignal(options.changed, 1500);
+  // The views judge every request of a page, and hear where it answered from: the guards of every session. A session
+  // is made only for a tab's page, once the views are.
+  const sessionFor = browserSessions<Session>({
+    fromPartition: (partition) => sessions.fromPartition(partition),
+    guards: {
+      blocked: (webContentsId, url) => views.blocked(webContentsId, url),
+      responded: (webContentsId, ip) => views.responded(webContentsId, ip),
+    },
+  });
+  const sessionOf = (owner: TabOwner): Session => sessionFor(partitionOf(owner));
 
-  const views = new BrowserViews({
-    create: (): PageView => {
-      const view = new WebContentsView({ webPreferences: { session, sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  const views: BrowserViews = new BrowserViews({
+    create: (owner): PageView => {
+      const view = new WebContentsView({ webPreferences: { session: sessionOf(owner), sandbox: true, contextIsolation: true, nodeIntegration: false } });
       const contents = view.webContents;
       return {
         setBounds: (rect) => view.setBounds(rect),
@@ -59,34 +69,11 @@ export function createBuiltinBrowser(options: {
     },
     host: windowHost(options.window as () => BrowserWindow | undefined),
     changed: options.changed,
-    // Chromium's own answers for a name, its cache read, stale ones included: what the page connected to.
-    pageLookup: async (host) =>
-      (await session.resolveHost(host, { cacheUsage: 'staleAllowed', source: 'any' })).endpoints.map((endpoint) => endpoint.address),
+    // Chromium's own answers for a name, in the tab's own session, its cache read, stale ones included: what the
+    // page connected to.
+    pageLookup: async (host, owner) =>
+      (await sessionOf(owner).resolveHost(host, { cacheUsage: 'staleAllowed', source: 'any' })).endpoints.map((endpoint) => endpoint.address),
   });
-  // Where Chromium really connected decides what the agent may read; a private address written as one is never asked
-  // by a page the agent opened (audit 13.4).
-  session.webRequest.onBeforeRequest((details, callback) => {
-    if (details.webContentsId === undefined) return callback({});
-    views.blocked(details.webContentsId, details.url).then(
-      (cancel) => callback({ cancel }),
-      () => callback({}),
-    );
-  });
-  // Behind a proxy, the address Electron gives is the proxy's: only a direct connection says where the page is.
-  const responded = (details: { url: string; webContentsId?: number; ip?: string }): void => {
-    const { webContentsId, ip } = details;
-    if (webContentsId === undefined || !ip) return;
-    void session.resolveProxy(details.url).then(
-      (proxy) => {
-        if (proxy.trim().toUpperCase() === 'DIRECT') views.responded(webContentsId, ip);
-      },
-      () => undefined,
-    );
-  };
-  // The address a request was really sent to: Electron says it once the response is over, or at a redirect.
-  session.webRequest.onBeforeRedirect((details) => responded(details));
-  // Electron 45 does not type it here; where it gives it, it counts.
-  session.webRequest.onCompleted((details) => responded(details as typeof details & { ip?: string }));
 
   // A page the agent opened is shown to the person: the window opens its pane.
   const shown =
@@ -96,11 +83,11 @@ export function createBuiltinBrowser(options: {
       return result;
     };
   const service: BrowserService = {
-    open: (url, conversationId) => views.agentOpen(url).then(shown(conversationId)),
-    openFile: (path, root, options) => views.agentOpenFile(path, root, options).then(shown(options.conversationId)),
-    read: () => reading.during(() => views.agentRead()),
-    async screenshot() {
-      const shot = await views.agentScreenshot();
+    open: (url, from) => views.agentOpen(url, from).then(shown(from.conversationId)),
+    openFile: (path, root, from) => views.agentOpenFile(path, root, from).then(shown(from.conversationId)),
+    read: (from) => reading.during(() => views.agentRead(from)),
+    async screenshot(from) {
+      const shot = await views.agentScreenshot(from);
       if (!shot) return null;
       const folder = join(options.dataDir, 'screenshots');
       await mkdir(folder, { recursive: true });
@@ -108,7 +95,7 @@ export function createBuiltinBrowser(options: {
       await writeFile(saved, shot.png);
       return { url: shot.url, width: shot.width, height: shot.height, saved };
     },
-    act: (action) => views.agentAct(action),
+    act: (action, from) => views.agentAct(action, from),
   };
 
   return { views, service, reading: () => reading.on(), dispose: () => views.dispose() };

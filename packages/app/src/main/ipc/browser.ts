@@ -22,7 +22,7 @@ import type { IpcRegistry } from './register.js';
 
 export function registerBrowserChannels(ipc: IpcRegistry, browser: Pick<BuiltinBrowser, 'views' | 'reading'>): void {
   const { views } = browser;
-  ipc.handle(browserTabs, () => ({ tabs: views.states(), reading: browser.reading() }));
+  ipc.handle(browserTabs, ({ conversationId }) => ({ tabs: views.states(conversationId), shown: views.shownIn(conversationId), reading: browser.reading() }));
   ipc.handle(browserOpenTab, ({ tabId }) => views.openTab(tabId));
   ipc.handle(browserCloseTab, ({ tabId }) => views.closeTab(tabId));
   ipc.handle(browserNavigate, ({ tabId, url }) => views.navigate(tabId, url));

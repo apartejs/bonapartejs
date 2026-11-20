@@ -1560,7 +1560,8 @@ export function createCore(deps: CoreDeps): Core {
       const { mode } = await modeOf(conversationId);
       const online: ToolDef = { name: 'browser_open', description: '', inputSchema: {}, effect: 'network', source: 'plugin', where: 'core' };
       const verdict = permissions.evaluate({ tool: online, input: {}, mode, ...(projectId ? { projectId } : {}) });
-      return { files: true, network: verdict.verdict === 'allow' };
+      // Its project, too: whose session its agent's tab of the browser lives in (the browser redo, step 2).
+      return { files: true, network: verdict.verdict === 'allow', ...(projectId ? { projectId } : {}) };
     },
   });
   // The monitor follows its entry, switched on or off (task 12.4).

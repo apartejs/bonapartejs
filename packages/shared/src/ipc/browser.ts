@@ -6,7 +6,9 @@
 import { z } from 'zod';
 import { defineChannel } from './contract.js';
 
-const tabId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+/** A tab of the person's (the window names it), or a conversation's agent's (`agent:<conversation>`), which it shows. */
+const personTabId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
+const tabId = z.string().regex(/^(?:agent:)?[A-Za-z0-9_-]{1,128}$/);
 
 export const browserTabSchema = z.object({
   tabId: z.string(),
@@ -17,15 +19,26 @@ export const browserTabSchema = z.object({
   error: z.string().optional(),
   errors: z.number(),
   warnings: z.number(),
+  /** The tab of the conversation's agent (the browser redo, step 2). */
+  agent: z.literal(true).optional(),
 });
 
 export type BrowserTabView = z.infer<typeof browserTabSchema>;
 
 export const browserConsoleLineSchema = z.object({ level: z.enum(['error', 'warning', 'info', 'debug']), text: z.string(), source: z.string() });
 
-/** The tabs as they stand, and whether the agent reads the page shown now (« L'agent lit la page »). */
-export const browserTabs = defineChannel('browser.tabs', z.void(), z.object({ tabs: z.array(browserTabSchema), reading: z.boolean() }));
-export const browserOpenTab = defineChannel('browser.openTab', z.object({ tabId }), z.void());
+/**
+ * The tabs of a conversation's pane as they stand — the person's, and that conversation's agent's —, the one to
+ * show (the one placed last, or the agent's new page), and whether the agent reads a page now (« L'agent lit la
+ * page »).
+ */
+export const browserTabs = defineChannel(
+  'browser.tabs',
+  z.object({ conversationId: z.string().min(1).max(128).nullable() }),
+  z.object({ tabs: z.array(browserTabSchema), shown: z.string().nullable(), reading: z.boolean() }),
+);
+/** A new tab of the person's: never one in an agent's name. */
+export const browserOpenTab = defineChannel('browser.openTab', z.object({ tabId: personTabId }), z.void());
 export const browserCloseTab = defineChannel('browser.closeTab', z.object({ tabId }), z.void());
 export const browserNavigate = defineChannel(
   'browser.navigate',

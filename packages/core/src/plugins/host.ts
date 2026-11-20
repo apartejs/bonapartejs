@@ -37,6 +37,7 @@ import {
   type PluginToolHandler,
   type TerminalService,
   type WebSearchService,
+  type BrowserCaller,
   type BrowserService,
   type Verdict,
 } from '@aparte/bonaparte-shared';
@@ -76,9 +77,10 @@ export interface PluginHostOptions {
   judge?: (use: { conversationId: string; tool: ToolDef; input: unknown }) => Verdict | Promise<Verdict>;
   /**
    * What a conversation's page opened from a file may: reach a file at all (a discussion reaches none), and the
-   * network without asking (Impro, or « ask before the network » off). Without it: files, offline.
+   * network without asking (Impro, or « ask before the network » off). Without it: files, offline. And the project
+   * the conversation is in: whose session its agent's tab of the browser lives in (the browser redo, step 2).
    */
-  fileAccess?: (conversationId: string) => Promise<{ files: boolean; network: boolean }>;
+  fileAccess?: (conversationId: string) => Promise<{ files: boolean; network: boolean; projectId?: string }>;
   /** Tests only: what launches a plugin's processes. */
   spawn?: SpawnFn;
   /** The terminals the app gives (run in a process of its own); none without it. */
@@ -141,7 +143,7 @@ async function openPerimeterFile(
   requested: string,
   roots: readonly string[],
   network: boolean,
-  conversationId: string,
+  from: BrowserCaller,
 ): Promise<{ url: string; title: string } | { error: string }> {
   const home = homedir();
   let real: string;
@@ -154,7 +156,7 @@ async function openPerimeterFile(
   if (!found) return { error: `There is no file at ${requested}: give the path of a page in the project, an .html file.` };
   if (!found.isFile()) return { error: `${requested} is not a file: give the path of a page in it, an .html file.` };
   const root = (roots.length > 0 ? roots : [home]).map((one) => realLocation(resolve(one))).find((one) => contains(one, real)) ?? dirname(real);
-  return browser.openFile(real, root, { network, conversationId });
+  return browser.openFile(real, root, { network, ...from });
 }
 
 const onlyReads = ({ tool }: { tool: ToolDef }): Verdict =>
@@ -534,17 +536,26 @@ export class PluginHost {
       // clicking and typing in it, execute (review of phase 10).
       const within = <T>(effect: 'read' | 'execute', what: string, run: () => Promise<T>): Promise<T> =>
         declares.has(effect) ? live(run) : Promise.reject(new Error(`The plugin ${id} does not declare ${effect}: it cannot ${what}.`));
+      // Whose agent calls: its conversation, and the project the core knows it in — never one the plugin names; the
+      // conversation's own tab, in that project's session (the browser redo, step 2).
+      const accessOf = async (conversationId: string): Promise<{ files: boolean; network: boolean; projectId?: string }> =>
+        (await this.options.fileAccess?.(conversationId)) ?? { files: true, network: false };
+      const callerOf = (conversationId: string, access: { projectId?: string }): BrowserCaller => ({
+        conversationId,
+        ...(access.projectId ? { projectId: access.projectId } : {}),
+      });
+      const caller = async (from: { conversationId: string }): Promise<BrowserCaller> => callerOf(from.conversationId, await accessOf(from.conversationId));
       context.browser = {
-        open: (url, from) => live(() => browser.open(url, from.conversationId)),
-        read: () => within('read', 'read the page', () => browser.read()),
-        screenshot: () => within('read', 'picture the page', () => browser.screenshot()),
-        act: (action) => within('execute', 'act in the page', () => browser.act(action)),
+        open: (url, from) => live(async () => browser.open(url, await caller(from))),
+        read: (from) => within('read', 'read the page', async () => browser.read(await caller(from))),
+        screenshot: (from) => within('read', 'picture the page', async () => browser.screenshot(await caller(from))),
+        act: (action, from) => within('execute', 'act in the page', async () => browser.act(action, await caller(from))),
         // A file is read: in the call's perimeter, checked here, never on the plugin's word (Paul, 2026-11-20).
         openFile: (path, from) =>
           within('read', 'open a file', async () => {
-            const access = (await this.options.fileAccess?.(from.conversationId)) ?? { files: true, network: false };
+            const access = await accessOf(from.conversationId);
             if (!access.files) return { error: 'A discussion reaches no file: open a page of the internet with browser_open instead.' };
-            const opened = await openPerimeterFile(browser, path, from.roots, access.network, from.conversationId);
+            const opened = await openPerimeterFile(browser, path, from.roots, access.network, callerOf(from.conversationId, access));
             return 'error' in opened || access.network ? opened : { ...opened, offline: true };
           }),
       };

@@ -603,6 +603,8 @@ export interface Messages {
   browser: {
     tabs: string;
     newTab: string;
+    /** The mark of the tab of the conversation's agent (the browser redo, step 2). */
+    agentTab: string;
     newTabTip: string;
     closeTab(label: string): string;
     back: string;

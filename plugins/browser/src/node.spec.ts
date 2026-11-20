@@ -89,9 +89,10 @@ describe('the built-in browser plugin (task 10.1)', () => {
     expect(await call('browser_open', {})).toMatchObject({ failed: true });
   });
 
-  it('reads the page shown — its text, then its console', async () => {
+  it('reads its conversation’s page — its text, then its console', async () => {
+    const asked: unknown[] = [];
     const call = await rig({
-      read: async () => ({
+      read: async (from) => (asked.push(from), {
         url: 'http://localhost:5173/rapport',
         title: 'Récap',
         text: 'Total 7 h 15',
@@ -103,6 +104,8 @@ describe('the built-in browser plugin (task 10.1)', () => {
     expect(read.content).toContain('Total 7 h 15');
     expect(read.content).toContain('Console: 1 error, 0 warnings');
     expect(read.content).toContain("[error] Cannot read properties of undefined (reading 'minutes') (weekly.ts:42)");
+    // The call's conversation: its agent's own tab, never another's (the browser redo, step 2).
+    expect(asked).toEqual([{ conversationId: 'c1' }]);
   });
 
   it('with no page open, reading or picturing says so', async () => {
@@ -112,17 +115,20 @@ describe('the built-in browser plugin (task 10.1)', () => {
   });
 
   it('a screenshot is kept for the person; the model is told it cannot see it', async () => {
-    const call = await rig({ screenshot: async () => ({ url: 'http://localhost:5173/', width: 800, height: 600, saved: 'C:\\data\\screenshots\\1.png' }) });
+    const asked: unknown[] = [];
+    const call = await rig({ screenshot: async (from) => (asked.push(from), { url: 'http://localhost:5173/', width: 800, height: 600, saved: 'C:\\data\\screenshots\\1.png' }) });
     const shot = await call('browser_screenshot');
     expect(shot.content).toContain('800 × 600');
     expect(shot.content).toContain('you cannot see it');
+    expect(asked).toEqual([{ conversationId: 'c1' }]);
   });
 
   it('acts on the page: a click, a text typed, a scroll — what does not exist is said', async () => {
     const asked: unknown[] = [];
     const call = await rig({
-      act: async (action) => {
+      act: async (action, from) => {
         asked.push(action);
+        expect(from).toEqual({ conversationId: 'c1' });
         return action.kind === 'click' && action.selector === '#missing' ? { error: 'No element matches #missing.' } : { done: 'clicked' };
       },
     });

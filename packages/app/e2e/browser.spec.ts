@@ -85,7 +85,7 @@ test('a page cannot take its tab to the app: its navigation to bonaparte:// is r
   await launched.page.waitForTimeout(500);
   const urls = await launched.page.evaluate(async () => {
     const preload = window as unknown as { bonaparte: { invoke(name: string, input: unknown): Promise<{ tabs: { url: string }[] }> } };
-    return (await preload.bonaparte.invoke('browser.tabs', undefined)).tabs.map((tab) => tab.url);
+    return (await preload.bonaparte.invoke('browser.tabs', { conversationId: null })).tabs.map((tab) => tab.url);
   });
   expect(urls.every((url) => url.startsWith('http://127.0.0.1'))).toBe(true);
 });

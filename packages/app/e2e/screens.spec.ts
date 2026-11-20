@@ -958,13 +958,13 @@ async function layBrowserPage(app: ElectronApplication, page: Page): Promise<voi
     const browser = (
       globalThis as unknown as {
         __bonaparteBrowser: {
-          placement(): { bounds: { x: number; y: number; width: number; height: number } } | null;
-          agentScreenshot(): Promise<{ png: Uint8Array } | null>;
+          placement(): { tabId: string; bounds: { x: number; y: number; width: number; height: number } } | null;
+          capture(tabId: string): Promise<{ png: Uint8Array } | null>;
         };
       }
     ).__bonaparteBrowser;
     const placed = browser.placement();
-    const picture = await browser.agentScreenshot();
+    const picture = placed ? await browser.capture(placed.tabId) : null;
     return placed && picture ? { bounds: placed.bounds, png: Buffer.from(picture.png).toString('base64') } : null;
   });
   await page.evaluate((laid) => {
@@ -988,14 +988,16 @@ async function layBrowserPage(app: ElectronApplication, page: Page): Promise<voi
 }
 
 const clickInPage = (app: ElectronApplication, selector: string) =>
-  app.evaluate(
-    (_electron, target) =>
-      (globalThis as unknown as { __bonaparteBrowser: { agentAct(action: { kind: 'click'; selector: string }): Promise<unknown> } }).__bonaparteBrowser.agentAct({
-        kind: 'click',
-        selector: target,
-      }),
-    selector,
-  );
+  app.evaluate((_electron, target) => {
+    // A click of the person's in the tab shown: the agent never acts on a tab of the person's (the browser redo, step 2).
+    const browser = (
+      globalThis as unknown as {
+        __bonaparteBrowser: { placement(): { tabId: string } | null; click(tabId: string, selector: string): Promise<boolean> };
+      }
+    ).__bonaparteBrowser;
+    const placed = browser.placement();
+    return placed ? browser.click(placed.tabId, target) : false;
+  }, selector);
 
 for (const locale of ['fr', 'en'] as const) {
   for (const scheme of ['light', 'dark'] as const) {

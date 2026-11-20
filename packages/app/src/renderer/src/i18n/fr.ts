@@ -896,6 +896,7 @@ export const fr: Messages = {
   browser: {
     tabs: 'Onglets',
     newTab: 'Nouvel onglet',
+    agentTab: 'Agent',
     newTabTip: 'Nouvel onglet · Ctrl T',
     closeTab: (label) => `Fermer ${label}`,
     back: 'Page précédente',
