@@ -408,6 +408,37 @@ describe('one agent’s tab per conversation, never the person’s (the browser 
     expect(browser.shownIn('c1')).toBe('agent:c1');
   });
 
+  it('a cover over the pane keeps the person’s tab shown in front of a waiting agent page; only the pane closed lets it go (audit of 2026-11-21)', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://localhost:5173/mine');
+    browser.place('t1', RECT, 'desktop', 'c1');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    expect(browser.shownIn('c1')).toBe('t1');
+    // A dialog, Ctrl K, « À traiter » or the settings go over c1's pane: a read meanwhile still says the person's
+    // tab — else the pane switched to the agent's and the person's unsent page comments went.
+    browser.place('t1', null, 'desktop', 'c1');
+    expect(browser.shownIn('c1')).toBe('t1');
+    expect(browser.states('c1').find((tab) => tab.agent)).toMatchObject({ fresh: true });
+    // The cover goes: the person's tab is placed again, the agent's page still waits.
+    browser.place('t1', RECT, 'desktop', 'c1');
+    expect(browser.shownIn('c1')).toBe('t1');
+    // An agent's page opened during a cover is shown when the person comes back, as before.
+    browser.place('t1', null, 'desktop', 'c1');
+    browser.hideAll();
+    expect(browser.shownIn('c1')).toBe('agent:c1');
+  });
+
+  it('an agent’s page opened while its own pane is covered is the one shown once the cover goes', async () => {
+    const { browser } = rig();
+    browser.openTab('t1');
+    await browser.navigate('t1', 'http://localhost:5173/mine');
+    browser.place('t1', RECT, 'desktop', 'c1');
+    browser.place('t1', null, 'desktop', 'c1');
+    await browser.agentOpen('http://localhost:5173/a', C1);
+    expect(browser.shownIn('c1')).toBe('agent:c1');
+  });
+
   it('each conversation’s pane keeps its own tab shown (third review of step 2)', async () => {
     const { browser } = rig();
     browser.openTab('t1');

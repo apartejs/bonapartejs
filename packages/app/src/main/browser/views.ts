@@ -250,8 +250,12 @@ export class BrowserViews {
    * (third review of step 2).
    */
   private readonly shownBy = new Map<string | null, string>();
-  /** The pane visible right now — its conversation and the tab it shows —; null when closed or covered. */
-  private visible: { conversationId: string | null; tabId: string } | null = null;
+  /**
+   * The pane visible right now — its conversation and the tab it shows —; null when closed. Covered (a dialog,
+   * Ctrl K, « À traiter », the settings), it is kept with `covered`: the person comes back to the same tab, so an
+   * agent's page waiting behind it stays behind it (audit of 2026-11-21) — only the pane closed lets it go.
+   */
+  private visible: { conversationId: string | null; tabId: string; covered?: true } | null = null;
   /** What is attached to the window: only that. */
   private placed: Tab | null = null;
   private bounds: Rect | null = null;
@@ -326,8 +330,8 @@ export class BrowserViews {
     const hasRect = rect !== null && rect.width > 0 && rect.height > 0;
     if (!hasRect) this.unplace();
     if (!hasRect && !options.blank) {
-      // Covered: nobody looks at this pane now.
-      this.visible = null;
+      // Covered: nobody looks at this pane now, yet the person comes back to this tab when the cover goes.
+      this.visible = { conversationId, tabId, covered: true };
       return;
     }
     this.visible = { conversationId, tabId };
@@ -406,15 +410,20 @@ export class BrowserViews {
    */
   shownIn(conversationId: string | null): string | null {
     const own = conversationId === null ? undefined : this.tabs.get(agentTabId(conversationId));
-    if (own?.fresh && !this.looksAtOwnTab(conversationId)) return own.id;
+    // A cover does not release a page that waits behind the person's tab: the pane closed does.
+    if (own?.fresh && !this.looksAtOwnTab(conversationId, { orCovered: true })) return own.id;
     const shown = this.shownBy.get(conversationId);
     if (shown !== undefined && this.inScope(conversationId).some((tab) => tab.id === shown)) return shown;
     return own?.id ?? null;
   }
 
-  /** The person looks at a tab of their own in that conversation's pane, right now — a blank one included. */
-  private looksAtOwnTab(conversationId: string | null): boolean {
+  /**
+   * The person looks at a tab of their own in that conversation's pane, right now — a blank one included; with
+   * `orCovered`, also while a page covers that pane (they come back to it).
+   */
+  private looksAtOwnTab(conversationId: string | null, { orCovered = false }: { orCovered?: boolean } = {}): boolean {
     if (!this.visible || this.visible.conversationId !== conversationId) return false;
+    if (this.visible.covered && !orCovered) return false;
     const tab = this.tabs.get(this.visible.tabId);
     return tab !== undefined && !isAgentTab(tab);
   }
