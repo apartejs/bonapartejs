@@ -634,10 +634,15 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   failed call, follow a refusal, no shell, how to end), a discussion its
   own short method, and the machine's platform — one seed per machine and
   kind. The date, the branch and `git status --short` (`environment.ts`)
-  go in the conversation's own turn, read only when its prompt is frozen.
-  The project's instructions take about 12 % of the context
-  (`instructionsBudget`), cut after a whole line with a note naming the
-  file and the line to read on from. The five tools that make a plugin
+  go in the conversation's own turn, read only when its prompt is frozen
+  (disarmed on a service: a repository names them); a conversation on its
+  own branch not made yet is told that branch and its base, never the
+  checkout's state. The project's instructions take about 12 % of the
+  context the prompt is frozen for (`instructionsBudget`; a copy or a
+  change of model: the target's; not known: 8 k), cut after a whole line
+  with a note naming the file — the first folder's relative, another's
+  absolute — and the line to read on from; a change past the cut tells
+  nothing. The five tools that make a plugin
   are out of the inventory unless « Plugins créés en conversation » is on
   or the conversation asked (« / plugin », `pluginTools`); `ask_user` is
   told in one paragraph (`deltas.ts`), never its schema; a turn on 16 k or
