@@ -51,6 +51,8 @@ export interface Messages {
     start: string;
     starting: string;
     empty: { title: string; body: string };
+    /** Why « Démarrer » waits, said beside it. */
+    waits: { llama: string; llamaDownloading: string; choose: string; unloadable: string };
     failed: {
       title: string;
       reason: Record<

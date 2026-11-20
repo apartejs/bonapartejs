@@ -40,7 +40,13 @@ export const en: Messages = {
     starting: 'Loading…',
     empty: {
       title: 'No model found',
-      body: 'bonaparte looks in the LM Studio folder and in the Hugging Face cache.',
+      body: 'bonaparte looks in the LM Studio folder and in the Hugging Face cache. Your models are elsewhere? Add their folder.',
+    },
+    waits: {
+      llama: 'Install llama.cpp first, above.',
+      llamaDownloading: 'Wait for llama.cpp to finish downloading.',
+      choose: 'Choose a model.',
+      unloadable: 'This model cannot load here: choose another one.',
     },
     failed: {
       title: 'The engine did not start.',

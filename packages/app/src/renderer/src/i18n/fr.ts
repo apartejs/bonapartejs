@@ -40,7 +40,13 @@ export const fr: Messages = {
     starting: 'Chargement…',
     empty: {
       title: 'Aucun modèle trouvé',
-      body: 'bonaparte cherche dans le dossier de LM Studio et dans le cache de Hugging Face.',
+      body: 'bonaparte cherche dans le dossier de LM Studio et dans le cache de Hugging Face. Tes modèles sont ailleurs ? Ajoute leur dossier.',
+    },
+    waits: {
+      llama: 'Installe d’abord llama.cpp, plus haut.',
+      llamaDownloading: 'Attends la fin du téléchargement de llama.cpp.',
+      choose: 'Choisis un modèle.',
+      unloadable: 'Ce modèle ne peut pas se charger ici : choisis-en un autre.',
     },
     failed: {
       title: 'Le moteur n’a pas démarré.',

@@ -5,8 +5,11 @@
  * conversation goes there. Nothing is loaded, downloaded nor sent before a click.
  */
 
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from './fixtures/app.js';
-import { FAKE_QWEN_TEMPLATE } from '@aparte/bonaparte-core/testing';
+import { FAKE_QWEN_TEMPLATE, writeFakeGguf } from '@aparte/bonaparte-core/testing';
 import { chat } from './fixtures/chat.js';
 import { loadFirstModel } from './fixtures/engine.js';
 
@@ -156,4 +159,41 @@ test('« Préparer le moteur intégré… » in the settings opens the first lau
   await page.getByRole('button', { name: 'Préparer le moteur intégré…' }).click();
   await expect(page.getByRole('heading', { name: 'Préparons le moteur' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retour aux conversations' })).toBeVisible();
+});
+
+test('no model found: « Ajouter un dossier… » is the empty state’s own action, and the folder’s models appear', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'bp-models-'));
+  try {
+    await writeFakeGguf(join(folder, 'qwen-du-bureau.gguf'), { chatTemplate: FAKE_QWEN_TEMPLATE });
+    const { page } = await launch({ managed: { models: {} }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    const empty = page.locator('.engine-setup__empty');
+    await expect(empty).toContainText('Aucun modèle trouvé');
+    // The way out is said where the problem is, as a button of its own — not a link under it.
+    await empty.getByRole('button', { name: 'Ajouter un dossier…' }).click();
+    await expect(page.getByRole('radio', { name: /qwen-du-bureau/ })).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+test('« Démarrer » says why it waits: llama.cpp to install first', async ({ launch }) => {
+  const { page } = await launch({ managed: { models: MODELS, releases: true, llama: 'missing' } });
+  const start = page.getByRole('button', { name: 'Démarrer' });
+  await expect(start).toBeDisabled();
+  await expect(page.locator('.first-run__footer')).toContainText('Installe d’abord llama.cpp, plus haut.');
+  await expect(start).toHaveAccessibleDescription('Installe d’abord llama.cpp, plus haut.');
+});
+
+test('a recommended model downloading never holds « Démarrer » for a model already there', async ({ launch }) => {
+  const { page } = await launch({
+    managed: { models: MODELS },
+    hub: { models: { 'gemma-petit': { family: 'gemma' } }, paceMs: 5_000 },
+  });
+  const row = page.locator('.recommended-row', { hasText: 'gemma-petit' });
+  await row.getByRole('button', { name: /^Télécharger · [\d,]+ [KM]o$/ }).click();
+  await expect(row.getByRole('progressbar')).toBeVisible();
+  await expect(page.getByRole('radio', { name: /gemma-4-e2e/ })).toBeChecked();
+  // While it downloads — its bar still there — the model already found can start.
+  await expect(page.getByRole('button', { name: 'Démarrer' })).toBeEnabled({ timeout: 1_000 });
+  await expect(row.getByRole('progressbar')).toBeVisible();
 });

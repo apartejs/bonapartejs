@@ -97,6 +97,18 @@ body {
   font-weight: var(--aparte-font-weight-medium);
 }
 
+/* No model found: its way out, under what it says. */
+.engine-setup__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--aparte-space-2);
+}
+
+.engine-setup__add {
+  margin-top: var(--aparte-space-2);
+}
+
 .model-row {
   align-items: center;
 }

@@ -543,6 +543,25 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
   }
 
   const chosen = models?.find((model) => model.path === selected) ?? null;
+  // Why « Démarrer » waits, in the person's words; null when it can go.
+  const waitsId = useId();
+  const waits: string | null =
+    llama !== null && llama.current === null
+      ? downloading
+        ? text.waits.llamaDownloading
+        : text.waits.llama
+      : downloading
+        ? text.waits.llamaDownloading
+        : !chosen
+          ? text.waits.choose
+          : !loadable(chosen)
+            ? text.waits.unloadable
+            : null;
+  const addFolder = (): void => {
+    void bridge.invoke(modelsAddFolder, undefined).then((next) => {
+      if (next) void listModels();
+    });
+  };
   const cost = chosen?.announcement ?? null;
 
   async function start(offload = false): Promise<void> {
@@ -663,6 +682,10 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                     <div className="engine-setup__empty">
                       <p className="engine-setup__empty-title">{text.empty.title}</p>
                       <p className="aparte-field-hint">{text.empty.body}</p>
+                      {/* The way out, where the problem is said: a button of its own. */}
+                      <button type="button" className="aparte-btn aparte-btn--outline engine-setup__add" onClick={addFolder}>
+                        {text.addFolder}
+                      </button>
                     </div>
                   ) : (
                     <>
@@ -710,17 +733,11 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                         ))}
                       </>
                     ) : null}
-                    <button
-                      type="button"
-                      className="aparte-btn aparte-btn--sm aparte-btn--ghost aparte-btn--primary first-run__add"
-                      onClick={() => {
-                        void bridge.invoke(modelsAddFolder, undefined).then((next) => {
-                          if (next) void listModels();
-                        });
-                      }}
-                    >
-                      {text.addFolder}
-                    </button>
+                    {models.length > 0 ? (
+                      <button type="button" className="aparte-btn aparte-btn--sm aparte-btn--ghost aparte-btn--primary first-run__add" onClick={addFolder}>
+                        {text.addFolder}
+                      </button>
+                    ) : null}
                   </p>
                 </fieldset>
               )}
@@ -836,17 +853,21 @@ export function FirstRun({ messages, locale, onReady, onService, onBack }: First
                 <button
                   type="button"
                   className="aparte-btn aparte-btn--primary aparte-btn--solid"
-                  // Nothing to run without llama.cpp, nor while a build or a model is being downloaded.
-                  disabled={!chosen || !loadable(chosen) || loading || downloading || fetching !== null || (llama !== null && llama.current === null)}
+                  // Nothing to run without llama.cpp, nor while its build downloads: said beside it. A recommended model
+                  // downloading holds nothing — the model already there can start.
+                  disabled={waits !== null || loading}
                   aria-busy={loading}
+                  {...(waits ? { 'aria-describedby': waitsId } : {})}
                   onClick={() => void start()}
                 >
                   {/* A busy kit button lays out its spinner, at its icon's size and in its ink (aparté 1.9). */}
                   {loading ? <span className="aparte-spinner" aria-hidden="true" /> : null}
                   {loading ? text.starting : text.start}
                 </button>
-                <p className="engine-announcement">
-                  {cost
+                <p className="engine-announcement" id={waitsId}>
+                  {waits
+                    ? waits
+                    : cost
                     ? text.announce({
                         seconds: formatSeconds(cost.seconds),
                         estimated: cost.secondsEstimated,
