@@ -82,9 +82,52 @@ describe('edit_file', () => {
     await writeFile(join(root, 'a.ts'), 'x\nx\n');
     expect(await call(editFile.handler, { path: 'a.ts', old_string: 'z', new_string: 'y' }, ctx)).toMatchObject({ failed: true });
     const twice = await call(editFile.handler, { path: 'a.ts', old_string: 'x', new_string: 'y' }, ctx);
-    expect(twice).toMatchObject({ failed: true, content: expect.stringMatching(/2 occurrences/) });
+    expect(twice).toMatchObject({ failed: true, content: expect.stringMatching(/occurs 2 times/) });
     expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('x\nx\n');
     expect(written).toEqual([]);
+  });
+
+  it('a CRLF file is edited from an old_string written with \\n, and keeps its CRLF (audit 2026-11-21, D4)', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'a.ts'), 'function f() {\r\n  return 1;\r\n}\r\nconst z = 0;\r\n');
+    const result = await call(
+      editFile.handler,
+      { path: 'a.ts', old_string: 'function f() {\n  return 1;\n}', new_string: 'function f() {\n  const x = 2;\n  return x;\n}' },
+      ctx,
+    );
+    expect(result).toMatchObject({ content: 'Edited: a.ts' });
+    expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('function f() {\r\n  const x = 2;\r\n  return x;\r\n}\r\nconst z = 0;\r\n');
+    // One line of a CRLF file, replaced by two: the new line takes the file's ending too.
+    await call(editFile.handler, { path: 'a.ts', old_string: 'const z = 0;', new_string: 'const z = 0;\nconst w = 1;' }, ctx);
+    expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('function f() {\r\n  const x = 2;\r\n  return x;\r\n}\r\nconst z = 0;\r\nconst w = 1;\r\n');
+  });
+
+  it('an LF file stays LF, whatever endings new_string came with', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'a.ts'), 'a\nb\nc\n');
+    await call(editFile.handler, { path: 'a.ts', old_string: 'a\r\nb', new_string: 'a\r\nB\r\nb' }, ctx);
+    expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('a\nB\nb\nc\n');
+  });
+
+  it('two places that differ only by their line endings are still two', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'a.ts'), 'x\r\ny\nx\ny\n');
+    const twice = await call(editFile.handler, { path: 'a.ts', old_string: 'x\ny', new_string: 'z' }, ctx);
+    expect(twice).toMatchObject({ failed: true, content: expect.stringMatching(/2 times/) });
+  });
+
+  it('text not found says what to do, and where the near match is when only whitespace differs', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'a.ts'), 'const a = 1;\nif (a) {\n    call(a);\n}\n');
+    const spaced = await call(editFile.handler, { path: 'a.ts', old_string: 'if (a) {\n  call(a);\n}', new_string: 'x' }, ctx);
+    expect(spaced).toMatchObject({ failed: true });
+    expect(spaced.content).toMatch(/old_string was not found in a\.ts; the file is unchanged\. Read the file again and copy the text exactly, indentation included\./);
+    expect(spaced.content).toMatch(/whitespace.*line 2/i);
+    const close = await call(editFile.handler, { path: 'a.ts', old_string: '    cal(a);', new_string: 'x' }, ctx);
+    expect(close.content).toMatch(/closest.*line 3/i);
+    const none = await call(editFile.handler, { path: 'a.ts', old_string: 'zzzzqqqq', new_string: 'x' }, ctx);
+    expect(none.content).not.toMatch(/closest|whitespace/i);
+    expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('const a = 1;\nif (a) {\n    call(a);\n}\n');
   });
 
   it('a replacement with $ in it is written as it is', async () => {
@@ -103,6 +146,15 @@ describe('write_file', () => {
     });
     expect(await readFile(join(root, 'src', 'new', 'a.ts'), 'utf8')).toBe('hello');
     expect(written).toEqual(['before src/new/a.ts', 'after']);
+  });
+
+  it('a CRLF file rewritten with LF keeps its CRLF; a new file is written as given (audit 2026-11-21, D4)', async () => {
+    const { root, ctx } = await project();
+    await writeFile(join(root, 'a.ts'), 'one\r\ntwo\r\n');
+    await call(writeFileTool.handler, { path: 'a.ts', content: 'one\nTWO\nthree\n' }, ctx);
+    expect(await readFile(join(root, 'a.ts'), 'utf8')).toBe('one\r\nTWO\r\nthree\r\n');
+    await call(writeFileTool.handler, { path: 'b.ts', content: 'x\ny\n' }, ctx);
+    expect(await readFile(join(root, 'b.ts'), 'utf8')).toBe('x\ny\n');
   });
 
   it('writes outside the project once the person allowed that very call, never otherwise', async () => {

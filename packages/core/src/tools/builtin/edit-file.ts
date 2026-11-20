@@ -1,6 +1,7 @@
 import { restoreDisarmed } from '../../families/control-tokens.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { displayInPerimeter } from '../../project/paths.js';
+import { applyEdit, editFailure } from '../edit-text.js';
 import { unifiedDiff } from '../preview.js';
 import { describeError, inPerimeter, refused, text, type BuiltinTool } from './common.js';
 
@@ -10,12 +11,13 @@ export const editFile: BuiltinTool = {
   def: {
     name: 'edit_file',
     description:
-      'Replace the one place old_string stands in a file with new_string. Give enough of the text around it for it to stand only once.',
+      'Replace one exact piece of text in a file. old_string must match the file exactly (indentation included) and occur only once: ' +
+      'copy it from read_file, with a nearby line or two if needed to make it unique. Read the file first.',
     inputSchema: {
       type: 'object',
       properties: {
         path: { type: 'string', description: 'The path of the file, relative to the project.' },
-        old_string: { type: 'string', description: 'The exact text to replace: it must stand once in the file.' },
+        old_string: { type: 'string', description: 'The exact text to replace, as read_file shows it: it must occur once in the file.' },
         new_string: { type: 'string', description: 'The text to put in its place.' },
       },
       required: ['path', 'old_string', 'new_string'],
@@ -40,17 +42,14 @@ export const editFile: BuiltinTool = {
     } catch (error) {
       return refused(`Cannot read file: ${requested} (${describeError(error)})`);
     }
-    const occurrences = content.split(oldString).length - 1;
-    if (occurrences === 0) return refused(`The text was not found in ${requested}: no occurrence of old_string. The file is unchanged.`);
-    if (occurrences > 1) {
-      return refused(`The text stands ${occurrences} times in ${requested} (${occurrences} occurrences): widen old_string so that it stands once. The file is unchanged.`);
-    }
+    // Line endings aside (a CRLF file, an old_string written with LF): the file keeps its own (audit 2026-11-21, D4).
+    const edit = applyEdit(content, oldString, newString);
+    if (!edit.ok) return refused(editFailure(requested, edit));
     const shown = displayInPerimeter(ctx.roots, resolved.path);
     let after: string;
     try {
       await ctx.beforeWrite?.(resolved.path, shown);
-      // A function: `$&` or `$1` in the new text are written as they are.
-      after = content.replace(oldString, () => newString);
+      after = edit.after;
       await writeFile(resolved.path, after, 'utf8');
       await ctx.afterWrite?.(resolved.path);
     } catch (error) {

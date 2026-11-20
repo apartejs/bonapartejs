@@ -8,6 +8,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { diffTexts, formatUnifiedDiff } from '@aparte/plugin-diff';
+import { applyEdit, keepEndings } from './edit-text.js';
 
 /** Past this many lines × lines, a rewrite is summed up rather than compared line by line. */
 const MAX_DIFF_CELLS = 4_000_000;
@@ -59,8 +60,9 @@ export async function previewToolCall(call: { name: string; input: unknown }, pa
   const current = await readFile(absolute, 'utf8').catch(() => null);
 
   if (call.name === 'write_file') {
-    const content = text(input, 'content');
-    if (content === undefined) return undefined;
+    const given = text(input, 'content');
+    if (given === undefined) return undefined;
+    const content = keepEndings(current, given);
     return { kind: 'diff', path: shown, before: current, after: content, diff: unifiedDiff(shown, current, content) };
   }
 
@@ -68,9 +70,10 @@ export async function previewToolCall(call: { name: string; input: unknown }, pa
   const newString = text(input, 'new_string');
   if (oldString === undefined || newString === undefined) return undefined;
   if (current === null) return { kind: 'fails', reason: 'missing', path: shown };
-  const occurrences = oldString === '' ? 0 : current.split(oldString).length - 1;
-  if (occurrences === 0) return { kind: 'fails', reason: 'not-found', path: shown };
-  if (occurrences > 1) return { kind: 'fails', reason: 'ambiguous', path: shown, occurrences };
-  const after = current.replace(oldString, () => newString);
+  if (oldString === '') return { kind: 'fails', reason: 'not-found', path: shown };
+  // The match edit_file makes: line endings aside, the file's own kept.
+  const edit = applyEdit(current, oldString, newString);
+  if (!edit.ok) return edit.reason === 'ambiguous' ? { kind: 'fails', reason: 'ambiguous', path: shown, occurrences: edit.occurrences } : { kind: 'fails', reason: 'not-found', path: shown };
+  const after = edit.after;
   return { kind: 'diff', path: shown, before: current, after, diff: unifiedDiff(shown, current, after) };
 }

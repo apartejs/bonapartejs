@@ -2,6 +2,7 @@ import { restoreDisarmed } from '../../families/control-tokens.js';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { displayInPerimeter } from '../../project/paths.js';
+import { keepEndings } from '../edit-text.js';
 import { unifiedDiff } from '../preview.js';
 import { describeError, inPerimeter, refused, text, type BuiltinTool } from './common.js';
 
@@ -25,14 +26,16 @@ export const writeFileTool: BuiltinTool = {
   },
   handler: async (call, ctx) => {
     const requested = text(call.input, 'path');
-    const content = restoreOrKeep(text(call.input, 'content'));
+    const given = restoreOrKeep(text(call.input, 'content'));
     if (!requested) return refused('Missing argument: path.');
-    if (content === undefined) return refused('Missing argument: content (a string).');
+    if (given === undefined) return refused('Missing argument: content (a string).');
     const resolved = inPerimeter(ctx, requested);
     if ('error' in resolved) return refused(resolved.error);
     const shown = displayInPerimeter(ctx.roots, resolved.path);
     // What it replaces, for the change the window shows: nothing when the file is new.
     const before = await readFile(resolved.path, 'utf8').catch(() => null);
+    // A CRLF file keeps its endings (audit 2026-11-21, D4).
+    const content = keepEndings(before, given);
     try {
       await ctx.beforeWrite?.(resolved.path, shown);
       await mkdir(dirname(resolved.path), { recursive: true });

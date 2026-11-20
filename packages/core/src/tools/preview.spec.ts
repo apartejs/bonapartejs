@@ -73,6 +73,13 @@ describe('previewToolCall', () => {
     expect(await edit('twice.ts', 'x')).toEqual({ kind: 'fails', reason: 'ambiguous', path: 'twice.ts', occurrences: 2 });
   });
 
+  it('the card shows what edit_file will do to a CRLF file: the same match, the file’s endings kept (audit 2026-11-21, D4)', async () => {
+    const { dir, paths } = await project();
+    await writeFile(join(dir, 'crlf.ts'), 'a\r\nb\r\nc\r\n');
+    const preview = await previewToolCall({ name: 'edit_file', input: { path: 'crlf.ts', old_string: 'a\nb', new_string: 'a\nB' } }, paths);
+    expect(preview).toMatchObject({ kind: 'diff', after: 'a\r\nB\r\nc\r\n' });
+  });
+
   it('a new file is shown whole; an existing one, only what changes', async () => {
     const { dir, paths } = await project();
     const created = await previewToolCall({ name: 'write_file', input: { path: 'new.ts', content: 'one\ntwo\n' } }, paths);
