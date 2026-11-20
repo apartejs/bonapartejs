@@ -139,7 +139,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
  */
 export function buildServicePrompt(options: Omit<SystemPromptOptions, 'family' | 'tools'>): string {
   const blocks = [IDENTITY[options.kind](options.platform), renderPerimeter(options.perimeter)];
-  if (options.environment) blocks.push(options.environment);
+  // The branch and the file names are a repository's choice: disarmed as its instructions are (security rule 5).
+  if (options.environment) blocks.push(disarmForService(options.environment));
   if (options.replyLanguage) blocks.push(`Write your replies to the person in ${options.replyLanguage}.`);
   // A file anyone who commits wrote: disarmed for any family the service may run (audit 13.4).
   if (options.projectInstructions) blocks.push(`Project instructions:\n${disarmForService(options.projectInstructions)}`);
