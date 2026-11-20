@@ -4614,7 +4614,7 @@ summary,
   }
 }
 
-/* The mascot reacts to the pointer: not a spot that moves the window. */
-.bonaparte-brand {
+/* The mascot reacts to the pointer: not a spot that moves the window. The name beside it does move it. */
+.bonaparte-brand__mark {
   -webkit-app-region: no-drag;
 }

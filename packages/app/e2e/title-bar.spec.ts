@@ -107,6 +107,10 @@ test('the top strip moves the window, a button in it stays clickable, and the he
     page.locator(selector).first().evaluate((element) => getComputedStyle(element).getPropertyValue('-webkit-app-region') || getComputedStyle(element).getPropertyValue('app-region'));
   expect(await appRegion('.conversation-header__title')).toBe('drag');
   expect(await appRegion('.bonaparte-sidebar__top')).toBe('drag');
+  // The name moves the window too (Paul, 2026-11-20): only the mascot, which answers the pointer, does not.
+  expect(await appRegion('.bonaparte-brand')).toBe('drag');
+  expect(await appRegion('.bonaparte-wordmark')).toBe('drag');
+  expect(await appRegion('.bonaparte-brand__mark')).toBe('no-drag');
   expect(await appRegion('.conversation-header .panel-toggles button')).toBe('no-drag');
   // A menu of the header, and its dialog, are the page's: never a spot that moves the window. A conversation has them.
   await chat(page).send('Bonjour');
