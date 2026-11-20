@@ -154,7 +154,7 @@ describe('one name for the one the model works for (review of round 2, 11)', () 
       NOT_RUN_STOPPED,
       SUBAGENT_LEFT,
       PLUGIN_GUIDE,
-      ...builtinTools().map((tool) => JSON.stringify([tool.description, tool.inputSchema])),
+      ...builtinTools().map((tool) => JSON.stringify([tool.def.description, tool.def.inputSchema])),
     ];
     for (const text of said) expect(text).not.toMatch(/\bperson\b/i);
     expect(said.join('\n')).toContain('the user');
