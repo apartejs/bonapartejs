@@ -24,6 +24,19 @@ export const SUMMARY_QUESTION =
   'done and verified, what failed, what remains to do, briefly. At most 500 words in all; no preamble, no advice ' +
   'to the user.';
 
+/**
+ * What the model is asked when the turn under way is folded on itself (review of round 2, 5): its message and its last
+ * call stay, its earlier calls go into the summary with the turns before — sent to the model: English.
+ */
+export const SUMMARY_TURN_QUESTION =
+  'Summarize this conversation so far, for your own use: it will replace the earlier turns and your earlier tool ' +
+  'calls for the user’s last message in your context; that message and your last call stay as they are. Write three ' +
+  'parts. "Facts:" — quote exactly, never paraphrase, each specific fact read in a file, from a tool or from the user ' +
+  'that a later step may need (codes, names, numbers, paths, values, results), one per line. "Work:" — the user’s goal ' +
+  'and constraints, the decisions taken and why, what was done and verified before, briefly. "Work so far in this ' +
+  'turn:" — each call you made for the user’s last message, in order, and what it found. At most 500 words in all; no ' +
+  'preamble, no advice to the user.';
+
 /** The longest summary asked for. */
 export const SUMMARY_MAX_TOKENS = 1536;
 /** Less to fold than this, and the summary would weigh about what it replaces: not worth it. */
@@ -46,8 +59,11 @@ export class CompactionError extends Error {
 }
 
 /** The summary as the model reads it after the rebase — English. */
-export function summaryNote(summary: string): string {
-  return `[conversation summary]\nThe earlier turns of this conversation were compacted to save context. What they established:\n${summary}`;
+export function summaryNote(summary: string, turn = false): string {
+  const what = turn
+    ? 'The earlier turns of this conversation, and your earlier calls for the user’s message below, were compacted to save context.'
+    : 'The earlier turns of this conversation were compacted to save context.';
+  return `[conversation summary]\n${what} What they established:\n${summary}`;
 }
 
 export interface CompactionPlan {
@@ -114,4 +130,54 @@ export function planCompaction(entries: readonly JournalEntry[], estimate: (text
     throw new CompactionError('not-worth', 'The conversation is too short for a summary to be worth it: nothing was compacted.');
   }
   return { kept, keptTurns, compactedTurns: starts.length - keptTurns, compactedTokens };
+}
+
+/** Less than this to fold of a turn's own rounds, and a summary would save nothing. */
+export const MIN_FOLDED_ROUND_TOKENS = 256;
+
+/** The turn under way folded on itself: what is kept of it, and where the summary is asked. */
+export interface TurnFold extends CompactionPlan {
+  /** The turn's message, kept as it was frozen. */
+  user: Extract<JournalEntry, { kind: 'user' }>;
+  /** The turn's first answer: its rendering opens the model's turn. */
+  first: Extract<JournalEntry, { kind: 'assistant' }>;
+  /** The last round, kept as it was: the model's last answer (its calls) and their results. */
+  round: readonly JournalEntry[];
+  /** The summary is asked of the entries before this index: everything before the last round. */
+  askedUntil: number;
+}
+
+/**
+ * The turn under way folded on itself (review of round 2, 5): when what precedes it is not worth folding — a fresh
+ * conversation, or a rebase earlier in this same turn — its own earlier rounds are. Its message is kept, its last round
+ * (the model's last calls and their results, which it goes on from) is kept, and the summary covers the rest.
+ */
+export function planTurnFold(entries: readonly JournalEntry[], estimate: (text: string) => number): TurnFold {
+  if (entries.at(-1)?.kind === 'pending') throw new CompactionError('pending', 'A call waits for an answer: answer it before compacting.');
+  const userAt = entries.findLastIndex((entry) => entry.kind === 'user');
+  const lastAt = entries.findLastIndex((entry) => entry.kind === 'assistant');
+  const round = entries.slice(lastAt);
+  const earlier = entries
+    .slice(userAt + 1, lastAt)
+    .filter((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
+  if (userAt < 0 || lastAt <= userAt || earlier.length === 0 || round.length < 2 || !round.slice(1).every((entry) => entry.kind === 'tool-results')) {
+    throw new CompactionError('not-worth', 'This turn has no earlier call to fold: nothing was compacted.');
+  }
+  const { part, folded } = conversationPart(entries.slice(0, lastAt));
+  const weigh = (list: readonly JournalEntry[]): number => estimate(list.map((entry) => entry.rendered ?? '').join(''));
+  const user = entries[userAt] as Extract<JournalEntry, { kind: 'user' }>;
+  const compactedTokens = weigh([...folded, ...part.filter((entry) => entry.id !== user.id)]);
+  if (compactedTokens < MIN_FOLDED_ROUND_TOKENS) {
+    throw new CompactionError('not-worth', 'This turn has too little to fold for a summary to be worth it: nothing was compacted.');
+  }
+  return {
+    user,
+    first: earlier[0]!,
+    round,
+    askedUntil: lastAt,
+    kept: [user, ...round],
+    keptTurns: 1,
+    compactedTurns: part.filter((entry) => entry.kind === 'user' && entry.id !== user.id).length,
+    compactedTokens,
+  };
 }

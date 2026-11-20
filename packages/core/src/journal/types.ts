@@ -106,8 +106,12 @@ export type JournalBody =
    * A compaction (task 7.3): the prompt starts again from here. `stable`: the system turn frozen again (what a
    * seed is keyed by); the facts it froze (`replyLanguage`, `perimeter`, `tools`), as the first system turn's.
    */
-  /** `keptFrom`: the first entry of the turns kept as they were (none kept: absent). */
-  | ({ kind: 'rebase'; summary: string; keptFrom?: string } & Refrozen)
+  /**
+   * `keptFrom`: the first entry of the turns kept as they were (none kept: absent). `keptRound`: the turn under way
+   * folded on itself (review of round 2, 5) — its message kept (`keptFrom`), its rounds before this answer folded into
+   * the summary, this answer and its results kept from here on.
+   */
+  | ({ kind: 'rebase'; summary: string; keptFrom?: string; keptRound?: string } & Refrozen)
   /**
    * A change of model (task 7.4): the prompt starts again from here, the conversation rendered again by the
    * new model's `family` (its `rendered`). `modelId`: the model file's path.

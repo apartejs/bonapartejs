@@ -7,6 +7,8 @@
  * goes on from before it. Too short to be worth it: said, nothing changed.
  */
 
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { expect, test, type LaunchedApp, type LaunchOptions } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 
@@ -138,4 +140,40 @@ test('a conversation too short to be worth it: said, nothing changed', async ({ 
   const { page } = await longConversation(launch, 1, 32_768);
   await command(page, /^\/compact/);
   await expect(page.getByRole('status').filter({ hasText: 'trop courte' })).toBeVisible({ timeout: 10_000 });
+});
+
+test('a first task that overflows a fresh conversation at 8 k folds its own earlier calls, goes on to its end, and the next message is answered (audit D2, review of round 2, 5)', async ({ launch }) => {
+  const Q = '<|"|>';
+  /** Reads a.txt, b.txt and c.txt, then runs the tests, then ends — each step read from what its prompt holds. */
+  const task = (prompt: string): string => {
+    if (prompt.includes('Summarize this conversation so far')) return 'Facts:\n- a.txt and b.txt hold the rules.\nWork so far in this turn: read a.txt, then b.txt.';
+    const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
+    if (turn.includes('Et ensuite')) return 'Suite.';
+    if (turn.includes('call:run_command')) return 'Tout est lu, et les tests passent.';
+    if (turn.includes('Contenu C')) return `<|tool_call>call:run_command{args:[${Q}--version${Q}],program:${Q}node${Q}}<tool_call|>`;
+    const next = turn.includes('Contenu B') ? 'c.txt' : turn.includes('Contenu A') ? 'b.txt' : 'a.txt';
+    return `<|tool_call>call:read_file{path:${Q}${next}${Q}}<tool_call|>`;
+  };
+  const prompts: string[] = [];
+  const { page, home } = await launch({ engine: { responder: task, nCtx: 8192, onCompletion: (body) => prompts.push(String(body['prompt'])) } });
+  for (const name of ['A', 'B', 'C']) {
+    await writeFile(join(home, `${name.toLowerCase()}.txt`), Array.from({ length: 400 }, (_, index) => `Contenu ${name}, ligne ${index + 1} du fichier.`).join('\n'));
+  }
+  const ui = chat(page);
+  await ui.send('Lis les trois fichiers puis lance les tests.');
+  // The command asks (Répétition): allowed.
+  await page.getByRole('region', { name: 'Demande d’accord' }).getByRole('button', { name: 'Autoriser', exact: true }).click({ timeout: 30_000 });
+  await expect(ui.replyText).toContainText('les tests passent', { timeout: 30_000 });
+  const live = page.locator('.bonaparte-live-chat:not([hidden])');
+  await expect(live.getByRole('note', { name: 'Compaction automatique' })).toContainText(/Contexte plein : la conversation a été résumée pour continuer/);
+  await expect(ui.errors).toHaveCount(0);
+  expect(prompts.some((prompt) => prompt.includes('Work so far in this turn'))).toBe(true);
+
+  // After the compaction, the journal and the window still agree: the next message is answered.
+  await ui.send('Et ensuite ?');
+  await expect(ui.replyText).toHaveText('Suite.', { timeout: 20_000 });
+  await expect(ui.errors).toHaveCount(0);
+  expect(prompts.at(-1)).toContain('[conversation summary]');
+  expect(prompts.at(-1)).not.toContain('Contenu A');
+  expect(prompts.at(-1)).toContain('Et ensuite ?');
 });

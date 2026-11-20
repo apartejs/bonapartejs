@@ -82,9 +82,12 @@ export function rerenderConversation(entries: readonly JournalEntry[], options: 
   let walked: readonly JournalEntry[] = entries;
   if (rebaseAt >= 0) {
     const rebase = entries[rebaseAt] as Extract<JournalEntry, { kind: 'rebase' }>;
-    text += to.renderSystemNote(summaryNote(rebase.summary));
+    text += to.renderSystemNote(summaryNote(rebase.summary, rebase.keptRound !== undefined));
     const keptAt = rebase.keptFrom ? entries.findIndex((item) => item.id === rebase.keptFrom) : -1;
-    walked = [...(keptAt >= 0 ? entries.slice(keptAt, rebaseAt) : []), ...entries.slice(rebaseAt + 1)];
+    // A turn folded on itself kept its message and its last round only: its earlier rounds are in the summary.
+    const roundAt = rebase.keptRound ? entries.findIndex((item) => item.id === rebase.keptRound) : -1;
+    const kept = keptAt < 0 ? [] : roundAt > keptAt ? [entries[keptAt]!, ...entries.slice(roundAt, rebaseAt)] : entries.slice(keptAt, rebaseAt);
+    walked = [...kept, ...entries.slice(rebaseAt + 1)];
   }
   const spoken = walked.filter((item) => !SILENT.has(item.kind) && (item.kind !== 'delta' || item.delta.kind === 'note'));
 

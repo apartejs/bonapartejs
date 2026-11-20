@@ -1064,6 +1064,68 @@ describe('ConversationEngine — the context runs out (audit 2026-11-21, D2)', (
     expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
   });
 
+  describe('a fresh conversation whose first task overflows (the audit’s own case, review of round 2, 5)', () => {
+    const RUN: ToolDef = { ...READ, name: 'run_command', description: 'Run a program.', effect: 'execute' };
+    const Q = '<|"|>';
+    /** Reads a.txt, b.txt, c.txt, then runs the tests, then ends — each step read from what its prompt holds. */
+    const task = (prompt: string): string => {
+      if (prompt.includes('Summarize this conversation so far')) return 'Facts:\n- a.txt and b.txt hold lines.\nWork so far in this turn: read a.txt, then b.txt.';
+      const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
+      if (turn.includes('Tests passed.')) return 'Fini.';
+      if (turn.includes('c.txt ligne')) return `<|tool_call>call:run_command{program:${Q}pnpm${Q}}<tool_call|>`;
+      const next = turn.includes('b.txt ligne') ? 'c.txt' : turn.includes('a.txt ligne') ? 'b.txt' : 'a.txt';
+      return `<|tool_call>call:read_file{path:${Q}${next}${Q}}<tool_call|>`;
+    };
+    const tools = (lines: number) => ({
+      defs: [READ, RUN],
+      onCalls: async (calls: readonly { id: string; name: string; input: unknown }[]) => ({
+        results: calls.map((call) => ({
+          toolCallId: call.id,
+          name: call.name,
+          content: call.name === 'run_command' ? 'Tests passed.' : `${String((call.input as { path: string }).path)} ligne\n`.repeat(lines),
+        })),
+      }),
+    });
+
+    it('folds the turn’s own earlier calls: its message and its last call kept, and the task goes on to its end', async () => {
+      const { store, prompts, conversation, engine } = await rig({ server: { responder: task, nCtx: 8192 } });
+      const meta = await conversation();
+      const events: TurnEvent[] = [];
+      const result = await engine.turn(meta.id, { text: 'Lis les trois fichiers puis lance les tests', tools: tools(900) }, (event) => events.push(event));
+      expect(result.stopped).toBeUndefined();
+      expect(events.some((event) => event.type === 'compaction' && event.phase === 'end' && event.after !== undefined)).toBe(true);
+      const entries = (await openJournal(store.dir, meta.id)).entries();
+      const rebase = entries.findLast((entry) => entry.kind === 'rebase');
+      const user = entries.find((entry) => entry.kind === 'user');
+      const lastCall = entries.findLast((entry) => entry.kind === 'assistant' && entry.raw.includes('c.txt'));
+      expect(rebase).toMatchObject({ keptFrom: user?.id, keptRound: lastCall?.id });
+      // The summary was asked of the turn's own work too.
+      expect(prompts.some((prompt) => prompt.includes('Work so far in this turn'))).toBe(true);
+      // The model went on from its message and its last call, the earlier ones in the summary.
+      const last = prompts.at(-1)!;
+      expect(last).toContain('[conversation summary]');
+      expect(last).toContain('Lis les trois fichiers puis lance les tests');
+      expect(last).toContain('c.txt ligne');
+      expect(last).not.toContain('a.txt ligne');
+      expect(last.indexOf('[conversation summary]')).toBeLessThan(last.indexOf('Lis les trois fichiers'));
+      expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
+
+      // The next message reads on from the rebase, the folded rounds still out of it.
+      await engine.turn(meta.id, { text: 'Et ensuite ?' }, () => undefined);
+      expect(prompts.at(-1)!.startsWith(frozenPrompt(entries))).toBe(true);
+      expect(prompts.at(-1)).not.toContain('a.txt ligne');
+      // A change of model renders the conversation again as the rebase left it: the folded rounds stay folded.
+      const rendered = await engine.rereadOn(meta.id, { family: familyLayer('qwen'), modelPath: 'qwen.gguf' });
+      expect(rendered).toBeLessThan(estimateTokens(prompts.at(-1)!) + 2000);
+    });
+
+    it('a round that alone exceeds the window still ends as context-full, said as such', async () => {
+      const { conversation, engine } = await rig({ server: { responder: task, nCtx: 8192 } });
+      const meta = await conversation();
+      await expect(engine.turn(meta.id, { text: 'Lis les trois fichiers puis lance les tests', tools: tools(3500) }, () => undefined)).rejects.toBeInstanceOf(ContextFullError);
+    });
+  });
+
   it('a conversation saved before, near full, told a new inventory: compacted before its notes overflow it, never refused (review of round 2, 1)', async () => {
     // A model that fills the context to about 6 700 of 8 192 tokens, as the engine counts them (four characters a token).
     const fill = (prompt: string): string => {

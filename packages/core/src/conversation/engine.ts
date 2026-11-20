@@ -43,7 +43,7 @@ import { rereadBeforeMessage } from '../kv/reread.js';
 import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import { cutInstructions, instructionsBudget, sameInstructions } from '../project/instructions.js';
-import { CompactionError, planCompaction, planCompactionKeeping, SUMMARY_MAX_TOKENS, SUMMARY_QUESTION, summaryNote } from './compact.js';
+import { CompactionError, planCompaction, planCompactionKeeping, planTurnFold, SUMMARY_MAX_TOKENS, SUMMARY_QUESTION, SUMMARY_TURN_QUESTION, summaryNote } from './compact.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
 import { branchModel, rerenderConversation } from './switch.js';
@@ -76,6 +76,32 @@ export const SMALL_CONTEXT = 16_384;
 /** Whether a turn reasons when nothing says: not on a small context, where its thoughts would eat the room left. */
 export function defaultThinking(window: number): boolean {
   return window > SMALL_CONTEXT;
+}
+
+/**
+ * How a compaction is made: `slot`, in the slot the turn under way holds; `keepFrom`, everything from that entry kept as
+ * it was frozen; `foldRounds`, the turn under way folded on itself — its message and its last round kept, its earlier
+ * rounds in the summary (review of round 2, 5).
+ */
+interface CompactOptions {
+  sink: (event: TurnEvent) => void;
+  window: number;
+  signal?: AbortSignal;
+  slot?: { id: number };
+  keepFrom?: string;
+  foldRounds?: boolean;
+}
+
+/** What an answer of the model wrote. */
+function rawOf(entry: JournalEntry): string {
+  return entry.kind === 'assistant' ? entry.raw : '';
+}
+
+/** What opened the model's turn of an answer, as it was frozen: its rendering before what it wrote. */
+function openingOf(answer: Extract<JournalEntry, { kind: 'assistant' }>, family: FamilyLayer): string {
+  const rendered = answer.rendered ?? '';
+  const written = answer.raw + family.endAssistant(answer.raw);
+  return rendered.endsWith(written) ? rendered.slice(0, rendered.length - written.length) : family.beginAssistant({ thinking: false });
 }
 
 /** A model a conversation may go to: its family, its file, and the context it runs with when it is known (tokens). */
@@ -336,7 +362,8 @@ function keptCut(
   if (at < 0 || rebaseAt < 0 || at >= rebaseAt || entries.slice(rebaseAt + 1).some(isRefrozen)) return null;
   const rebase = entries[rebaseAt] as Extract<JournalEntry, { kind: 'rebase' }>;
   const keptAt = rebase.keptFrom ? entries.findIndex((entry) => entry.id === rebase.keptFrom) : -1;
-  if (keptAt < 0 || at < keptAt - 1) return null;
+  // A turn folded on itself kept only some of its entries: a fork there starts from before the compaction.
+  if (keptAt < 0 || at < keptAt - 1 || rebase.keptRound) return null;
   const keptText = entries
     .slice(keptAt, rebaseAt)
     .map((entry) => entry.rendered ?? '')
@@ -806,25 +833,30 @@ export class ConversationEngine {
     meta: ConversationMeta,
     journal: Journal,
     engine: EngineView,
-    options: { sink: (event: TurnEvent) => void; window: number; signal?: AbortSignal; slot?: { id: number }; keepFrom?: string },
+    options: CompactOptions,
   ): Promise<CompactResult> {
     const { family, client } = engine;
     const { sink, signal, window } = options;
     const entries = journal.entries();
-    const plan = options.keepFrom ? planCompactionKeeping(entries, options.keepFrom, estimateTokens) : planCompaction(entries, estimateTokens);
+    // The turn under way folded on itself: its message and its last round kept, its earlier rounds summarised (D2).
+    const fold = options.foldRounds ? planTurnFold(entries, estimateTokens) : null;
+    const plan = fold ?? (options.keepFrom ? planCompactionKeeping(entries, options.keepFrom, estimateTokens) : planCompaction(entries, estimateTokens));
     // What the summary is asked of: the whole frozen text, or the prefix before what is kept as it was.
-    const keptAt = options.keepFrom ? entries.findIndex((entry) => entry.id === options.keepFrom) : entries.length;
+    const keptAt = fold ? fold.askedUntil : options.keepFrom ? entries.findIndex((entry) => entry.id === options.keepFrom) : entries.length;
     const asked = entries.slice(0, keptAt);
-    const frozen = frozenPrompt(asked);
-    const question = family.renderUser(SUMMARY_QUESTION) + family.beginAssistant({ thinking: false });
+    // Asked in the middle of the model's turn, after the results of a round: that turn closed first, as an answer
+    // that gave up its calls closes it — so that the question is the user's, in a turn of its own.
+    const close = fold ? family.beginAssistant({ thinking: false, continuing: true }) + family.endAssistant('') : '';
+    const frozen = frozenPrompt(asked) + close;
+    const question = family.renderUser(fold ? SUMMARY_TURN_QUESTION : SUMMARY_QUESTION) + family.beginAssistant({ thinking: false });
     // What the engine holds, as it counted it, then the question: an estimate of the whole (three characters
     // a token) found no room in a conversation the engine held at 92 %, just when it had to be compacted.
-    const used = (countedContext(asked) ?? estimateTokens(frozen)) + estimateTokens(question);
+    const used = (countedContext(asked) ?? estimateTokens(frozenPrompt(asked))) + estimateTokens(close + question);
     const nPredict = Math.min(SUMMARY_MAX_TOKENS, Math.floor(window - used - 64));
     if (nPredict < 256) {
       // The room a summary needs: asked of what comes before the last turn, which is kept (audit 2026-11-21, D2).
       const lastTurn = entries.findLast((entry) => entry.kind === 'user');
-      if (!options.keepFrom && lastTurn && lastTurn.id !== plan.kept[0]?.id) {
+      if (!options.keepFrom && !fold && lastTurn && lastTurn.id !== plan.kept[0]?.id) {
         return this.compactNow(meta, journal, engine, { ...options, keepFrom: lastTurn.id });
       }
       throw new CompactionError('no-room', 'There is no room left in the context for a summary: nothing was compacted.');
@@ -884,15 +916,24 @@ export class ConversationEngine {
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     const { asked: decor, prompt } = await this.systemPrompt(meta, family, instructions, window);
     const stable = family.renderSystem(prompt.stable);
-    const rendered =
-      stable +
-      family.renderSystemNote(prompt.project) +
-      family.renderSystemNote(summaryNote(summary)) +
-      plan.kept.map((entry) => entry.rendered ?? '').join('');
+    // Folded on itself, the turn reads on from its message, its model's turn opened as its first answer opened it, then
+    // its last answer and the results it waits on — as it was frozen.
+    const kept = fold
+      ? fold.user.rendered! +
+        openingOf(fold.first, family) +
+        rawOf(fold.round[0]!) +
+        family.endAssistant(rawOf(fold.round[0]!)) +
+        fold.round
+          .slice(1)
+          .map((entry) => entry.rendered ?? '')
+          .join('')
+      : plan.kept.map((entry) => entry.rendered ?? '').join('');
+    const rendered = stable + family.renderSystemNote(prompt.project) + family.renderSystemNote(summaryNote(summary, fold !== null)) + kept;
     await journal.append({
       kind: 'rebase',
       summary,
       ...(plan.kept[0] ? { keptFrom: plan.kept[0].id } : {}),
+      ...(fold ? { keptRound: fold.round[0]!.id } : {}),
       stable,
       replyLanguage: decor.replyLanguage,
       perimeter: [...decor.perimeter],
@@ -1280,7 +1321,7 @@ export class ConversationEngine {
     meta: ConversationMeta,
     journal: Journal,
     engine: EngineView,
-    options: { sink: (event: TurnEvent) => void; window: number; signal?: AbortSignal; slot?: { id: number }; keepFrom?: string },
+    options: CompactOptions,
   ): Promise<boolean> {
     options.sink({ type: 'compaction', phase: 'start' });
     try {
@@ -1292,6 +1333,37 @@ export class ConversationEngine {
       if (error instanceof CompactionError) return false;
       throw error;
     }
+  }
+
+  /**
+   * The turn under way ran out of room between two rounds (audit 2026-11-21, D2): compacted in the slot it holds, and
+   * it goes on. The turn is kept whole beside a summary of what came before it when that is worth folding and leaves
+   * room; else — a fresh conversation, a rebase earlier in this turn, a turn that weighs too much — the turn is folded
+   * on itself: its message and its last round kept, its earlier rounds in the summary (review of round 2, 5). False when
+   * nothing could be compacted: the turn then ends as context-full.
+   */
+  private async compactTurn(meta: ConversationMeta, journal: Journal, engine: EngineView, options: CompactOptions, opening: string): Promise<boolean> {
+    const entries = journal.entries();
+    const current = entries.findLast((entry) => entry.kind === 'user');
+    if (!current) return false;
+    const fits = (): boolean => {
+      const held = journal.entries();
+      return (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(opening) + REPLY_ROOM <= options.window;
+    };
+    let whole = true;
+    try {
+      planCompactionKeeping(entries, current.id, estimateTokens);
+      // The turn kept beside the head and its summary: room left for an answer?
+      const turn = estimateTokens(entries.slice(entries.indexOf(current)).map((entry) => entry.rendered ?? '').join(''));
+      const head = estimateTokens(stableOf(entries)) + Math.ceil(instructionsBudget(options.window) / 3);
+      whole = head + SUMMARY_MAX_TOKENS + turn + REPLY_ROOM <= options.window;
+    } catch (error) {
+      if (!(error instanceof CompactionError)) throw error;
+      whole = false;
+    }
+    if (whole && (await this.autoCompact(meta, journal, engine, { ...options, keepFrom: current.id })) && fits()) return true;
+    if (!whole || !fits()) return this.autoCompact(meta, journal, engine, { ...options, foldRounds: true });
+    return false;
   }
 
   private ownerOf(meta: ConversationMeta): SlotOwner {
@@ -1663,11 +1735,7 @@ export class ConversationEngine {
             slot,
             window,
             // Its context run out between two rounds: compacted on its own, the turn under way kept as it was (D2).
-            compactMidTurn: async (held) => {
-              const current = journal.entries().findLast((entry) => entry.kind === 'user');
-              if (!current) return false;
-              return this.autoCompact(meta, journal, engine, { sink, window, slot: held, keepFrom: current.id, ...(signal ? { signal } : {}) });
-            },
+            compactMidTurn: (held, opening) => this.compactTurn(meta, journal, engine, { sink, window, slot: held, ...(signal ? { signal } : {}) }, opening),
             tooLong: async (round, prompt) => {
               // The server read nothing of it: the slot holds what it held. The person's message is taken
               // back when it is what did not fit; after tool rounds, what they gave stays.
@@ -1723,7 +1791,7 @@ export class ConversationEngine {
     /** The turn's context (tokens): between two rounds, what would not fit is compacted (`compactMidTurn`). */
     window?: number;
     /** Compacts the conversation, the turn under way kept, in the slot it holds; false when it could not be. */
-    compactMidTurn?(slot: { id: number }): Promise<boolean>;
+    compactMidTurn?(slot: { id: number }, opening: string): Promise<boolean>;
   }): Promise<TurnResult> {
     const { journal, engine, owner, turning, tools, sink, signal, answerOf, slot } = run;
     const { family, client } = engine;
@@ -1856,7 +1924,7 @@ export class ConversationEngine {
         // The results would leave no room for the next answer: compacted now, while the turn goes on (D2).
         const held = journal.entries();
         const needed = (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(roundOpening);
-        if (needed + REPLY_ROOM > run.window) await run.compactMidTurn(slot);
+        if (needed + REPLY_ROOM > run.window) await run.compactMidTurn(slot, roundOpening);
       }
       prompt = frozenPrompt(journal.entries()) + roundOpening;
     }

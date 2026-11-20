@@ -587,12 +587,18 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   after it); a fork before a compaction or a change of model never carries
   the parent's memory. When the context runs out the core compacts on its
   own (audit 2026-11-21, D2): before a message that would not leave
-  `REPLY_ROOM`, and between two tool rounds whose results would not —
-  then the turn under way is kept as it was frozen (`planCompactionKeeping`)
-  and goes on in the slot it holds. It is a rebase like any other, said
-  as it runs (the step `compact`) and as a line of the answer that stays
-  (the activity `compaction`, `aparte/compaction-line.ts`: tokens before
-  and after); the window sets no checkpoint, the divergence reads the
+  `REPLY_ROOM` — its notes measured first —, and between two tool rounds
+  whose results would not — then the turn under way is kept as it was
+  frozen (`planCompactionKeeping`), or, when what precedes it is not worth
+  folding (a fresh conversation, a rebase earlier in the turn) or it
+  weighs too much, folded on itself (`planTurnFold`, the rebase's
+  `keptRound`): its message and its last round kept, its earlier rounds
+  in the summary (« Work so far in this turn »). It goes on in the slot
+  it holds; a last round that alone overflows ends as context-full. It is
+  a rebase like any other, said as it runs (the step `compact`) and as a
+  line of the answer that stays (the activity `compaction`,
+  `aparte/compaction-line.ts`: about how many tokens before and after,
+  both estimated); the window sets no checkpoint, the divergence reads the
   whole history. A conversation too full for a summary of the whole has
   its last turn kept and the summary asked of what comes before it.
 - **A change of model** (`core/src/conversation/switch.ts`, the `engine`
