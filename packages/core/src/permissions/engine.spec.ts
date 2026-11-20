@@ -54,6 +54,9 @@ describe('a tool of a plugin of a third party is judged as a program it runs (au
   it('declared network, it is still asked as the network is — and refused in Lecture, like any program', () => {
     expect(engine().evaluate({ tool: FETCH, input: {}, mode: 'impro' }).verdict).toBe('ask');
     expect(engine().evaluate({ tool: FETCH, input: {}, mode: 'lecture' }).verdict).toBe('deny');
+    // Impro lets the app's own network through, never a third party's code — « ask before the network » off included.
+    expect(engine({ askBeforeNetwork: () => false }).evaluate({ tool: FETCH, input: {}, mode: 'impro' }).verdict).toBe('ask');
+    expect(engine({ askBeforeNetwork: () => false }).evaluate({ tool: FETCH, input: {}, mode: 'plume' }).verdict).toBe('ask');
   });
 
   it('a built-in plugin’s read is believed: its code is the app’s', () => {

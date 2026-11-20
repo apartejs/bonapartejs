@@ -527,7 +527,7 @@ export const fr: Messages = {
       remove: (name) => `Retirer ${name}`,
       network: 'Ce qui sort de la machine',
       networkHint: 'Recherche web, page ouverte par l’agent, outil MCP qui appelle un service.',
-      networkAsk: 'Demander avant chaque accès au réseau, même en Plume et en Impro',
+      networkAsk: 'Demander avant chaque accès au réseau (Impro ne demande jamais)',
       byProject: 'Par projet',
       open: 'Ouvrir',
       openProject: (name) => `Ouvrir ${name}`,

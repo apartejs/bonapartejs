@@ -958,11 +958,14 @@ describe('createCore — the modes and the previews of the window', () => {
     expect(core.permissions.evaluate(makefile)).toEqual({ verdict: 'ask', why: 'armed-path' });
 
     const online = { tool: fetchPage, input: { url: 'https://example.com' }, projectId: project.id };
-    expect(core.permissions.evaluate({ ...online, mode: 'impro' })).toMatchObject({ verdict: 'ask' });
-    await core.settings.set('askBeforeNetwork', false);
+    // Impro never asks for the network (Paul, 2026-11-20); the setting asks it in the three other modes.
     expect(core.permissions.evaluate({ ...online, mode: 'impro' })).toEqual({ verdict: 'allow' });
     for (const mode of ['lecture', 'repetition', 'plume'] as const) {
-      expect(core.permissions.evaluate({ ...online, mode }).verdict).not.toBe('allow');
+      expect(core.permissions.evaluate({ ...online, mode })).toMatchObject({ verdict: 'ask', why: 'network' });
+    }
+    await core.settings.set('askBeforeNetwork', false);
+    for (const mode of ['lecture', 'repetition', 'plume', 'impro'] as const) {
+      expect(core.permissions.evaluate({ ...online, mode })).toEqual({ verdict: 'allow' });
     }
   });
 

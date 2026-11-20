@@ -539,6 +539,51 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
     expect(await reader.ctx!.browser!.read()).toMatchObject({ text: 'secret' });
     await expect(reader.ctx!.browser!.act({ kind: 'click', selector: 'button' })).rejects.toThrow(/execute/);
   });
+
+  it('a file of the conversation’s folders opens as a read, its folder the only one its page may load from; nothing outside them (Paul, 2026-11-20)', async () => {
+    const project = await tempDir('bp-host-file-');
+    const elsewhere = await tempDir('bp-host-elsewhere-');
+    await mkdir(join(project, 'bac'));
+    await writeFile(join(project, 'bac', 'snake.html'), '<title>Snake</title>');
+    await writeFile(join(elsewhere, 'secret.html'), 'no');
+    const opened: [string, string, { network: boolean }][] = [];
+    const browser = {
+      open: async (url: string) => ({ url, title: 'Page' }),
+      openFile: async (path: string, root: string, options: { network: boolean }) => {
+        opened.push([path, root, options]);
+        return { url: `file:///${path}`, title: 'Snake' };
+      },
+      read: async () => null,
+      screenshot: async () => null,
+      act: async () => ({ done: 'clicked' }),
+    };
+    // What each conversation may: a discussion reaches no file; the network without asking (Impro) or not.
+    const fileAccess = async (conversationId: string) =>
+      conversationId === 'discussion' ? { files: false, network: false } : { files: true, network: conversationId === 'impro' };
+    const host = new PluginHost({ registry: new ToolRegistry(), browser, fileAccess });
+    host.add(manifest('opener', { effects: [{ effect: 'network', what: 'pages' }] }), { builtin: true });
+    host.add(manifest('reader', { effects: [{ effect: 'network', what: 'pages' }, { effect: 'read', what: 'files' }] }), { builtin: true });
+    const opener = capture();
+    const reader = capture();
+    await host.activate('opener', opener);
+    await host.activate('reader', reader);
+    const from = (conversationId: string) => ({ conversationId, roots: [project] });
+    // A file is read: a plugin that does not declare read opens none.
+    await expect(opener.ctx!.browser!.openFile('bac/snake.html', from('plume'))).rejects.toThrow(/read/);
+    expect(await reader.ctx!.browser!.openFile('bac/snake.html', from('plume'))).toEqual({ url: `file:///${join(project, 'bac', 'snake.html')}`, title: 'Snake', offline: true });
+    // Its page reaches the network only where the conversation may without asking (review of 2026-11-20).
+    await reader.ctx!.browser!.openFile('bac/snake.html', from('impro'));
+    expect(opened).toEqual([
+      [join(project, 'bac', 'snake.html'), project, { network: false }],
+      [join(project, 'bac', 'snake.html'), project, { network: true }],
+    ]);
+    // Outside the folders, a folder, a file that is not there, a discussion: refused, with words the model can act on.
+    expect(await reader.ctx!.browser!.openFile(join(elsewhere, 'secret.html'), from('plume'))).toMatchObject({ error: expect.stringMatching(/outside/i) });
+    expect(await reader.ctx!.browser!.openFile('bac', from('plume'))).toMatchObject({ error: expect.stringMatching(/not a file/i) });
+    expect(await reader.ctx!.browser!.openFile('bac/none.html', from('plume'))).toMatchObject({ error: expect.stringMatching(/no file/i) });
+    expect(await reader.ctx!.browser!.openFile('bac/snake.html', from('discussion'))).toMatchObject({ error: expect.stringMatching(/discussion/i) });
+    expect(opened).toHaveLength(2);
+  });
 });
 
 describe('PluginHost — what is switched off is kept (task 11.1)', () => {

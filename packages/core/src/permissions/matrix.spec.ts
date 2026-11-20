@@ -24,12 +24,13 @@ const MATRIX: [tool: string, effect: ToolEffect, expected: [Short, Short, Short,
   ['edit_file', 'write', ['deny', 'ask', 'allow', 'allow']],
   ['write_file', 'write', ['deny', 'ask', 'allow', 'allow']],
   ['run_command', 'execute', ['deny', 'ask', 'ask', 'allow']],
-  ['browser_open', 'network', ['ask', 'ask', 'ask', 'ask']],
+  ['browser_open', 'network', ['ask', 'ask', 'ask', 'allow']],
+  ['browser_open_file', 'read', ['allow', 'allow', 'allow', 'allow']],
   ['browser_read', 'read', ['allow', 'allow', 'allow', 'allow']],
   ['browser_screenshot', 'read', ['allow', 'allow', 'allow', 'allow']],
   ['browser_act', 'execute', ['deny', 'ask', 'ask', 'allow']],
-  ['web_fetch', 'network', ['ask', 'ask', 'ask', 'ask']],
-  ['web_search', 'network', ['ask', 'ask', 'ask', 'ask']],
+  ['web_fetch', 'network', ['ask', 'ask', 'ask', 'allow']],
+  ['web_search', 'network', ['ask', 'ask', 'ask', 'allow']],
   ['ask_user', 'ui', ['allow', 'allow', 'allow', 'allow']],
   ['update_plan', 'ui', ['allow', 'allow', 'allow', 'allow']],
 ];
@@ -62,14 +63,14 @@ describe('the matrix of the design document', () => {
     });
   }
 
-  it('going online is allowed in Impro once « ask before the network » is off — still asked in the other three', () => {
+  it('going online is allowed in every mode once « ask before the network » is off — Impro never asks for it (Paul, 2026-11-20)', () => {
     const relaxed = new PermissionEngine({
       roots: () => [project],
       dataDir: join(project, '..', 'bonaparte-data'),
       askBeforeNetwork: () => false,
     });
     const got = MODES.map((mode) => relaxed.evaluate({ tool: tool('web_fetch', 'network'), input: {}, mode }).verdict);
-    expect(got).toEqual(['ask', 'ask', 'ask', 'allow']);
+    expect(got).toEqual(['allow', 'allow', 'allow', 'allow']);
   });
 
   it('an ask says why: the mode, or the network', () => {
@@ -77,7 +78,7 @@ describe('the matrix of the design document', () => {
       verdict: 'ask',
       why: 'mode',
     });
-    expect(engine().evaluate({ tool: tool('web_fetch', 'network'), input: {}, mode: 'impro' })).toEqual({ verdict: 'ask', why: 'network' });
+    expect(engine().evaluate({ tool: tool('web_fetch', 'network'), input: {}, mode: 'plume' })).toEqual({ verdict: 'ask', why: 'network' });
   });
 
   it('a refusal says why, in English, for the model', () => {

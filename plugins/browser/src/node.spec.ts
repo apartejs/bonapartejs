@@ -4,14 +4,14 @@
  * failure is a result the model reads.
  */
 
-import type { BrowserService, PluginNodeContext, PluginToolInvocation, PluginToolResult } from '@aparte/bonaparte-plugin-sdk';
+import type { PluginBrowser, PluginNodeContext, PluginToolInvocation, PluginToolResult } from '@aparte/bonaparte-plugin-sdk';
 import { describe, expect, it } from 'vitest';
 import { browserManifest } from './index.js';
 import { browser } from './node.js';
 
 type Handler = (call: PluginToolInvocation) => Promise<PluginToolResult>;
 
-async function rig(service?: Partial<BrowserService>) {
+async function rig(service?: Partial<PluginBrowser>, roots: readonly string[] = []) {
   const handlers = new Map<string, Handler>();
   const ctx = {
     pluginId: 'browser',
@@ -24,6 +24,7 @@ async function rig(service?: Partial<BrowserService>) {
             read: async () => null,
             screenshot: async () => null,
             act: async () => ({ error: 'unused' }),
+            openFile: async () => ({ error: 'unused' }),
             ...service,
           },
         }
@@ -31,17 +32,45 @@ async function rig(service?: Partial<BrowserService>) {
   } as unknown as PluginNodeContext;
   await browser.activate(ctx);
   return (name: string, input: unknown = {}) =>
-    handlers.get(name)!({ input, conversationId: 'c1', roots: [], signal: { aborted: false, addEventListener: () => undefined }, use: async () => ({ content: '' }) } as unknown as PluginToolInvocation);
+    handlers.get(name)!({ input, conversationId: 'c1', roots, signal: { aborted: false, addEventListener: () => undefined }, use: async () => ({ content: '' }) } as unknown as PluginToolInvocation);
 }
 
 describe('the built-in browser plugin (task 10.1)', () => {
-  it('declares its four tools with the effects of §9: open network, read and screenshot read, act execute', () => {
+  it('declares its tools with the effects of §9: open network, open a file of the project, read and screenshot read, act execute', () => {
     expect(browserManifest.contributes?.tools?.map((tool) => [tool.name, tool.effect])).toEqual([
       ['browser_open', 'network'],
+      ['browser_open_file', 'read'],
       ['browser_read', 'read'],
       ['browser_screenshot', 'read'],
       ['browser_act', 'execute'],
     ]);
+  });
+
+  it('opens a file of the conversation’s folders — a page the agent wrote — in its perimeter, and says why not (Paul, 2026-11-20)', async () => {
+    const asked: [string, { conversationId: string; roots: readonly string[] }][] = [];
+    const call = await rig(
+      {
+        openFile: async (path, from) => {
+          asked.push([path, from]);
+          return path.endsWith('none.html') ? { error: 'There is no file at bac/none.html.' } : { url: 'file:///C:/projet/bac/snake3.html', title: 'Snake' };
+        },
+      },
+      ['C:/projet'],
+    );
+    expect(await call('browser_open_file', { path: 'bac/snake3.html' })).toEqual({ content: 'Opened file:///C:/projet/bac/snake3.html (Snake) in the browser.' });
+    expect(await call('browser_open_file', { path: 'bac/none.html' })).toMatchObject({ failed: true, content: expect.stringMatching(/no file/) });
+    expect(await call('browser_open_file', {})).toMatchObject({ failed: true, content: expect.stringMatching(/path/) });
+    // The address a model writes for a file goes the same way: a file of the perimeter, never a page of the disk.
+    expect(await call('browser_open', { url: 'file:///C:/projet/bac/snake3.html' })).toEqual({ content: 'Opened file:///C:/projet/bac/snake3.html (Snake) in the browser.' });
+    expect(asked.map(([path]) => path)).toEqual(['bac/snake3.html', 'bac/none.html', process.platform === 'win32' ? 'C:\\projet\\bac\\snake3.html' : '/C:/projet/bac/snake3.html']);
+    expect(asked.every(([, from]) => from.roots[0] === 'C:/projet' && from.conversationId === 'c1')).toBe(true);
+  });
+
+  it('a page kept off the network is said so to the model: what it loads from the internet is blocked (review of 2026-11-20)', async () => {
+    const call = await rig({ openFile: async () => ({ url: 'file:///C:/projet/a.html', title: 'A', offline: true }) }, ['C:/projet']);
+    expect(await call('browser_open_file', { path: 'a.html' })).toEqual({
+      content: 'Opened file:///C:/projet/a.html (A) in the browser. Its page is kept off the network here: what it loads from the internet or from a server of this machine is blocked.',
+    });
   });
 
   it('opens an address in the browser, and says where it landed — or why not', async () => {

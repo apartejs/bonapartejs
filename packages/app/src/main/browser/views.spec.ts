@@ -4,7 +4,12 @@
  * sits above the window's page; only http(s) is ever loaded; the agent works on the tab shown.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { realpathSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
 
 interface FakeView extends PageView {
@@ -428,5 +433,91 @@ describe('where Chromium connected decides, not a second lookup (audit 13.4: DNS
     expect(await browser.blocked(id, 'http://127.0.0.1:5173/')).toBe(false);
     expect(await browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
     expect(await browser.blocked(9999, 'http://10.0.0.5/')).toBe(false);
+  });
+});
+
+describe('a file of the conversation’s folders, opened by the agent (Paul, 2026-11-20)', () => {
+  let root = '';
+  let page = '';
+  let elsewhere = '';
+  let outside = '';
+  beforeAll(async () => {
+    // Real folders: where a file: address really lands is what is judged, its links resolved.
+    root = realpathSync.native(await mkdtemp(join(tmpdir(), 'bp-projet-')));
+    outside = realpathSync.native(await mkdtemp(join(tmpdir(), 'bp-ailleurs-')));
+    await mkdir(join(root, 'bac'));
+    page = join(root, 'bac', 'snake3.html');
+    await writeFile(page, '<title>Snake</title>');
+    await writeFile(join(root, 'bac', 'snake.js'), '');
+    await writeFile(join(root, 'bac', 'level2.html'), '');
+    await writeFile(join(outside, 'secret.html'), 'no');
+    elsewhere = pathToFileURL(join(outside, 'secret.html')).href;
+    // A link inside the project to a folder outside it (a junction on Windows: no right needed).
+    await symlink(outside, join(root, 'docs'), process.platform === 'win32' ? 'junction' : 'dir');
+  });
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  it('loads the file, and the agent reads it', async () => {
+    const { browser, views } = rig({ title: 'Snake', read: { title: 'Snake', text: 'Score: 0' } });
+    expect(await browser.agentOpenFile(page, root, { network: false })).toMatchObject({ url: pathToFileURL(page).href, title: 'Snake' });
+    expect(views[0]!.loaded).toEqual([pathToFileURL(page).href]);
+    expect(await browser.agentRead()).toMatchObject({ text: 'Score: 0' });
+  });
+
+  it('its page loads from its folder only: the rest of the disk is cancelled, and so is a file in any other tab', async () => {
+    const { browser, views } = rig();
+    await browser.agentOpenFile(page, root, { network: true });
+    const id = views[0]!.webContents.id;
+    expect(await browser.blocked(id, pathToFileURL(join(root, 'bac', 'snake.js')).href)).toBe(false);
+    expect(await browser.blocked(id, elsewhere)).toBe(true);
+    // A file that is not there loads nothing either.
+    expect(await browser.blocked(id, pathToFileURL(join(root, 'bac', 'none.js')).href)).toBe(true);
+    // A page the person opened, or a page of the agent's once it went to the internet, loads no file.
+    browser.openTab('t2');
+    await browser.navigate('t2', 'http://localhost:5173/');
+    expect(await browser.blocked(views[1]!.webContents.id, pathToFileURL(page).href)).toBe(true);
+    await browser.agentOpen('http://localhost:5173/');
+    expect(await browser.blocked(views[1]!.webContents.id, pathToFileURL(page).href)).toBe(true);
+  });
+
+  it('a link of the project that leads out of it is judged where it leads: cancelled (security rule 6, review of 2026-11-20)', async () => {
+    const { browser, views } = rig();
+    await browser.agentOpenFile(page, root, { network: false });
+    const through = pathToFileURL(join(root, 'docs', 'secret.html')).href;
+    expect(await browser.blocked(views[0]!.webContents.id, through)).toBe(true);
+    let prevented = false;
+    views[0]!.emit('will-navigate', { preventDefault: () => (prevented = true) }, through);
+    expect(prevented).toBe(true);
+  });
+
+  it('its page reaches the network only where the conversation may without asking: else it stays offline (review of 2026-11-20)', async () => {
+    const offline = rig();
+    await offline.browser.agentOpenFile(page, root, { network: false });
+    const id = offline.views[0]!.webContents.id;
+    expect(await offline.browser.blocked(id, 'https://cdn.example/x.js')).toBe(true);
+    expect(await offline.browser.blocked(id, 'http://127.0.0.1:5173/beacon')).toBe(true);
+    expect(await offline.browser.blocked(id, 'ws://localhost:8080/')).toBe(true);
+    const online = rig();
+    await online.browser.agentOpenFile(page, root, { network: true });
+    expect(await online.browser.blocked(online.views[0]!.webContents.id, 'https://cdn.example/x.js')).toBe(false);
+    // The agent's next page of the internet is asked as the network: it is not the file's.
+    await offline.browser.agentOpen('http://127.0.0.1:5173/');
+    expect(await offline.browser.blocked(id, 'https://cdn.example/x.js')).toBe(false);
+  });
+
+  it('a link of the page goes to a file of its folder, never elsewhere on the disk, nor to the internet when it is offline', async () => {
+    const { browser, views } = rig();
+    await browser.agentOpenFile(page, root, { network: false });
+    const tried = (url: string): boolean => {
+      let prevented = false;
+      views[0]!.emit('will-navigate', { preventDefault: () => (prevented = true) }, url);
+      return prevented;
+    };
+    expect(tried(pathToFileURL(join(root, 'bac', 'level2.html')).href)).toBe(false);
+    expect(tried(elsewhere)).toBe(true);
+    expect(tried('https://example.com/')).toBe(true);
   });
 });

@@ -24,7 +24,7 @@ test('the default mode, the files always asked and the network, kept by the core
   await page.getByRole('textbox', { name: 'Fichier à toujours demander' }).fill('Dockerfile');
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Retirer Dockerfile' })).toBeVisible();
-  await page.getByRole('switch', { name: 'Demander avant chaque accès au réseau, même en Plume et en Impro' }).click();
+  await page.getByRole('switch', { name: 'Demander avant chaque accès au réseau (Impro ne demande jamais)' }).click();
   await expect
     .poll(() => settingsOf(dataDir))
     .toMatchObject({ defaultMode: 'plume', alwaysAsk: ['Dockerfile'], askBeforeNetwork: false });

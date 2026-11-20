@@ -5,6 +5,10 @@
  */
 
 import type { ElectronApplication, Page } from '@playwright/test';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 
@@ -122,3 +126,85 @@ test('the agent opens a page — asked, it reaches the network — then reads it
 });
 
 let pagesUrl = '';
+
+test('the agent opens a page it wrote — a file of the project — and reads it, asked nothing: a file is read (Paul, 2026-11-20)', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'bp-snake-'));
+  // A file of the disk outside the project: its page may not load it.
+  const outside = await mkdtemp(join(tmpdir(), 'bp-outside-'));
+  await writeFile(join(outside, 'leak.js'), 'document.querySelector("p").textContent += " — fuite";');
+  await mkdir(join(folder, 'bac'));
+  await writeFile(
+    join(folder, 'bac', 'snake3.html'),
+    `<!doctype html><meta charset="utf-8"><title>Snake</title><p>Score : 0</p><script src="snake.js"></script><script src="${pathToFileURL(join(outside, 'leak.js')).href}"></script>`,
+  );
+  await writeFile(join(folder, 'bac', 'snake.js'), 'document.querySelector("p").textContent += " — prêt";');
+  const prompts: string[] = [];
+  try {
+    const { page } = await launch({
+      engine: {
+        responder: (prompt) => {
+          prompts.push(prompt);
+          const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
+          const results = turn.split('<|tool_response>').length - 1;
+          if (!turn.includes('serpent')) return 'ok';
+          if (results === 0) return `<|tool_call>call:browser_open_file{path:${Q}bac/snake3.html${Q}}<tool_call|>`;
+          if (results === 1) return '<|tool_call>call:browser_read{}<tool_call|>';
+          return 'Lu.';
+        },
+        nCtx: 16_384,
+      },
+      env: { BONAPARTE_E2E_PICK_FOLDER: folder },
+    });
+    await page.getByRole('button', { name: 'Nouveau projet' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
+    await dialog.getByRole('button', { name: 'Choisir un dossier…' }).click();
+    await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+    await expect(dialog).toBeHidden();
+    await chat(page).send('Montre le serpent');
+    await expect(chat(page).replyText).toHaveText('Lu.', { timeout: 20_000 });
+    await expect(page.getByRole('region', { name: 'Demande d’accord' })).toHaveCount(0);
+    // Its page ran, its script loaded from its folder.
+    const read = prompts.findLast((prompt) => prompt.includes('Score : 0')) ?? '';
+    expect(read).toContain('Snake');
+    expect(read).toContain('prêt');
+    expect(read).not.toContain('fuite');
+    // In Répétition the network is asked: the page of a file stays off it, and the model is told (review of 2026-11-20).
+    expect(read).toContain('kept off the network');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test('a discussion reaches no file: the address of one, given to browser_open, opens nothing (review of 2026-11-20)', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'bp-home-page-'));
+  await writeFile(join(folder, 'notes.html'), '<!doctype html><meta charset="utf-8"><title>Notes</title><p>secret du dossier</p>');
+  const url = pathToFileURL(join(folder, 'notes.html')).href;
+  const prompts: string[] = [];
+  try {
+    const { page } = await launch({
+      engine: {
+        responder: (prompt) => {
+          prompts.push(prompt);
+          const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
+          if (!turn.includes('notes')) return 'ok';
+          return turn.includes('<|tool_response>') ? 'Fini.' : `<|tool_call>call:browser_open{url:${Q}${url}${Q}}<tool_call|>`;
+        },
+        nCtx: 16_384,
+      },
+    });
+    await expect(chat(page).editor).toBeVisible();
+    await page.getByRole('navigation', { name: 'Projets et conversations', exact: true }).getByRole('button', { name: 'Nouvelle discussion' }).click();
+    await chat(page).send('Ouvre mes notes');
+    // browser_open is the network: asked in a discussion (Lecture) while « ask before the network » is on.
+    const card = page.getByRole('region', { name: 'Demande d’accord' });
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await card.getByRole('button', { name: 'Autoriser', exact: true }).click();
+    await expect(chat(page).replyText).toHaveText('Fini.', { timeout: 20_000 });
+    const answered = prompts.at(-1) ?? '';
+    expect(answered).toContain('A discussion reaches no file');
+    expect(answered).not.toContain('secret du dossier');
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+});

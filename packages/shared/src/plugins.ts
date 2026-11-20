@@ -284,6 +284,12 @@ export type BrowserAction = { kind: 'click'; selector: string } | { kind: 'type'
  */
 export interface BrowserService {
   open(url: string): Promise<{ url: string; title: string } | { error: string }>;
+  /**
+   * A file of this machine, already checked by the core (`path` absolute, real, in the conversation's folders):
+   * its page loads from `root`, the folder of the perimeter that holds it, and nothing else of the disk; it reaches
+   * the network only with `network` — the conversation may go there without asking —, else it stays offline.
+   */
+  openFile(path: string, root: string, options: { network: boolean }): Promise<{ url: string; title: string } | { error: string }>;
   /** The text of the page shown, and its console; null with no page open. The pane says « L'agent lit la page ». */
   read(): Promise<{ url: string; title: string; text: string; console: BrowserConsoleLine[] } | null>;
   /** A picture of the page shown, kept in the app's data folder (`saved`); null with no page open. */
@@ -340,7 +346,19 @@ export interface PluginNodeContext {
    */
   search?: WebSearchService['search'];
   /** The built-in browser (task 10.1). Only for a plugin that declares `network`, and only where the app has one. */
-  browser?: BrowserService;
+  browser?: PluginBrowser;
+}
+
+/**
+ * The built-in browser as a plugin sees it: a file is named as the model named it, with the call it comes from (its
+ * conversation and perimeter, the invocation's own) — the host checks it is a file there, and what the conversation
+ * may, before anything opens. A file is read.
+ */
+export interface PluginBrowser extends Omit<BrowserService, 'openFile'> {
+  openFile(
+    path: string,
+    from: { conversationId: string; roots: readonly string[] },
+  ): Promise<{ url: string; title: string; offline?: boolean } | { error: string }>;
 }
 
 export interface PluginNodeModule {

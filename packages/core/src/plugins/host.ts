@@ -40,8 +40,10 @@ import {
   type BrowserService,
   type Verdict,
 } from '@aparte/bonaparte-shared';
-import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { contains, realLocation, resolveInPerimeter } from '../project/paths.js';
 import { withoutSecrets } from '../process/env.js';
 import type { SpawnedProcess, SpawnFn } from '../process/spawn.js';
 import { spawnTree, stopProcessTree } from '../process/tree.js';
@@ -72,6 +74,11 @@ export interface PluginHostOptions {
    * conversation. Without it only reads pass.
    */
   judge?: (use: { conversationId: string; tool: ToolDef; input: unknown }) => Verdict | Promise<Verdict>;
+  /**
+   * What a conversation's page opened from a file may: reach a file at all (a discussion reaches none), and the
+   * network without asking (Impro, or « ask before the network » off). Without it: files, offline.
+   */
+  fileAccess?: (conversationId: string) => Promise<{ files: boolean; network: boolean }>;
   /** Tests only: what launches a plugin's processes. */
   spawn?: SpawnFn;
   /** The terminals the app gives (run in a process of its own); none without it. */
@@ -123,6 +130,31 @@ const sizeOf = (payload: unknown): number => {
 };
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * A file the model named, opened in the built-in browser: where it really lands must be a file of the perimeter
+ * (the project's folders, or the home folder), and its page may load only from the folder of the perimeter that
+ * holds it. A refusal is words the model can act on.
+ */
+async function openPerimeterFile(
+  browser: BrowserService,
+  requested: string,
+  roots: readonly string[],
+  network: boolean,
+): Promise<{ url: string; title: string } | { error: string }> {
+  const home = homedir();
+  let real: string;
+  try {
+    real = realLocation(resolveInPerimeter(roots, requested, home));
+  } catch (error) {
+    return { error: `Not opened: ${describe(error)}` };
+  }
+  const found = await stat(real).catch(() => null);
+  if (!found) return { error: `There is no file at ${requested}: give the path of a page in the project, an .html file.` };
+  if (!found.isFile()) return { error: `${requested} is not a file: give the path of a page in it, an .html file.` };
+  const root = (roots.length > 0 ? roots : [home]).map((one) => realLocation(resolve(one))).find((one) => contains(one, real)) ?? dirname(real);
+  return browser.openFile(real, root, { network });
+}
 
 const onlyReads = ({ tool }: { tool: ToolDef }): Verdict =>
   tool.effect === 'read' ? { verdict: 'allow' } : { verdict: 'ask', why: 'mode' };
@@ -506,6 +538,14 @@ export class PluginHost {
         read: () => within('read', 'read the page', () => browser.read()),
         screenshot: () => within('read', 'picture the page', () => browser.screenshot()),
         act: (action) => within('execute', 'act in the page', () => browser.act(action)),
+        // A file is read: in the call's perimeter, checked here, never on the plugin's word (Paul, 2026-11-20).
+        openFile: (path, from) =>
+          within('read', 'open a file', async () => {
+            const access = (await this.options.fileAccess?.(from.conversationId)) ?? { files: true, network: false };
+            if (!access.files) return { error: 'A discussion reaches no file: open a page of the internet with browser_open instead.' };
+            const opened = await openPerimeterFile(browser, path, from.roots, access.network);
+            return 'error' in opened || access.network ? opened : { ...opened, offline: true };
+          }),
       };
     }
     return context;

@@ -28,6 +28,17 @@ export const browserManifest = defineManifest({
         inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'The address, http or https.' } }, required: ['url'] },
       },
       {
+        name: 'browser_open_file',
+        description:
+          'Open a file of the project in the built-in browser, in the tab the person sees: a page you wrote (index.html), to see it run. Give its path, as for read_file. Then read it with browser_read.',
+        effect: 'read',
+        inputSchema: {
+          type: 'object',
+          properties: { path: { type: 'string', description: 'The path of the file, in the project (bac/snake.html).' } },
+          required: ['path'],
+        },
+      },
+      {
         name: 'browser_read',
         description: 'Read the page shown in the built-in browser: its title, its text, and what its console logged (errors first).',
         effect: 'read',

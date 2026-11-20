@@ -748,7 +748,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **The built-in browser** (task 10.1, `main/browser/views.ts`,
   `main/browser/service.ts`, `plugins/browser`, `panels/BrowserPanel.tsx`):
   one `WebContentsView` a tab, in its own session (`bonaparte-browser`),
-  http(s) only, never `bonaparte://`. The pane keeps a slot and says where it
+  http(s) only, never `bonaparte://` — and one `file:`: a file of the
+  conversation's folders the agent opened (`browser_open_file`, read; a
+  `file:///` given to `browser_open` goes the same way), checked by the host
+  (`openPerimeterFile`: in the perimeter, its links resolved, a file; never
+  for a discussion), its page loading from the folder of the perimeter that
+  holds it and from nowhere else of the disk — every `file:` request judged
+  where it really lands, its links resolved (`fileIn`, the tab's `fileRoot`)
+  — and reaching the network only where the conversation may without asking
+  (`fileAccess`), else kept offline and said so: opening a file is a read,
+  never a way round the network's ask. The pane keeps a slot and says where it
   is (`browser.place`, measured on resize and every 300 ms); the page is
   taken off whenever anything covers it — a dialog, a page over the
   conversation, the pane hidden — since a native view sits above the
@@ -921,7 +930,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`theme/appearance.ts`), the language by asking the main process again
   (`bonaparte-locale`) — an open conversation hears it as a note at its next
   message. The permission engine reads `askBeforeNetwork` and `alwaysAsk`
-  (global, and a project's own list).
+  (global, and a project's own list). The network is asked in Lecture,
+  Répétition and Plume while `askBeforeNetwork` is on, never in Impro (Paul,
+  2026-11-20); a third party's plugin asks in every mode, whatever it says.
 - **One app per data folder** (`main/startup.ts`): the window's profile is
   `<data>/window`, and Electron's single-instance lock with it — a test run
   never meets the person's app. A test run puts no icon in the notification

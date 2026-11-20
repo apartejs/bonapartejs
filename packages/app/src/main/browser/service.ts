@@ -84,6 +84,7 @@ export function createBuiltinBrowser(options: { window: () => BrowserWindow | un
 
   const service: BrowserService = {
     open: (url) => views.agentOpen(url),
+    openFile: (path, root, options) => views.agentOpenFile(path, root, options),
     read: () => reading.during(() => views.agentRead()),
     async screenshot() {
       const shot = await views.agentScreenshot();

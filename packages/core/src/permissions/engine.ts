@@ -8,7 +8,8 @@
  *   `.env`, a shell profile, bonaparte's own data, the project's « always
  *   asked ») asks in every mode — refused in Lecture like any write;
  * - a write outside the project asks, even in Impro; a network path is refused;
- * - going online asks in every mode while « ask before the network » is on;
+ * - going online asks in Lecture, Répétition and Plume while « ask before the network » is on, never in Impro —
+ *   but a third party's plugin asks in every mode, whatever the setting;
  * - a tool that does not say what it does is taken as one that runs something;
  * - a rule remembered turns an ask of the mode (or of the network) into an
  *   allow — never a refusal, never a file that runs later, never a write
@@ -53,10 +54,12 @@ export interface PermissionEngineDeps {
 type Short = 'allow' | 'ask' | 'deny';
 type KnownEffect = Exclude<ToolEffect, never>;
 
+// The network is asked by « ask before the network » (on by default) in the first three modes; Impro never asks for
+// the app's own network (Paul, 2026-11-20). A third party's code is asked whatever the setting says.
 const MATRIX: Record<PlayMode, Record<KnownEffect, Short>> = {
-  lecture: { read: 'allow', write: 'deny', execute: 'deny', network: 'ask', ui: 'allow' },
-  repetition: { read: 'allow', write: 'ask', execute: 'ask', network: 'ask', ui: 'allow' },
-  plume: { read: 'allow', write: 'allow', execute: 'ask', network: 'ask', ui: 'allow' },
+  lecture: { read: 'allow', write: 'deny', execute: 'deny', network: 'allow', ui: 'allow' },
+  repetition: { read: 'allow', write: 'ask', execute: 'ask', network: 'allow', ui: 'allow' },
+  plume: { read: 'allow', write: 'allow', execute: 'ask', network: 'allow', ui: 'allow' },
   impro: { read: 'allow', write: 'allow', execute: 'allow', network: 'allow', ui: 'allow' },
 };
 const KNOWN = new Set<string>(['read', 'write', 'execute', 'network', 'ui']);
@@ -164,7 +167,10 @@ export class PermissionEngine {
     const untrusted = query.tool.source === 'extension' && query.tool.effect !== 'network';
     const effect: KnownEffect = declared && !untrusted ? query.tool.effect : 'execute';
     let short = MATRIX[query.mode][effect];
-    if (effect === 'network' && (this.deps.askBeforeNetwork?.() ?? true)) short = 'ask';
+    if (effect === 'network') {
+      const asked = query.tool.source === 'extension' || (query.mode !== 'impro' && (this.deps.askBeforeNetwork?.() ?? true));
+      if (asked) short = 'ask';
+    }
     // Lecture runs nothing: a third party's code included, whatever it says it does.
     if (query.tool.source === 'extension' && query.mode === 'lecture') short = 'deny';
     if (short === 'deny') return { verdict: 'deny', reason: refusal(query.mode, effect) };

@@ -4,6 +4,7 @@
  * text reaches the model as text — the core neutralises the template's control tokens in every tool result.
  */
 
+import { fileURLToPath } from 'node:url';
 import { definePlugin, type BrowserAction, type BrowserConsoleLine } from '@aparte/bonaparte-plugin-sdk';
 
 const UNAVAILABLE = { content: 'The built-in browser is not available here.', failed: true } as const;
@@ -33,13 +34,40 @@ function actionOf(input: Record<string, unknown>): BrowserAction | null {
 
 export const browser = definePlugin({
   activate(ctx) {
-    ctx.registerToolHandler('browser_open', async ({ input }) => {
+    // A file of the conversation's folders: the host checks it is one, in this call's perimeter (Paul, 2026-11-20).
+    const openFile = async (path: string, from: { conversationId: string; roots: readonly string[] }) => {
+      const opened = await ctx.browser!.openFile(path, from);
+      if ('error' in opened) return { content: `Could not open ${path}: ${opened.error}`, failed: true };
+      const offline = opened.offline
+        ? ' Its page is kept off the network here: what it loads from the internet or from a server of this machine is blocked.'
+        : '';
+      return { content: `Opened ${opened.url} (${opened.title || 'untitled'}) in the browser.${offline}` };
+    };
+
+    ctx.registerToolHandler('browser_open', async ({ input, roots, conversationId }) => {
       if (!ctx.browser) return UNAVAILABLE;
       const url = typeof (input as { url?: unknown })?.url === 'string' ? (input as { url: string }).url.trim() : '';
       if (!url) return { content: 'Argument "url" is required: the address to open.', failed: true };
+      // The address a model writes for a file it made: opened as that file, in the perimeter, never as a page of the disk.
+      if (/^file:/i.test(url)) {
+        let path: string;
+        try {
+          path = fileURLToPath(url);
+        } catch {
+          return { content: `Could not open ${url}: it is not the address of a file. Give its path to browser_open_file.`, failed: true };
+        }
+        return openFile(path, { conversationId, roots });
+      }
       const opened = await ctx.browser.open(url);
       if ('error' in opened) return { content: `Could not open ${url}: ${opened.error}`, failed: true };
       return { content: `Opened ${opened.url} (${opened.title || 'untitled'}) in the browser.` };
+    });
+
+    ctx.registerToolHandler('browser_open_file', async ({ input, roots, conversationId }) => {
+      if (!ctx.browser) return UNAVAILABLE;
+      const path = typeof (input as { path?: unknown })?.path === 'string' ? (input as { path: string }).path.trim() : '';
+      if (!path) return { content: 'Argument "path" is required: the file to open, as for read_file.', failed: true };
+      return openFile(path, { conversationId, roots });
     });
 
     ctx.registerToolHandler('browser_read', async () => {

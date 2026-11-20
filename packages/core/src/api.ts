@@ -1544,6 +1544,16 @@ export function createCore(deps: CoreDeps): Core {
       const { mode } = await modeOf(conversationId);
       return permissions.evaluate({ tool, input, mode, ...(projectId ? { projectId } : {}) });
     },
+    // A page opened from a file (review of 2026-11-20): a discussion reaches no file; its page goes online only
+    // where the conversation's network passes without asking — opening it is a read, never a way round the ask.
+    fileAccess: async (conversationId) => {
+      if ((await conversationStore.get(conversationId))?.kind === 'discussion') return { files: false, network: false };
+      const { projectId } = await rootsOf(conversationId);
+      const { mode } = await modeOf(conversationId);
+      const online: ToolDef = { name: 'browser_open', description: '', inputSchema: {}, effect: 'network', source: 'plugin', where: 'core' };
+      const verdict = permissions.evaluate({ tool: online, input: {}, mode, ...(projectId ? { projectId } : {}) });
+      return { files: true, network: verdict.verdict === 'allow' };
+    },
   });
   // The monitor follows its entry, switched on or off (task 12.4).
   plugins.onChange(() => followMonitor());

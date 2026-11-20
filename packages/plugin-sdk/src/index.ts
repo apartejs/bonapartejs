@@ -41,6 +41,7 @@ export type {
   WebSearchResult,
   WebSearchService,
   BrowserService,
+  PluginBrowser,
   BrowserAction,
   BrowserConsoleLine,
   TerminalService,

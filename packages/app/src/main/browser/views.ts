@@ -8,12 +8,16 @@
  * taken off when its tab, its pane or the window's other pages hide it (a view placed with no rectangle covered
  * the whole window); a load that fails resolves with its error, so that the pane still knows where it is.
  * Only http and https are ever loaded, by the person, the agent or the page itself: never `bonaparte://`,
- * `file:`, `javascript:` or `devtools:`. The agent may open this machine's own pages (a dev server), never the
- * network it is in.
+ * `javascript:` or `devtools:`. The agent may open this machine's own pages (a dev server), never the
+ * network it is in. One `file:` only: a file of the conversation's folders the agent opened (the core checked
+ * it), whose page loads from the folder of the perimeter that holds it, and from nowhere else of the disk.
  */
 
 import { lookup } from 'node:dns/promises';
+import { realpathSync } from 'node:fs';
 import { isIP } from 'node:net';
+import { isAbsolute, relative } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { isPublicAddress } from '@aparte/bonaparte-core';
 import type { PickedElement } from '@aparte/bonaparte-shared';
 
@@ -152,6 +156,26 @@ interface Tab {
   loadedBy?: 'person' | 'agent';
   /** A page the agent opened answered from the network this machine is in, by Chromium's own resolution (audit 13.4). */
   reachedPrivate?: boolean;
+  /** A file the agent opened: the only folder of the disk its page loads from (real, its links resolved). */
+  fileRoot?: string;
+  /** Its page stays off the network: the conversation may not reach it without asking (review of 2026-11-20). */
+  fileOffline?: boolean;
+}
+
+/**
+ * A `file:` address that really lands inside `root` — its links and junctions resolved, as the perimeter is
+ * (security rule 6): never `root`'s neighbours, never a path that climbs out of it, never a file that is not there.
+ */
+function fileIn(root: string | undefined, url: string): boolean {
+  if (!root || !/^file:/i.test(url)) return false;
+  let real: string;
+  try {
+    real = realpathSync.native(fileURLToPath(url));
+  } catch {
+    return false;
+  }
+  const inside = relative(root, real);
+  return inside !== '' && !inside.startsWith('..') && !isAbsolute(inside);
 }
 
 /** An address as a person types it: a scheme added when it has none; null for anything but http(s). */
@@ -198,7 +222,13 @@ export class BrowserViews {
     // A page never opens a window of its own, nor goes where a person could not.
     view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     const guard = (event: unknown, url: unknown): void => {
-      if (typeof url !== 'string' || pageUrl(url) === null || !/^https?:/i.test(url)) (event as { preventDefault(): void }).preventDefault();
+      // A file of the folder the agent's file was opened from; no other of the disk.
+      if (typeof url === 'string' && /^file:/i.test(url)) {
+        if (!fileIn(tab.fileRoot, url)) (event as { preventDefault(): void }).preventDefault();
+      } else if (tab.fileOffline) {
+        // A file's page kept off the network does not go there by a link either.
+        (event as { preventDefault(): void }).preventDefault();
+      } else if (typeof url !== 'string' || pageUrl(url) === null || !/^https?:/i.test(url)) (event as { preventDefault(): void }).preventDefault();
       // A page the agent opened does not take it into the network this machine is in (a redirect, a script).
       else if (tab.loadedBy === 'agent' && privateLiteral(new URL(url).hostname)) (event as { preventDefault(): void }).preventDefault();
     };
@@ -258,6 +288,8 @@ export class BrowserViews {
     const url = pageUrl(typed);
     if (!url) return { error: 'Only http and https addresses are opened.' };
     tab.loadedBy = 'person';
+    delete tab.fileRoot;
+    delete tab.fileOffline;
     return this.load(tab, url);
   }
 
@@ -297,7 +329,23 @@ export class BrowserViews {
     const tab = this.agentTab();
     tab.loadedBy = 'agent';
     delete tab.reachedPrivate;
+    delete tab.fileRoot;
+    delete tab.fileOffline;
     return this.load(tab, url);
+  }
+
+  /**
+   * A file the core checked (in the conversation's folders): its page loads from `root` alone (Paul, 2026-11-20),
+   * and reaches the network only when the conversation may without asking — else nothing of it leaves the machine.
+   */
+  async agentOpenFile(path: string, root: string, options: { network: boolean }): Promise<{ url: string; title: string } | { error: string }> {
+    const tab = this.agentTab();
+    tab.loadedBy = 'agent';
+    delete tab.reachedPrivate;
+    tab.fileRoot = root;
+    if (options.network) delete tab.fileOffline;
+    else tab.fileOffline = true;
+    return this.load(tab, pathToFileURL(path).href);
   }
 
   /**
@@ -318,6 +366,10 @@ export class BrowserViews {
    */
   async blocked(webContentsId: number, url: string): Promise<boolean> {
     const tab = this.tabOf(webContentsId);
+    // A file: only one of the folder the agent's file was opened from, in that tab.
+    if (/^file:/i.test(url)) return !fileIn(tab?.fileRoot, url);
+    // A file's page kept off the network: nothing of it leaves the machine, this machine's own servers included.
+    if (tab?.fileOffline) return true;
     if (!tab || tab.loadedBy !== 'agent') return false;
     let host: string;
     try {
@@ -447,6 +499,11 @@ export class BrowserViews {
    */
   private async mayReach(tab: Tab): Promise<void> {
     if (tab.loadedBy === 'person') return;
+    const shown = tab.view.webContents.getURL();
+    if (/^file:/i.test(shown)) {
+      if (fileIn(tab.fileRoot, shown)) return;
+      throw new Error('Refused: this page is a file outside the folder the agent opened it from.');
+    }
     const answered = 'Refused: this page answered from a private address (the network this machine is in). The browser opens the internet and this machine\'s own pages.';
     if (tab.reachedPrivate) throw new Error(answered);
     const host = new URL(tab.view.webContents.getURL()).hostname;

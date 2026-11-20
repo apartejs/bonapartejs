@@ -84,7 +84,9 @@ test('the shell and a conversation: every button has a name; Tab follows the rea
   await page.evaluate(() => document.querySelector('.a11y-probe')?.remove());
   expect(await unnamedButtons(page)).toEqual([]);
   // The reading order: the sidebar top to bottom, the header, the panes, the thread, the composer and its toolbar.
-  expect(await tabStops(page, 24)).toEqual([
+  // The gauge's name says its share, which moves with the tools' inventory: its words are what is pinned.
+  const stops = (await tabStops(page, 24)).map((name) => name.replace(/^(Fenêtre de contexte): \d+ %$/, '$1: … %'));
+  expect(stops).toEqual([
     'Réduire la barre latérale',
     'Nouvelle conversation',
     'Rechercher dans les conversations',
@@ -108,7 +110,7 @@ test('the shell and a conversation: every button has a name; Tab follows the rea
     'Copier',
     'Réponds, ou demande autre chose…',
     "Mode d'approbation",
-    'Fenêtre de contexte: 17 %',
+    'Fenêtre de contexte: … %',
   ]);
 });
 
