@@ -304,6 +304,9 @@ export interface Messages {
     project(name: string, count: number): string;
     /** A project's « + »: a conversation in that project. */
     newConversationIn(name: string): string;
+    /** Why a conversation did not move to another project (aparté 1.16, apartejs/aparte#269). */
+    moveRefused: { busy: string; waiting: string; ownBranch: string; failed: string };
+    dismiss: string;
     /** Where a conversation's memory is (§12): said by a name, never by a colour alone. */
     memory: { engine: string; saved: string; reread: string };
     /** A conversation in the folded sidebar: its title, and that it waits for the person. */

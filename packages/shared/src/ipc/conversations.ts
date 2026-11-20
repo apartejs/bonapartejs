@@ -273,6 +273,17 @@ export type ContextFullView = z.infer<typeof contextFullSchema>;
 export const conversationsContext = defineChannel('conversations.context', z.object({ id: conversationId }), contextFullSchema.nullable());
 
 
+/**
+ * A conversation moved to another project, or a discussion into one (aparté 1.16, apartejs/aparte#269): moved, or
+ * why not — a reply runs, a question or an approval waits, it works on its own branch; `failed` for anything else.
+ */
+export const conversationsMove = defineChannel(
+  'conversations.move',
+  z.object({ id: z.string().min(1).max(128), projectId: z.string().min(1).max(128) }),
+  z.union([z.object({ ok: z.literal(true) }), z.object({ ok: z.literal(false), reason: z.enum(['busy', 'waiting', 'own-branch', 'failed']) })]),
+);
+export type MoveReason = 'busy' | 'waiting' | 'own-branch' | 'failed';
+
 /** « Travailler dans un projet… » (task 9.7): a discussion becomes a code conversation of the project. */
 export const conversationsAttachProject = defineChannel(
   'conversations.attachProject',

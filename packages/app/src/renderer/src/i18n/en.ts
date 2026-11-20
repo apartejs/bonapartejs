@@ -367,6 +367,13 @@ export const en: Messages = {
     discussions: 'Discussions',
     project: (name, count) => `${name}, ${count} conversation${count === 1 ? '' : 's'}`,
     newConversationIn: (name) => `New conversation in ${name}`,
+    moveRefused: {
+      busy: 'A reply is running: move the conversation once it is over.',
+      waiting: 'This conversation waits for your answer: answer first, then move it.',
+      ownBranch: 'This conversation works on its own branch, in its project’s repository: it cannot change project.',
+      failed: 'The conversation could not be moved.',
+    },
+    dismiss: 'Close',
     memory: { engine: 'Context in the engine', saved: 'Memory saved', reread: 'To read again' },
     railConversation: (title, waiting) => (waiting ? `${title}, waiting for your answer` : title),
     engine: (model) => `Engine: ${model}, ready`,

@@ -7,7 +7,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConversationStore } from '@aparte/bonaparte-core';
+import { ConversationStore, MoveRefusedError } from '@aparte/bonaparte-core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createIpcRegistry, type IpcMainLike } from './register.js';
 import { registerConversationChannels } from './conversations.js';
@@ -64,6 +64,11 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     contextOf: async () => null,
     serviceOf: async () => undefined,
     attachProject: async () => undefined,
+    // c-busy runs a reply, c-gone is no conversation, the others move.
+    moveConversation: async (id: string) => {
+      if (id === 'c-busy') throw new MoveRefusedError('busy');
+      if (id === 'c-gone') throw new Error('No conversation c-gone.');
+    },
     // The core's delete: the conversation and the originals its turns kept.
     removeConversation: async (id: string) => {
       removed.push(id);
@@ -77,6 +82,14 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
 const DOC = { id: 'c-1', title: '', createdAt: 1, updatedAt: 1, messages: [{ id: 'm1', role: 'user', content: 'Bonjour' }] };
 
 describe('the conversation channels', () => {
+  it('move a conversation to a project, or say why not — a refusal of the core by its reason, anything else as failed', async () => {
+    const { call } = await setup();
+    await expect(call('conversations.move', { id: 'c-1', projectId: 'p-2' })).resolves.toEqual({ ok: true });
+    await expect(call('conversations.move', { id: 'c-busy', projectId: 'p-2' })).resolves.toEqual({ ok: false, reason: 'busy' });
+    await expect(call('conversations.move', { id: 'c-gone', projectId: 'p-2' })).resolves.toEqual({ ok: false, reason: 'failed' });
+    await expect(call('conversations.move', { id: 'c-1', projectId: '' })).rejects.toThrow();
+  });
+
   it('save a document — the conversation made if the page saves before its first turn — and give it back', async () => {
     const { call, store } = await setup();
     await call('conversations.save', { document: DOC });

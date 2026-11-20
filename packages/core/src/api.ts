@@ -584,6 +584,14 @@ export interface Core {
    * default mode. Nothing is read again: its next turn tells the tools, the folders and the mode as notes.
    */
   attachProject(conversationId: string, projectId: string): Promise<void>;
+  /**
+   * A conversation moved to another project (aparté 1.16, apartejs/aparte#269), or a discussion into one: its
+   * folders and its tools told as notes at its next turn, nothing re-rendered; a code conversation keeps its mode, a
+   * discussion takes the project's default (a plan presented in Lecture is never taken for one launched). Refused
+   * (`MoveRefusedError`) under a reply, while a question or an approval waits, and for a conversation on its own
+   * branch — its worktree belongs to its project's repository.
+   */
+  moveConversation(conversationId: string, projectId: string): Promise<void>;
   /** A turn of a conversation on a service: aparté's own loop, the core's tools and policy (task 9.2). */
   turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response>;
   /**
@@ -1676,6 +1684,21 @@ export function createCore(deps: CoreDeps): Core {
     emit: (event: StreamRunEvent) => void,
     onTurnEvent: (event: TurnEvent) => void,
   ): Promise<TurnResult> {
+    const release = hold(conversationId);
+    try {
+      return await agentTurnHeld(conversationId, input, options, emit, onTurnEvent);
+    } finally {
+      release();
+    }
+  }
+
+  async function agentTurnHeld(
+    conversationId: string,
+    input: Omit<TurnInput, 'tools'>,
+    options: { clientTools: readonly ClientTool[]; signal: AbortSignal },
+    emit: (event: StreamRunEvent) => void,
+    onTurnEvent: (event: TurnEvent) => void,
+  ): Promise<TurnResult> {
     // The first turn starts the MCP servers, in the background: their tools are told at the next turn (task 10.5).
     mcp.startAll();
     // Its own settings, while « Réglages de conversation » is on (task 12.4): its temperature, its reasoning.
@@ -1764,13 +1787,24 @@ export function createCore(deps: CoreDeps): Core {
   }
 
   async function attachProject(conversationId: string, projectId: string): Promise<void> {
+    await moveConversation(conversationId, projectId);
+  }
+
+  async function moveConversation(conversationId: string, projectId: string): Promise<void> {
     const project = await projectStore.get(projectId);
     if (!project) throw new Error(`No project ${projectId}.`);
     const meta = await conversationStore.get(conversationId);
     if (!meta) throw new Error(`No conversation ${conversationId}.`);
+    if (meta.kind === 'code' && meta.projectId === project.id) return;
+    // Its own branch, made or only chosen: it belongs to its project's repository (review of 2026-11-20).
+    if (meta.worktree || meta.worksIn === 'branch') throw new MoveRefusedError('own-branch');
+    if (turning.has(conversationId)) throw new MoveRefusedError('busy');
+    const last = (await openJournal(conversationStore.dir, conversationId, meta.branchId)).entries().at(-1);
+    if (last?.kind === 'pending') throw new MoveRefusedError('waiting');
     await conversationStore.update(conversationId, { kind: 'code', projectId: project.id });
     projectRoots.set(project.id, project.roots);
-    await core.setMode(conversationId, project.defaultMode ?? 'repetition', { confirmed: false });
+    // A discussion ran in Lecture for want of a project: it takes the project's. A code conversation keeps its own.
+    if (meta.kind === 'discussion') await core.setMode(conversationId, project.defaultMode ?? 'repetition', { confirmed: false });
   }
 
   async function switchProvider(conversationId: string, providerId: string, model: string): Promise<void> {
@@ -1785,7 +1819,20 @@ export function createCore(deps: CoreDeps): Core {
     await conversationStore.update(conversationId, { engineId: provider.id, modelId: model });
   }
 
+  /** A turn on a service holds its conversation from its first line to the end of its stream: never moved under it. */
   async function turnOnService(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
+    const release = hold(conversationId);
+    let response: Response;
+    try {
+      response = await turnOnServiceHeld(conversationId, raw, request);
+    } catch (error) {
+      release();
+      throw error;
+    }
+    return releasedWhenRead(response, release);
+  }
+
+  async function turnOnServiceHeld(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
     mcp.startAll();
     const meta = await conversationStore.get(conversationId);
     const provider = await serviceOf(conversationId);
@@ -1885,6 +1932,47 @@ export function createCore(deps: CoreDeps): Core {
         return undefined;
       },
     );
+  }
+
+  // The turns running now, per conversation: a move to another project waits for their end (apartejs/aparte#269).
+  const turning = new Map<string, number>();
+  function hold(conversationId: string): () => void {
+    turning.set(conversationId, (turning.get(conversationId) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const left = (turning.get(conversationId) ?? 1) - 1;
+      if (left > 0) turning.set(conversationId, left);
+      else turning.delete(conversationId);
+    };
+  }
+  /** A service's turn runs as long as its stream: read to its end, or cancelled by the page. */
+  function releasedWhenRead(answered: Response, release: () => void): Response {
+    if (!answered.body) {
+      release();
+      return answered;
+    }
+    const reader = answered.body.getReader();
+    const body = new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        try {
+          const { done, value } = await reader.read();
+          if (done) {
+            release();
+            controller.close();
+          } else controller.enqueue(value);
+        } catch (error) {
+          release();
+          controller.error(error);
+        }
+      },
+      cancel(reason) {
+        release();
+        return reader.cancel(reason);
+      },
+    });
+    return new Response(body, { status: answered.status, statusText: answered.statusText, headers: answered.headers });
   }
 
   // Each turn that ends, told to whoever listens: the main process's notifications (task 8.5).
@@ -2434,6 +2522,7 @@ export function createCore(deps: CoreDeps): Core {
     startOnService,
     switchProvider,
     attachProject,
+    moveConversation,
     turnOnService,
     modeOf,
 
@@ -2622,6 +2711,20 @@ export function createCore(deps: CoreDeps): Core {
 
 /** A load names a file the core did not list: the window may only load what it was shown. */
 /** A reply runs: the engine is not changed under it (task 7.4). */
+/** A conversation that cannot change project now (aparté 1.16, apartejs/aparte#269); `reason` says why. */
+export class MoveRefusedError extends Error {
+  constructor(readonly reason: 'busy' | 'waiting' | 'own-branch') {
+    super(
+      reason === 'own-branch'
+        ? 'This conversation works on its own branch, in its project\'s repository: it cannot move to another project.'
+        : reason === 'waiting'
+          ? 'This conversation waits for an answer: answer it first.'
+          : 'A reply of this conversation runs: it moves once the reply is over.',
+    );
+    this.name = 'MoveRefusedError';
+  }
+}
+
 export class EngineBusyError extends Error {
   constructor() {
     super('A reply is running: the model is not changed under it.');

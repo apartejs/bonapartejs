@@ -5,7 +5,7 @@
  * conversation is made then, once.
  */
 
-import type { Core } from '@aparte/bonaparte-core';
+import { MoveRefusedError, type Core } from '@aparte/bonaparte-core';
 import {
   conversationsLoadMeta,
   conversationsRename,
@@ -39,6 +39,7 @@ import {
   conversationsSettingsGet,
   conversationsSettingsSet,
   conversationsAttachProject,
+  conversationsMove,
   type ConversationDocument,
   type ConversationMemoryView,
 } from '@aparte/bonaparte-shared';
@@ -58,6 +59,7 @@ interface ConversationCore {
   readAgain: Core['readAgain'];
   serviceOf: Core['serviceOf'];
   attachProject: Core['attachProject'];
+  moveConversation: Core['moveConversation'];
   removeConversation: Core['removeConversation'];
   branchOf: Core['branchOf'];
   prOf: Core['prOf'];
@@ -164,6 +166,15 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsSettingsGet, ({ id }) => core.conversationSettings.get(id));
   ipc.handle(conversationsSettingsSet, ({ id, ...changes }) => core.conversationSettings.set(id, changes));
   ipc.handle(conversationsAttachProject, ({ id, projectId }) => core.attachProject(id, projectId));
+  // Refused, it says why; the sidebar tells the person (aparté 1.16, apartejs/aparte#269).
+  ipc.handle(conversationsMove, async ({ id, projectId }) => {
+    try {
+      await core.moveConversation(id, projectId);
+      return { ok: true as const };
+    } catch (error) {
+      return { ok: false as const, reason: error instanceof MoveRefusedError ? error.reason : ('failed' as const) };
+    }
+  });
   ipc.handle(conversationsStatus, async ({ ids }) => {
     const found = await Promise.all(
       ids.map(async (id) => {

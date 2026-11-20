@@ -495,9 +495,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   reads in the success colour (#271, pinned by `e2e/subagents.spec.ts`), a
   reasoning that comes after its block closed opens a new one (#272), and a
   scrolled thread no longer moves a pixel each way while reasoning streams
-  under React (#270). Open: apartejs/aparte#269 (move a conversation to
-  another group of the list) and #275 (a `turn-start` or the run's end
-  without `text-flush` drops the text the parser holds: the core flushes).
+  under React (#270). **aparté 1.16.0** (2026-11-20), which bonaparte runs
+  on: a conversation moves to another group (`moveTargets`,
+  `onConversationMove`, apartejs/aparte#269); the parser hands its text over
+  at a `turn-start` and the run's end (#275; the core still flushes); the
+  model picker lists a catalogue replaced under the same id (#276, its
+  workaround gone). Open: apartejs/aparte#278 (a row dragged onto another
+  list) and #279 (a toast).
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
@@ -613,7 +617,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   list draws itself again for any new array, closing an open row menu: give
   it the same array while nothing it draws changed. Menus and tabs get
   aparté's keyboard through `aparte/kit.ts` (`useMenu`, which must be told
-  when its elements arrive).
+  when its elements arrive). A conversation moves to another project
+  (`core.moveConversation`, `conversations.move`): « Déplacer vers… » in its
+  row's menu (each list's `moveTargets` are the other projects), or its row
+  dragged onto a project's group, which reads the id aparté puts in the drag
+  (`application/x-aparte-conversation`: aparté drops only within one list,
+  apartejs/aparte#278). Its folders, tools and the project's mode are notes
+  at its next turn; refused (`MoveRefusedError`) under a reply (the core
+  counts the turns running, a service's while its stream lasts), while a
+  question or an approval waits, and on its own branch — said above the
+  lists (`.bonaparte-move-notice`, apartejs/aparte#279).
 - **The title bar** (`main/title-bar.ts`, `theme/title-bar.ts`, the end of
   `theme/app.css`): on Windows and Linux the system's bar is hidden
   (`titleBarStyle: 'hidden'`) and its buttons drawn over the top right corner

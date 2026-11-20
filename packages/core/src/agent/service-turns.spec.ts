@@ -38,14 +38,20 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-const vault = (): SecretStore => {
+const vault = (gate?: Promise<void>): SecretStore => {
   const held = new Map<string, string>();
-  return { get: async (n) => held.get(n), set: async (n, v) => void held.set(n, v), delete: async (n) => void held.delete(n), has: async (n) => held.has(n) };
+  return {
+    // A vault that answers once `gate` opens: a turn caught reading its key.
+    get: async (n) => (await gate, held.get(n)),
+    set: async (n, v) => void held.set(n, v),
+    delete: async (n) => void held.delete(n),
+    has: async (n) => held.has(n),
+  };
 };
 
 type Message = { role: string; content: string; toolCalls?: unknown[] };
 
-async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer = () => ({ text: 'Réponse du service.' })) {
+async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer = () => ({ text: 'Réponse du service.' }), gate?: Promise<void>) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-service-'));
   dirs.push(dir);
   const models = join(dir, 'models');
@@ -67,7 +73,7 @@ async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer = (
     llamaReleases: null,
     modelHub: null,
     gh: null,
-    secrets: vault(),
+    secrets: vault(gate),
     logger: () => undefined,
   });
   cores.push(core);
@@ -94,6 +100,24 @@ async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer = (
   const users = async (id: string) => (await entries(id)).flatMap((entry) => (entry.kind === 'user' ? [entry.text] : []));
   return { core, gemma, home, service, provider, post, onService, entries, users };
 }
+
+describe('a conversation on a service moved to another project (aparté 1.16, apartejs/aparte#269)', () => {
+  it('is refused from the moment its turn begins — its key still read — never moved under it (review of 2026-11-20)', async () => {
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const { core, home, post, onService, users } = await rig(undefined, gate);
+    const a = await core.projects.create({ name: 'a', roots: [home], defaultMode: 'repetition' });
+    const b = await core.projects.create({ name: 'b', roots: [home], defaultMode: 'plume' });
+    // The first turn waits on the vault: it has written its message, it has not reached the service.
+    const turn = post('s1', [{ role: 'user', content: 'Bonjour' }], `${onService}&project=${a.id}`);
+    await vi.waitFor(async () => expect(await users('s1')).toEqual(['Bonjour']), { timeout: 10_000 });
+    await expect(core.moveConversation('s1', b.id)).rejects.toMatchObject({ reason: 'busy' });
+    open();
+    expect((await turn).status).toBe(200);
+    await core.moveConversation('s1', b.id);
+    expect(await core.conversationStore.get('s1')).toMatchObject({ projectId: b.id });
+  }, 30_000);
+});
 
 describe('a conversation started on a service takes what its first turn chose (review of phase 9)', () => {
   it('a discussion stays a discussion: Lecture, and the service is offered no tool that reaches the disk', async () => {

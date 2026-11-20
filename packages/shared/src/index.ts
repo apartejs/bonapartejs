@@ -175,6 +175,8 @@ export {
   conversationsSettingsSet,
   type ConversationSettingsView,
   conversationsAttachProject,
+  conversationsMove,
+  type MoveReason,
   inboxSchema,
 } from './ipc/conversations.js';
 export type { ConversationCard } from './ipc/conversations.js';

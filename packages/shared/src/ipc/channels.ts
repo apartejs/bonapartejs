@@ -45,6 +45,7 @@ import {
   conversationsSettingsGet,
   conversationsSettingsSet,
   conversationsAttachProject,
+  conversationsMove,
 } from './conversations.js';
 import {
   engineApplySettings,
@@ -102,6 +103,7 @@ export const CHANNELS = [
   conversationsSettingsGet,
   conversationsSettingsSet,
   conversationsAttachProject,
+  conversationsMove,
   pluginsInvoke,
   pluginsAck,
   pluginsOverview,

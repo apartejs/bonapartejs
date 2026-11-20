@@ -1798,6 +1798,37 @@ body {
   height: 24px;
 }
 
+/* A row dragged over a project (aparté 1.16, apartejs/aparte#278): the project that would take it, outlined. */
+.bonaparte-project {
+  border-radius: var(--aparte-radius-md, 8px);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  transition: outline-color 120ms ease, background-color 120ms ease;
+}
+
+.bonaparte-project--drop {
+  outline-color: var(--aparte-primary);
+  background: color-mix(in srgb, var(--aparte-primary) 8%, transparent);
+}
+
+.bonaparte-conversations .aparte-conv-item--dragging {
+  opacity: 0.5;
+}
+
+/* Why a conversation did not move: said above the lists, until closed. */
+.bonaparte-move-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--aparte-space-2);
+  margin: 0 var(--aparte-space-2) var(--aparte-space-2);
+  font-size: var(--aparte-font-size-sm, 13px);
+}
+
+.bonaparte-move-notice__text {
+  flex: 1;
+  min-width: 0;
+}
+
 /* A project's head: its header, and its « + » shown on hover or focus — always in the Tab order. */
 .bonaparte-project__head {
   display: flex;

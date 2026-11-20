@@ -15,7 +15,7 @@ export { probeEndpoint } from './providers/probe.js';
 export type { ProbeError, ProbeResult } from './providers/probe.js';
 export { LlamaCppHttpClient, LlamaCppHttpError } from './backend/llamacpp/http-client.js';
 export type * from './backend/types.js';
-export { createCore, EngineBusyError, ModelNotListedError } from './api.js';
+export { createCore, EngineBusyError, ModelNotListedError, MoveRefusedError } from './api.js';
 export { decideLoad, ModelTooBigError } from './failures.js';
 export type { Core, CoreDeps, Engine, EngineState, LlamaCppState, ModelChoice, RecommendedModel, TurnEnd } from './api.js';
 export type { CatalogueEntry } from './models/catalogue.js';

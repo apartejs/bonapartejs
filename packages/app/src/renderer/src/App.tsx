@@ -34,6 +34,7 @@ import {
   conversationsSeen,
   conversationsReadAgain,
   conversationsAttachProject,
+  conversationsMove,
   providersList,
   providersModels,
   providersSwitch,
@@ -138,6 +139,8 @@ function playModeOf(value: unknown): PlayMode | null {
 
 /** Under 1 100 px, the sidebar folds into icons (board « Fenêtre étroite »). */
 const NARROW = '(max-width: 1099px)';
+/** How long the sidebar says why a conversation did not move. */
+const MOVE_NOTICE_MS = 8_000;
 
 function Workspace({
   messages,
@@ -631,6 +634,35 @@ function Workspace({
       })
       .catch(() => setAttachFailed(true))
       .finally(() => setAttachBusy(false));
+  };
+  // A conversation moved to another project, from its row (aparté 1.16, apartejs/aparte#269): what changes is
+  // read again; refused, the sidebar says why until it is closed, or for some seconds (aparté has no toast yet,
+  // apartejs/aparte#279).
+  const [moveNotice, setMoveNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!moveNotice) return;
+    const timer = setTimeout(() => setMoveNotice(null), MOVE_NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [moveNotice]);
+  const moveTo = (id: string, projectId: string): void => {
+    setMoveNotice(null);
+    void bridge
+      .invoke(conversationsMove, { id, projectId })
+      .catch(() => ({ ok: false as const, reason: 'failed' as const }))
+      .then(async (moved) => {
+        if (!moved.ok) {
+          const refused = messages.shell.moveRefused;
+          setMoveNotice(moved.reason === 'own-branch' ? refused.ownBranch : refused[moved.reason]);
+          return;
+        }
+        bornIn.current.set(id, projectId);
+        setAsked((count) => count + 1);
+        // Its mode is the project's now: the switch of the chat shown says it.
+        if (id === shownIdRef.current) {
+          const now = await bridge.invoke(modesGet, { id }).catch(() => null);
+          if (now) setMode(now.mode);
+        }
+      });
   };
   // The list drives the deck, not a chat: the page shows the chat of the conversation picked.
   useEffect(() => {
@@ -1327,6 +1359,8 @@ function Workspace({
           onSearch={() => setSearching(true)}
           onNewProject={() => setCreatingProject(true)}
           onNewConversationIn={newConversationIn}
+          onMove={moveTo}
+          moveNotice={moveNotice ? { text: moveNotice, onDismiss: () => setMoveNotice(null) } : null}
           inbox={{
             count: inboxCount,
             open: inboxOpen,

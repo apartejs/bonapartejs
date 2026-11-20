@@ -504,6 +504,7 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
       read: async () => null,
       screenshot: async () => null,
       act: async () => ({ done: 'clicked' }),
+      openFile: async () => ({ error: 'unused' }),
     };
     const host = new PluginHost({ registry: new ToolRegistry(), browser });
     host.add(manifest('pages', { effects: [{ effect: 'network', what: 'pages' }] }), { builtin: true });
@@ -525,6 +526,7 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
       read: async () => ({ url: 'http://x/', title: 'x', text: 'secret', console: [] }),
       screenshot: async () => null,
       act: async () => ({ done: 'clicked' }),
+      openFile: async () => ({ error: 'unused' }),
     };
     const host = new PluginHost({ registry: new ToolRegistry(), browser });
     host.add(manifest('opener', { effects: [{ effect: 'network', what: 'pages' }] }), { builtin: true });
