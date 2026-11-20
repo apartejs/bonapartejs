@@ -67,7 +67,7 @@ async function partsOf(root: string, file: string, content: string): Promise<{ p
     const target = resolve(dirname(file), line.slice(1));
     if (!inside(root, target)) continue;
     const imported = await readIfFile(target);
-    if (imported !== undefined) parts.push({ path: shown(root, target), content: imported.trim() });
+    if (imported !== undefined) parts.push({ path: shown(root, target), content: imported.trimEnd() });
   }
   return parts.length > 0 ? parts : [{ path: shown(root, file), content }];
 }
@@ -75,14 +75,17 @@ async function partsOf(root: string, file: string, content: string): Promise<{ p
 export async function readProjectInstructions(roots: string[]): Promise<ProjectInstructions | undefined> {
   const found: { label: string; content: string }[] = [];
   const sources: string[] = [];
-  for (const root of roots) {
+  for (const [index, root] of roots.entries()) {
     for (const name of INSTRUCTION_FILES) {
       const file = join(root, name);
       if (!inside(root, file)) continue;
       const content = await readIfFile(file);
       if (content === undefined || content.trim() === '') continue;
       const prefix = roots.length > 1 ? `${basename(resolve(root))}/` : '';
-      for (const part of await partsOf(root, file, content)) found.push({ label: `${prefix}${part.path}`, content: part.content.trim() });
+      // Each labelled by a path read_file opens: relative paths resolve from the first folder; another folder's file
+      // is named whole (review of round 2, 6). Its blank lines at the start kept: a cut counts the file's own lines.
+      const label = (path: string): string => (index === 0 ? path : resolve(root, path).replace(/\\/g, '/'));
+      for (const part of await partsOf(root, file, content)) found.push({ label: label(part.path), content: part.content.trimEnd() });
       sources.push(`${prefix}${name}`);
       break;
     }

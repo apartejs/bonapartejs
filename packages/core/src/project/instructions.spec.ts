@@ -129,6 +129,27 @@ describe('the instructions on a small context (audit 2026-11-21, I2)', () => {
     expect(cutInstructions(text, text.length)).toBe(text);
   });
 
+  it('with several folders, the note and the files not shown name paths read_file opens: the first folder’s relative, the others absolute (review of round 2, 6)', async () => {
+    const web = await root({ 'AGENTS.md': Array.from({ length: 400 }, (_, index) => `Web rule ${index + 1}.`).join('\n') });
+    const api = await root({ 'AGENTS.md': 'API RULES' });
+    const cut = cutInstructions((await readProjectInstructions([web, api]))!.text, 1500);
+    // Relative paths resolve from the first folder: its file is « AGENTS.md » there, never « <folder>/AGENTS.md ».
+    expect(cut).toMatch(/\[AGENTS\.md is cut after line \d+: read_file AGENTS\.md with offset \d+ for the rest\]/);
+    const other = join(api, 'AGENTS.md').replace(/\\/g, '/');
+    expect(cut).toContain(`[Not shown: ${other} — read with read_file when you need them]`);
+    // Past the cut, the second folder's file is named by its absolute path in its label too.
+    const whole = (await readProjectInstructions([web, api]))!.text;
+    expect(whole).toContain(`(from ${other})\nAPI RULES`);
+  });
+
+  it('counts the lines as the file does: blank lines at its start included (review of round 2, 6)', async () => {
+    const dir = await root({ 'AGENTS.md': '\n\n\n' + Array.from({ length: 400 }, (_, index) => `Line ${index + 4}.`).join('\n') });
+    const cut = cutInstructions((await readProjectInstructions([dir]))!.text, 1500);
+    const [, last] = /is cut after line (\d+):/.exec(cut)!;
+    // The file's line N holds « Line N. »: the offset given is where the file goes on.
+    expect(cut).toContain(`\nLine ${last}.\n[AGENTS.md is cut`);
+  });
+
   it('a file of a second folder past the cut is named, never dropped in silence', async () => {
     const a = await root({ 'AGENTS.md': 'A rule.\n'.repeat(400) });
     const b = await root({ 'AGENTS.md': 'BACK RULES' });
