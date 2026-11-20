@@ -769,7 +769,7 @@ export const fr: Messages = {
     later: 'Continuer quand même',
     first: (duration) => `Compacter d’abord · ${duration}`,
     running: 'Compaction en cours : le modèle résume la conversation…',
-    auto: (before, after) => `Contexte plein : la conversation a été résumée pour continuer (${before} → ${after} jetons).`,
+    auto: (before, after) => `Contexte plein : la conversation a été résumée pour continuer (environ ${before} → ${after} jetons).`,
     autoLabel: 'Compaction automatique',
     refused: {
       pending: 'Rien n’a été compacté : un appel attend ta réponse.',

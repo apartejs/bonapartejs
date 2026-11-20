@@ -17,7 +17,7 @@ import { familyLayer } from '../families/index.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import { KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { fakeTokenize, startFakeLlamaServer, type FakeLlamaServer, type FakeLlamaServerOptions } from '../testing/fake-llama-server.js';
-import { ConversationEngine, ContextFullError, EngineFailedError, REPLY_ROOM, type TurnEvent } from './engine.js';
+import { ConversationEngine, ContextFullError, EngineFailedError, estimateTokens, REPLY_ROOM, type TurnEvent } from './engine.js';
 import { ConversationStore } from './store.js';
 import type { ToolDef } from '../tools/types.js';
 
@@ -1025,6 +1025,11 @@ describe('ConversationEngine — the context runs out (audit 2026-11-21, D2)', (
     expect(prompts.at(-1)).toContain('[conversation summary]');
     expect(prompts.at(-1)).toContain('MARJORAM');
     expect(prompts.at(-1)).toContain('Quatre');
+    // Its figures are of one kind: what the prompt weighed before and after, both reckoned the same way (review of round 2, 10).
+    const entries = (await openJournal(store.dir, meta.id)).entries();
+    const at = entries.findLastIndex((entry) => entry.kind === 'rebase');
+    expect(end?.before).toBe(estimateTokens(frozenPrompt(entries.slice(0, at))));
+    expect(end?.after).toBe(estimateTokens(entries[at]!.rendered ?? ''));
   });
 
   it('results that would not fit: compacted between two rounds, the turn under way kept as it was, and it goes on', async () => {

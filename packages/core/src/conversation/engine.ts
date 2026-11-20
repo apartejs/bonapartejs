@@ -906,7 +906,9 @@ export class ConversationEngine {
       summary,
       compactedTurns: plan.compactedTurns,
       keptTurns: plan.keptTurns,
-      tokensBefore: countedContext(entries) ?? estimateTokens(frozenPrompt(entries)),
+      // Two figures of one kind, the prompt's weight reckoned the same way before and after: the engine has counted
+      // no prompt of the rebase yet (review of round 2, 10). The window says them as « about ».
+      tokensBefore: estimateTokens(frozenPrompt(entries)),
       tokensAfter: estimateTokens(rendered),
     };
   }

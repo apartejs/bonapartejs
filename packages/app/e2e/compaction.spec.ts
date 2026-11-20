@@ -127,7 +127,7 @@ test('a message that would not fit: the conversation is compacted on its own, sa
   await chat(page).send('Et ensuite ?');
   await expect(chat(page).replyText).toHaveText('Suite.', { timeout: 20_000 });
   const line = page.locator('.bonaparte-live-chat:not([hidden])').getByRole('note', { name: 'Compaction automatique' });
-  await expect(line).toContainText(/Contexte plein : la conversation a été résumée pour continuer \([\d\s  ]+ → [\d\s  ]+ jetons\)/);
+  await expect(line).toContainText(/Contexte plein : la conversation a été résumée pour continuer \(environ [\d\s  ]+ → [\d\s  ]+ jetons\)/);
   await expect(chat(page).errors).toHaveCount(0);
   expect(prompts.at(-1)).toContain('RÉSUMÉ DU TRAVAIL.');
   expect(prompts.at(-1)).not.toContain('Une longue réponse');

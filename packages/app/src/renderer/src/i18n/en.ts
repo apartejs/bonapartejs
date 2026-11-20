@@ -767,7 +767,7 @@ export const en: Messages = {
     later: 'Go on anyway',
     first: (duration) => `Compact first · ${duration}`,
     running: 'Compacting: the model summarises the conversation…',
-    auto: (before, after) => `Context full: the conversation was summarised to go on (${before} → ${after} tokens).`,
+    auto: (before, after) => `Context full: the conversation was summarised to go on (about ${before} → ${after} tokens).`,
     autoLabel: 'Automatic compaction',
     refused: {
       pending: 'Nothing was compacted: a call waits for your answer.',
