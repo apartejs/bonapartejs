@@ -93,6 +93,27 @@ test('a sub-agent’s thoughts of two rounds are two blocks in its thread, never
   await expect(blocks.nth(1)).toHaveText('J’ai lu, je conclus.');
 });
 
+test('a failed call in a sub-agent’s thread reads as failed, never in the colour of success (aparté 1.15.1, apartejs/aparte#271)', async ({ launch }) => {
+  const { page } = await launch({
+    engine: {
+      responder: (prompt) => {
+        if (isSubagent(prompt)) return answered(prompt) ? 'Rendu.' : call('read_file', { path: 'absent.txt' });
+        return answered(prompt) ? 'Synthèse.' : call('run_subagent', { name: 'Lecteur', mission: 'Lis absent.txt.', tools: 'read' });
+      },
+    },
+  });
+  const ui = chat(page);
+  await ui.send('Une piste');
+  await expect(ui.replyText).toHaveText('Synthèse.', { timeout: 20_000 });
+  await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Sous-agents', exact: true }).click();
+  await pane(page).getByRole('button', { name: /Lecteur/ }).click();
+  // The same failed call, drawn twice: under the sub-agent's line, which is done, and on its own.
+  const failed = page.locator('.aparte-segment-tool-call[data-tool-name="read_file"][data-status="failed"] .aparte-tool-state');
+  await expect(failed).toHaveCount(2);
+  const colours = await failed.evaluateAll((states) => states.map((state) => getComputedStyle(state).color));
+  expect(colours[0]).toBe(colours[1]);
+});
+
 test('a line’s « Ouvrir » opens the pane on that sub-agent', async ({ launch }) => {
   const { page, home } = await launch({ engine: { responder: model(TWO) } });
   await writeFile(join(home, 'notes.txt'), 'une note\n');

@@ -488,10 +488,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (2026-11-19): a pill goes in at the caret or after the draft
   (`insertToken` past the end, apartejs/aparte#259), a « / » command
   carries a `badge` (#261), the composer's `stopKey` (#264), and the error
-  renderer's `appCode` (#265). **aparté 1.15.0** (2026-11-19), which
-  bonaparte runs on: an error renderer returns `null` for an error it does
-  not change, and that error keeps aparté's own card (#267). No issue of
-  bonaparte's is open on aparté.
+  renderer's `appCode` (#265). **aparté 1.15.0** (2026-11-19): an error
+  renderer returns `null` for an error it does not change, and that error
+  keeps aparté's own card (#267). **aparté 1.15.1** (2026-11-20), which
+  bonaparte runs on: a failed call in a sub-agent's transcript no longer
+  reads in the success colour (#271, pinned by `e2e/subagents.spec.ts`), a
+  reasoning that comes after its block closed opens a new one (#272), and a
+  scrolled thread no longer moves a pixel each way while reasoning streams
+  under React (#270). Open: apartejs/aparte#269 (move a conversation to
+  another group of the list) and #275 (a `turn-start` or the run's end
+  without `text-flush` drops the text the parser holds: the core flushes).
 - **The deck of live chats** (`renderer/src/chat/deck.ts`, `ChatDeck.tsx`):
   one `<AparteChat>` and one client per live conversation — the one shown,
   those that work or wait for the person, the four seen last — each bound to
