@@ -914,6 +914,53 @@ describe('ConversationEngine — the project instructions', () => {
     const notes = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta');
     expect(notes).toHaveLength(1);
   });
+
+  it('take about 12 % of the context: a long file is cut, the note naming the line to read on from (audit I2)', async () => {
+    const text = '(from AGENTS.md)\n' + Array.from({ length: 2000 }, (_, index) => `Rule ${index + 1}.`).join('\n');
+    const { store, prompts, conversation, say } = await rig({ instructions: async () => text });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const sent = prompts.filter((prompt) => prompt.includes('Bonjour')).at(-1)!;
+    const said = sent.slice(sent.indexOf('(from AGENTS.md)'), sent.indexOf('<turn|>', sent.indexOf('(from AGENTS.md)')));
+    // 8 192 tokens: about a thousand of them, some 4 000 characters.
+    expect(said.length).toBeLessThanOrEqual(4000);
+    expect(said).toMatch(/\[AGENTS\.md is cut after line \d+: read_file AGENTS\.md with offset \d+ for the rest\]/);
+    // The whole text is what is compared at the next turn: no note while it stays the same.
+    await say(meta.id, 'Encore');
+    expect((await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta')).toHaveLength(0);
+    expect((await store.get(meta.id))?.instructions).toBe(text);
+  });
+
+  it('a conversation frozen with the first version’s cut is not told its instructions again (audit I2)', async () => {
+    const full = '(from AGENTS.md)\n' + 'Rule.\n'.repeat(5000);
+    const { store, prompts, conversation, say } = await rig({ instructions: async () => full });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    const legacy =
+      ('(from CLAUDE.md)\n' + 'Rule.\n'.repeat(5000)).slice(0, 16_000) +
+      '\n\n[instructions cut here: the file continues — read it with read_file when you need the rest]';
+    await store.update(meta.id, { instructions: legacy });
+    await say(meta.id, 'Encore');
+    expect(prompts.at(-1)).not.toContain('[project update]');
+  });
+});
+
+describe('ConversationEngine — reasoning on a small context (audit 2026-11-21, I2)', () => {
+  const opens = (prompt: string): boolean => !prompt.endsWith('<|channel>thought\n<channel|>');
+
+  it('16 k or less: a turn does not reason unless the conversation says so; above, it does', async () => {
+    const small = await rig();
+    const meta = await small.conversation();
+    await small.say(meta.id, 'Bonjour');
+    expect(opens(small.prompts.at(-1)!)).toBe(false);
+    await small.engine.turn(meta.id, { text: 'Réfléchis', thinking: true }, () => undefined);
+    expect(opens(small.prompts.at(-1)!)).toBe(true);
+
+    const large = await rig({ live: { ...LIVE, nCtx: 32_768 } });
+    const other = await large.conversation();
+    await large.say(other.id, 'Bonjour');
+    expect(opens(large.prompts.at(-1)!)).toBe(true);
+  });
 });
 
 describe('ConversationEngine — the mode, as the model knows it', () => {
@@ -1047,6 +1094,18 @@ describe("ConversationEngine — the window's tools, as the model knows them", (
     expect(prompt).toContain('[tool inventory update]');
     expect(prompt).toContain('ask_user');
     expect(prompt.indexOf('ask_user')).toBeLessThan(prompt.indexOf('Bonjour'));
+  });
+
+  it('ask_user is told in a short sentence, never its raw schema (audit 2026-11-21, I2)', async () => {
+    const { prompts, conversation, engine } = await rig();
+    const meta = await conversation();
+    await engine.turn(meta.id, { text: 'Bonjour', tools: quiet }, () => undefined);
+    const prompt = prompts.filter((one) => one.includes('Bonjour')).at(-1)!;
+    const note = prompt.slice(prompt.indexOf('[tool inventory update]'), prompt.indexOf('Bonjour'));
+    expect(note).toContain('- ask_user: Ask the user to choose');
+    expect(note).toContain('options');
+    expect(note).not.toContain('arguments: {');
+    expect(note.length).toBeLessThan(600);
   });
 
   it('told once: the next turn with the same tools adds nothing; a turn without them removes nothing', async () => {

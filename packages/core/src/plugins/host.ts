@@ -52,7 +52,7 @@ import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../tools/types.js';
 import { PluginState } from './state.js';
 import { remoteModule, type PluginPort } from './remote.js';
-import { CORE_ENTRIES } from './entries.js';
+import { CORE_ENTRIES, OFF_BY_DEFAULT } from './entries.js';
 
 export const PLUGIN_MANIFEST_FILE = 'plugin.json';
 
@@ -378,6 +378,13 @@ export class PluginHost {
       this.changed();
       return;
     }
+    // Off by default (`OFF_BY_DEFAULT`): the person's « on » is what is kept.
+    if (OFF_BY_DEFAULT.has(id)) {
+      await state.setOn(id, enabled);
+      if (!enabled) await this.teardown(id);
+      this.changed();
+      return;
+    }
     if (enabled) {
       await state.setOff(id, false);
       const module = this.modules.get(id);
@@ -390,7 +397,7 @@ export class PluginHost {
   }
 
   isEnabled(id: string, projectId?: string): boolean {
-    return !(this.state?.isOff(id, projectId) ?? false);
+    return !(this.state?.isOff(id, projectId, OFF_BY_DEFAULT.has(id)) ?? OFF_BY_DEFAULT.has(id));
   }
 
   /**

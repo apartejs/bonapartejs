@@ -22,6 +22,7 @@ import {
 } from '../testing/fake-llama-server.js';
 import { writeFakeGguf } from '../testing/fake-gguf.js';
 import { AGENT_ENDPOINT, createAgentHandler } from './handler.js';
+import { familyLayer } from '../families/index.js';
 
 let servers: FakeLlamaServer[] = [];
 
@@ -192,7 +193,8 @@ describe('the agent handler, streaming a turn', () => {
     expect(prompts[1]).toContain('ok<turn|>\n');
     // A text file the window inlined arrives as a part of the message: it enters the message.
     expect(prompts[1]).toContain('<|turn>user\nQuel jour sommes-nous ?<turn|>\n');
-    expect(prompts[1]!.endsWith('<|turn>model\n')).toBe(true);
+    // A fake engine of 4 096 tokens: a small context, where a turn does not reason by default (audit I2).
+    expect(prompts[1]!.endsWith(familyLayer('gemma').beginAssistant({ thinking: false }))).toBe(true);
   });
 
   it('speaks Qwen to a model whose template is Qwen', async () => {
@@ -206,7 +208,7 @@ describe('the agent handler, streaming a turn', () => {
     });
     await linesOf(await handler(post(turn(user('Bonjour')))));
     expect(prompts[0]).toContain('<|im_start|>user\nBonjour<|im_end|>\n');
-    expect(prompts[0]!.endsWith('<|im_start|>assistant\n')).toBe(true);
+    expect(prompts[0]!.endsWith(familyLayer('qwen').beginAssistant({ thinking: false }))).toBe(true);
   });
 
   it("tells the engine where an answer ends in the model's family", async () => {

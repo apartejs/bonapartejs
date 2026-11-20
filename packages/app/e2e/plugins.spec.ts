@@ -47,18 +47,20 @@ test('the plugins added and the built-in ones, with their scope and effects, fil
   await expect(row(page, 'Bonjour')).toContainText('Lit');
   await expect(row(page, 'Bonjour')).toContainText('Depuis un dossier');
   const builtin = page.getByRole('region', { name: 'Intégrés' });
-  for (const name of ['Terminal', 'Navigateur', 'Recherche web', 'Scripts du projet', 'Titres automatiques', 'Sous-agents']) {
+  for (const name of ['Terminal', 'Navigateur', 'Recherche web', 'Scripts du projet', 'Titres automatiques', 'Sous-agents', 'Plugins créés en conversation']) {
     await expect(builtin.locator('.plugin-row__name', { hasText: name })).toBeVisible();
   }
   await expect(row(page, 'Titres automatiques')).toContainText('Interface seule');
   const show = page.getByRole('radiogroup', { name: 'Afficher' });
-  await expect(show).toContainText('Coupés · 0');
+  // « Plugins créés en conversation » is off until the person switches it on (audit 2026-11-21, I2).
+  await expect(row(page, 'Plugins créés en conversation').getByRole('switch', { name: 'Plugins créés en conversation' })).not.toBeChecked();
+  await expect(show).toContainText('Coupés · 1');
 
   const subagents = row(page, 'Sous-agents').getByRole('switch', { name: 'Sous-agents' });
   await expect(subagents).toBeChecked();
   await subagents.click();
   await expect(subagents).not.toBeChecked();
-  await expect(show).toContainText('Coupés · 1');
+  await expect(show).toContainText('Coupés · 2');
   await page.getByRole('searchbox', { name: 'Filtrer les plugins' }).fill('bonj');
   await expect(page.locator('.plugin-row')).toHaveCount(1);
 

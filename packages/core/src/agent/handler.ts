@@ -52,6 +52,16 @@ function refName(value: string | null): string | null {
  * conversation already, made in the default mode. After that, the core's choices stand. Both paths, the
  * built-in engine and a service, start a conversation through it.
  */
+/**
+ * « / plugin »: the conversation asked for the tools that make a plugin, off by default (audit 2026-11-21, I2) —
+ * any turn may say it (`plugins=1`), and it holds for the conversation; told to the model as a note of its inventory.
+ */
+async function askedPluginTools(core: Core, conversationId: string, url: URL): Promise<void> {
+  if (url.searchParams.get('plugins') !== '1') return;
+  const meta = await core.conversationStore.get(conversationId);
+  if (meta && meta.pluginTools !== true) await core.conversationStore.update(conversationId, { pluginTools: true });
+}
+
 async function applyFirstTurn(core: Core, conversationId: string, url: URL): Promise<void> {
   const chosen = playModeSchema.safeParse(url.searchParams.get('mode'));
   // Started in a project: it belongs to it, and runs in its default mode unless the person chose one.
@@ -114,7 +124,10 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       // built-in engine (review of phase 9: a discussion started on a service got every tool of a code one).
       await applyFirstTurn(core, conversationId, url);
     }
-    if (await core.serviceOf(conversationId)) return core.turnOnService(conversationId, raw as Record<string, unknown>, request);
+    if (await core.serviceOf(conversationId)) {
+      await askedPluginTools(core, conversationId, url);
+      return core.turnOnService(conversationId, raw as Record<string, unknown>, request);
+    }
 
     let engine: Engine | undefined;
     try {
@@ -139,6 +152,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
     } catch (error) {
       return jsonError(400, error instanceof Error ? error.message : String(error));
     }
+    await askedPluginTools(core, conversationId, url);
     const { messageId, clientTools, resume } = body.data;
     if (resume) {
       // A paused turn goes on: its ticket checked, its calls answered — the history the window sends is not read.

@@ -87,6 +87,8 @@ export interface LaunchOptions {
   plugins?: Record<string, Record<string, string>>;
   /** The app's settings as the person would have left them (`settings` in the configuration file). */
   settings?: Record<string, unknown>;
+  /** Built-in entries off by default that the person switched on (`config/plugins.json`'s `on`): « conversation-plugins ». */
+  pluginsOn?: string[];
   /** GitHub's CLI, a fake one: its pull request (as `gh pr view --json` says it), or none. Without it, the app has no CLI. */
   gh?: { pr?: Record<string, unknown> };
   /**
@@ -254,6 +256,9 @@ export async function launchApp(options: LaunchOptions = {}): Promise<LaunchedAp
         BONAPARTE_E2E_ENGINE_PORT: String(enginePort),
         FAKE_LLAMA_REQUESTS: requestsFile,
       });
+    }
+    if (options.pluginsOn) {
+      await writeFile(join(dataDir, 'config', 'plugins.json'), JSON.stringify({ installed: {}, off: [], on: options.pluginsOn, projects: {} }));
     }
     // A later launch on the same folder keeps the settings the app wrote there; the test's are laid over them.
     const written = await readFile(join(dataDir, 'config', 'global.json'), 'utf8')

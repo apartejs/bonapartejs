@@ -1,7 +1,8 @@
 /**
  * The built-in entries of the core on the Plugins page (task 11.3): features of the core that the person switches
  * off as a plugin — for the app, or for one project — and that the core follows. They have no Node half of their own
- * and add no tool: « Sous-agents » keeps `run_subagent` in the inventory or takes it out; « Scripts du projet » lets
+ * and add no tool: « Sous-agents » keeps `run_subagent` in the inventory or takes it out, « Plugins créés en
+ * conversation » the tools that make a plugin (off by default); « Scripts du projet » lets
  * the new tab list what the project runs; « Titres automatiques » lets the window title a conversation from its
  * first message.
  */
@@ -50,6 +51,18 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
     effects: [],
   },
   {
+    // Off until the person switches it on, or a conversation asks for it (« / plugin »): its five tools weigh some
+    // 900 tokens in every prompt (audit 2026-11-21, I2).
+    id: 'conversation-plugins',
+    name: { en: 'Plugins made in a conversation', fr: 'Plugins créés en conversation' },
+    version: '1.0.0',
+    description: {
+      en: 'The agent writes a plugin in any conversation, tries it there and offers to install it. Without it, only a conversation that asks with « / plugin ».',
+      fr: 'L’agent écrit un plugin dans toute conversation, l’essaie là et propose de l’installer. Sans lui, seulement une conversation qui le demande avec « / plugin ».',
+    },
+    effects: [{ effect: 'execute', what: { en: 'the plugins the agent writes, tried in their conversation', fr: 'les plugins que l’agent écrit, essayés dans leur conversation' } }],
+  },
+  {
     id: 'auto-titles',
     name: { en: 'Automatic titles', fr: 'Titres automatiques' },
     version: '1.0.0',
@@ -61,5 +74,14 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
   },
 ];
 
-/** The tool each entry keeps in the inventory, or takes out when it is switched off. */
-export const ENTRY_TOOLS: Readonly<Record<string, string>> = { subagents: 'run_subagent' };
+/** The tools each entry keeps in the inventory, or takes out when it is switched off. */
+export const ENTRY_TOOLS: Readonly<Record<string, readonly string[]>> = {
+  subagents: ['run_subagent'],
+  'conversation-plugins': ['harness_inspect', 'extension_define', 'extension_run', 'extension_stop', 'extension_undefine'],
+};
+
+/** The entries off until the person switches them on: their tools only where a conversation asks for them. */
+export const OFF_BY_DEFAULT: ReadonlySet<string> = new Set(['conversation-plugins']);
+
+/** The entry a conversation asks for with its « / » command, its tools then in its inventory whatever the switch. */
+export const ASKED_ENTRY = 'conversation-plugins';

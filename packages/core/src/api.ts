@@ -98,6 +98,7 @@ import {
 import {
   ContextFullError,
   ConversationEngine,
+  defaultThinking,
   NoEngineError,
   type EngineView,
   type TurnEvent,
@@ -115,7 +116,7 @@ import { builtinTools } from './tools/builtin/index.js';
 import { appliedChanges, type AppliedChange } from './checkpoints/changes.js';
 import { CheckpointStore, type ChangedFile, type UndoResult } from './checkpoints/store.js';
 import { detectProject, type ProjectFacts } from './project/detect.js';
-import { readProjectInstructions } from './project/instructions.js';
+import { cutInstructions, instructionsBudget, readProjectInstructions } from './project/instructions.js';
 import { openJournal } from './journal/journal.js';
 import { projectToAparte } from './journal/projection.js';
 import { ConversationIndex, type SearchResult } from './conversation/index.js';
@@ -130,7 +131,7 @@ import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, rem
 import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { AddedPlugins } from './plugins/added.js';
-import { ENTRY_TOOLS } from './plugins/entries.js';
+import { ASKED_ENTRY, ENTRY_TOOLS } from './plugins/entries.js';
 import { EXTENSION_ENTRY, ExtensionStore } from './plugins/extensions.js';
 import { extensionTools } from './tools/builtin/extensions.js';
 import { unifiedDiff } from './tools/preview.js';
@@ -698,13 +699,17 @@ export interface ConversationSettingsView {
   defaults: { temperature: number; thinking: boolean };
 }
 
-/** `family`: the layer its turns run in — its recommended temperature is the one a turn falls back on (audit 2026-11-21, D6). */
-function settingsView(meta: ConversationMeta, family: FamilyLayer): ConversationSettingsView {
+/**
+ * `family`: the layer its turns run in — its recommended temperature is the one a turn falls back on (audit 2026-11-21,
+ * D6). `engineWindow`: the engine's context — a small one does not reason by default (audit 2026-11-21, I2).
+ */
+function settingsView(meta: ConversationMeta, family: FamilyLayer, engineWindow: number): ConversationSettingsView {
+  const thinking = defaultThinking(Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow));
   return {
     temperature: meta.temperature ?? null,
     thinking: meta.thinking ?? null,
     contextCap: meta.contextCap ?? null,
-    defaults: { temperature: family.sampling({ thinking: meta.thinking ?? true }).temperature, thinking: true },
+    defaults: { temperature: family.sampling({ thinking: meta.thinking ?? thinking }).temperature, thinking },
   };
 }
 
@@ -1533,11 +1538,18 @@ export function createCore(deps: CoreDeps): Core {
     return project?.roots[0] ? { root: project.roots[0], name: project.name } : null;
   }
   // What a conversation of a project sees: the plugins it keeps, the MCP servers of the app and its own.
-  const visibleTo = (projectId: string | undefined, conversationId?: string) => {
+  const visibleTo = (projectId: string | undefined, conversationId?: string, meta?: Pick<ConversationMeta, 'pluginTools'> | null) => {
     const byPlugins = plugins.visibleTo(projectId, conversationId);
     const byServers = mcp.visibleTo(projectId);
-    // A built-in entry switched off takes its tool of the core out (« Sous-agents », task 11.3).
-    const offTools = new Set(Object.entries(ENTRY_TOOLS).filter(([entry]) => !plugins.isEnabled(entry, projectId)).map(([, tool]) => tool));
+    // A conversation that asked for the tools that make a plugin (« / plugin »), or made one already, keeps them.
+    const asked = meta?.pluginTools === true || (conversationId !== undefined && extensions.latest(conversationId).length > 0);
+    // A built-in entry switched off takes its tools of the core out (« Sous-agents », task 11.3; « Plugins créés en
+    // conversation », off by default: audit 2026-11-21, I2).
+    const offTools = new Set(
+      Object.entries(ENTRY_TOOLS)
+        .filter(([entry]) => !plugins.isEnabled(entry, projectId) && !(entry === ASKED_ENTRY && asked))
+        .flatMap(([, names]) => names),
+    );
     return (def: ToolDef) => byPlugins(def) && byServers(def) && !offTools.has(def.name);
   };
   const plugins = new PluginHost({
@@ -1627,7 +1639,7 @@ export function createCore(deps: CoreDeps): Core {
     },
     prompt: (meta) => ({
       kind: meta.kind,
-      tools: toolsFor(meta.kind, tools.view(visibleTo(meta.projectId, meta.id)).list()),
+      tools: toolsFor(meta.kind, tools.view(visibleTo(meta.projectId, meta.id, meta)).list()),
       perimeter: perimeterOf(meta),
       replyLanguage: deps.replyLanguage?.() ?? 'English',
       // The machine's: the same in every conversation's shared turn, so one seed serves them (audit 2026-11-21, I1).
@@ -1666,6 +1678,11 @@ export function createCore(deps: CoreDeps): Core {
     store: conversationStore,
     family: () => loaded?.layer ?? remoteFamily ?? familyLayer('gemma'),
   });
+
+  /** The context a turn has on the engine that runs, else on the one a load would launch. */
+  async function engineContext(): Promise<number> {
+    return supervisor.loaded?.nCtx || (await launchSettings()).nCtx;
+  }
 
   async function currentEngine(): Promise<Engine | undefined> {
     if ((await mode()) === 'remote') {
@@ -1734,8 +1751,9 @@ export function createCore(deps: CoreDeps): Core {
     const signer = await tickets();
     const { roots, projectId, barred } = await rootsOf(conversationId);
     // Only the tools its kind is told of: a discussion's call to a file tool finds none (task 9.7).
-    const kind = (await conversationStore.get(conversationId))?.kind ?? 'code';
-    const visible = visibleTo(projectId, conversationId);
+    const asked = await conversationStore.get(conversationId);
+    const kind = asked?.kind ?? 'code';
+    const visible = visibleTo(projectId, conversationId, asked);
     const told = new Set(toolsFor(kind, tools.view(visible).list()).map((tool) => tool.name));
     // Whatever becomes of the turn, what it wrote is found by « Rechercher » at once.
     try {
@@ -1849,9 +1867,10 @@ export function createCore(deps: CoreDeps): Core {
     if (!meta || !provider) throw new Error(`The conversation ${conversationId} is not on a service.`);
     const place = await rootsOf(conversationId);
     const { mode } = await modeOf(conversationId);
-    const registry = tools.view(visibleTo(place.projectId, conversationId));
+    const registry = tools.view(visibleTo(place.projectId, conversationId, meta));
     const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
-    const instructions = project ? ((await readProjectInstructions(project.roots))?.text ?? '') : '';
+    // Cut as for a context of 32 k: a service's is not known (audit 2026-11-21, I2).
+    const instructions = project ? cutInstructions((await readProjectInstructions(project.roots))?.text ?? '', instructionsBudget(32_768)) : '';
     const messageId = typeof raw['messageId'] === 'string' ? raw['messageId'] : 'turn';
     const originals = keepOriginals(conversationId, messageId);
     // What the turn says is kept in the journal, the truth (task 9.2): the message, then the answer — nothing
@@ -2462,7 +2481,7 @@ export function createCore(deps: CoreDeps): Core {
       async get(conversationId) {
         const meta = await conversationStore.get(conversationId);
         if (!meta) throw new Error(`There is no conversation ${conversationId}.`);
-        return settingsView(meta, loaded?.layer ?? remoteFamily ?? familyLayer('gemma'));
+        return settingsView(meta, loaded?.layer ?? remoteFamily ?? familyLayer('gemma'), await engineContext());
       },
       async set(conversationId, changes) {
         if (changes.temperature !== undefined && changes.temperature !== null && !(changes.temperature >= 0 && changes.temperature <= 2)) {
@@ -2471,7 +2490,7 @@ export function createCore(deps: CoreDeps): Core {
         if (changes.contextCap !== undefined && changes.contextCap !== null && !(Number.isInteger(changes.contextCap) && changes.contextCap >= 512)) {
           throw new Error('The context cap is a whole number of tokens, 512 at least.');
         }
-        return settingsView(await conversationStore.settle(conversationId, changes), loaded?.layer ?? remoteFamily ?? familyLayer('gemma'));
+        return settingsView(await conversationStore.settle(conversationId, changes), loaded?.layer ?? remoteFamily ?? familyLayer('gemma'), await engineContext());
       },
     },
 
@@ -2583,7 +2602,7 @@ export function createCore(deps: CoreDeps): Core {
         conversationId,
         mode: (await modeOf(conversationId)).mode,
         ...(place.projectId ? { projectId: place.projectId } : {}),
-        registry: tools.view(visibleTo(place.projectId, conversationId)),
+        registry: tools.view(visibleTo(place.projectId, conversationId, await conversationStore.get(conversationId))),
         permissions,
         place: { roots: place.roots, ...(place.barred ? { barred: place.barred } : {}) },
         nCtx: supervisor.loaded?.nCtx ?? (settingDefault('nCtx') as number),

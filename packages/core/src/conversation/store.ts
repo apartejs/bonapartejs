@@ -37,6 +37,8 @@ export interface ConversationMeta {
   /** « Réglages de conversation » (task 12.4): its temperature, and its reasoning switched off; none: the defaults. */
   temperature?: number;
   thinking?: boolean;
+  /** It asked for the tools that make a plugin (« / plugin »), off by default (audit 2026-11-21, I2). */
+  pluginTools?: boolean;
   /** The project's instructions as the model last read them: a change is appended as a note (task 4.7). */
   instructions?: string;
   /** Its last going back, while it can still be undone — until its next turn begins (task 7.1). */

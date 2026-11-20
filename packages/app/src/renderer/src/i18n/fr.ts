@@ -750,6 +750,11 @@ export const fr: Messages = {
     pill: 'Sous-agents',
     ask: 'Confie chaque partie indépendante de cette demande à un sous-agent (outil run_subagent). Donne-lui tools "all" s’il doit écrire des fichiers ou lancer des commandes. Voici la demande :',
   },
+  pluginCommand: {
+    description: 'Créer un plugin dans cette conversation',
+    pill: 'Plugin',
+    ask: 'Crée un plugin pour bonaparte : lis d’abord le guide avec harness_inspect, écris-le avec extension_define, puis essaie-le avec extension_run. Voici ce qu’il doit faire :',
+  },
   compact: {
     command: 'Résume la conversation, et elle repart de ce résumé',
     full: (percent) => `Contexte plein à ${percent} %`,

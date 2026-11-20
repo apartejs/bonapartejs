@@ -367,8 +367,10 @@ function Workspace({
   // « À l'essai », the row's own badge, filtered too (aparté 1.14, apartejs/aparte#261). Run, the command asks its plugin, which
   // says what to send in the person's name or to tell.
   const subagentsOn = plugins.find((plugin) => plugin.id === 'subagents')?.enabled ?? true;
-  const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn });
-  commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn };
+  // « Plugins créés en conversation », off by default: « /plugin » asks its tools for one conversation (audit I2).
+  const madeHereOn = plugins.find((plugin) => plugin.id === 'conversation-plugins')?.enabled ?? false;
+  const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn, madeHere: madeHereOn });
+  commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn, madeHere: madeHereOn };
   useEffect(() => {
     const collect = (event: Event): void => {
       const detail = (event as CustomEvent<{ add(command: { id: string; name: string; description: string; badge?: string; order: number; run(context: { notify(text: string): void }): void }): void }>).detail;
@@ -383,6 +385,20 @@ function Workspace({
           order: 250,
           run: () => {
             attachToken({ label: now.messages.agentsCommand.pill, text: now.messages.agentsCommand.ask, kind: 'subagents' });
+          },
+        });
+      }
+      // « /plugin »: the tools that make a plugin for this conversation (a discussion has none), a pill that names them.
+      if (!now.madeHere && now.projectId) {
+        detail.add({
+          id: 'plugin',
+          name: 'plugin',
+          description: now.messages.pluginCommand.description,
+          order: 260,
+          run: () => {
+            if (now.conversationId) pluginsAsked.current.add(now.conversationId);
+            else pluginsNext.current = true;
+            attachToken({ label: now.messages.pluginCommand.pill, text: now.messages.pluginCommand.ask, kind: 'plugin' });
           },
         });
       }
@@ -479,6 +495,9 @@ function Workspace({
   // Where each conversation born here was started: until its first turn tells the core.
   const bornIn = useRef(new Map<string, string | null>());
 
+  // The conversations that asked for the tools that make a plugin (« /plugin »), and a new one's, until its first turn.
+  const pluginsAsked = useRef(new Set<string>());
+  const pluginsNext = useRef(false);
   // The service a new conversation starts on (task 9.3): what the picker shows, picked before its first message.
   const chosenService = useRef<{ provider: string; model: string } | null>(startOn);
   const [, setServicePicked] = useState(0);
@@ -491,6 +510,14 @@ function Workspace({
         mode: () => chosen.current,
         picked: () => picked.current,
         project: () => project.current?.id ?? null,
+        // « /plugin » (audit 2026-11-21, I2): the conversation it was asked in, or the next turn's when none was open yet.
+        plugins: (id) => {
+          if (pluginsNext.current) {
+            pluginsNext.current = false;
+            pluginsAsked.current.add(id);
+          }
+          return pluginsAsked.current.has(id);
+        },
         // Its own branch, chosen before its first message (task 6.7).
         branch: () => (place.current?.worksIn === 'branch' && place.current.branch.trim() ? { branch: place.current.branch.trim(), base: place.current.base.trim() || 'HEAD' } : null),
       }),
@@ -1397,6 +1424,8 @@ function Workspace({
           // « Créer avec l’agent » (task 11.3): a new conversation, its composer asking for a plugin.
           setSettingsPage(null);
           goTo(null);
+          // Its tools come with its first turn, whatever « Plugins créés en conversation » says (audit 2026-11-21, I2).
+          pluginsNext.current = true;
           setTimeout(() => prefill(messages.plugins.createPrompt), 0);
         }}
         onOpenConversation={(id) => {

@@ -84,6 +84,14 @@ describe('createConversationRunner', () => {
     expect(posted).toEqual(['bonaparte://app/agent/c/c-1?mode=lecture', 'bonaparte://app/agent/c/c-1?mode=plume']);
   });
 
+  it('tells the core that « /plugin » asked the tools that make a plugin, for that conversation only (audit I2)', async () => {
+    const { fetch, posted } = answering([{ type: 'run-start' }, { type: 'run-done' }]);
+    const runner = createConversationRunner({ fetch, plugins: (id) => id === 'c-1' });
+    await runner(turn('c-1'));
+    await runner(turn('c-2'));
+    expect(posted).toEqual(['bonaparte://app/agent/c/c-1?plugins=1', 'bonaparte://app/agent/c/c-2']);
+  });
+
   it('tells the core the project a new conversation starts in, beside the mode', async () => {
     const { fetch, posted } = answering([{ type: 'run-start' }, { type: 'run-done' }]);
     let project: string | null = 'p-1';

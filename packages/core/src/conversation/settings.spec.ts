@@ -77,14 +77,22 @@ describe('the settings of one conversation', { timeout: 30_000 }, () => {
     expect(bodies.at(-1)).toMatchObject({ temperature: 0.3, top_p: 0.95, top_k: 64, min_p: 0 });
   });
 
+  it('says that a small context does not reason by default (audit 2026-11-21, I2)', async () => {
+    const { core, say } = await rig();
+    await say('Bonjour');
+    // The fake engine's 4 096 tokens, a cap of the conversation's above it changing nothing.
+    expect((await core.conversationSettings.get('c1')).defaults.thinking).toBe(false);
+  });
+
   it('switched off, the entry gives the defaults back', async () => {
     const { core, say, bodies } = await rig();
     await say('Bonjour');
-    await core.conversationSettings.set('c1', { temperature: 0.2, thinking: false });
+    // Reasoning asked against the default of a small context (the fake engine's 4 096 tokens: off, audit I2).
+    await core.conversationSettings.set('c1', { temperature: 0.2, thinking: true });
     await core.plugins.setEnabled('conversation-settings', false);
     await say('Encore');
     expect(bodies.at(-1)!['temperature']).toBe(1);
-    expect(String(bodies.at(-1)!['prompt']).endsWith(familyLayer('gemma').beginAssistant({ thinking: true }))).toBe(true);
+    expect(String(bodies.at(-1)!['prompt']).endsWith(familyLayer('gemma').beginAssistant({ thinking: false }))).toBe(true);
   });
 
   it('refuses a temperature out of range, and a context cap that is no whole number', async () => {

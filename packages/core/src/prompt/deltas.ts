@@ -15,6 +15,21 @@ function toolLine(tool: ToolDef): string {
   return `- ${tool.name}: ${tool.description}\n  arguments: ${JSON.stringify(tool.inputSchema)}`;
 }
 
+/**
+ * The window's question, in one short paragraph: its raw schema (aparté's, with `anyOf`) weighs some 1 700
+ * characters in every conversation, and says less to a small model than a sentence (audit 2026-11-21, I2).
+ */
+const ASK_USER_NOTE =
+  '- ask_user: Ask the user to choose before you go on, only when their request is truly ambiguous and no sensible ' +
+  'default exists; otherwise answer or act. Arguments: questions, a list of 1 to 5 objects, each {question, header: ' +
+  'one or two words, options: a list of 2 to 4 {title, description?}, multiple?: true when several options may apply}. ' +
+  'The user’s choice comes back as the result.';
+
+/** What the model reads of a tool in a note; whether it changed is still read from its whole definition (`toolLine`). */
+function toolNote(tool: ToolDef): string {
+  return tool.where === 'window' && tool.name === 'ask_user' ? ASK_USER_NOTE : toolLine(tool);
+}
+
 const sameList = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((item, index) => item === b[index]);
 
@@ -53,7 +68,7 @@ export function renderInventoryDelta(previous: readonly ToolDef[], current: read
   const removed = previous.filter((tool) => !names.has(tool.name)).map((tool) => tool.name);
   if (available.length === 0 && removed.length === 0) return null;
   const parts = ['[tool inventory update]'];
-  if (available.length > 0) parts.push(`Tools now available:\n${available.map(toolLine).join('\n')}`);
+  if (available.length > 0) parts.push(`Tools now available:\n${available.map(toolNote).join('\n')}`);
   if (removed.length > 0) parts.push(`Tools removed (do not call them): ${removed.join(', ')}`);
   return { kind: 'inventory', text: parts.join('\n') };
 }

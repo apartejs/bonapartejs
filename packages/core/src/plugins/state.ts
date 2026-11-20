@@ -16,6 +16,8 @@ const fileSchema = z.object({
     .record(z.string(), z.object({ source: pluginSourceSchema, addedAt: z.string(), update: z.string().optional() }))
     .default({}),
   off: z.array(z.string()).default([]),
+  /** Switched on by the person, of what is off by default (`OFF_BY_DEFAULT`). */
+  on: z.array(z.string()).default([]),
   projects: z.record(z.string(), z.array(z.string())).default({}),
 });
 
@@ -41,7 +43,7 @@ export class PluginState {
 
   /** The state kept in `file`; with none, in memory only (tests, and a core without a data folder). */
   static async open(file: string | null): Promise<PluginState> {
-    const empty: PluginsFile = { installed: {}, off: [], projects: {} };
+    const empty: PluginsFile = { installed: {}, off: [], on: [], projects: {} };
     if (!file) return new PluginState(null, empty);
     let found: unknown;
     try {
@@ -55,9 +57,17 @@ export class PluginState {
     return new PluginState(file, parsed.data);
   }
 
-  /** Switched off for the app, or for this project. */
-  isOff(id: string, projectId?: string): boolean {
-    return this.data.off.includes(id) || (projectId !== undefined && (this.data.projects[projectId] ?? []).includes(id));
+  /** Switched off for the app, or for this project; `byDefault`: off until the person switched it on. */
+  isOff(id: string, projectId?: string, byDefault = false): boolean {
+    const forApp = byDefault ? !this.data.on.includes(id) : this.data.off.includes(id);
+    return forApp || (projectId !== undefined && (this.data.projects[projectId] ?? []).includes(id));
+  }
+
+  /** What is off by default, switched on for the app — or off again. */
+  setOn(id: string, on: boolean): Promise<void> {
+    return this.change((data) => {
+      data.on = on ? [...new Set([...data.on, id])] : data.on.filter((one) => one !== id);
+    });
   }
 
   /** What a project switches off of what the app runs. */
@@ -106,6 +116,7 @@ export class PluginState {
     return this.change((data) => {
       delete data.installed[id];
       data.off = data.off.filter((one) => one !== id);
+      data.on = data.on.filter((one) => one !== id);
       for (const project of Object.keys(data.projects)) data.projects[project] = data.projects[project]!.filter((one) => one !== id);
     });
   }

@@ -748,6 +748,11 @@ export const en: Messages = {
     pill: 'Sub-agents',
     ask: 'Hand each independent part of this request to a sub-agent (the run_subagent tool). Give it tools "all" when it has to write files or run commands. The request:',
   },
+  pluginCommand: {
+    description: 'Make a plugin in this conversation',
+    pill: 'Plugin',
+    ask: 'Make a plugin for bonaparte: read the guide with harness_inspect first, write it with extension_define, then try it with extension_run. What it should do:',
+  },
   compact: {
     command: 'Summarise the conversation, and it goes on from the summary',
     full: (percent) => `Context ${percent} % full`,

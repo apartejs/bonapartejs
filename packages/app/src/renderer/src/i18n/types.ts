@@ -769,6 +769,15 @@ export interface Messages {
     /** What the message says in the pill's place: the tool named, as a small model needs it. */
     ask: string;
   };
+  /**
+   * « /plugin »: the tools that make a plugin, off by default (audit 2026-11-21, I2), asked for this conversation,
+   * and a pill that names them in the person's name.
+   */
+  pluginCommand: {
+    description: string;
+    pill: string;
+    ask: string;
+  };
   compact: {
     /** The « / » command's description. */
     command: string;

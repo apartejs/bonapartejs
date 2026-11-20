@@ -79,6 +79,31 @@ describe('the built-in entries of the core (task 11.3)', () => {
     expect(lastUserPart(prompts.at(-1)!)).toMatch(/Tools now available:[\s\S]*run_subagent/);
   });
 
+  it('« Plugins créés en conversation » is off by default: the tools that make a plugin are in no prompt (audit 2026-11-21, I2)', async () => {
+    const { core, prompts, say } = await rig();
+    await core.plugins.activateBuiltinEntries();
+    expect(core.plugins.status().find((one) => one.id === 'conversation-plugins')).toMatchObject({ builtin: true, enabled: false });
+    await say('c1', 'Bonjour');
+    for (const name of ['harness_inspect', 'extension_define', 'extension_run', 'extension_stop', 'extension_undefine']) {
+      expect(prompts.at(-1)).not.toContain(name);
+    }
+    // A conversation that asks for them (« / plugin »): told as a note, the frozen text untouched; it keeps them.
+    await say('c1', 'Fais un plugin', '?plugins=1');
+    expect(lastUserPart(prompts.at(-1)!)).toMatch(/Tools now available:[\s\S]*extension_define/);
+    await say('c1', 'Encore');
+    expect(lastUserPart(prompts.at(-1)!)).not.toContain('Tools removed');
+    // Another conversation does not have them.
+    await say('c2', 'Bonjour');
+    expect(prompts.at(-1)).not.toContain('extension_define');
+    // Switched on by the person: every conversation has them, the switch kept across a restart.
+    await core.plugins.setEnabled('conversation-plugins', true);
+    await say('c2', 'Et maintenant');
+    expect(lastUserPart(prompts.at(-1)!)).toMatch(/Tools now available:[\s\S]*harness_inspect/);
+    expect(core.plugins.isEnabled('conversation-plugins')).toBe(true);
+    await core.plugins.setEnabled('conversation-plugins', false);
+    expect(core.plugins.isEnabled('conversation-plugins')).toBe(false);
+  });
+
   it('« Scripts du projet » switched off: the new tab lists no script', async () => {
     const { core, dir } = await rig();
     await core.plugins.activateBuiltinEntries();

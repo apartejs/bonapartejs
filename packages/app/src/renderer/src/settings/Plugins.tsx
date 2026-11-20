@@ -56,6 +56,7 @@ const BUILTIN_ICONS: Record<string, IconName> = {
   subagents: 'subagents',
   'project-scripts': 'terminal',
   'auto-titles': 'edit',
+  'conversation-plugins': 'conversation',
 };
 function iconOf(plugin: PluginStatus, conversation: string | null): IconName {
   if (plugin.builtin) return BUILTIN_ICONS[plugin.id] ?? 'panel';

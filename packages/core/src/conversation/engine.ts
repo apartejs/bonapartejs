@@ -42,6 +42,7 @@ import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
 import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
+import { cutInstructions, instructionsBudget, sameInstructions } from '../project/instructions.js';
 import { CompactionError, planCompaction, SUMMARY_MAX_TOKENS, SUMMARY_QUESTION, summaryNote } from './compact.js';
 import type { ToolDef, ToolResult } from '../tools/types.js';
 import type { ConversationMeta, ConversationStore } from './store.js';
@@ -67,6 +68,14 @@ export function countedContext(entries: readonly JournalEntry[]): number | null 
   const counted = (entries[at] as Extract<JournalEntry, { kind: 'assistant' }>).usage!.contextTokens!;
   const since = entries.slice(at + 1).map((entry) => entry.rendered ?? '').join('');
   return counted + (since ? Math.ceil(since.length / 3) : 0);
+}
+
+/** A context this small or smaller: a turn does not reason unless its conversation says so (audit 2026-11-21, I2). */
+export const SMALL_CONTEXT = 16_384;
+
+/** Whether a turn reasons when nothing says: not on a small context, where its thoughts would eat the room left. */
+export function defaultThinking(window: number): boolean {
+  return window > SMALL_CONTEXT;
 }
 
 /** Room kept for the answer: a message that leaves less is refused before it is sent. */
@@ -834,7 +843,7 @@ export class ConversationEngine {
 
       // The system prompt frozen again, with the truth of the moment: every note folded in.
       const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
-      const { asked, prompt } = await this.systemPrompt(meta, family, instructions);
+      const { asked, prompt } = await this.systemPrompt(meta, family, instructions, window);
       const stable = family.renderSystem(prompt.stable);
       const rendered =
         stable +
@@ -1096,8 +1105,10 @@ export class ConversationEngine {
     }
     const entries = journal.entries();
     const frozen = frozenPrompt(entries);
-    const opening = family.beginAssistant({ thinking: input.thinking ?? true, ...(input.resume ? { continuing: true } : {}) });
     const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
+    // A sub-agent reasons as its conversation does: off by default on a small context (audit I2).
+    const thinking = input.thinking ?? defaultThinking(engineWindow);
+    const opening = family.beginAssistant({ thinking, ...(input.resume ? { continuing: true } : {}) });
     const used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(opening);
     if (used + REPLY_ROOM > engineWindow) throw new ContextFullError(this.contextFull(engine, used, engineWindow));
 
@@ -1123,7 +1134,7 @@ export class ConversationEngine {
         turning,
         prompt: frozen + opening,
         opening,
-        thinking: input.thinking ?? true,
+        thinking,
         ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
         tools: input.tools,
         sink,
@@ -1199,18 +1210,25 @@ export class ConversationEngine {
 
   /**
    * The system prompt as it is frozen now: what the conversation is told of its tools, folders and language, its
-   * environment read at this moment, its instructions. Only when a prompt is frozen — never between two rebases.
+   * environment read at this moment, its instructions cut to the context it is frozen for (`window`, tokens: about
+   * 12 % of it, audit 2026-11-21, I2). Only when a prompt is frozen — never between two rebases.
    */
-  private async systemPrompt(meta: ConversationMeta, family: FamilyLayer, instructions: string | undefined) {
+  private async systemPrompt(meta: ConversationMeta, family: FamilyLayer, instructions: string | undefined, window: number) {
     const asked = this.deps.prompt(meta);
     const environment = this.deps.environment ? await this.deps.environment(meta).catch(() => undefined) : undefined;
+    const said = instructions ? cutInstructions(instructions, instructionsBudget(window)) : '';
     const prompt = buildSystemPrompt({
       ...asked,
       family,
       ...(environment ? { environment } : {}),
-      ...(instructions ? { projectInstructions: instructions } : {}),
+      ...(said ? { projectInstructions: said } : {}),
     });
     return { asked, prompt };
+  }
+
+  /** The context a turn of this conversation has: its own cap, else the engine's (tokens; infinite when unknown). */
+  private windowOf(meta: ConversationMeta, engine: Partial<Pick<EngineView, 'live'>>, engineWindow?: number): number {
+    return Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow ?? (engine.live?.nCtx || Number.POSITIVE_INFINITY));
   }
 
   private ownerOf(meta: ConversationMeta): SlotOwner {
@@ -1280,11 +1298,11 @@ export class ConversationEngine {
   private async refreezeFor(
     meta: ConversationMeta,
     entries: readonly JournalEntry[],
-    engine: Pick<EngineView, 'family'>,
+    engine: Pick<EngineView, 'family'> & Partial<Pick<EngineView, 'live'>>,
     instructions: string | undefined,
   ) {
     const { family } = engine;
-    const { asked, prompt } = await this.systemPrompt(meta, family, instructions);
+    const { asked, prompt } = await this.systemPrompt(meta, family, instructions, this.windowOf(meta, engine));
     const stable = family.renderSystem(prompt.stable);
     const written = branchModel(entries).family;
     const rendered = rerenderConversation(entries, {
@@ -1397,6 +1415,11 @@ export class ConversationEngine {
     }
     // Each answer names the window's message it fills: the sibling the person picks is found by it.
     const answerOf = input.messageId ? { messageId: input.messageId } : {};
+    // The context of this turn: what the instructions take of a frozen prompt, whether it reasons by default, what fits.
+    const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
+    const window = this.windowOf(meta, engine, engineWindow);
+    // On a small context the model answers without reasoning unless the conversation says otherwise (audit I2).
+    const thinking = input.thinking ?? defaultThinking(window);
 
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     // A branch frozen for another model goes on in a new branch, the conversation rendered again (task 7.4).
@@ -1406,7 +1429,7 @@ export class ConversationEngine {
     // A branch frozen again (a change of model) has its system turn in that entry: one started on a service has
     // no other, and never reads a second one after the person's message (review of phase 9).
     if (!journal.entries().some((entry) => entry.kind === 'system' || (isRefrozen(entry) && entry.rendered !== undefined))) {
-      const { asked, prompt } = await this.systemPrompt(meta, family, instructions);
+      const { asked, prompt } = await this.systemPrompt(meta, family, instructions, window);
       await journal.append({
         kind: 'system',
         rendered: family.renderSystem(prompt.stable),
@@ -1432,10 +1455,10 @@ export class ConversationEngine {
       await tellRewind(journal, family);
       if (meta.rewound) meta = await this.deps.store.update(id, { rewound: undefined });
     }
-    if (!input.resume && instructions !== undefined && instructions !== (meta.instructions ?? '')) {
+    if (!input.resume && instructions !== undefined && !sameInstructions(meta.instructions ?? '', instructions)) {
       // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
-      // Never on a resume: the answer it continues is still open.
-      const delta = renderInstructionsDelta(meta.instructions ?? '', instructions);
+      // Never on a resume: the answer it continues is still open. Cut as a frozen prompt cuts them.
+      const delta = renderInstructionsDelta(meta.instructions ?? '', cutInstructions(instructions, instructionsBudget(window)));
       if (delta) await journal.append({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
       meta = await this.deps.store.update(id, { instructions });
     }
@@ -1483,11 +1506,9 @@ export class ConversationEngine {
     const frozen = frozenPrompt(entries);
     // Answering the last message again appends no message.
     const userRendered = input.text === undefined ? '' : family.renderUser(input.text);
-    const opening = family.beginAssistant({ thinking: input.thinking ?? true, ...(input.resume ? { continuing: true } : {}) });
+    const opening = family.beginAssistant({ thinking, ...(input.resume ? { continuing: true } : {}) });
 
     // Never a context shift: what does not fit is refused before anything is sent.
-    const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
-    const window = Math.min(meta.contextCap ?? Number.POSITIVE_INFINITY, engineWindow);
     // What the engine holds, as it counted it, and what this turn adds: an estimate of the whole (three
     // characters a token) refused, in prose, messages the engine had room for. The server refuses what does
     // not fit after all (below).
@@ -1531,7 +1552,7 @@ export class ConversationEngine {
             turning,
             prompt: frozen + userRendered + opening,
             opening,
-            thinking: input.thinking ?? true,
+            thinking,
             ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
             ...(input.tools ? { tools: input.tools } : {}),
             sink,

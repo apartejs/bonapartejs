@@ -29,6 +29,8 @@ export interface ConversationRunnerOptions {
   service?: () => { provider: string; model: string } | null;
   /** A new conversation without a project is a discussion (task 9.7; the core takes it at its first turn only). */
   kind?: () => 'discussion' | null;
+  /** « /plugin » asked the tools that make a plugin for this conversation (audit 2026-11-21, I2): said with its turns. */
+  plugins?: (conversationId: string) => boolean;
   /** What each turn is doing, said once each time it changes (task 12.2); by default, on the window (`TURN_ACTIVITY`). */
   onActivity?: (conversationId: string, activity: TurnActivity) => void;
   /** Tests only. */
@@ -55,6 +57,7 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
         query.set('base', branch.base);
       }
       if (options.kind?.() === 'discussion') query.set('kind', 'discussion');
+      if (conversationId && options.plugins?.(conversationId)) query.set('plugins', '1');
       const service = options.service?.();
       if (service) {
         query.set('provider', service.provider);

@@ -37,6 +37,32 @@ const agentWith = (code: string) => (prompt: string): string => {
 };
 const agent = agentWith(CODE);
 
+test('off by default, the tools that make a plugin are in no prompt; « /plugin » asks them for its conversation, in a pill (audit I2)', async ({ launch }) => {
+  const prompts: string[] = [];
+  const recording = (prompt: string): string => {
+    prompts.push(prompt);
+    return agent(prompt);
+  };
+  const { page } = await launch({ engine: { responder: recording }, settings: { defaultMode: 'plume' } });
+  const ui = chat(page);
+  await ui.send('Bonjour');
+  await expect(ui.replyText).toHaveText('ok', { timeout: 30_000 });
+  const first = prompts.at(-1)!;
+  expect(first).not.toContain('extension_define');
+  await ui.editor.click();
+  await page.keyboard.type('/plug');
+  await page.getByRole('listbox').getByRole('option', { name: /plugin/ }).click();
+  await expect(ui.editor).toContainText('Plugin');
+  await page.keyboard.type(' une commande /changelog.');
+  await page.keyboard.press('Enter');
+  await expect(ui.replyText).toHaveText(/Voilà le plugin/, { timeout: 30_000 });
+  await expect(page.locator('section.extension-card[data-extension="changelog"]')).toBeVisible();
+  const asked = prompts.find((prompt) => prompt.includes('harness_inspect'))!;
+  // Told as a note of the inventory, the frozen prompt as it was.
+  expect(asked.startsWith(first.slice(0, first.indexOf('<|turn>user')))).toBe(true);
+  expect(asked).toMatch(/\[tool inventory update\][\s\S]*extension_define/);
+});
+
 test('a trial the model starts itself (extension_run) reaches the window: its « / » command is there, marked « À l’essai »', async ({ launch }) => {
   const run = (prompt: string): string => {
     const user = prompt.lastIndexOf('<|turn>user');
@@ -45,7 +71,7 @@ test('a trial the model starts itself (extension_run) reaches the window: its «
     if (results === 3) return 'Il tourne ici.';
     return agent(prompt);
   };
-  const { page } = await launch({ engine: { responder: run }, settings: { defaultMode: 'plume' } });
+  const { page } = await launch({ engine: { responder: run }, settings: { defaultMode: 'plume' }, pluginsOn: ['conversation-plugins'] });
   const ui = chat(page);
   await ui.send('Crée-moi un plugin : une commande /changelog, et lance-le.');
   // Its code is shown before it runs: the person says yes.
@@ -62,7 +88,7 @@ test('a trial the model starts itself (extension_run) reaches the window: its «
 });
 
 test('a trial ends from the Plugins page: « Arrêter l’essai » — its « / » command goes with it', async ({ launch }) => {
-  const { page } = await launch({ engine: { responder: agent }, settings: { defaultMode: 'plume' } });
+  const { page } = await launch({ engine: { responder: agent }, settings: { defaultMode: 'plume' }, pluginsOn: ['conversation-plugins'] });
   const ui = chat(page);
   await ui.send('Crée-moi un plugin : une commande /changelog.');
   const card = page.locator('section.extension-card[data-extension="changelog"]');
@@ -82,7 +108,7 @@ test('a trial ends from the Plugins page: « Arrêter l’essai » — its « / 
 
 test('« Essayer » on a plugin that does not start says so, with its reason — never « À l’essai »', async ({ launch }) => {
   const broken = "export default { activate() { throw new Error('no git here'); } };";
-  const { page } = await launch({ engine: { responder: agentWith(broken) }, settings: { defaultMode: 'plume' } });
+  const { page } = await launch({ engine: { responder: agentWith(broken) }, settings: { defaultMode: 'plume' }, pluginsOn: ['conversation-plugins'] });
   await chat(page).send('Crée-moi un plugin : une commande /changelog.');
   const card = page.locator('section.extension-card[data-extension="changelog"]');
   await expect(card).toBeVisible({ timeout: 30_000 });
@@ -93,7 +119,7 @@ test('« Essayer » on a plugin that does not start says so, with its reason —
 });
 
 test('a plugin made in a conversation: its card, tried there with its « / » command on trial, then installed', async ({ launch }) => {
-  const { page } = await launch({ engine: { responder: agent }, settings: { defaultMode: 'plume' } });
+  const { page } = await launch({ engine: { responder: agent }, settings: { defaultMode: 'plume' }, pluginsOn: ['conversation-plugins'] });
   const ui = chat(page);
   await ui.send('Crée-moi un plugin : une commande /changelog qui résume les commits du jour.');
   await expect(ui.replyText).toHaveText(/Voilà le plugin/, { timeout: 30_000 });
