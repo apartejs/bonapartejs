@@ -35,6 +35,20 @@ async function rig(service?: Partial<PluginBrowser>, roots: readonly string[] = 
     handlers.get(name)!({ input, conversationId: 'c1', roots, signal: { aborted: false, addEventListener: () => undefined }, use: async () => ({ content: '' }) } as unknown as PluginToolInvocation);
 }
 
+describe('what the model reads of the browser (audit 2026-11-21, I3)', () => {
+  it('each tool says it works in the agent’s own tab, a session apart — never the tab the person sees', () => {
+    const tools = browserManifest.contributes?.tools ?? [];
+    expect(tools).toHaveLength(5);
+    for (const tool of tools) {
+      expect(tool.description).toContain('your own browser tab');
+      expect(tool.description).not.toMatch(/the person sees|the page shown|the person/);
+      // Short: what, when, its limits — three sentences at most.
+      expect(tool.description.split(/(?<=[.!?])\s+/).length).toBeLessThanOrEqual(3);
+    }
+    expect(tools.find((tool) => tool.name === 'browser_open')?.description).toContain('none of the user’s logins or cookies');
+  });
+});
+
 describe('the built-in browser plugin (task 10.1)', () => {
   it('declares its tools with the effects of §9: open network, open a file of the project, read and screenshot read, act execute', () => {
     expect(browserManifest.contributes?.tools?.map((tool) => [tool.name, tool.effect])).toEqual([

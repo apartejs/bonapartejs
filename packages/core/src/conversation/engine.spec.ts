@@ -415,6 +415,29 @@ describe('ConversationEngine — the tools of the core', () => {
     expect(prompts.at(-1)!).toContain('Tools removed (do not call them): changelog');
     expect(prompts.at(-1)!.startsWith(frozen)).toBe(true);
   });
+
+  it('a description that changed reaches a conversation saved before as a note: restored, the frozen text untouched, only the note and the message read (audit I3)', async () => {
+    const old = { ...tool('browser_read'), description: 'Read the page shown in the built-in browser.' };
+    const first = await rig({ tools: () => [old] });
+    const meta = await first.conversation();
+    await first.say(meta.id, 'Bonjour');
+    await first.engine.flush();
+    const frozen = frozenPrompt((await openJournal(first.store.dir, meta.id)).entries());
+    const now = { ...old, description: 'Read the page in your own browser tab.' };
+    const again = await rig({ dir: first.dir, tools: () => [now] });
+    const { result, events } = await again.say(meta.id, 'Et maintenant ?');
+    expect(events).toContainEqual({ type: 'step', name: 'restore', phase: 'start' });
+    const sent = again.prompts.at(-1)!;
+    expect(sent.startsWith(frozen)).toBe(true);
+    const appended = sent.slice(frozen.length);
+    expect(appended).toContain('[tool inventory update]');
+    expect(appended).toContain('- browser_read: Read the page in your own browser tab.');
+    expect(appended).not.toContain('Tools removed');
+    expect(result.usage.cacheReadTokens).toBeGreaterThanOrEqual(fakeTokenize(frozen).length - 5);
+    // Told once.
+    await again.say(meta.id, 'Encore ?');
+    expect(again.prompts.at(-1)!.split('[tool inventory update]').length - 1).toBe(1);
+  });
 });
 
 describe('ConversationEngine — the reply language', () => {
