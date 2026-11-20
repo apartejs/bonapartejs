@@ -37,7 +37,7 @@ const sameList = (a: readonly string[], b: readonly string[]): boolean =>
  * The project's folders moved. The order matters as much as the content:
  * the first folder is the default for relative paths.
  */
-export function renderPerimeterDelta(previous: readonly string[], current: readonly string[]): Delta | null {
+export function renderPerimeterDelta(previous: readonly string[], current: readonly string[], branch?: string): Delta | null {
   if (sameList(previous, current)) return null;
   if (current.length === 0) {
     return {
@@ -56,6 +56,8 @@ export function renderPerimeterDelta(previous: readonly string[], current: reado
   ];
   if (added.length > 0) parts.push(`Added: ${added.join(', ')}`);
   if (removed.length > 0) parts.push(`Removed (do not touch them any more): ${removed.join(', ')}`);
+  // Its own branch made: the folders are its worktree's, on that branch (review of round 2, 8).
+  if (branch) parts.push(`You now work on branch ${branch}, in its own folder (a git worktree); the project’s own checkout is not yours.`);
   parts.push('This list supersedes anything said earlier about the project folders.');
   return { kind: 'perimeter', text: parts.join('\n') };
 }

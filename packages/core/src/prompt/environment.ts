@@ -16,6 +16,11 @@ export interface PromptEnvironment {
   date: string;
   /** In a git repository: its branch ('' when detached) and `git status --short`, one line a file. */
   git?: { branch: string; status: string[] };
+  /**
+   * A conversation that works on its own branch, not made yet (review of round 2, 8): the branch it will work on
+   * and its base — never the checkout's state, which is not its own.
+   */
+  ownBranch?: { branch: string; base: string };
 }
 
 /** The platform, as people name it. */
@@ -45,7 +50,10 @@ export async function readEnvironment(root: string | undefined, now: Date = new 
 export function renderEnvironment(environment: PromptEnvironment): string {
   const lines = [`Today is ${environment.date}.`];
   const repo = environment.git;
-  if (repo) {
+  if (environment.ownBranch) {
+    const { branch, base } = environment.ownBranch;
+    lines.push(`Git: you will work on branch ${branch}, made from ${base} at your first change; the project’s own checkout is not yours.`);
+  } else if (repo) {
     const where = repo.branch ? `branch ${repo.branch}` : 'detached HEAD';
     const count = repo.status.length;
     if (count === 0) {

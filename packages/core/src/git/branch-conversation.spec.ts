@@ -140,6 +140,23 @@ describe('a conversation on its own branch', { timeout: 30_000 }, () => {
     expect(last).toContain(worktree);
   });
 
+  it('freezes the branch it will work on, never the checkout’s state; the worktree made, the note names its branch (review of round 2, 8)', async () => {
+    const { repo, prompts, turn, branch } = await setup();
+    // The person's own work in the checkout: not the branch's.
+    await writeFile(join(repo.dir, 'mine.txt'), 'not committed\n');
+    await turn('c1', 'Bonjour', branch('heures'));
+    const first = prompts[0]!;
+    expect(first).toContain('Git: you will work on branch bonaparte/heures, made from main at your first change; the project’s own checkout is not yours.');
+    expect(first).not.toContain('mine.txt');
+    expect(first).not.toContain('Git: branch main');
+
+    await turn('c1', 'Écris la note');
+    await turn('c1', 'Et maintenant ?');
+    const note = prompts.at(-1)!.slice(first.lastIndexOf('<|turn>user'));
+    expect(note).toContain(join(repo.dir, '.bonaparte', 'worktrees', 'heures'));
+    expect(note).toContain('You now work on branch bonaparte/heures');
+  });
+
   it('a write that asks makes the worktree first: the card shows the branch’s file, and the write lands there', async () => {
     const edit = call('edit_file', { path: 'notes.txt', old_string: 'first', new_string: 'second' });
     const { core, repo, turn, approve, branch } = await setup({ write: edit, files: { 'notes.txt': 'first\n' } });

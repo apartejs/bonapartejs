@@ -1401,7 +1401,7 @@ export class ConversationEngine {
     // The project's folders changed (one added, one removed).
     const roots = [...asked.perimeter];
     const toldRoots = lastToldPerimeter(entries);
-    const perimeter = toldRoots === undefined ? null : renderPerimeterDelta(toldRoots, roots);
+    const perimeter = toldRoots === undefined ? null : renderPerimeterDelta(toldRoots, roots, meta.worktree ? meta.branch : undefined);
     if (perimeter) note({ ...perimeter, roots });
     // The language of the interface changed: the replies follow it.
     const language = asked.replyLanguage;

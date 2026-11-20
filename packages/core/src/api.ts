@@ -1470,6 +1470,27 @@ export function createCore(deps: CoreDeps): Core {
   // whatever the calls of that turn.
   // Whatever stops it is said to the model as the call's result; the turn goes on.
   const branching = new Map<string, Promise<ChangePlace | undefined>>();
+  /** The branch a conversation on its own branch asked for, and what it starts from: `HEAD` is the branch checked out now. */
+  const plannedBranch = async (meta: ConversationMeta, repo: string): Promise<{ asked: string; base: string }> => {
+    const prefix = String((await appSettings.get('branchPrefix').catch(() => 'bonaparte/')) ?? 'bonaparte/');
+    const asked = meta.branch ?? `${prefix}${meta.id.slice(0, 8)}`;
+    const base = meta.base && meta.base !== 'HEAD' ? meta.base : (await currentBranch(repo)) || 'HEAD';
+    return { asked, base };
+  };
+  /**
+   * Where a conversation works, as its prompt says it: the date, and the branch and status of `root`; for one on its
+   * own branch not made yet, that branch and its base — the checkout is not its own (review of round 2, 8).
+   */
+  const environmentOf = async (meta: ConversationMeta, root: string | undefined): Promise<string> => {
+    if (meta.kind === 'code' && meta.worksIn === 'branch' && !meta.worktree && meta.projectId && root) {
+      const repo = await repoRoot(root);
+      if (repo) {
+        const { asked, base } = await plannedBranch(meta, repo);
+        return renderEnvironment({ ...(await readEnvironment(undefined)), ownBranch: { branch: asked, base } });
+      }
+    }
+    return renderEnvironment(await readEnvironment(root));
+  };
   const ensureBranch = (conversationId: string): Promise<ChangePlace | undefined> => {
     const running = branching.get(conversationId);
     if (running) return running;
@@ -1480,11 +1501,9 @@ export function createCore(deps: CoreDeps): Core {
       const repo = project?.roots[0] ? await repoRoot(project.roots[0]) : null;
       // Never into the project's own folder instead.
       if (!project || !repo) return { error: 'This conversation works on its own branch, and its project is not in a git repository any more: it changes nothing.' };
-      const prefix = String((await appSettings.get('branchPrefix').catch(() => 'bonaparte/')) ?? 'bonaparte/');
-      const asked = meta.branch ?? `${prefix}${conversationId.slice(0, 8)}`;
-      const name = asked.split('/').pop() || conversationId.slice(0, 8);
       // `HEAD` as a base is the branch checked out now, so that what is counted against it stays put.
-      const base = meta.base && meta.base !== 'HEAD' ? meta.base : (await currentBranch(repo)) || 'HEAD';
+      const { asked, base } = await plannedBranch(meta, repo);
+      const name = asked.split('/').pop() || conversationId.slice(0, 8);
       try {
         const worktree = await createWorktree({ repo, name, base, prefix: asked.slice(0, asked.length - name.length), copy: ['.env'] });
         await conversationStore.update(conversationId, { worktree: worktree.dir, branch: worktree.branch, base });
@@ -1683,7 +1702,7 @@ export function createCore(deps: CoreDeps): Core {
       platform: platformName(),
     }),
     // The date, and the branch and status of the folder relative paths resolve from: read when a prompt is frozen.
-    environment: async (meta) => renderEnvironment(await readEnvironment(meta.kind === 'code' ? perimeterOf(meta)[0] : undefined)),
+    environment: async (meta) => environmentOf(meta, meta.kind === 'code' ? perimeterOf(meta)[0] : undefined),
     // The project's instructions (.bonaparte/instructions.md, AGENTS.md or CLAUDE.md), read at each turn:
     // frozen at the first, a change told by a note (task 4.7).
     instructions: async (meta) => {
@@ -1970,7 +1989,7 @@ export function createCore(deps: CoreDeps): Core {
           replyLanguage: deps.replyLanguage?.() ?? 'English',
           platform: platformName(),
           // Sent whole at every turn: a service keeps no memory, nothing is frozen there.
-          environment: renderEnvironment(await readEnvironment(meta.kind === 'code' && place.projectId ? place.roots[0] : undefined)),
+          environment: await environmentOf(meta, meta.kind === 'code' && place.projectId ? place.roots[0] : undefined),
           ...(instructions ? { projectInstructions: instructions } : {}),
         }),
         secret: (await installationSecret(deps.dataDir)).toString('hex'),
