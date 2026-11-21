@@ -129,11 +129,14 @@ export async function serveOnService(
     }),
   );
   if (!response.body || !/ndjson/.test(response.headers.get('content-type') ?? '')) return response;
-  return new Response(tee(response.body, onLine), { status: response.status, headers: response.headers });
+  // A Request follows the signal it was made with only while it lives (undici holds its own controller by a
+  // WeakRef): the window's is held while the answer streams, or a collection in the middle of it left Stop unheard
+  // by the service (2026-11-21). aparté's handler keeps the one it is handed.
+  return new Response(tee(response.body, onLine, [request]), { status: response.status, headers: response.headers });
 }
 
 /** The stream as it goes to the window, each of its lines heard on the way. */
-function tee(body: ReadableStream<Uint8Array>, onLine: (line: ServiceLine) => void): ReadableStream<Uint8Array> {
+function tee(body: ReadableStream<Uint8Array>, onLine: (line: ServiceLine) => void, held: Request[]): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   let buffered = '';
   const hear = (text: string): void => {
@@ -159,6 +162,8 @@ function tee(body: ReadableStream<Uint8Array>, onLine: (line: ServiceLine) => vo
       },
       flush() {
         hear(buffered + decoder.decode());
+        // The answer is over: what Stop had to reach may go.
+        held.length = 0;
       },
     }),
   );

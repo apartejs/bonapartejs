@@ -8,6 +8,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core } from '../api.js';
 import { openJournal } from '../journal/journal.js';
@@ -39,12 +41,16 @@ function vault(): SecretStore {
 
 type Line = { type: string; [key: string]: unknown };
 
-async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer, mode: 'lecture' | 'repetition' | 'plume' | 'impro' = 'repetition') {
+async function rig(
+  responder: (request: FakeChatRequest) => FakeOpenAIAnswer,
+  mode: 'lecture' | 'repetition' | 'plume' | 'impro' = 'repetition',
+  pace: { paceMs?: number } = {},
+) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-endpoint-'));
   dirs.push(dir);
   const home = join(dir, 'home');
   await mkdir(home, { recursive: true });
-  const service = await startFakeOpenAIServer({ key: 'sk-test', models: ['qwen3:8b'], responder });
+  const service = await startFakeOpenAIServer({ key: 'sk-test', models: ['qwen3:8b'], responder, ...pace });
   services.push(service);
   const core = createCore({ dataDir: join(dir, 'data'), env: {}, home, secrets: vault(), llamaReleases: null, gh: null, logger: () => undefined });
   cores.push(core);
@@ -59,7 +65,7 @@ async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer, mo
     const text = await response.text();
     return { status: response.status, lines: response.status === 200 ? text.split('\n').filter(Boolean).map((line) => JSON.parse(line) as Line) : [{ type: 'http', body: text }] };
   };
-  return { core, home, service, provider, post };
+  return { core, home, service, provider, post, handler };
 }
 
 const said = (lines: Line[]): string => lines.map((line) => (line.type === 'text-delta' ? String(line.delta) : '')).join('');
@@ -67,6 +73,45 @@ const ask = (text: string) => ({ messages: [{ role: 'user', content: text }], mo
 const lastIsTool = (request: FakeChatRequest): boolean => request.messages.at(-1)?.role === 'tool';
 
 describe('a conversation on a service (task 9.2)', () => {
+  it('Stop reaches the service though nothing holds the Request any more and the heap was collected', async () => {
+    // A Request follows the signal it was made with only while it lives (undici: a WeakRef to its own controller):
+    // the window's request, and the one handed on to aparté's handler, may both be dropped once they are answered.
+    setFlagsFromString('--expose-gc');
+    const collect = runInNewContext('gc') as () => void;
+    const { service, handler } = await rig(() => ({ text: 'un deux trois quatre cinq six sept huit neuf dix '.repeat(30) }), 'repetition', { paceMs: 20 });
+    const controller = new AbortController();
+    const response = await handler(
+      new Request(`${AGENT_ENDPOINT}/c/c1`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ v: 1, clientTools: [], messageId: 'm1', request: ask('Compte') }),
+        signal: controller.signal,
+      }),
+    );
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes('text-delta')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+    for (let pass = 0; pass < 3; pass += 1) {
+      collect();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    controller.abort();
+    // Read to its end, or until the stop is heard: a stop unheard reads the whole answer (some 6 s at this pace).
+    const reading = (async () => {
+      for (;;) {
+        const { done } = await reader.read().catch(() => ({ done: true }));
+        if (done) return;
+      }
+    })();
+    await expect.poll(() => service.aborted, { timeout: 2_000 }).toBe(1);
+    await reading;
+  }, 20_000);
+
   it('a turn of text: the service answers, through its own loop; it reads our system prompt in English and its key; no engine is needed', async () => {
     const { service, post } = await rig(() => ({ text: 'Bonjour Paul.' }));
     const { status, lines } = await post({ messageId: 'm1', request: ask('Bonjour') });

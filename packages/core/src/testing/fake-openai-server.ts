@@ -41,6 +41,8 @@ export interface FakeOpenAIServerOptions {
 export interface FakeOpenAIServer {
   url: string;
   requests: FakeChatRequest[];
+  /** The answers whose client went away before their end: a Stop that reached the service. */
+  readonly aborted: number;
   close(): Promise<void>;
 }
 
@@ -57,6 +59,7 @@ export async function startFakeOpenAIServer(options: FakeOpenAIServerOptions = {
   const requests: FakeChatRequest[] = [];
   const models = options.models ?? ['fake-model'];
   let calls = 0;
+  let aborted = 0;
   const server: Server = createServer((req, res) => {
     void (async () => {
       const authorization = req.headers.authorization;
@@ -70,7 +73,12 @@ export async function startFakeOpenAIServer(options: FakeOpenAIServerOptions = {
         requests.push(request);
         const answer = (await options.responder?.(request)) ?? { text: 'ok' };
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
+        res.on('close', () => {
+          if (!res.writableFinished) aborted += 1;
+        });
         const send = async (chunk: unknown): Promise<void> => {
+          // The client went away: the answer ends here, as a service's does.
+          if (res.destroyed) throw new Error('The client went away.');
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
           if (options.paceMs) await new Promise((resolve) => setTimeout(resolve, options.paceMs));
         };
@@ -109,6 +117,9 @@ export async function startFakeOpenAIServer(options: FakeOpenAIServerOptions = {
   return {
     url,
     requests,
+    get aborted() {
+      return aborted;
+    },
     close: async () => {
       server.closeAllConnections();
       await new Promise((resolve) => server.close(resolve));

@@ -161,7 +161,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
       return streamTurn(
         core,
         (emit, onTurnEvent, signal) => core.resumeTurn(conversationId, check, { messageId, clientTools, signal }, emit, onTurnEvent),
-        request.signal,
+        request,
       );
     }
     const entries = (await openJournal(core.conversationStore.dir, conversationId, meta.branchId)).entries();
@@ -179,7 +179,7 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
     return streamTurn(
       core,
       (emit, onTurnEvent, signal) => core.agentTurn(conversationId, input, { clientTools, signal }, emit, onTurnEvent),
-      request.signal,
+      request,
     );
   };
 }
@@ -187,12 +187,17 @@ export function createAgentHandler(core: Core): (request: Request) => Promise<Re
 /** What leads a turn: a new one, or a pause resumed. */
 type TurnRunner = (emit: (event: StreamRunEvent) => void, onTurnEvent: (event: TurnEvent) => void, signal: AbortSignal) => Promise<TurnResult>;
 
-function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Response {
+function streamTurn(core: Core, runTurn: TurnRunner, request: Request): Response {
   const encoder = new TextEncoder();
   // Stops the generation: when the window cuts its request, or stops reading.
   const stop = new AbortController();
-  if (signal.aborted) stop.abort();
-  else signal.addEventListener('abort', () => stop.abort(), { once: true });
+  // A Request follows the signal it was made with only while it lives (undici holds its own controller by a WeakRef):
+  // whoever made it may drop it once we answer, and a collection in the middle of a reply then left Stop unheard,
+  // llama.cpp generating to the end (the real smoke, 2026-11-21). The request itself is held until the turn ends:
+  // the `finally` below takes the listener off through it.
+  const onAbort = (): void => stop.abort();
+  if (request.signal.aborted) stop.abort();
+  else request.signal.addEventListener('abort', onAbort, { once: true });
   // The engine is not unloaded while a turn works.
   const release = core.hold();
 
@@ -272,6 +277,7 @@ function streamTurn(core: Core, runTurn: TurnRunner, signal: AbortSignal): Respo
         .finally(() => {
           release();
           close();
+          request.signal.removeEventListener('abort', onAbort);
         });
     },
     // The reader went away (the window dropped the response): stop generating.

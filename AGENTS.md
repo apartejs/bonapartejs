@@ -1238,6 +1238,14 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **Stop crosses `protocol.handle`** (Electron 45). When the page aborts its
   request, the handler's signal fires and the engine is cut within a second:
   no IPC channel is needed for Stop. Pinned by `e2e/stop.spec.ts`.
+- **A Request follows its signal only while it lives**: undici holds the
+  Request's own controller by a `WeakRef`, so a handler that keeps only
+  `request.signal` hears no Stop once the heap is collected — the real smoke
+  saw llama.cpp still generating 30 s after it. The handler and the service
+  path hold the Request until the turn ends; a test proves it with a forced
+  `gc()` (`node:v8` `setFlagsFromString('--expose-gc')`). In the app the
+  response's body cancelled stops the turn too, which is why the window never
+  showed it (`e2e/stop.spec.ts` collects the main process's heap).
 - **A failure of llama-server once the stream has begun is an event of the
   stream** (`data: {"error": …}`), not a status. Read past it, and the reply
   looks like one the person stopped.
@@ -1510,6 +1518,43 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 
 Record here: the date, the model, the llama.cpp build, and the outcome of each
 case. The newest entry comes first.
+
+- **2026-11-21, after the audit — 19/19 green**, the third run of the day.
+  Gemma 4 26B-A4B-it UD-Q4_K_XL, llama.cpp b12383 Vulkan, Radeon 8060S,
+  `-c 8192`, K/V f16, one slot (two for « En parallèle »), loaded in 5.9 s
+  (65.7 GiB of RAM free, read before); Qwen3-1.7B Q4_K_M for the change of
+  model. The key refused (HTTP 401); the template byte for byte; no call
+  forced (« 4 »); `read_file {path: notes.txt}` read by the demux; Stop:
+  the slot stopped 60 ms after it; a restore in 890 ms, 1,730 of 1,730
+  served; a branch 1,752 of 1,762; a seed 1,632 of 1,632 (served 2 → 3);
+  the agent's last round 1,751 of 1,774; an edit paused, approved, « DONE »;
+  the reply language « sept » then « fourteen », 1,732 of 1,782; unloaded
+  and reloaded, restored in 802 ms, restarted in 9.1 s, restored in
+  1,298 ms; after a long answer (172 tokens) 1,901 of 1,919 served (18 read,
+  1,237.2 MiB saved); going back 30 read of 1,817; a compaction 3,851 →
+  1,662 tokens (estimated) kept the code word in 486 characters; three
+  sub-agents in turn in 14.9 s, the last round 50 read of 2,015; two in
+  parallel, restarted with two slots in 9.5 s, both working at once on
+  llama.cpp's slots, in 10.9 s, the last round 38 read of 1,947; MCP
+  connected in 2.8 s (16 tools), « MARJORAM », 4,747 of 4,776; the change
+  to Qwen announced 2,192 tokens to read again, loaded in 7.2 s, its next
+  turn read 131 of 1,551, « The code word is SAFFRON. ». Run 1 (18/19): the
+  change of model failed — Qwen answered « OK », the first message having
+  asked for one, and a turn sampling by its family (0.7, audit D6): the
+  smoke's turns now set their temperature (0.2) and that message no longer
+  asks for « OK ». Run 2 (17/19): two failures. Stop: the handler kept only
+  `request.signal`, and a Request follows its signal only while it lives —
+  after a collection Stop was never heard, the slot still working 30 s on;
+  the handler and the service path now hold the Request until the turn
+  ends. « En parallèle »: llama.cpp worked one slot at a time because
+  Gemma 4, at its own temperature (1.0), handed the two leads in two steps
+  (seen twice, the engine never waiting); at 0.2 they come in one step and
+  run together — the runner's conversations of the smoke now set it. One
+  finding not fixed: right after the restart with two slots, llama.cpp
+  refused to restore a state saved under one (« n_stream mismatch »), which
+  the KV manifest does not check; the core took it as refused and the case
+  passed, but what a change of the slots costs the memories saved before
+  is not said yet.
 
 - **2026-11-18, phase 10 — the MCP case green** (run alone, twice: the
   second time to read its figures). Gemma 4 26B-A4B-it UD-Q4_K_XL,

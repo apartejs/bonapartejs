@@ -12,6 +12,8 @@ import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore, type Core, type TurnEnd } from '../api.js';
 import {
@@ -274,6 +276,47 @@ describe('the agent handler, streaming a turn', () => {
       .map((line) => (JSON.parse(line) as Line).type);
     expect(types.slice(-2)).toEqual(['run-aborted', 'run-done']);
     await expect.poll(() => server.aborted, { timeout: 5_000 }).toBe(1);
+  }, 20_000);
+
+  it('cuts the completion when the request is aborted, though nothing holds the Request any more and the heap was collected', async () => {
+    // A Request follows the signal it was made with only while it lives (undici: a WeakRef to its own controller).
+    // Electron's protocol.handle and the smoke drop theirs once the handler answers: a collection in the middle of a
+    // reply then left Stop unheard, and llama.cpp generated to the end (the real smoke, 2026-11-21).
+    setFlagsFromString('--expose-gc');
+    const collect = runInNewContext('gc') as () => void;
+    const { server, handler } = await setup({
+      paceMs: 20,
+      responder: () => 'un deux trois quatre cinq six sept huit neuf dix '.repeat(30),
+    });
+    const controller = new AbortController();
+    // Made and given away in one expression, as Electron does: only the handler may keep it.
+    const response = await handler(post(turn(user('Compte')), { signal: controller.signal }));
+
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    while (!text.includes('text-delta')) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+    for (let pass = 0; pass < 3; pass += 1) {
+      collect();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    controller.abort();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+    const types = text
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => (JSON.parse(line) as Line).type);
+    expect(types.slice(-2)).toEqual(['run-aborted', 'run-done']);
+    // The engine hears it at its next chunk: it stops long before the reply's own end (some 6 s at this pace).
+    await expect.poll(() => server.aborted, { timeout: 2_000 }).toBe(1);
   }, 20_000);
 
   it('ends with run-error, and no run-done, when the engine fails once the stream began', async () => {
