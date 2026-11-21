@@ -6,7 +6,6 @@
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,14 +28,6 @@ afterEach(async () => {
   for (const service of services.splice(0)) await service.close();
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
 });
-
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const port = (server.address() as { port: number }).port;
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
 
 const vault = (gate?: Promise<void>): SecretStore => {
   const held = new Map<string, string>();
@@ -67,7 +58,6 @@ async function rig(responder: (request: FakeChatRequest) => FakeOpenAIAnswer = (
     env: {},
     home,
     llamaCommand: [process.execPath, BIN],
-    port: await freePort(),
     modelRoots: [{ dir: models, source: 'custom' }],
     gpuMemory: async () => 24 * 1024 ** 3,
     llamaReleases: null,

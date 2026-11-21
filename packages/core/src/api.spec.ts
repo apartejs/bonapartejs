@@ -6,7 +6,6 @@
 
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,15 +42,6 @@ afterEach(async () => {
   servers = [];
 });
 
-async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  await new Promise<void>((resolve) => server.close(() => resolve()));
-  if (address === null || typeof address === 'string') throw new Error('no port');
-  return address.port;
-}
-
 async function setup(overrides: Partial<CoreDeps> = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-core-'));
   dirs.push(dir);
@@ -69,7 +59,6 @@ async function setup(overrides: Partial<CoreDeps> = {}) {
     dataDir: join(dir, 'data'),
     env: {},
     llamaCommand: [process.execPath, BIN],
-    port: await freePort(),
     modelRoots: [{ dir: models, source: 'custom' }],
     gpuMemory: async () => 24 * GiB,
     // A test never asks GitHub: the ones that need releases start their own.
@@ -913,7 +902,6 @@ describe('createCore — what the review of phase 2 found', () => {
       dataDir: join(dir, 'data'),
       env: {},
       llamaCommand: [process.execPath, BIN],
-      port: await freePort(),
       modelRoots: [{ dir: join(dir, 'models'), source: 'custom' }],
       gpuMemory: async () => 24 * GiB,
       llamaReleases: null,

@@ -94,6 +94,30 @@ describe('EngineSupervisor — a managed engine', () => {
     expect(supervisor.client()).toBeUndefined();
   });
 
+  // The engine listened on 8763 whatever held it: another program there, and it never started. A relaunch on the
+  // port just let go also met a port taken again (EADDRINUSE on GitHub's runner, 2026-11-21).
+  it('with no port given, each launch takes a free one: a program on 8763 does not stop the engine', async () => {
+    const holder = createServer();
+    const held = await new Promise<boolean>((resolve) => {
+      holder.once('error', () => resolve(false));
+      holder.listen(8763, '127.0.0.1', () => resolve(true));
+    });
+    try {
+      const { supervisor, modelA, modelB, serverLaunches } = await setup({ port: undefined });
+      await supervisor.configure(MANAGED);
+      await supervisor.ensureLoaded(modelA);
+      expect(supervisor.status()).toBe('ready');
+      const portOf = (launch: { args: readonly string[] }) => launch.args[launch.args.indexOf('--port') + 1];
+      expect(portOf(serverLaunches()[0]!)).not.toBe('8763');
+      // Another model: a relaunch, on a port free now.
+      await supervisor.ensureLoaded(modelB);
+      expect(supervisor.status()).toBe('ready');
+      expect(serverLaunches()).toHaveLength(2);
+    } finally {
+      if (held) await new Promise<void>((resolve) => holder.close(() => resolve()));
+    }
+  });
+
   it('loads a model on demand: one launch, then ready, with what the KV manifest needs', async () => {
     const { supervisor, modelA, serverLaunches } = await setup();
     await supervisor.configure(MANAGED);
