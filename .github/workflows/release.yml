@@ -9,13 +9,18 @@ name: release
 #
 # Minutes on a private repository (audit 2026-11-21, N2): Windows counts twice
 # and macOS ten times. Windows is the product's platform and the only one
-# built by default; macOS and Linux only when a run by hand asks for them.
+# built by default; macOS and Linux only when a run by hand asks for them —
+# on the tag, before its draft is published.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
+      windows:
+        description: 'Build Windows (uncheck it for a run of macOS or Linux alone; its minutes count twice)'
+        type: boolean
+        default: true
       macos:
         description: 'Also build macOS (a dmg, not signed; its minutes count ten times)'
         type: boolean
@@ -44,6 +49,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
 
       - name: Make the draft release
         env:
@@ -69,8 +76,14 @@ jobs:
       fail-fast: false
       matrix:
         # Windows on the image with Visual Studio 2026, as llama.cpp's own Windows builds: its redistributable Visual
-        # C++ runtime is the one the installer carries for llama.cpp. macOS and Linux at best, only when asked.
-        os: ${{ fromJSON(format('["windows-2025-vs2026"{0}{1}]', inputs.macos && ',"macos-latest"' || '', inputs.linux && ',"ubuntu-latest"' || '')) }}
+        # C++ runtime is the one the installer carries for llama.cpp. macOS and Linux at best, only when asked. A tag
+        # builds Windows; a run by hand builds what it checks — Windows left out when unchecked, so that macOS alone
+        # does not build and upload Windows again (review of round 6). `none` leaves out nothing.
+        os: [windows-2025-vs2026, macos-latest, ubuntu-latest]
+        exclude:
+          - os: ${{ github.event_name == 'workflow_dispatch' && !inputs.windows && 'windows-2025-vs2026' || 'none' }}
+          - os: ${{ !inputs.macos && 'macos-latest' || 'none' }}
+          - os: ${{ !inputs.linux && 'ubuntu-latest' || 'none' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     permissions:
@@ -78,7 +91,23 @@ jobs:
     env:
       RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
     steps:
+      # The job may write the repository's releases: its token is never left in the checkout's git configuration, where
+      # every later step — the dependencies' install scripts included — could read it. Only the steps that speak to
+      # the releases get it, in their own environment (review of round 6).
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      # electron-builder publishes into a draft only, and skips a release already published in silence: a run on the
+      # tag after the release was published would end green with nothing uploaded. Said before anything is built.
+      - name: Check the release is still a draft
+        if: env.RELEASE == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          draft=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          test "$draft" = "true" || { echo "The release $GITHUB_REF_NAME is published: electron-builder would upload nothing into it."; exit 1; }
 
       # The tag is the version: a release whose tag and package disagree would offer an update that is not one — and
       # electron-builder publishes into the release of `v<version>`, not of the tag. Checked before anything is built.
