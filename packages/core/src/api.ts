@@ -2435,7 +2435,14 @@ export function createCore(deps: CoreDeps): Core {
         : undefined;
       // The memories these settings would refuse that the current ones serve: those it makes to read again — another
       // number of slots among them, llama.cpp keeping one KV stream a slot (the real smoke of 2026-11-21).
-      const states = await kv.savedStates();
+      // The conversations still in the slots count too: the restart saves them first, under the settings that run
+      // now, over what the disk holds of them (review of 2026-11-21).
+      const resident = await conversations.unsaved();
+      const writing = new Set(resident.map((memory) => memory.stateId));
+      const states = [
+        ...(await kv.savedStates()).filter((state) => !writing.has(state.stateId)),
+        ...resident.map(({ live, tokens }) => ({ ...live, kvStreams: live.kvStreams ?? 1, promptTokenCount: tokens })),
+      ];
       const served = states.filter((state) => memoriesRefusedBy([state], { ...current, slots: slotsFor(current) }) === 0);
       const running = (await currentEngine()) && loaded ? (await models()).find((model) => samePath(model.path, loaded!.path)) : undefined;
       const restart = announceRestart({

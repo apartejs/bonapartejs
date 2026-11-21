@@ -169,7 +169,9 @@ test('« Slots du moteur » counts the memories saved under the other number, an
   await engineSettings(page);
 
   await page.getByRole('radiogroup', { name: 'Slots du moteur' }).locator('label', { hasText: '2' }).click();
-  await expect(restart(page)).toContainText(/(Une mémoire sauvée sera|\d+ mémoires sauvées seront) à relire avec ce réglage\./);
+  // « Premier » was saved when « Second » took the slot; « Second » is still in it, and the restart saves it under
+  // one slot first: both are read again, and both are said (review of 2026-11-21).
+  await expect(restart(page)).toContainText('2 mémoires sauvées seront à relire avec ce réglage.');
   await restart(page).getByRole('button', { name: 'Redémarrer maintenant' }).click();
   await expect(engineFacts(page)).toContainText('2 slots', { timeout: 20_000 });
   await expect(page.locator('.memory-row', { hasText: 'Premier' })).toContainText('Sauvée · autre nombre de slots');

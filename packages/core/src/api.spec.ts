@@ -776,6 +776,24 @@ describe('createCore — what the review of phase 2 found', () => {
     expect(await core.restartCost({ subagents: 'sequential' })).toMatchObject({ memoriesLost: 1 });
   }, 60_000);
 
+  it('the conversation still in the slot is counted too: the restart saves it under the old settings, then refuses it (review of 2026-11-21)', async () => {
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    // One slot: A is saved when B takes it, and B stays in the slot with nothing on disk.
+    for (const id of ['a', 'b']) {
+      await core.conversationStore.ensure(id, { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+      await core.conversations.turn(id, { text: 'Bonjour' }, () => undefined);
+    }
+    expect(await core.restartCost({ cacheType: 'q8_0' })).toMatchObject({ memoriesLost: 2 });
+    expect(await core.restartCost({ nCtx: 16_384 })).toMatchObject({ memoriesLost: 0 });
+    expect(await core.restartCost({ subagents: 'parallel' })).toMatchObject({ memoriesLost: 2 });
+    await core.applyEngineSettings({ subagents: 'parallel' }, { restart: true });
+    await expect.poll(async () => (await core.memory()).engine.slots, { timeout: 15_000 }).toBe(2);
+    // What was announced is what is read again: both.
+    expect(await core.conversations.open('a')).toMatchObject({ kind: 'reread', reason: 'slots' });
+    expect(await core.conversations.open('b')).toMatchObject({ kind: 'reread', reason: 'slots' });
+  }, 60_000);
+
   it('two slots on a card that holds 32 k for one only (review of C2): the context drops to 16 k each, said, and the memories past it counted as lost', async () => {
     // A card that holds the 32 k cache once, and not twice: the automatic context steps down for two slots.
     let card = 24 * GiB;

@@ -61,6 +61,11 @@ export interface SlotScheduler {
   resize(slots: number): void;
   /** Saves every owner whose state changed (the app closes); `keepFor`: an owner whose saved state must survive the room made. */
   flush(keepFor?: SlotOwner): Promise<void>;
+  /**
+   * The owners a flush would save — a resident whose state changed — and those working now, whose state will have
+   * changed when their job ends: what a restart writes to disk under the settings that run now.
+   */
+  unsaved(): SlotOwner[];
   /** Does this owner sit in a slot — would its next turn find its state there? */
   isResident(owner: SlotOwner): boolean;
   /** Forgets what a slot holds for this owner, without saving it: the engine died, or the conversation was deleted. */
@@ -273,6 +278,15 @@ export function createSlotScheduler(options: SlotSchedulerOptions): SlotSchedule
       for (const slot of slots) {
         if (slot.running === null) await save(slot, keepFor);
       }
+    },
+
+    unsaved() {
+      const owners = new Map<string, SlotOwner>();
+      for (const slot of slots) {
+        if (slot.resident && slot.dirty) owners.set(keyOf(slot.resident), slot.resident);
+        if (slot.running && slot.running.kind !== 'side') owners.set(keyOf(slot.running), slot.running);
+      }
+      return [...owners.values()];
     },
 
     isResident(owner) {

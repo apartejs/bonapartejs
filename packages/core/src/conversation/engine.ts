@@ -1255,6 +1255,26 @@ export class ConversationEngine {
   }
 
   /**
+   * The memories still in the slots that a flush would write — saved under the settings the engine runs now, with
+   * the tokens of their last turn: what a restart's announcement counts beside the states on disk (review of
+   * 2026-11-21). A server that went away holds none.
+   */
+  async unsaved(): Promise<Array<{ stateId: string; tokens: number; live: LiveConfig }>> {
+    const owners = this.scheduler.unsaved();
+    if (owners.length === 0) return [];
+    const engine = await this.deps.engine();
+    const memories: Array<{ stateId: string; tokens: number; live: LiveConfig }> = [];
+    for (const owner of owners) {
+      const last = this.lastRun.get(ownerKey(owner));
+      if (last && last.engine.generation !== engine?.generation) continue;
+      const live = last?.engine.live ?? engine?.live;
+      if (!live) continue;
+      memories.push({ stateId: ownerKey(owner), tokens: last?.tokens ?? 0, live });
+    }
+    return memories;
+  }
+
+  /**
    * A server relaunched — by itself after a crash, or for another model —
    * holds nothing: its slots' residents are forgotten, none saved over the
    * memory on disk, and the next turn restores what it needs.
