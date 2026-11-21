@@ -1245,6 +1245,9 @@ export interface Messages {
     };
   };
   conversationSettings: {
+    /** What « Pour cette conversation » kept: listed, each taken back. */
+    remembered: string;
+    rememberedHint: string;
     menu: string;
     title: string;
     hint: string;

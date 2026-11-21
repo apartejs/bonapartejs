@@ -49,8 +49,16 @@ export function ruleKey(rule: { tool: string; program?: string; args?: readonly 
 export const rememberedRuleSchema = z.object({ key: z.string(), rule: allowRuleSchema });
 export type RememberedRuleView = z.infer<typeof rememberedRuleSchema>;
 
-/** The rules kept: the app's (`projectId` null), or a project's. */
-export const permissionsRules = defineChannel('permissions.rules', z.object({ projectId: idSchema.nullable() }), z.array(rememberedRuleSchema));
+/** The rules kept: the app's (`projectId` null), a project's, or — `conversationId` given — that conversation's own. */
+export const permissionsRules = defineChannel(
+  'permissions.rules',
+  z.object({ projectId: idSchema.nullable(), conversationId: idSchema.optional() }),
+  z.array(rememberedRuleSchema),
+);
 
 /** One taken back, by the name the list gave it. */
-export const permissionsRevoke = defineChannel('permissions.revoke', z.object({ projectId: idSchema.nullable(), key: z.string().min(1).max(10_000) }), z.void());
+export const permissionsRevoke = defineChannel(
+  'permissions.revoke',
+  z.object({ projectId: idSchema.nullable(), conversationId: idSchema.optional(), key: z.string().min(1).max(10_000) }),
+  z.void(),
+);

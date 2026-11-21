@@ -1,13 +1,14 @@
 /**
  * « Réglages de la conversation » (task 12.4, the built-in entry `conversation-settings`): its temperature, its
  * reasoning and its context cap — for this conversation only; an empty field keeps the default. Checked before it
- * is kept, said in the person's words.
+ * is kept, said in the person's words. Below them, what « Pour cette conversation » kept, each taken back there.
  */
 
 import { conversationsSettingsGet, conversationsSettingsSet, type ConversationSettingsView } from '@aparte/bonaparte-shared';
 import { useEffect, useId, useRef, useState } from 'react';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
+import { RememberedRules } from '../settings/RememberedRules';
 
 export interface ConversationSettingsProps {
   messages: Messages;
@@ -24,6 +25,7 @@ export function ConversationSettingsDialog({ messages, locale, conversationId, o
   const temperatureId = useId();
   const thinkingId = useId();
   const capId = useId();
+  const rememberedId = useId();
   const [view, setView] = useState<ConversationSettingsView | null>(null);
   const [temperature, setTemperature] = useState('');
   const [thinking, setThinking] = useState<'default' | 'on' | 'off'>('default');
@@ -106,6 +108,15 @@ export function ConversationSettingsDialog({ messages, locale, conversationId, o
         </label>
         <input id={capId} className="aparte-field" type="number" min={512} step={512} value={cap} onChange={(event) => setCap(event.target.value)} />
         <p className="aparte-field-hint">{words.contextCapHint}</p>
+        {conversationId ? (
+          <section className="conversation-settings__remembered" aria-labelledby={rememberedId}>
+            <h3 id={rememberedId} className="aparte-field-label">
+              {words.remembered}
+            </h3>
+            <p className="aparte-field-hint">{words.rememberedHint}</p>
+            <RememberedRules messages={messages} projectId={null} conversationId={conversationId} />
+          </section>
+        ) : null}
         {refused ? (
           <p className="aparte-field-warning" role="alert">
             {refused}

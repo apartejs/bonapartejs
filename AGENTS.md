@@ -560,8 +560,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   remember says why. The window names a call and a scope,
   never a rule (`permissions.remember`); a rule is taken back by the key the
   list gave (`permissions.revoke`). `<data>/config/grants.json` (armed) keeps
-  the app's rules (sites), each project's, and each conversation's own,
-  forgotten when it is deleted; a rule turns an ask of the mode or of the
+  the app's rules (sites), each project's, and each conversation's own —
+  listed, each taken back, in « Réglages de la conversation… » — forgotten
+  when it is deleted; a rule turns an ask of the mode or of the
   network into an allow — never a refusal (Lecture), never a file that runs
   later, never one outside the project, never a third party's tool. A
   browser_act is judged on the site of its conversation's agent's page as

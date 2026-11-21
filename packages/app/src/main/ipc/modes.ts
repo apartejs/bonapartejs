@@ -16,10 +16,12 @@ export function registerModeChannels(ipc: IpcRegistry, core: ModeCore): void {
   // « Toujours autoriser » (audit D3): the core says what a rule is; the window names a call and a scope.
   ipc.handle(permissionsOffer, ({ id, call }) => core.remembered.offer(id, call));
   ipc.handle(permissionsRemember, ({ id, call, scope }) => core.remembered.remember(id, call, scope));
-  ipc.handle(permissionsRules, async ({ projectId }) => (await core.remembered.rules(projectId)).map((rule) => ({ key: ruleKey(rule), rule })));
+  ipc.handle(permissionsRules, async ({ projectId, conversationId }) =>
+    (await core.remembered.rules(projectId, conversationId)).map((rule) => ({ key: ruleKey(rule), rule })),
+  );
   // Taken back by its name: only a rule that is kept there.
-  ipc.handle(permissionsRevoke, async ({ projectId, key }) => {
-    const rule = (await core.remembered.rules(projectId)).find((kept) => ruleKey(kept) === key);
-    if (rule) await core.remembered.revoke(projectId, rule);
+  ipc.handle(permissionsRevoke, async ({ projectId, conversationId, key }) => {
+    const rule = (await core.remembered.rules(projectId, conversationId)).find((kept) => ruleKey(kept) === key);
+    if (rule) await core.remembered.revoke(projectId, rule, conversationId);
   });
 }

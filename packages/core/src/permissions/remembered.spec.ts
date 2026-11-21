@@ -47,8 +47,13 @@ describe('« Toujours autoriser » through the core (audit D3)', () => {
     expect(judge(core, 'c2', RUN)).toEqual({ verdict: 'ask', why: 'mode' });
     // Another argument is another command.
     expect(judge(core, 'c1', { name: 'run_command', input: { program: 'node', args: ['--eval', 'x'] } })).toEqual({ verdict: 'ask', why: 'mode' });
-    // Not one of the app's rules: it is listed nowhere, and goes with its conversation.
+    // Not one of the app's rules: listed with its conversation alone (review of round 6), and goes with it.
     expect(await core.remembered.rules(null)).toEqual([]);
+    expect(await core.remembered.rules(null, 'c1')).toEqual([{ tool: 'run_command', program: 'node', args: ['--version'] }]);
+    expect(await core.remembered.rules(null, 'c2')).toEqual([]);
+    await core.remembered.revoke(null, { tool: 'run_command', program: 'node', args: ['--version'] }, 'c1');
+    expect(judge(core, 'c1', RUN)).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(await core.remembered.remember('c1', RUN, 'conversation')).toBe(true);
     await core.removeConversation('c1');
     expect(judge(core, 'c1', RUN)).toEqual({ verdict: 'ask', why: 'mode' });
   });

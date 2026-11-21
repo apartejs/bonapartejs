@@ -639,8 +639,9 @@ export interface Core {
   readonly remembered: {
     offer(conversationId: string, call: { name: string; input: unknown }): Promise<RememberOffer | null>;
     remember(conversationId: string, call: { name: string; input: unknown }, scope: 'conversation' | 'always'): Promise<boolean>;
-    rules(projectId: string | null): Promise<AllowRule[]>;
-    revoke(projectId: string | null, rule: AllowRule): Promise<void>;
+    /** The app's rules (`projectId` null), a project's, or — `conversationId` given — that conversation's own. */
+    rules(projectId: string | null, conversationId?: string): Promise<AllowRule[]>;
+    revoke(projectId: string | null, rule: AllowRule, conversationId?: string): Promise<void>;
   };
   /** What a call would change — the text before and after, and their diff — for the approval card. */
   previewCall(
@@ -1500,6 +1501,9 @@ export function createCore(deps: CoreDeps): Core {
   const gh = deps.gh === undefined ? ['gh'] : deps.gh;
   const PR_FRESH_MS = 20_000;
   const prs = new Map<string, { at: number; pr: PrStatus | null }>();
+  /** Where « Toujours » keeps what the settings list: a conversation's own, a project's, or the app's. */
+  const grantScope = (projectId: string | null, conversationId?: string): GrantScope =>
+    conversationId ? { kind: 'conversation', conversationId } : projectId ? { kind: 'project', projectId } : { kind: 'app' };
   const repoOf = async (meta: { projectId?: string }): Promise<string | null> => {
     const project = meta.projectId ? await projectStore.get(meta.projectId) : undefined;
     return project?.roots[0] ? repoRoot(project.roots[0]) : null;
@@ -2885,13 +2889,13 @@ export function createCore(deps: CoreDeps): Core {
         await grants.add(where, offered.rule);
         return true;
       },
-      async rules(projectId) {
+      async rules(projectId, conversationId) {
         await grantsRead;
-        return grants.list(projectId ? { kind: 'project', projectId } : { kind: 'app' });
+        return grants.list(grantScope(projectId, conversationId));
       },
-      async revoke(projectId, rule) {
+      async revoke(projectId, rule, conversationId) {
         await grantsRead;
-        await grants.revoke(projectId ? { kind: 'project', projectId } : { kind: 'app' }, rule);
+        await grants.revoke(grantScope(projectId, conversationId), rule);
       },
     },
 

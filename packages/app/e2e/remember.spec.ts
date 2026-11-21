@@ -56,6 +56,20 @@ test('« Pour cette conversation »: the exact command passes there again, and i
   await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
   await expect(card(page)).toHaveCount(0);
 
+  // Listed in « Réglages de la conversation… », where « Retirer » takes it back (review of round 6).
+  await page.getByRole('button', { name: 'Plus d’actions' }).click();
+  await page.getByRole('menuitem', { name: 'Réglages de la conversation…' }).click();
+  const settings = page.getByRole('dialog', { name: 'Réglages de la conversation' });
+  const own = settings.getByRole('list', { name: 'Autorisé sans demander' });
+  await expect(own).toContainText('Lancer node --version');
+  await own.getByRole('button', { name: 'Retirer : Lancer node --version' }).click();
+  await expect(settings.getByText('Rien n’est retenu.')).toBeVisible();
+  await settings.getByRole('button', { name: 'Annuler' }).click();
+  await chat(page).send('Lance, teste toujours');
+  await expect(card(page)).toBeVisible({ timeout: 15_000 });
+  await card(page).getByRole('button', { name: 'Autoriser', exact: true }).click();
+  await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
+
   await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
   await choosePlume(page);
   await chat(page).send('Lance, teste');

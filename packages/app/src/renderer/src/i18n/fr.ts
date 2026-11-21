@@ -1359,6 +1359,8 @@ export const fr: Messages = {
   },
   conversationSettings: {
     menu: 'Réglages de la conversation…',
+    remembered: 'Autorisé dans cette conversation',
+    rememberedHint: 'Ce que « Pour cette conversation » a retenu. « Retirer » le fait demander de nouveau.',
     title: 'Réglages de la conversation',
     hint: 'Pour cette conversation seulement. Un champ vide garde la valeur par défaut.',
     temperature: 'Température',

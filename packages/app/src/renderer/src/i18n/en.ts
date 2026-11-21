@@ -1355,6 +1355,8 @@ export const en: Messages = {
   },
   conversationSettings: {
     menu: 'Conversation settings…',
+    remembered: 'Allowed in this conversation',
+    rememberedHint: 'What « For this conversation » kept. « Remove » has it asked again.',
     title: 'Conversation settings',
     hint: 'For this conversation only. An empty field keeps the default.',
     temperature: 'Temperature',
