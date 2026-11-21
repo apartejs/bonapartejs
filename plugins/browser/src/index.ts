@@ -35,6 +35,14 @@ export const browserManifest = defineManifest({
             path: { type: 'string', description: 'Or the path of a file of the project, as for read_file.' },
           },
         },
+        // A discussion has no folder: it is told the web pages only (review of round 3, 6 and 7).
+        discussion: {
+          description:
+            'Open a web page in your own browser tab, then read it with browser_read. ' +
+            'Give url, an http(s) address (of the internet, or of this machine: localhost:5173). ' +
+            'Your tab is a session of its own, with none of the user’s logins or cookies; a private network address is refused.',
+          inputSchema: { type: 'object', properties: { url: { type: 'string', description: 'An http(s) address.' } } },
+        },
       },
       {
         // Kept for the conversations told of it before: one tool opens a page or a file now (Paul, 2026-11-20).

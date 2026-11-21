@@ -579,6 +579,9 @@ export class PluginHost {
       source: plugin.builtin ? 'plugin' : 'extension',
       where: 'core',
       ...(tool.hidden ? { hidden: true as const } : {}),
+      ...(tool.discussion
+        ? { discussion: { description: tool.discussion.description, inputSchema: tool.discussion.inputSchema ?? { type: 'object', properties: {} } } }
+        : {}),
     };
   }
 

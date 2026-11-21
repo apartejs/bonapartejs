@@ -109,6 +109,21 @@ describe('buildSystemPrompt', () => {
     expect(toolsFor('code', all).map((one) => one.name)).not.toContain('browser_open_file');
   });
 
+  it('a discussion is told a tool as its words for a discussion say it, when it has them: no folder (review of round 3, 6 and 7)', () => {
+    const open: ToolDef = {
+      ...tool('browser_open', 'network'),
+      source: 'plugin',
+      description: 'Open a page, or a file as for read_file.',
+      inputSchema: { type: 'object', properties: { url: { type: 'string' }, path: { type: 'string' } } },
+      discussion: { description: 'Open a web page.', inputSchema: { type: 'object', properties: { url: { type: 'string' } } } },
+    };
+    const [told] = toolsFor('discussion', [open]);
+    expect(told).toMatchObject({ name: 'browser_open', description: 'Open a web page.', inputSchema: { properties: { url: { type: 'string' } } } });
+    expect(told).not.toHaveProperty('discussion');
+    expect(JSON.stringify(told)).not.toMatch(/read_file|path/);
+    expect(toolsFor('code', [open])[0]).toMatchObject({ description: 'Open a page, or a file as for read_file.' });
+  });
+
   it('a discussion is given no MCP tool, even one its server says only reads: it reads files on this machine (review of phase 10)', () => {
     const mcpRead = { ...tool('mcp__files__read_file', 'network'), source: 'mcp' as const };
     expect(toolsFor('discussion', [...TOOLS, mcpRead]).map((one) => one.name)).toEqual(['web_fetch']);

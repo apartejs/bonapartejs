@@ -49,6 +49,11 @@ const toolSchema = z
     inputSchema: z.record(z.string(), z.unknown()).optional(),
     /** Kept for the conversations told of it before, never told to a new one (a tool another replaced). */
     hidden: z.boolean().optional(),
+    /** What a discussion is told of it instead — it has no folder (review of round 3, 6 and 7). Sent to the model: English. */
+    discussion: z
+      .object({ description: z.string().min(1).max(400), inputSchema: z.record(z.string(), z.unknown()).optional() })
+      .strict()
+      .optional(),
   })
   .strict();
 

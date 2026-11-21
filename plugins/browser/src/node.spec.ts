@@ -36,6 +36,15 @@ async function rig(service?: Partial<PluginBrowser>, roots: readonly string[] = 
 }
 
 describe('what the model reads of the browser (audit 2026-11-21, I3)', () => {
+  it('browser_open is told to a discussion without a path: it has no folder, nor read_file (review of round 3, 6 and 7)', () => {
+    const open = (browserManifest.contributes?.tools ?? []).find((tool) => tool.name === 'browser_open')!;
+    expect(open.discussion).toBeDefined();
+    expect(JSON.stringify(open.discussion)).not.toMatch(/read_file|path|project|file/);
+    expect(open.discussion!.description).toContain('your own browser tab');
+    expect(open.discussion!.description).toContain('none of the user’s logins or cookies');
+    expect(Object.keys((open.discussion!.inputSchema as { properties: object }).properties)).toEqual(['url']);
+  });
+
   it('each tool says it works in the agent’s own tab, a session apart — never the tab the person sees', () => {
     const tools = browserManifest.contributes?.tools ?? [];
     expect(tools).toHaveLength(5);

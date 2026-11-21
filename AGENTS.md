@@ -798,7 +798,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`kind: 'discussion'`, `?kind=discussion` on its first turn) has the
   network tools only and Lecture, no mode switch, no code panes — and
   the whole built-in browser on web pages (Paul, 2026-11-20): its tools
-  (`toolsFor`), its « Navigateur » pane and Ctrl Maj B, never a file;
+  (`toolsFor`; `browser_open` told by its manifest's `discussion` words,
+  an address only), its « Navigateur » pane and Ctrl Maj B, never a file;
   `browser_act` asked each time there (`PermissionEngine.forDiscussion`),
   never refused by its Lecture, never free; its prompt names no folder;
   `attachProject` makes it a code conversation, the project and its tools

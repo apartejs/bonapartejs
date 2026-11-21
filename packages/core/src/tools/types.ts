@@ -19,6 +19,8 @@ export interface ToolDef {
   where: 'core' | 'window';
   /** Kept for the conversations told of it before, never told to a new one (`browser_open_file`). */
   hidden?: true;
+  /** What a discussion is told of it instead of its description and schema: it has no folder (review of round 3, 6 and 7). */
+  discussion?: { description: string; inputSchema: JsonSchema };
 }
 
 export interface ToolResult {

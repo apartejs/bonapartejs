@@ -30,7 +30,7 @@ test('without a project, a new conversation is a discussion: no mode switch, no 
   expect(prompts.at(-1)).toContain('web_fetch');
   // The whole browser on web pages; one tool opens a page or a file, and a discussion opens no file.
   for (const name of ['browser_open', 'browser_read', 'browser_screenshot', 'browser_act']) expect(prompts.at(-1)).toContain(`declaration:${name}{`);
-  expect(prompts.at(-1)).not.toMatch(/declaration:(read_file|edit_file|write_file|run_command|browser_open_file)\{/);
+  expect(prompts.at(-1)).not.toMatch(/read_file|edit_file|write_file|run_command|browser_open_file/);
   await expect(page.getByRole('group', { name: 'Discussions', exact: true })).toContainText('Bonjour');
   await expect(ui.modeShown).toHaveCount(0);
 });

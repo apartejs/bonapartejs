@@ -97,9 +97,10 @@ export function toolsFor(kind: ConversationKind, tools: readonly ToolDef[]): Too
   const told = tools.filter((tool) => !tool.hidden);
   if (kind === 'code') return told;
   // An MCP tool is never a discussion's, whatever its effect: a server's « read-only » tool reads this machine's files.
-  return told.filter(
-    (tool) => (tool.effect === 'network' && tool.source !== 'mcp') || (tool.source === 'plugin' && DISCUSSION_BROWSER.has(tool.name)),
-  );
+  // A tool that has words for a discussion is told by them: browser_open without its path (review of round 3, 6 and 7).
+  return told
+    .filter((tool) => (tool.effect === 'network' && tool.source !== 'mcp') || (tool.source === 'plugin' && DISCUSSION_BROWSER.has(tool.name)))
+    .map(({ discussion, ...tool }) => (discussion ? { ...tool, ...discussion } : tool));
 }
 
 /**
