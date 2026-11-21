@@ -8,7 +8,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCore, type Core, type EngineState } from '../api.js';
 import { openJournal } from '../journal/journal.js';
 import type { SecretStore } from '../providers/secrets.js';
@@ -59,7 +59,7 @@ function serviceModel(work: FakeOpenAIAnswer = { calls: [{ name: 'read_file', ar
   };
 }
 
-async function rig(options: { llama?: (prompt: string) => string; service?: (request: FakeChatRequest) => FakeOpenAIAnswer; setting?: boolean } = {}) {
+async function rig(options: { llama?: (prompt: string) => string; service?: (request: FakeChatRequest) => FakeOpenAIAnswer | Promise<FakeOpenAIAnswer>; setting?: boolean } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-service-subagents-'));
   dirs.push(dir);
   const prompts: string[] = [];
@@ -204,6 +204,38 @@ describe('run_subagent in a conversation on a service (audit S3)', () => {
     expect(lines.filter((line) => line.type === 'text-delta' && !line['agentId']).map((line) => line['delta']).join('')).toContain('Synthèse du service.');
     expect(service.requests.filter(isSubagent).every((request) => request.model === 'qwen3:8b')).toBe(true);
     expect(prompts).toEqual([]);
+  });
+
+  it('a sub-agent that works longer than five minutes is not cut by the tool call it runs in (review of S3)', async () => {
+    // A slow local model: each of the sub-agent's rounds takes a while, the whole past aparté's default of five
+    // minutes for one call of a tool. Time is the test's: only the timers move.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let reached = (): void => undefined;
+      const gates: (() => void)[] = [];
+      const slow = (request: FakeChatRequest): FakeOpenAIAnswer | Promise<FakeOpenAIAnswer> => {
+        if (!isSubagent(request)) return main(request);
+        const answer = serviceModel()(request);
+        return new Promise((resolve) => {
+          gates.push(() => resolve(answer));
+          reached();
+        });
+      };
+      const { post, onService } = await rig({ setting: false, service: slow });
+      const posting = post('s1', {}, onService);
+      for (let round = 0; round < 2; round += 1) {
+        if (gates.length === 0) await new Promise<void>((resolve) => (reached = resolve));
+        // Four minutes a round: eight in all.
+        await vi.advanceTimersByTimeAsync(4 * 60_000);
+        gates.shift()!();
+      }
+      const lines = await posting;
+      expect(of(lines, 'tool-aborted').map((line) => line['cause'])).toEqual([]);
+      expect(of(lines, 'agent-end')[0]).toMatchObject({ status: 'done', result: 'From the service: a is 1.' });
+      expect(lines.filter((line) => line.type === 'text-delta' && !line['agentId']).map((line) => line['delta']).join('')).toContain('Synthèse du service.');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('what its mode would ask is refused to the sub-agent, in words for the main agent — never done', async () => {

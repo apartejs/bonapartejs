@@ -30,6 +30,12 @@ export interface ServiceTurn {
   maxTurns: number;
 }
 
+/**
+ * How long one tool call of a service turn may run before aparté abandons it: past any tool's own limit and a
+ * sub-agent's rounds on a slow local model — a net, never what ends a call.
+ */
+export const SERVICE_TOOL_TIMEOUT_MS = 2 * 60 * 60_000;
+
 /** A line of the turn's stream, as aparté's handler writes it. */
 export type ServiceLine = { type: string; [key: string]: unknown };
 
@@ -102,6 +108,10 @@ export async function serveOnService(
       ],
     }),
     maxTurns: turn.maxTurns,
+    // Each tool bounds its own time, as on the built-in engine (a command up to ten minutes, a fetch, a search), and a
+    // sub-agent runs whole inside its call (S3): aparté's five minutes a call would cut both, the turn stopped and what
+    // the sub-agent found lost (review of S3). Its bound stays only as a net (apartejs/aparte#290).
+    toolTimeoutMs: SERVICE_TOOL_TIMEOUT_MS,
     // A write or a command never passes one that waits for the person (aparté 1.8).
     parallelTools: false,
   });

@@ -32,7 +32,8 @@ export interface FakeOpenAIServerOptions {
   models?: string[];
   /** The key the service asks; without it, any request (or none) is accepted. */
   key?: string;
-  responder?: (request: FakeChatRequest) => FakeOpenAIAnswer;
+  /** Answers at once, or when its promise settles (a service that thinks for a while). */
+  responder?: (request: FakeChatRequest) => FakeOpenAIAnswer | Promise<FakeOpenAIAnswer>;
   /** A real delay between two chunks (default 0). */
   paceMs?: number;
 }
@@ -67,7 +68,7 @@ export async function startFakeOpenAIServer(options: FakeOpenAIServerOptions = {
         const body = JSON.parse(await readBody(req)) as Omit<FakeChatRequest, 'authorization'>;
         const request: FakeChatRequest = { model: body.model, messages: body.messages, ...(body.tools ? { tools: body.tools } : {}), authorization };
         requests.push(request);
-        const answer = options.responder?.(request) ?? { text: 'ok' };
+        const answer = (await options.responder?.(request)) ?? { text: 'ok' };
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
         const send = async (chunk: unknown): Promise<void> => {
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
