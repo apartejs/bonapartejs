@@ -41,6 +41,7 @@ import {
   conversationsContext,
   conversationsInbox,
   conversationsSeen,
+  conversationsShown,
   conversationsReadAgain,
   conversationsSettingsGet,
   conversationsSettingsSet,
@@ -68,7 +69,7 @@ import { changesList, changesRevert } from './changes.js';
 import { filesChanged, filesList, filesRead } from './files.js';
 import { pluginsAck, pluginsCheckUpdates, pluginsDiscard, pluginsInstall, pluginsInvoke, pluginsOverview, pluginsPickFolder, pluginsPreview, pluginsRemove, pluginsSetEnabled, searchKeysList, searchKeysSet, extensionsTry, extensionsInstall, extensionsCode, extensionsStop } from './plugins.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
-import { projectsAddFolder, projectsChooseFolder, projectsCreate, projectsDetect, projectsList, projectsRemove, projectsUpdate } from './projects.js';
+import { projectsAddFolder, projectsChooseFolder, projectsCreate, projectsDetect, projectsFolderTaken, projectsList, projectsRemove, projectsUpdate } from './projects.js';
 import { engineMemory, engineReleaseMemory, engineDiskCheck, engineResources, engineRestart, engineUnload } from './memory.js';
 import { modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from './models.js';
 import { providersAdd, providersList, providersModels, providersProbe, providersRemove, providersSwitch } from './providers.js';
@@ -99,6 +100,7 @@ export const CHANNELS = [
   conversationsContext,
   conversationsInbox,
   conversationsSeen,
+  conversationsShown,
   conversationsReadAgain,
   conversationsSettingsGet,
   conversationsSettingsSet,
@@ -154,6 +156,7 @@ export const CHANNELS = [
   toolsPreview,
   projectsList,
   projectsDetect,
+  projectsFolderTaken,
   projectsChooseFolder,
   projectsCreate,
   projectsUpdate,

@@ -62,6 +62,16 @@ export const projectsUpdate = defineChannel(
   projectSchema,
 );
 
+/**
+ * Another conversation of the project works in its folder (audit C4): a reply running, a question or an approval
+ * waiting, changes applied and not undone. A new one is then offered its own branch first.
+ */
+export const projectsFolderTaken = defineChannel(
+  'projects.folderTaken',
+  z.object({ id: idSchema }),
+  z.object({ conversationId: z.string(), title: z.string() }).nullable(),
+);
+
 export const projectsRemove = defineChannel('projects.remove', z.object({ id: idSchema }), z.void());
 
 /** « Ajouter un dossier » on the project's page: the folder chosen in the system's dialog; null when closed. */

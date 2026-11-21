@@ -7,8 +7,10 @@
  */
 
 import { tempRepo } from '@aparte/bonaparte-core/testing';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 
@@ -56,5 +58,57 @@ test('chosen before its first message, its worktree made at its first write; the
       .toEqual([worktree]);
   } finally {
     await repo.remove();
+  }
+});
+
+async function newProject(page: Page, git: boolean): Promise<void> {
+  await page.getByRole('button', { name: 'Nouveau projet' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Nouveau projet' });
+  await dialog.getByRole('button', { name: 'Choisir un dossier…' }).click();
+  if (git) await expect(dialog).toContainText('Un dépôt git, sur main');
+  await dialog.getByRole('radio', { name: /Plume/ }).check();
+  await dialog.getByRole('button', { name: 'Créer le projet' }).click();
+  await expect(dialog).toBeHidden();
+}
+
+test('another conversation works in the project’s folder: a new one starts on its own branch, and says why (audit C4)', async ({ launch }) => {
+  const repo = await tempRepo({ 'notes.txt': 'first\n' });
+  try {
+    const { page } = await launch({ engine: { responder: model }, env: { BONAPARTE_E2E_PICK_FOLDER: repo.dir } });
+    await newProject(page, true);
+    const where = page.getByRole('radiogroup', { name: 'Où travaille la conversation' });
+    // Nobody works in the folder yet: the setting's choice, and nothing said.
+    await expect(where.getByRole('radio', { name: /Dans le dossier du projet/ })).toBeChecked();
+    await expect(page.locator('.where-it-works__taken')).toHaveCount(0);
+    await chat(page).send('Change la note');
+    await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
+    expect(await readFile(join(repo.dir, 'notes.txt'), 'utf8')).toBe('second\n');
+
+    // Its change stands in the folder: the next conversation is offered its own branch first, and told why.
+    await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
+    await expect(where.getByRole('radio', { name: /Sur sa propre branche/ })).toBeChecked({ timeout: 10_000 });
+    await expect(page.locator('.where-it-works__taken')).toHaveText('« Change la note » travaille déjà dans ce dossier : celle-ci part sur sa propre branche.');
+    // The person may still choose the folder.
+    await where.getByRole('radio', { name: /Dans le dossier du projet/ }).check();
+    await expect(where.getByRole('radio', { name: /Dans le dossier du projet/ })).toBeChecked();
+  } finally {
+    await repo.remove();
+  }
+});
+
+test('in a project without git, another conversation in its folder is said plainly: no branch to offer (audit C4)', async ({ launch }) => {
+  const folder = await mkdtemp(join(tmpdir(), 'bp-nogit-'));
+  try {
+    await writeFile(join(folder, 'notes.txt'), 'first\n');
+    const { page } = await launch({ engine: { responder: model }, env: { BONAPARTE_E2E_PICK_FOLDER: folder } });
+    await newProject(page, false);
+    await expect(page.locator('.folder-taken')).toHaveCount(0);
+    await chat(page).send('Change la note');
+    await expect(chat(page).replyText).toHaveText('Fait.', { timeout: 15_000 });
+    await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
+    await expect(page.locator('.folder-taken')).toContainText('« Change la note » travaille déjà dans ce dossier. Ce projet n’est pas un dépôt git', { timeout: 10_000 });
+    await expect(page.getByRole('radiogroup', { name: 'Où travaille la conversation' })).toHaveCount(0);
+  } finally {
+    await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
   }
 });

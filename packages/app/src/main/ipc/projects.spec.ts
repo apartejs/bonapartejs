@@ -31,6 +31,7 @@ function setup(chosen: string | null = 'C:/dev/spanwise') {
         ...(alwaysAsk ? { alwaysAsk: [...alwaysAsk] } : {}),
       }),
       remove: async () => undefined,
+      folderTaken: async (id) => (id === PROJECT.id ? { conversationId: 'c1', title: 'Refonte du login' } : null),
     },
   };
   const listeners = new Map<string, Listener>();
@@ -73,5 +74,11 @@ describe('the project channels', () => {
     await expect(call('projects.list')).resolves.toEqual([PROJECT]);
     await expect(call('projects.update', { id: 'p-1', changes: { defaultMode: 'lecture' } })).resolves.toMatchObject({ defaultMode: 'lecture' });
     await expect(call('projects.remove', { id: 'p-1' })).resolves.toBeUndefined();
+  });
+
+  it('say who else works in a project’s folder, or nobody (audit C4)', async () => {
+    const { call } = setup();
+    await expect(call('projects.folderTaken', { id: 'p-1' })).resolves.toEqual({ conversationId: 'c1', title: 'Refonte du login' });
+    await expect(call('projects.folderTaken', { id: 'p-2' })).resolves.toBeNull();
   });
 });

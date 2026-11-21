@@ -12,10 +12,11 @@ import type { EngineRow, Waiting } from './tray.js';
 
 const HOUR = 3_600_000;
 
-function setup(over: { settings?: Partial<Record<NotifyEvent, NotifySetting>>; focused?: boolean; engine?: EngineRow | null } = {}) {
+function setup(over: { settings?: Partial<Record<NotifyEvent, NotifySetting>>; focused?: boolean; shown?: string | null; engine?: EngineRow | null } = {}) {
   const state = {
     now: Date.parse('2026-11-16T21:47:00Z'),
     focused: over.focused ?? false,
+    shown: over.shown === undefined ? null : over.shown,
     waiting: [] as Waiting[],
     unread: 0,
     failing: false,
@@ -30,6 +31,7 @@ function setup(over: { settings?: Partial<Record<NotifyEvent, NotifySetting>>; f
     words: () => mainWords('fr'),
     setting: async (event) => settings[event],
     focused: () => state.focused,
+    shown: () => state.shown,
     now: () => state.now,
     waiting: async () => {
       if (state.failing) throw new Error('The journal of c9 cannot be read at line 3');
@@ -55,11 +57,20 @@ describe('being noticed', () => {
     expect(last()).toMatchObject({ icon: 'rest', badge: null });
   });
 
-  it('nothing pops up while the window is in front of the person', async () => {
-    const { attention, shown } = setup({ focused: true });
+  it('nothing pops up for the conversation the person looks at, the window in front', async () => {
+    const { attention, shown, state } = setup({ focused: true, shown: 'c1' });
     await attention.turnEnded(done);
+    expect(shown).toEqual([]);
+    state.shown = 'c2';
     await attention.turnEnded(approval);
     expect(shown).toEqual([]);
+  });
+
+  it('another conversation that ends or waits while the person looks at one: a banner, the window in front or not (audit C3)', async () => {
+    const { attention, shown } = setup({ focused: true, shown: 'c9' });
+    await attention.turnEnded(done);
+    await attention.turnEnded(approval);
+    expect(shown.map((note) => note.conversationId)).toEqual(['c1', 'c2']);
   });
 
   it('an approval waiting: a banner, the icon amber, the badge says it — until it is answered', async () => {

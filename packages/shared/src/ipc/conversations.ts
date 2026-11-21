@@ -116,6 +116,12 @@ export const conversationsInbox = defineChannel('conversations.inbox', z.void(),
 /** The window shows a conversation: what it finished so far is read. */
 export const conversationsSeen = defineChannel('conversations.seen', z.object({ id: z.string().min(1).max(128) }), z.void());
 
+/**
+ * What the window shows the person now (audit C3): a conversation, or none — a new one not yet sent, « À traiter »,
+ * the settings. Its events need no banner while the window is in front; another conversation's do.
+ */
+export const conversationsShown = defineChannel('conversations.shown', z.object({ id: z.string().min(1).max(128).nullable() }), z.void());
+
 /** « Relire et continuer »: the conversation read again now, nothing generated. */
 export const conversationsReadAgain = defineChannel('conversations.readAgain', z.object({ id: z.string().min(1).max(128) }), z.void());
 

@@ -24,6 +24,7 @@ import {
   type AppliedChangeView,
   pluginsInvoke,
   projectsDetect,
+  projectsFolderTaken,
   conversationsOpenFolder,
   conversationsArchiveCheck,
   conversationsCommitBranch,
@@ -32,6 +33,7 @@ import {
   conversationsBranches,
   conversationsInbox,
   conversationsSeen,
+  conversationsShown,
   conversationsReadAgain,
   conversationsAttachProject,
   conversationsMove,
@@ -59,7 +61,7 @@ import { speakAsBonaparte } from './aparte/words';
 import { createStorageAdapter } from './aparte/storage-adapter';
 import { bridge } from './bridge';
 import { ApprovalCard } from './chat/ApprovalCard';
-import { WhereItWorks, type Place } from './chat/WhereItWorks';
+import { FolderTaken, WhereItWorks, type Place } from './chat/WhereItWorks';
 import { CHATS_TARGET, ChatDeck } from './chat/ChatDeck';
 import { addComment, clearPending, editComment, markSent, pendingOf, reviewMessage, type ReviewComment } from './diff/comments-store';
 import { appliedCards, ChangesPanel, useProposedCards } from './panels/ChangesPanel';
@@ -134,7 +136,7 @@ import { DiskFullCard } from './failures/DiskFullCard';
 import { ConversationSettingsDialog } from './dialogs/ConversationSettings';
 import { UpdatesDialog, updatesCount } from './dialogs/Updates';
 import { TURN_ACTIVITY } from './aparte/runner';
-import { useConversationStatuses, useWaitingMarks, type Statuses } from './shell/statuses';
+import { useConversationStatuses, useRunningConversations, useWaitingMarks, type Statuses } from './shell/statuses';
 
 type Announcement = ConversationMemoryView['announcement'];
 
@@ -498,6 +500,8 @@ function Workspace({
   }, [settingsPage]);
   // Where a new conversation of a git project works (task 6.7): its folder, or its own branch.
   const [placeShown, setPlaceShown] = useState<Place | null>(null);
+  // Another conversation already works in the project's folder (audit C4): its title, said above the choice.
+  const [folderTaken, setFolderTaken] = useState<string | null>(null);
   const place = useRef<Place | null>(null);
   place.current = placeShown;
   // Where each conversation born here was started: until its first turn tells the core.
@@ -563,10 +567,14 @@ function Workspace({
     window.addEventListener('aparte-message-done', ended);
     return () => window.removeEventListener('aparte-message-done', ended);
   }, []);
-  // A new conversation in a git project offers its own branch; the default is the setting's.
+  // A new conversation in a git project offers its own branch; the default is the setting's — or the branch, when
+  // another conversation already works in the project's folder (audit C4), which is said.
   useEffect(() => {
     if (conversationId || !activeProject?.roots[0]) {
-      if (!conversationId) setPlaceShown(null);
+      if (!conversationId) {
+        setPlaceShown(null);
+        setFolderTaken(null);
+      }
       return;
     }
     let current = true;
@@ -574,16 +582,19 @@ function Workspace({
       bridge.invoke(projectsDetect, { folder: activeProject.roots[0] }),
       bridge.invoke(settingsGet, { key: 'newConversationWorksIn' }).catch(() => 'folder'),
       bridge.invoke(settingsGet, { key: 'branchPrefix' }).catch(() => 'bonaparte/'),
+      bridge.invoke(projectsFolderTaken, { id: activeProject.id }).catch(() => null),
     ])
-      .then(([facts, worksIn, prefix]) => {
+      .then(([facts, worksIn, prefix, taken]) => {
         if (!current) return;
+        const takenBy = taken ? taken.title.trim() || messages.engineWait.untitled : null;
+        setFolderTaken(takenBy);
         if (!facts.git) {
           setPlaceShown(null);
           return;
         }
         const stamp = new Date().toISOString().slice(5, 16).replace(/[-T:]/g, '');
         setPlaceShown({
-          worksIn: worksIn === 'branch' ? 'branch' : 'folder',
+          worksIn: worksIn === 'branch' || takenBy !== null ? 'branch' : 'folder',
           branch: `${typeof prefix === 'string' ? prefix : 'bonaparte/'}conversation-${stamp}`,
           base: facts.git.branch ?? 'HEAD',
         });
@@ -763,6 +774,8 @@ function Workspace({
   const statuses = useConversationStatuses(listedIds, asked);
   // The conversations whose turn waits for the engine another one holds (audit C1): their row says it.
   const engineWaits = useEngineWaits();
+  // The conversations that answer now: the rail shows them (audit C3).
+  const runningConversations = useRunningConversations();
   // What waits for the person, read again when something may have changed it.
   useEffect(() => {
     void bridge
@@ -788,6 +801,11 @@ function Workspace({
     window.addEventListener('focus', seen);
     return () => window.removeEventListener('focus', seen);
   }, [conversationId, turnsEnded, inboxOpen]);
+  // What the person looks at, told to the main process: another conversation's events become banners (audit C3).
+  const lookingAt = inboxOpen || settingsPage !== null ? null : (conversationId ?? null);
+  useEffect(() => {
+    void bridge.invoke(conversationsShown, { id: lookingAt }).catch(() => undefined);
+  }, [lookingAt]);
   statusesNow.current = statuses;
   useWaitingMarks(statuses);
   // Archiving (task 6.8): a conversation whose branch has changes not committed asks first.
@@ -1456,6 +1474,8 @@ function Workspace({
           conversations={activeConversations}
           activeId={conversationId ?? null}
           statuses={statuses}
+          running={runningConversations}
+          queued={engineWaits}
           onExpand={toggleSidebar}
           onNewConversation={newConversation}
           onNewDiscussion={newDiscussion}
@@ -1920,7 +1940,9 @@ function Workspace({
               onLater={compaction.later}
             />
           ) : !conversationId && placeShown ? (
-            <WhereItWorks messages={messages} place={placeShown} onChange={setPlaceShown} />
+            <WhereItWorks messages={messages} place={placeShown} onChange={setPlaceShown} {...(folderTaken !== null ? { taken: folderTaken } : {})} />
+          ) : !conversationId && folderTaken !== null ? (
+            <FolderTaken messages={messages} title={folderTaken} />
           ) : undefined
         }
         toolbar={

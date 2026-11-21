@@ -90,3 +90,32 @@ test('« Ne pas déranger pendant 1 h » from the icon\'s menu: no banner — wh
   await clickTrayItem(app, 'Change la note');
   await expect(page.getByRole('region', { name: 'Demande d’accord' })).toBeVisible();
 });
+
+test('another conversation ends while the person looks at one, the window in front: a banner all the same; the folded rail shows it answer, then unread (audit C3)', async ({ launch }) => {
+  // The synthesis lasts some seconds; anything else answers at once.
+  const { app, page } = await launch({
+    engine: { responder: (prompt) => (prompt.slice(prompt.lastIndexOf('<|turn>user')).includes('synthèse') ? `${'mot '.repeat(40)}fin.` : 'ok'), paceMs: 120 },
+  });
+  await setFocused(app, true);
+  const ui = chat(page);
+  await ui.send('Bonjour');
+  await expect(ui.replyText).toHaveText('ok');
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).first().click();
+  await ui.send('Fais la synthèse');
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 10_000 });
+  // The person goes back to the first conversation while the synthesis is written.
+  await page.locator('.aparte-conv-item', { hasText: 'Bonjour' }).locator('.aparte-conv-item__select').click();
+  await expect(ui.replyText).toHaveText('ok');
+  await page.keyboard.press('Control+B');
+  const rail = page.getByRole('navigation', { name: 'Projets et conversations, barre réduite' });
+  await expect(rail.getByRole('button', { name: 'Fais la synthèse, répond' })).toBeVisible();
+
+  await expect.poll(() => banners(app), { timeout: 20_000 }).toEqual([{ title: 'Tour fini · Fais la synthèse', body: expect.stringContaining('mot mot'), conversationId: expect.any(String) }]);
+  await expect(rail.getByRole('button', { name: 'Fais la synthèse, réponse pas encore lue' })).toBeVisible();
+  // The one the person looks at made none.
+  await ui.send('Encore');
+  await expect(ui.replies).toHaveCount(2);
+  await expect(ui.streamingReplies).toHaveCount(0, { timeout: 10_000 });
+  await page.waitForTimeout(500);
+  expect((await banners(app)).length).toBe(1);
+});

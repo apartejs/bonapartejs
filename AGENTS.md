@@ -761,7 +761,12 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `main/notifications.ts`, `main/tray.ts`; the core's `onTurnEnd`): each
   turn that ends (done, approval, question, failed — never one the person
   stopped) becomes a banner by `decide` (the person's setting, the window's
-  focus, « Ne pas déranger »), else the badge alone. The icon's colour and
+  focus and the conversation it shows — `conversations.shown`, null for a
+  new one, « À traiter » or the settings: another conversation's event is a
+  banner with the window in front too, audit C3 —, « Ne pas déranger »),
+  else the badge alone; aparté has no toast for a notice in the window
+  (apartejs/aparte#279). The rail shows the conversations that wait, that
+  wait for the engine, that answer and those not read, each its dot. The icon's colour and
   the taskbar's badge (`setOverlayIcon`) say what waits as long as it is
   true, read from the inbox. A banner and the icon's menu open a
   conversation (`AppEvent` `open`), never answer it. The icons are drawn
@@ -782,7 +787,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (`bonaparte:event`, the bridge's `on`): a plugin's events, and the
   agent's commands as `run_command` tells them (`ToolContext.onOutput`).
 - **A conversation's own branch** (`core/src/git/`): chosen before its first
-  message (`worksIn=branch&branch=…&base=…` on the first turn, a name git
+  message — offered first, and said why, when another conversation works in
+  the project's folder (`projects.folderTaken`: a reply running, a pause,
+  changes standing; audit C4; said plainly without git) —
+  (`worksIn=branch&branch=…&base=…` on the first turn, a name git
   takes, in any language), made by the loop's `beforeChange` hook before
   its first write or command is judged — so what the card shows, what is
   judged and what is done are all on the branch: `.bonaparte/worktrees/<name>`

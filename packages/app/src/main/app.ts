@@ -99,6 +99,8 @@ function wireAttention(options: {
   words: () => MainWords;
   reveal(): void;
   open(conversationId: string): void;
+  /** The conversation the window shows, as it last said so. */
+  shown(): string | null;
 }): Attention {
   const { core, e2e } = options;
   const record = globalThis as {
@@ -148,6 +150,7 @@ function wireAttention(options: {
       const window = options.window();
       return Boolean(window && !window.isDestroyed() && window.isVisible() && window.isFocused());
     },
+    shown: options.shown,
     now: () => Date.now(),
     waiting: async () => {
       const inbox = await core.inbox();
@@ -227,7 +230,7 @@ export async function startApp(options: { e2e: boolean }): Promise<void> {
   await app.whenReady();
 
   // The icon in the notification area, the banners, the badge (task 8.5): made once the window exists.
-  const noticing: { attention?: Attention } = {};
+  const noticing: { attention?: Attention; shown?: string | undefined } = {};
   // What the main process pushes to the window: a terminal's output, an agent's command.
   const push = (event: AppEvent): void => {
     if (window && !window.isDestroyed()) window.webContents.send(APP_EVENT, event);
@@ -426,6 +429,10 @@ ${appTokens}`,
     },
     // A conversation seen: a reply ready there leaves the taskbar's badge.
     seen: () => void noticing.attention?.refresh(),
+    // What the person looks at: its events need no banner while the window is in front; another's do (audit C3).
+    shown: (id) => {
+      noticing.shown = id ?? undefined;
+    },
     // The window's buttons in the app's colours (a test run notes them).
     titleBar: (colours) => {
       if (options.e2e) (globalThis as { __bonaparteTitleBar?: unknown }).__bonaparteTitleBar = colours;
@@ -497,6 +504,7 @@ ${appTokens}`,
     words: () => mainWords(interfaceLocale()),
     reveal,
     open: openConversation,
+    shown: () => noticing.shown ?? null,
   });
   noticing.attention = noticed;
   // None of these ever rejects (attention.ts logs what fails): the app goes on, whatever a drawing does.

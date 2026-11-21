@@ -151,6 +151,31 @@ export function memoryMark(memory: Memory, words: Messages['shell']['memory']): 
   return element;
 }
 
+/**
+ * The conversations that answer now, as aparté tells its lists (`aparte-conversation-status`, `running`): what the
+ * rail shows of them (audit C3). aparté keeps the state page-wide but does not export it: heard from the event.
+ */
+export function useRunningConversations(): ReadonlySet<string> {
+  const [running, setRunning] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    const heard = (event: Event): void => {
+      const detail = (event as CustomEvent<{ id?: unknown; status?: unknown }>).detail;
+      if (typeof detail?.id !== 'string') return;
+      const id = detail.id;
+      setRunning((was) => {
+        if ((detail.status === 'running') === was.has(id)) return was;
+        const next = new Set(was);
+        if (detail.status === 'running') next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    };
+    window.addEventListener('aparte-conversation-status', heard);
+    return () => window.removeEventListener('aparte-conversation-status', heard);
+  }, []);
+  return running;
+}
+
 /** aparté's `waiting` state, for the conversations the core says wait; taken back only where it was told here. */
 export function useWaitingMarks(statuses: Statuses): void {
   const told = useRef(new Set<string>());

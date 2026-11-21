@@ -35,6 +35,7 @@ import {
   conversationsStatus,
   conversationsInbox,
   conversationsSeen,
+  conversationsShown,
   conversationsReadAgain,
   conversationsSettingsGet,
   conversationsSettingsSet,
@@ -80,7 +81,9 @@ interface ConversationCore {
 /** What the main process does when the window says something it follows. */
 export interface ConversationHooks {
   /** A conversation was seen: a reply ready there is no longer one to show in the notification area. */
-  seen?(): void;
+  seen?(id: string): void;
+  /** What the window shows now: a conversation, or none (audit C3). */
+  shown?(id: string | null): void;
   /** A conversation was deleted or archived: what lived for it goes (its agent's tab in the browser). */
   gone?(id: string): void;
 }
@@ -165,7 +168,10 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   ipc.handle(conversationsInbox, () => core.inbox());
   ipc.handle(conversationsSeen, async ({ id }) => {
     await core.conversations.markSeen(id);
-    hooks.seen?.();
+    hooks.seen?.(id);
+  });
+  ipc.handle(conversationsShown, async ({ id }) => {
+    hooks.shown?.(id);
   });
   // The core holds the engine while it reads.
   ipc.handle(conversationsReadAgain, ({ id }) => core.readAgain(id));

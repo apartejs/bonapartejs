@@ -25,6 +25,9 @@ export interface RailProps {
   conversations: readonly ListedConversation[];
   activeId: string | null;
   statuses: Statuses;
+  /** The conversations that answer now (aparté's `running`), and those whose turn waits for the engine (audit C3, C1). */
+  running: ReadonlySet<string>;
+  queued: ReadonlySet<string>;
   onExpand(): void;
   onNewConversation(): void;
   /** « Nouvelle discussion » (task 9.7): a conversation without a project, offered folded too (review of phase 9). */
@@ -36,10 +39,24 @@ export interface RailProps {
   updates?: { count: number; onOpen(): void };
 }
 
+type RailState = 'waiting' | 'queued' | 'running' | 'unread' | null;
+
+/** The kit's tone of each state's dot: what waits for the person in its amber, a reply not read in the accent. */
+const BADGES: Record<Exclude<RailState, null>, string> = { waiting: 'warning', queued: 'neutral', running: 'info', unread: 'primary' };
+
 export function Rail(props: RailProps) {
-  const { messages, conversations, activeId, statuses } = props;
+  const { messages, conversations, activeId, statuses, running, queued } = props;
   const words = messages.shell;
-  const shown = conversations.filter((conversation) => conversation.id === activeId || statuses[conversation.id]?.waiting);
+  // What a conversation does, the most pressing first: it waits for the person, for the engine, it answers, or a
+  // reply waits to be read (audit C3) — never « unread » for the one open.
+  const stateOf = (id: string): RailState => {
+    if (statuses[id]?.waiting) return 'waiting';
+    if (queued.has(id)) return 'queued';
+    if (running.has(id)) return 'running';
+    if (statuses[id]?.unread && id !== activeId) return 'unread';
+    return null;
+  };
+  const shown = conversations.filter((conversation) => conversation.id === activeId || stateOf(conversation.id) !== null);
   return (
     <nav className="bonaparte-rail" aria-label={words.navCollapsed}>
       <Mascot className="bonaparte-rail__mark" state={props.mascot} label={words.mascot.label(words.mascot.states[props.mascot])} />
@@ -49,16 +66,20 @@ export function Rail(props: RailProps) {
       <TipButton label={messages.search.open} tip={words.searchTip} icon="search" side="end" onClick={props.onSearch} />
       {shown.length > 0 ? <span className="bonaparte-rail__separator" role="separator" /> : null}
       {shown.map((conversation) => {
-        const waiting = statuses[conversation.id]?.waiting === true;
+        const state = stateOf(conversation.id);
         const title = conversation.title || messages.search.untitled;
         return (
           <TipButton
             key={conversation.id}
-            label={words.railConversation(title, waiting)}
+            label={words.railConversation(title, state)}
             icon="conversation"
             side="end"
             current={conversation.id === activeId}
-            badge={waiting ? <span className="aparte-badge aparte-badge--dot aparte-badge--warning bonaparte-rail__badge" aria-hidden="true" /> : null}
+            badge={
+              state ? (
+                <span className={`aparte-badge aparte-badge--dot aparte-badge--${BADGES[state]} bonaparte-rail__badge`} data-state={state} aria-hidden="true" />
+              ) : null
+            }
             onClick={() => props.onOpen(conversation.id)}
           />
         );

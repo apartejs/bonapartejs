@@ -9,6 +9,7 @@ import {
   projectsChooseFolder,
   projectsCreate,
   projectsDetect,
+  projectsFolderTaken,
   projectsList,
   projectsRemove,
   projectsUpdate,
@@ -26,6 +27,7 @@ export type ChooseFolder = () => Promise<string | null>;
 export function registerProjectChannels(ipc: IpcRegistry, core: ProjectCore, chooseFolder: ChooseFolder): void {
   ipc.handle(projectsList, () => core.projects.list());
   ipc.handle(projectsDetect, ({ folder }) => core.projects.detect(folder));
+  ipc.handle(projectsFolderTaken, ({ id }) => core.projects.folderTaken(id));
   ipc.handle(projectsChooseFolder, async () => {
     const folder = await chooseFolder();
     return folder ? { folder } : null;

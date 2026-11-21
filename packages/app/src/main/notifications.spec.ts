@@ -13,17 +13,21 @@ const HOUR = 3_600_000;
 
 describe('what an event becomes', () => {
   it.each([
-    // setting, focused, quiet until, delivery
-    ['banner', false, null, 'banner'],
-    ['banner', true, null, 'badge'],
-    ['banner', false, NOW + HOUR, 'badge'],
-    ['banner', false, NOW - 1, 'banner'],
-    ['badge', false, null, 'badge'],
-    ['badge', true, null, 'badge'],
-    ['off', false, null, 'none'],
-    ['off', true, NOW + HOUR, 'none'],
-  ] as const)('« %s », focused %s, quiet until %s: %s', (setting, focused, quietUntil, delivery) => {
-    expect(decide({ setting, focused, quietUntil, now: NOW })).toBe(delivery);
+    // setting, focused, the conversation shown, quiet until, delivery
+    ['banner', false, true, null, 'banner'],
+    ['banner', true, true, null, 'badge'],
+    // In front, but the person looks at another conversation (audit C3): the banner all the same.
+    ['banner', true, false, null, 'banner'],
+    ['banner', true, false, NOW + HOUR, 'badge'],
+    ['banner', false, true, NOW + HOUR, 'badge'],
+    ['banner', false, true, NOW - 1, 'banner'],
+    ['badge', false, true, null, 'badge'],
+    ['badge', true, false, null, 'badge'],
+    ['off', false, true, null, 'none'],
+    ['off', true, false, null, 'none'],
+    ['off', true, true, NOW + HOUR, 'none'],
+  ] as const)('« %s », focused %s, its conversation shown %s, quiet until %s: %s', (setting, focused, shown, quietUntil, delivery) => {
+    expect(decide({ setting, focused, shown, quietUntil, now: NOW })).toBe(delivery);
   });
 
   it('each end of a turn is one of the four events the settings name', () => {

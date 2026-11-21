@@ -33,6 +33,8 @@ export interface AttentionDeps {
   setting(event: NotifyEvent): Promise<NotifySetting>;
   /** The window is in front of the person. */
   focused(): boolean;
+  /** The conversation the window shows the person, as it last said so (`conversations.seen`); none: null. */
+  shown(): string | null;
   now(): number;
   /** What waits for the person (« À traiter »): the conversations waiting on an answer, and the replies not read. */
   waiting(): Promise<{ rows: Waiting[]; unread: number }>;
@@ -119,7 +121,7 @@ export function createAttention(deps: AttentionDeps): Attention {
   return {
     turnEnded: safely('a notification failed', async (end: TurnEnd) => {
       const setting = await deps.setting(EVENT_OF[end.how]);
-      const delivery = decide({ setting, focused: deps.focused(), quietUntil: quiet(), now: deps.now() });
+      const delivery = decide({ setting, focused: deps.focused(), shown: deps.shown() === end.conversationId, quietUntil: quiet(), now: deps.now() });
       if (delivery === 'banner') deps.show({ ...notificationOf(end, deps.words().notify), conversationId: end.conversationId });
       if (end.how === 'failed') failed = end.conversationId;
       else if (failed === end.conversationId) failed = null;

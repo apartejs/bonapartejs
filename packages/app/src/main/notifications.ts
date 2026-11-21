@@ -1,6 +1,6 @@
 /**
- * What the end of a turn tells the person when the window is not in front of them (task 8.5, board « Notifications
- * et zone de notification »): one of four events — a reply done, an approval waiting, a question, a failure —
+ * What the end of a turn tells the person when they do not look at its conversation (task 8.5, board « Notifications
+ * et zone de notification »; audit C3, another conversation shown): one of four events — a reply done, an approval waiting, a question, a failure —
  * becomes a banner, only a badge, or nothing, by the person's setting for that event (Settings, Général), the
  * window's focus and « Ne pas déranger ». A banner says « <what happened> · <the conversation> », then a line.
  *
@@ -18,14 +18,15 @@ export type Delivery = 'banner' | 'badge' | 'none';
 export const EVENT_OF: Record<TurnEnd['how'], NotifyEvent> = { done: 'replyDone', approval: 'approval', question: 'question', failed: 'failure' };
 
 /**
- * A banner only when the person asked for one, the window is not in front of them and « Ne pas déranger » is off;
- * otherwise only the badge — the item waits in « À traiter » — unless the person turned the event off.
+ * A banner only when the person asked for one, they do not look at its conversation — the window not in front of
+ * them, or another conversation shown in it (audit C3) — and « Ne pas déranger » is off; otherwise only the badge —
+ * the item waits in « À traiter » — unless the person turned the event off.
  */
-export function decide(input: { setting: NotifySetting; focused: boolean; quietUntil: number | null; now: number }): Delivery {
+export function decide(input: { setting: NotifySetting; focused: boolean; shown: boolean; quietUntil: number | null; now: number }): Delivery {
   if (input.setting === 'off') return 'none';
   if (input.setting === 'badge') return 'badge';
   const quiet = input.quietUntil !== null && input.now < input.quietUntil;
-  return input.focused || quiet ? 'badge' : 'banner';
+  return (input.focused && input.shown) || quiet ? 'badge' : 'banner';
 }
 
 /** At most this long, a line of a banner: Windows cuts the rest anyway. */

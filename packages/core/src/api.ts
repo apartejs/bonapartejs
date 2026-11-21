@@ -565,6 +565,11 @@ export interface Core {
     create(input: NewProject): Promise<Project>;
     update(id: string, changes: ProjectChanges): Promise<Project>;
     remove(id: string): Promise<void>;
+    /**
+     * Another conversation of the project works in its folder (audit C4): its reply runs, a question or an approval
+     * waits, or changes it applied stand — the first found; none (or only conversations on their own branch): null.
+     */
+    folderTaken(id: string): Promise<{ conversationId: string; title: string } | null>;
   };
   /**
    * A turn of the agent: the model's calls decided by the policy, run by the
@@ -2544,6 +2549,18 @@ export function createCore(deps: CoreDeps): Core {
         return project;
       },
       remove: (id) => projectStore.remove(id),
+      async folderTaken(id) {
+        for (const meta of await conversationStore.list()) {
+          if (meta.projectId !== id || meta.kind !== 'code' || meta.archivedAt) continue;
+          // On its own branch, made or only chosen: it works in its worktree, not in the project's folder.
+          if (meta.worktree || meta.worksIn === 'branch') continue;
+          const last = (await openJournal(conversationStore.dir, meta.id, meta.branchId).catch(() => null))?.entries().at(-1);
+          const alive =
+            turning.has(meta.id) || last?.kind === 'pending' || (await checkpoints.files(meta.id).catch(() => [])).length > 0;
+          if (alive) return { conversationId: meta.id, title: meta.title };
+        }
+        return null;
+      },
     },
 
     async search(query, options = {}) {

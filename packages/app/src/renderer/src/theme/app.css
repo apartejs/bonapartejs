@@ -4655,3 +4655,8 @@ summary,
   background-image: none;
   -webkit-text-fill-color: currentColor;
 }
+
+/* A project without git whose folder another conversation works in (audit C4): said above the composer. */
+.folder-taken {
+  margin-block-end: 10px;
+}

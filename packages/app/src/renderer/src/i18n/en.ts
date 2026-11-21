@@ -415,7 +415,16 @@ export const en: Messages = {
     },
     dismiss: 'Close',
     memory: { engine: 'Context in the engine', saved: 'Memory saved', reread: 'To read again' },
-    railConversation: (title, waiting) => (waiting ? `${title}, waiting for your answer` : title),
+    railConversation: (title, state) =>
+      state === 'waiting'
+        ? `${title}, waiting for your answer`
+        : state === 'queued'
+          ? `${title}, waiting for the engine`
+          : state === 'running'
+            ? `${title}, answering`
+            : state === 'unread'
+              ? `${title}, reply not read yet`
+              : title,
     engine: (model) => `Engine: ${model}, ready`,
   },
   settings: {
@@ -736,6 +745,9 @@ export const en: Messages = {
     inFolderNote: 'On the branch you are on. Simple, but two conversations write in the same place.',
     ownBranch: 'On its own branch',
     ownBranchNote: 'A folder of its own: nothing touches your working folder.',
+    takenBranch: (title) => `“${title}” already works in this folder: this one starts on its own branch.`,
+    takenFolder: (title) =>
+      `“${title}” already works in this folder. This project is not a git repository, so there is no branch of its own: both conversations will write and run their commands there.`,
     branch: 'Branch',
     base: 'Start from',
     folderNote: (name) => `Folder: .bonaparte/worktrees/${name}, made at its first write. A .env is copied in.`,

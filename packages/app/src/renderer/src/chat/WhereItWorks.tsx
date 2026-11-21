@@ -18,9 +18,22 @@ export interface WhereItWorksProps {
   messages: Messages;
   place: Place;
   onChange(place: Place): void;
+  /** Another conversation works in the project's folder (audit C4): its title, said above the choice. */
+  taken?: string;
 }
 
-export function WhereItWorks({ messages, place, onChange }: WhereItWorksProps) {
+/** A project without git, whose folder another conversation works in (audit C4): no branch to offer, said plainly. */
+export function FolderTaken({ messages, title }: { messages: Messages; title: string }) {
+  return (
+    <div className="aparte-alert aparte-alert--warning folder-taken" role="status">
+      <div className="aparte-alert__body">
+        <p className="aparte-alert__message">{messages.branches.takenFolder(title)}</p>
+      </div>
+    </div>
+  );
+}
+
+export function WhereItWorks({ messages, place, onChange, taken }: WhereItWorksProps) {
   const words = messages.branches;
   const name = useId();
   const branchId = useId();
@@ -37,6 +50,11 @@ export function WhereItWorks({ messages, place, onChange }: WhereItWorksProps) {
   );
   return (
     <div className="where-it-works">
+      {taken !== undefined ? (
+        <p className="aparte-field-hint where-it-works__taken" role="status">
+          {words.takenBranch(taken)}
+        </p>
+      ) : null}
       <div role="radiogroup" aria-label={words.where} className="where-it-works__choices">
         {choice('folder', words.inFolder, words.inFolderNote)}
         {choice('branch', words.ownBranch, words.ownBranchNote)}

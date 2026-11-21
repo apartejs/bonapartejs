@@ -47,7 +47,9 @@ export interface AppFacts {
   /** Opens a page the core read (a pull request's, on GitHub) in the system's browser. */
   openLink(url: string): Promise<void>;
   /** A conversation was seen in the window (the notification area draws again). */
-  seen?(): void;
+  seen?(id: string): void;
+  /** What the window shows now: a conversation, or none (audit C3). */
+  shown?(id: string | null): void;
   /** The built-in browser's pages (task 10.1): the pane's channels reach them. */
   browser?: BuiltinBrowser;
   /** The plugins changed (task 11.3): the window reads them again. */
@@ -71,6 +73,7 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
   const browser = facts.browser;
   registerConversationChannels(ipc, core, {
     ...(facts.seen ? { seen: facts.seen } : {}),
+    ...(facts.shown ? { shown: facts.shown } : {}),
     // A conversation deleted or archived: its agent's tab goes with it (the browser redo, step 2, review).
     ...(browser ? { gone: (id: string) => browser.views.closeAgentTab(id) } : {}),
   });

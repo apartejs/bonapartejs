@@ -335,7 +335,8 @@ export interface Messages {
     /** Where a conversation's memory is (§12): said by a name, never by a colour alone. */
     memory: { engine: string; saved: string; reread: string };
     /** A conversation in the folded sidebar: its title, and that it waits for the person. */
-    railConversation(title: string, waiting: boolean): string;
+    /** A conversation's icon in the rail, named with what it does (audit C3): it waits for the person or the engine, it answers, or a reply waits to be read. */
+    railConversation(title: string, state: 'waiting' | 'queued' | 'running' | 'unread' | null): string;
     engine(model: string): string;
   };
   /** The settings (boards « Réglages · Général », « Apparence »…, task 5.7). */
@@ -739,6 +740,10 @@ export interface Messages {
     inFolderNote: string;
     ownBranch: string;
     ownBranchNote: string;
+    /** Another conversation works in the project's folder (audit C4): its own branch offered first, and why. */
+    takenBranch(title: string): string;
+    /** The same, in a project without git: no branch to offer, said plainly. */
+    takenFolder(title: string): string;
     branch: string;
     base: string;
     folderNote(name: string): string;
