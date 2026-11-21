@@ -923,9 +923,17 @@ export interface Messages {
     show: string;
     open: string;
     openQuestion: string;
-    openWhat(branch: string, base: string): string;
+    /** What goes, said first (audit 2026-11-21, D7): the branch, the remote and its address, the base. */
+    openWhat(branch: string, remote: string, url: string, base: string): string;
+    commits(count: number): string;
+    moreCommits(count: number): string;
+    uncommittedStay(files: number): string;
+    titleField: string;
+    bodyField: string;
     openConfirm: string;
-    openFailed: string;
+    /** Why it is not opened, or could not be, in the person's words; git's or GitHub's own line beside it. */
+    refused: Record<'no-gh' | 'no-remote' | 'default-branch' | 'no-commits' | 'push-rejected' | 'push-denied' | 'offline' | 'gh-auth' | 'exists' | 'failed', string>;
+    saidBy: string;
     cancel: string;
     archiveQuestion(title: string): string;
     uncommitted(files: number): string;

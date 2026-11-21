@@ -14,6 +14,7 @@ import {
   conversationsArchive,
   conversationsUnarchive,
   conversationsOpenPr,
+  conversationsPrPlan,
   conversationsArchiveCheck,
   conversationsCommitBranch,
   conversationsRewindPreview,
@@ -66,6 +67,7 @@ interface ConversationCore {
   prOf: Core['prOf'];
   inbox: Core['inbox'];
   openPr: Core['openPr'];
+  prPlan: Core['prPlan'];
   uncommitted: Core['uncommitted'];
   unsavedCommits: Core['unsavedCommits'];
   commitBranch: Core['commitBranch'];
@@ -124,7 +126,8 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     await store.mark(id, { archivedAt: undefined });
     await core.conversationArchived(id, false).catch(() => undefined);
   });
-  ipc.handle(conversationsOpenPr, ({ id }) => core.openPr(id));
+  ipc.handle(conversationsPrPlan, ({ id }) => core.prPlan(id));
+  ipc.handle(conversationsOpenPr, ({ id, title, body }) => core.openPr(id, { title, body }));
   ipc.handle(conversationsArchiveCheck, async ({ id }) => ({ uncommitted: await core.uncommitted(id), unsaved: await core.unsavedCommits(id) }));
   ipc.handle(conversationsCommitBranch, async ({ id }) => {
     const meta = await store.get(id);

@@ -795,6 +795,53 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* « Ouvrir une PR » (audit D7): what goes, said first — its commits listed, what stays, the words to send. */
+.open-pr__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-3);
+  overflow-wrap: anywhere;
+}
+
+.open-pr__body p {
+  margin: 0;
+}
+
+.open-pr__list {
+  margin: var(--aparte-space-1) 0 0;
+  padding-inline-start: var(--aparte-space-5);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.open-pr__list code,
+.open-pr__said code {
+  font-family: var(--aparte-code-font-family);
+}
+
+.open-pr__more {
+  color: var(--aparte-text-muted);
+}
+
+.open-pr__uncommitted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--aparte-space-2);
+}
+
+.open-pr__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--aparte-space-1);
+}
+
+.open-pr__field .aparte-field {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 /* The mode switch leads the composer's toolbar; the gauge goes to its end. */
 .mode-switch {
   display: inline-flex;

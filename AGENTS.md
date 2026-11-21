@@ -837,7 +837,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   model as the call's failure; the turn goes on. Its
   pull request: `CoreDeps.gh` (`gh`; a fake CLI in tests,
   `testing/fake-gh.mjs`; null in a test run that gives none — a test never
-  asks GitHub). Archived, the worktree is let go, its folder removed 30
+  asks GitHub). « Ouvrir une PR » (`git/pr.ts` `prPlan`, `openPr`;
+  `dialogs/OpenPr.tsx`; audit 2026-11-21, D7) says what goes first — the
+  remote and its address (no user nor token), the branch, its commits, the
+  files not committed that stay (« Commiter d'abord »), a title and a
+  description read from the commits that the person may change —; then
+  `gh auth status`, the branch pushed to itself with an explicit refspec
+  (never `--force`, never `+`, never the base nor the remote's default
+  branch), and `gh pr create --title --body`; a failure is said for what it
+  is (no remote, rejected, denied, offline, not signed in, already open),
+  git's or gh's own line beside it. Archived, the worktree is let go, its folder removed 30
   days after — never with work not committed in it — and its branch only
   when every commit of it is merged into its base or on its upstream
   (`unsavedCommits`; audit 2026-11-21, D8): else it stays, said in the

@@ -132,7 +132,7 @@ import {
 } from './project/store.js';
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
 import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, unsavedCommits, type BranchStatus } from './git/worktrees.js';
-import { openPr, prStatus, type PrStatus } from './git/pr.js';
+import { openPr, prPlan, prStatus, type PrOpened, type PrPlan, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { git } from './git/git.js';
 import { AddedPlugins } from './plugins/added.js';
@@ -473,8 +473,13 @@ export interface Core {
   prOf(conversationId: string): Promise<PrStatus | null>;
   /** « À traiter » (task 8.4): what waits for the person, across the conversations. */
   inbox(): Promise<Inbox>;
-  /** « Ouvrir une PR », on the person's word: the branch pushed, its pull request opened. */
-  openPr(conversationId: string): Promise<PrStatus | null>;
+  /**
+   * « Ouvrir une PR » (audit 2026-11-21, D7): what would go, said first — the remote, the branch, its commits, what
+   * is not committed, a title and a description to start from; null without a branch of its own.
+   */
+  prPlan(conversationId: string): Promise<PrPlan | null>;
+  /** On the person's word: the branch pushed (never forced, never to the default branch), its pull request opened. */
+  openPr(conversationId: string, text: { title: string; body: string }): Promise<PrOpened | null>;
   /** What archiving a conversation on its branch would leave uncommitted: its files. */
   uncommitted(conversationId: string): Promise<number>;
   /** Its branch's commits neither pushed nor merged into its base (audit D8); 0 without a branch, null when it cannot be told. */
@@ -2549,12 +2554,18 @@ export function createCore(deps: CoreDeps): Core {
       return pr;
     },
 
-    async openPr(conversationId) {
+    async prPlan(conversationId) {
       const meta = await conversationStore.get(conversationId);
       if (!meta?.worktree || !meta.branch || !meta.base) return null;
-      const pr = await openPr(gh, meta.worktree, meta.branch, meta.base);
-      prs.set(conversationId, { at: Date.now(), pr });
-      return pr;
+      return prPlan(gh, meta.worktree, meta.branch, meta.base, meta.title);
+    },
+
+    async openPr(conversationId, text) {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta?.worktree || !meta.branch || !meta.base) return null;
+      const opened = await openPr(gh, meta.worktree, meta.branch, meta.base, text);
+      if (opened.ok) prs.set(conversationId, { at: Date.now(), pr: opened.pr });
+      return opened;
     },
 
     async uncommitted(conversationId) {

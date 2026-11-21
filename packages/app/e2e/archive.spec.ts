@@ -8,7 +8,8 @@
  */
 
 import { git, tempRepo, type TempRepo } from '@aparte/bonaparte-core/testing';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type LaunchOptions } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
@@ -96,6 +97,59 @@ test('archiving a branch with commits neither pushed nor merged says they are ke
     await expect(dialog.getByRole('button', { name: 'Commiter d’abord' })).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Archiver', exact: true }).click();
     await expect(nav(page).getByRole('button', { name: /^Change la note/ })).toHaveCount(0, { timeout: 10_000 });
+  } finally {
+    await repo.remove();
+  }
+});
+
+test('« Ouvrir une PR » says what goes first — the remote, the commits, what stays — and opens it with the person’s title (audit D7)', async ({ launch }) => {
+  const repo = await tempRepo({ 'notes.txt': 'first\n' });
+  const remote = await mkdtemp(join(tmpdir(), 'bp-remote-'));
+  try {
+    expect((await git(['init', '-q', '--bare', remote], repo.dir)).code).toBe(0);
+    expect((await git(['remote', 'add', 'origin', remote], repo.dir)).code).toBe(0);
+    const { page, dataDir } = await onItsBranch(launch, repo, {});
+    await page.locator('.conversation-header').getByRole('button', { name: 'Ouvrir une PR' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Ouvrir une pull request ?' });
+    await expect(dialog).toContainText(`La branche bonaparte/heures part vers origin (${remote}), sans rien forcer, et une pull request vers main s’ouvre.`);
+    // Nothing committed yet: what stays is said, and nothing can go.
+    await expect(dialog).toContainText('1 fichier modifié n’est pas commité : il ne part pas.');
+    await expect(dialog).toContainText('Rien n’est commité sur cette branche depuis sa base : commite d’abord.');
+    await expect(dialog.getByRole('button', { name: 'Pousser et ouvrir' })).toBeDisabled();
+
+    await dialog.getByRole('button', { name: 'Commiter d’abord' }).click();
+    await expect(dialog).toContainText('1 commit part :');
+    await expect(dialog).toContainText('bonaparte: Change la note');
+    await expect(dialog).not.toContainText('pas commité');
+    await expect(dialog.getByRole('textbox', { name: 'Titre' })).toHaveValue('bonaparte: Change la note');
+    await dialog.getByRole('textbox', { name: 'Titre' }).fill('Récap des heures');
+    await dialog.getByRole('textbox', { name: 'Description' }).fill('La note change.');
+    await dialog.getByRole('button', { name: 'Pousser et ouvrir' }).click();
+
+    await expect(dialog).toBeHidden({ timeout: 15_000 });
+    expect((await git(['log', '-1', '--format=%s', 'bonaparte/heures'], remote)).stdout.trim()).toBe('bonaparte: Change la note');
+    const opened = JSON.parse(await readFile(join(dataDir, 'fake-gh.json'), 'utf8')) as { pr?: { title?: string } };
+    expect(opened.pr?.title).toBe('Récap des heures');
+    await expect(page.locator('.conversation-header')).toContainText('PR 42', { timeout: 15_000 });
+  } finally {
+    await repo.remove();
+    await rm(remote, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  }
+});
+
+test('a push the remote cannot take is said in the person’s words, with git’s own line (audit D7)', async ({ launch }) => {
+  const repo = await tempRepo({ 'notes.txt': 'first\n' });
+  try {
+    // A remote that is not a repository.
+    expect((await git(['remote', 'add', 'origin', join(repo.dir, 'no-such-remote')], repo.dir)).code).toBe(0);
+    const { page } = await onItsBranch(launch, repo, {});
+    expect((await git(['commit', '-qam', 'Work'], join(repo.dir, '.bonaparte', 'worktrees', 'heures'))).code).toBe(0);
+    await page.locator('.conversation-header').getByRole('button', { name: 'Ouvrir une PR' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Ouvrir une pull request ?' });
+    await dialog.getByRole('button', { name: 'Pousser et ouvrir' }).click();
+    await expect(dialog.getByRole('alert')).toContainText('Ce dépôt n’a pas de remote où pousser', { timeout: 15_000 });
+    await expect(dialog.getByRole('alert')).toContainText('Ce qu’il a dit :');
+    await expect(dialog).toBeVisible();
   } finally {
     await repo.remove();
   }

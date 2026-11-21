@@ -172,8 +172,49 @@ export const conversationsSaveDraft = defineChannel(
 /** « Ouvrir le dossier »: the conversation's own folder — its worktree —, never one the window names. */
 export const conversationsOpenFolder = defineChannel('conversations.openFolder', z.object({ id: z.string().min(1).max(128) }), z.void());
 
-/** « Ouvrir une PR », on the person's word: the branch pushed, its pull request opened (none when either failed). */
-export const conversationsOpenPr = defineChannel('conversations.openPr', z.object({ id: z.string().min(1).max(128) }), prSchema.nullable());
+/** Why a pull request is not opened, or could not be (audit 2026-11-21, D7). */
+export const prRefusalSchema = z.enum([
+  'no-gh',
+  'no-remote',
+  'default-branch',
+  'no-commits',
+  'push-rejected',
+  'push-denied',
+  'offline',
+  'gh-auth',
+  'exists',
+  'failed',
+]);
+export type PrRefusalView = z.infer<typeof prRefusalSchema>;
+
+/** What « Pousser et ouvrir » would do, said before anything goes: the remote, the branch, its commits, what stays. */
+export const prPlanSchema = z.object({
+  branch: z.string(),
+  base: z.string(),
+  remote: z.object({ name: z.string(), url: z.string() }).nullable(),
+  commits: z.array(z.object({ hash: z.string(), subject: z.string() })),
+  count: z.number(),
+  uncommitted: z.number(),
+  title: z.string(),
+  body: z.string(),
+  refused: prRefusalSchema.optional(),
+});
+export type PrPlanView = z.infer<typeof prPlanSchema>;
+
+/** « Ouvrir une PR »: what would go, read first; null without a branch of its own. */
+export const conversationsPrPlan = defineChannel('conversations.prPlan', z.object({ id: z.string().min(1).max(128) }), prPlanSchema.nullable());
+
+/**
+ * « Pousser et ouvrir », on the person's word, with their title and description: the branch pushed (never forced,
+ * never to the default branch), its pull request opened — or why not, with what git or GitHub's CLI said.
+ */
+export const conversationsOpenPr = defineChannel(
+  'conversations.openPr',
+  z.object({ id: z.string().min(1).max(128), title: z.string().max(256), body: z.string().max(20_000) }),
+  z
+    .union([z.object({ ok: z.literal(true), pr: prSchema.nullable() }), z.object({ ok: z.literal(false), reason: prRefusalSchema, detail: z.string() })])
+    .nullable(),
+);
 
 /** « Voir la PR »: its page, in the system's browser — the address the core read, never one the window names. */
 export const conversationsShowPr = defineChannel('conversations.showPr', z.object({ id: z.string().min(1).max(128) }), z.void());

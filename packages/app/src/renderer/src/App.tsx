@@ -14,6 +14,9 @@ import {
   modesGet,
   modesSet,
   permissionsRemember,
+  conversationsPrPlan,
+  type PrPlanView,
+  type PrRefusalView,
   projectsList,
   settingsGet,
   type ConversationMemoryView,
@@ -856,8 +859,16 @@ function Workspace({
     });
   };
   // « Ouvrir une PR »: said first — it goes online —, done on the person's word.
-  const [openingPr, setOpeningPr] = useState<{ id: string; branch: string; base: string; failed: boolean } | null>(null);
+  const [openingPr, setOpeningPr] = useState<{ id: string; branch: string; base: string } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
+  // What would go, read before anything goes (audit D7); why it did not, the last time.
+  const [prPlanShown, setPrPlanShown] = useState<PrPlanView | null>(null);
+  const [prFailure, setPrFailure] = useState<{ reason: PrRefusalView; detail: string } | null>(null);
+  const readPrPlan = (id: string): Promise<void> =>
+    bridge
+      .invoke(conversationsPrPlan, { id })
+      .then((plan) => setPrPlanShown(plan))
+      .catch(() => setPrFailure({ reason: 'failed', detail: '' }));
   const projectOf = (id: string): string | null => statuses[id]?.projectId ?? bornIn.current.get(id) ?? null;
   // A new conversation starts in the project of the conversation open — as the projects now are.
   useEffect(() => {
@@ -1639,21 +1650,39 @@ function Workspace({
       <OpenPr
         messages={messages}
         asking={openingPr}
+        plan={prPlanShown}
+        failure={prFailure}
         busy={prBusy}
-        onCancel={() => setOpeningPr(null)}
-        onOpen={() => {
+        onCancel={() => {
+          setOpeningPr(null);
+          setPrPlanShown(null);
+          setPrFailure(null);
+        }}
+        onCommitFirst={() => {
           const asked = openingPr;
           if (!asked) return;
           setPrBusy(true);
           void bridge
-            .invoke(conversationsOpenPr, { id: asked.id })
-            .catch(() => null)
-            .then((pr) => {
+            .invoke(conversationsCommitBranch, { id: asked.id })
+            .catch(() => false)
+            .then(() => readPrPlan(asked.id))
+            .finally(() => setPrBusy(false));
+        }}
+        onOpen={(text) => {
+          const asked = openingPr;
+          if (!asked) return;
+          setPrBusy(true);
+          setPrFailure(null);
+          void bridge
+            .invoke(conversationsOpenPr, { id: asked.id, ...text })
+            .catch(() => ({ ok: false as const, reason: 'failed' as const, detail: '' }))
+            .then((opened) => {
               setPrBusy(false);
-              if (pr) {
+              if (opened?.ok) {
                 setOpeningPr(null);
+                setPrPlanShown(null);
                 setAsked((count) => count + 1);
-              } else setOpeningPr({ ...asked, failed: true });
+              } else setPrFailure(opened ? { reason: opened.reason, detail: opened.detail } : { reason: 'failed', detail: '' });
             });
         }}
       />
@@ -1763,7 +1792,11 @@ function Workspace({
         }
         onOpenPr={() => {
           const branch = openConversation ? statuses[openConversation.id]?.branch : undefined;
-          if (openConversation && branch) setOpeningPr({ id: openConversation.id, branch: branch.name, base: branch.base, failed: false });
+          if (!openConversation || !branch) return;
+          setPrPlanShown(null);
+          setPrFailure(null);
+          setOpeningPr({ id: openConversation.id, branch: branch.name, base: branch.base });
+          void readPrPlan(openConversation.id);
         }}
         forks={
           openConversation ? (
