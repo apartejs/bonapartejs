@@ -147,7 +147,13 @@ function commandOf(input: unknown): CommandLine | undefined {
   return { program, args: list };
 }
 
-function refusal(mode: PlayMode, effect: KnownEffect): string {
+function refusal(mode: PlayMode, effect: KnownEffect, subagent: boolean): string {
+  // A sub-agent presents no plan: that is the main agent's work (audit S2). It hands back what it would do.
+  if (mode === 'lecture' && subagent) {
+    return effect === 'write'
+      ? 'Lecture mode: this conversation reads and plans; a sub-agent writes nothing. Do not try again: answer the main agent with what you found, and what you would write (the path, and the change).'
+      : 'Lecture mode: this conversation reads and plans; a sub-agent runs nothing. Do not try again: answer the main agent with what you found, and what you would run.';
+  }
   if (mode === 'lecture' && effect === 'write') {
     return 'Lecture mode: the agent reads and plans; it writes nothing. Present the change as a plan with update_plan instead.';
   }
@@ -202,7 +208,7 @@ export class PermissionEngine {
     }
     // Lecture runs nothing: a third party's code included, whatever it says it does.
     if (query.tool.source === 'extension' && query.mode === 'lecture') short = 'deny';
-    if (short === 'deny') return { verdict: 'deny', reason: refusal(query.mode, effect) };
+    if (short === 'deny') return { verdict: 'deny', reason: refusal(query.mode, effect, query.agentId !== undefined) };
 
     // A write: where it really lands decides — a file that runs later, outside the project, the network.
     if (effect === 'write') {

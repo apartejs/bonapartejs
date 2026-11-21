@@ -72,7 +72,7 @@ function model(missions: Record<string, string>[], work: (name: string) => strin
 async function rig(
   responder: (prompt: string) => string,
   mode: PlayMode = 'plume',
-  options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number; maxToolRounds?: number } = {},
+  options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number; maxToolRounds?: number; instructions?: string } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-subagents-'));
   dirs.push(dir);
@@ -132,6 +132,7 @@ async function rig(
       ...(options.slots ? { slots: options.slots } : {}),
     }),
     prompt: () => ({ kind: 'code', tools: registry.list(), perimeter: [root], replyLanguage: 'French' }),
+    ...(options.instructions !== undefined ? { instructions: async () => options.instructions } : {}),
   });
   const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode });
   const permissions = new PermissionEngine({ roots: () => [root], dataDir: join(dir, 'data') });
@@ -362,6 +363,51 @@ describe('a sub-agent on the built-in engine', () => {
     const outcome = of(events, 'tool-resolved').find((event) => event['toolCallId'] === launch['toolCallId'])!;
     expect(String(outcome['result'])).toMatch(/^The sub-agent was cut after 3 rounds of tools, before it finished\./);
     expect(String(outcome['result'])).toContain('Partial: a is 1; b.ts not read.');
+  });
+
+  describe('what it reads (audit S2)', () => {
+    it('its conversation’s own turn after the shared one — the project’s instructions as the conversation froze them: their prefix grows', async () => {
+      const { run, store, meta, asked } = await rig(model([LECTEUR]), 'plume', { instructions: 'Never write a shell string. Tests first.' });
+      await run('Que vaut a ?');
+      const systems = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'system');
+      const [shared, project] = systems.map((entry) => entry.rendered ?? '');
+      expect(project).toContain('Never write a shell string. Tests first.');
+      expect(asked[0]!.prompt.startsWith(shared! + project!)).toBe(true);
+    });
+
+    it('its note: no context but its mission, its tools, its mode in a line, never ask, never retry, the answer then the evidence — never « nobody reads »', async () => {
+      const { run, asked } = await rig(model([LECTEUR]), 'repetition');
+      await run('Que vaut a ?');
+      const prompt = asked[0]!.prompt;
+      expect(prompt).toContain('You are a sub-agent named Lecteur. You start with no context: the mission below is all you know');
+      expect(prompt).toMatch(/Use only these tools: [a-z_, ]*read_file/);
+      expect(prompt).toContain('Mode: Répétition: each change to a file and each command is asked to the user first');
+      expect(prompt).toContain('Never ask the user anything. If a call is refused, do not retry it.');
+      expect(prompt).toContain('give the answer first, then the evidence (paths with line numbers). If you could not finish, say what is left.');
+      expect(prompt).not.toMatch(/nobody else reads/);
+    });
+
+    it('in Lecture, its refused write tells it to hand back what it would write — never to present a plan with update_plan', async () => {
+      const edit = () => call('edit_file', { path: 'a.ts', old_string: '1', new_string: '2' });
+      const { run } = await rig(model([{ ...LECTEUR, tools: 'all' }], edit), 'lecture');
+      const { events } = await run('Lis.');
+      const agentId = String(of(events, 'agent-start')[0]!['agentId']);
+      const refused = by(events, agentId).find((event) => event.type === 'tool-rejected') as Record<string, unknown>;
+      expect(String(refused['reason'])).toMatch(/a sub-agent writes nothing\. Do not try again: answer the main agent/);
+      expect(String(refused['reason'])).not.toMatch(/update_plan/);
+    });
+
+    it('a tool come after its conversation froze its inventory: told with its description, not only its name', async () => {
+      const made = await rig(model([LECTEUR]));
+      await made.run('Bonjour.');
+      made.registry.register(
+        { name: 'mcp__docs__lookup', description: 'Look a word up in the project glossary.', inputSchema: { type: 'object', properties: { word: { type: 'string' } } }, effect: 'read', source: 'mcp', where: 'core' },
+        async (call) => ({ toolCallId: call.id, name: call.name, content: 'x' }),
+      );
+      made.asked.length = 0;
+      await made.run('Que vaut a ?');
+      expect(made.asked[0]!.prompt).toMatch(/Your tools added after the list above:\n- mcp__docs__lookup: Look a word up in the project glossary\./);
+    });
   });
 
   describe('its own context (audit S5)', () => {

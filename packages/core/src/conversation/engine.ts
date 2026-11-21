@@ -40,7 +40,7 @@ import { unreadAnswer } from './inbox.js';
 import type { Journal, JournalEntry, NewJournalEntry, Outcome, PendingCall, SubagentHold, Usage } from '../journal/types.js';
 import { canRestore, type KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { rereadBeforeMessage } from '../kv/reread.js';
-import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta } from '../prompt/deltas.js';
+import { renderInstructionsDelta, renderInventoryDelta, renderModeDelta, renderPerimeterDelta, renderReplyLanguageDelta, toolLine } from '../prompt/deltas.js';
 import { buildSystemPrompt, type SystemPromptOptions } from '../prompt/system-prompt.js';
 import { cutInstructions, instructionsBudget, sameInstructions } from '../project/instructions.js';
 import { CompactionError, planCompaction, planCompactionKeeping, planTurnFold, SUMMARY_MAX_TOKENS, SUMMARY_QUESTION, SUMMARY_TURN_QUESTION, summaryNote } from './compact.js';
@@ -209,8 +209,11 @@ export interface CallsSlot {
 
 /** A sub-agent's turn (task 8.1): its first, after its note and its mission, or its pause answered. */
 export interface SubagentTurnInput {
-  /** Its first turn: its note (who it is, what it may use) and its mission, after its conversation's first system turn. */
-  start?: { note: string; mission: string };
+  /**
+   * Its first turn: its note (who it is, what it may use) and its mission, after its conversation's system turns.
+   * `tools`: its own — those its conversation's frozen inventory does not hold are described in its note.
+   */
+  start?: { note: string; mission: string; tools?: readonly ToolDef[] };
   /** Its pause was answered: it goes on. */
   resume?: true;
   tools: TurnTools;
@@ -1227,11 +1230,18 @@ export class ConversationEngine {
     if (input.start && journal.entries().length === 0) {
       const parent = (await openJournal(this.deps.store.dir, conversationId, meta.branchId)).entries();
       const stable = stableOf(parent);
+      // Its conversation's own turn after the shared one (audit S2): the project's instructions, its folders, its
+      // environment — the very text the conversation froze, so the prefix they share grows.
+      const project = (await this.projectTurnOf(meta, parent, family, window)) ?? '';
+      // Its tools the frozen inventory does not hold (an MCP server, a plugin, come since): told with what they do.
+      const later = laterTools(parent, input.start.tools ?? []);
+      const told = later.length > 0 ? `${input.start.note}\nYour tools added after the list above:\n${later.map(toolLine).join('\n')}` : input.start.note;
       const mission = family.renderUser(input.start.mission);
       // Its budget, said (audit S5): how much it holds, and what its own prompt already takes of it.
-      const head = estimateTokens(stable + family.renderSystemNote(input.start.note) + mission) + BUDGET_LINE_TOKENS;
-      const note = Number.isFinite(window) ? `${input.start.note}\n${budgetLine(window, head)}` : input.start.note;
+      const head = estimateTokens(stable + project + family.renderSystemNote(told) + mission) + BUDGET_LINE_TOKENS;
+      const note = Number.isFinite(window) ? `${told}\n${budgetLine(window, head)}` : told;
       await journal.append({ kind: 'system', rendered: stable });
+      if (project) await journal.append({ kind: 'system', rendered: project });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(note) });
       await journal.append({ kind: 'user', text: input.start.mission, rendered: mission });
     }
@@ -1357,6 +1367,21 @@ export class ConversationEngine {
       ...(said ? { projectInstructions: said } : {}),
     });
     return { asked, prompt, budget };
+  }
+
+  /**
+   * A conversation's own turn, rendered, as its sub-agents copy it (audit S2): the one its branch froze after the
+   * shared turn; after a rebase or a change of model, where it lies inside one entry, rendered again now. None for a
+   * conversation that froze nothing yet.
+   */
+  private async projectTurnOf(meta: ConversationMeta, entries: readonly JournalEntry[], family: FamilyLayer, window: number): Promise<string | undefined> {
+    if (!entries.some(isRefrozen)) {
+      const systems = entries.filter((entry) => entry.kind === 'system');
+      return systems.length > 1 ? systems[1]!.rendered : undefined;
+    }
+    const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
+    const { prompt } = await this.systemPrompt(meta, family, instructions, window);
+    return family.renderSystemNote(prompt.project);
   }
 
   /** The context a turn of this conversation has: its own cap, else the engine's (tokens; infinite when unknown). */
@@ -2191,6 +2216,14 @@ function textOf(family: FamilyLayer, raw: string): string {
     .map((piece) => (piece.type === 'text' ? piece.delta : ''))
     .join('')
     .trim();
+}
+
+/** Of these tools, those the frozen inventory of the branch does not hold as they are now (audit S2). */
+function laterTools(entries: readonly JournalEntry[], tools: readonly ToolDef[]): ToolDef[] {
+  const frozen = entries.findLast(isRefrozen)?.tools ?? entries.find((entry) => entry.kind === 'system')?.tools;
+  if (!frozen) return [];
+  const known = new Map(frozen.map((tool) => [tool.name, toolLine(tool)]));
+  return tools.filter((tool) => known.get(tool.name) !== toolLine(tool));
 }
 
 function stableOf(entries: readonly JournalEntry[]): string {

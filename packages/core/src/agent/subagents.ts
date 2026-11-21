@@ -10,6 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import type { PlayMode } from '@aparte/bonaparte-shared';
 import { EXTENSION_TOOLS } from '../tools/builtin/extensions.js';
 import type { StreamRunEvent } from '@aparte/engine';
 import { ContextFullError, type CallsAnswer, type CallsSlot, type ConversationEngine, type ModelCall, type TurnEvent, type TurnResult } from '../conversation/engine.js';
@@ -106,14 +107,26 @@ function seen(parent: SubagentParent): readonly ToolDef[] {
   return parent.registry.list();
 }
 
-/** What the sub-agent reads before its mission: who it is, what it may use, where, and what to give back. English. */
-function noteFor(spec: SubagentSpec, tools: readonly ToolDef[], roots: readonly string[]): string {
+/** Its conversation's mode, in one line: what passes, what is asked, what is refused. Sent to the model: English. */
+const MODE_LINES: Record<PlayMode, string> = {
+  lecture: 'Lecture: you read and search; writes and commands are refused.',
+  repetition: 'Répétition: each change to a file and each command is asked to the user first; a refusal may say what to do instead.',
+  plume: 'Plume: changes to files run without asking; commands are asked to the user first.',
+  impro: 'Impro: changes and commands run without asking, except files that run later (package.json, git hooks, configuration files, .env), which are asked.',
+};
+
+/**
+ * What the sub-agent reads before its mission (audit S2): that it starts with nothing else, its tools, its mode, how to
+ * end. The person reads its transcript in the « Sous-agents » pane: nothing tells it it writes unseen. English.
+ */
+export function noteFor(spec: SubagentSpec, tools: readonly ToolDef[], roots: readonly string[], mode: PlayMode): string {
   return [
-    `You are a sub-agent named ${spec.name}. The main agent of this conversation gave you the mission below;`,
-    'you see nothing else of its conversation, and nobody else reads what you write but your last answer.',
-    `Work on your own with these tools only: ${tools.map((tool) => tool.name).join(', ') || 'none'}.`,
+    `You are a sub-agent named ${spec.name}. You start with no context: the mission below is all you know of the main agent's work.`,
+    `Use only these tools: ${tools.map((tool) => tool.name).join(', ') || 'none'}.`,
     roots.length > 0 ? `You work in: ${roots.join(', ')}.` : '',
-    'Never ask the user anything. When you are done, answer with your result only: what the main agent needs, briefly. It is all that goes back to it.',
+    `Mode: ${MODE_LINES[mode]}`,
+    'Never ask the user anything. If a call is refused, do not retry it.',
+    'Your last message is your whole result for the main agent: give the answer first, then the evidence (paths with line numbers). If you could not finish, say what is left.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -256,7 +269,10 @@ export function subagentRunner(parent: SubagentParent): SubagentRunner {
         parent.engine.subagentTurn(
           parent.conversationId,
           { agentId, name: spec.name },
-          { start: { note: noteFor(spec, scope.registry.list(), scope.place.roots), mission: spec.mission }, tools: { defs: seen(parent), onCalls } },
+          {
+            start: { note: noteFor(spec, scope.registry.list(), scope.place.roots, scope.mode), mission: spec.mission, tools: scope.registry.list() },
+            tools: { defs: seen(parent), onCalls },
+          },
           sink,
           { ...(slot ? { lend: slot.lend } : {}), signal: parent.signal },
         ),

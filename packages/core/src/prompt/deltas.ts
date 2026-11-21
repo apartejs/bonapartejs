@@ -11,7 +11,7 @@ import type { Delta } from '../journal/types.js';
 import type { ToolDef } from '../tools/types.js';
 
 /** A tool as a delta lists it: the family's declarations live in the frozen prompt only. */
-function toolLine(tool: ToolDef): string {
+export function toolLine(tool: ToolDef): string {
   return `- ${tool.name}: ${tool.description}\n  arguments: ${JSON.stringify(tool.inputSchema)}`;
 }
 
