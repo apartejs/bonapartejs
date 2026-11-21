@@ -63,10 +63,15 @@ test('ci.yml: runs on pull requests and pushes to main only, an older run cancel
   assert.match(ci, /^ {2}cancel-in-progress: true$/m);
 });
 
-test('ci.yml: the end-to-end tests run on one platform, Windows (minutes ×2 on a private repository)', () => {
-  const e2e = [...ci.matchAll(/^\s*- name: (End-to-end[^\n]*)\n((?: {8}.*\n)+)/gm)];
-  assert.equal(e2e.length, 1, 'one end-to-end step');
-  assert.match(e2e[0][2], /if: runner\.os == 'Windows'/);
+test('ci.yml: the end-to-end tests run on Windows only, split over four jobs that run together', () => {
+  // Paul, 2026-11-21: one job took 45 minutes (workers: 1). The repository is public: its minutes are free.
+  const job = jobs(ci).get('e2e');
+  assert.ok(job, 'ci.yml has an e2e job');
+  assert.match(job, /runs-on: windows-latest/);
+  assert.match(job, /shard: \[1, 2, 3, 4\]/);
+  assert.match(job, /playwright test --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.doesNotMatch(jobs(ci).get('gate'), /End-to-end/, 'the gate no longer runs them');
+  assert.match(jobs(ci).get('release'), /needs: \[gate, e2e\]/);
 });
 
 test('release.yml: Windows by default; macOS (×10) and Linux only when asked; a run by hand builds what it checks', () => {
@@ -136,7 +141,7 @@ test('release.yml: the draft release carries the version’s own notes from CHAN
 test('ci.yml: a green main tags its version once, and dispatches the release on that tag', () => {
   const job = jobs(ci).get('release');
   assert.ok(job, 'ci.yml has a release job');
-  assert.match(job, /needs: gate/);
+  assert.match(job, /needs: \[gate, e2e\]/);
   assert.match(job, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
   assert.match(job, /contents: write/);
   assert.match(job, /actions: write/);
