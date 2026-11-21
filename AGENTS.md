@@ -298,8 +298,10 @@ An issue can stay open after its fix has shipped.
   the graphics card alone. Ask Paul before the first Electron launch of a
   session.
 - **Local commits are free; NO push without Paul's validation in the app.** A
-  guard hook refuses `git push`. The restart is built on the local branch `v1`,
-  merged into `main` when Paul validates.
+  guard hook refuses `git push`, but for the two Paul opened on 2026-11-21:
+  `git push [-u] origin main` and `git push origin vX.Y.Z` (a release tag), to
+  apartejs/bonapartejs, never forced — and only when Paul asks. The work is
+  done on the branch `v1`, fast-forwarded into `main` when Paul validates.
 
 ### Sub-agents and skills of the project
 
