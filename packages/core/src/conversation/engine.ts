@@ -1393,7 +1393,11 @@ export class ConversationEngine {
       const project = (await this.projectTurnOf(meta, parent, family, window)) ?? '';
       // Its tools the frozen inventory does not hold (an MCP server, a plugin, come since): told with what they do.
       const later = laterTools(parent, input.start.tools ?? []);
-      const told = later.length > 0 ? `${input.start.note}\nYour tools added after the list above:\n${later.map(toolLine).join('\n')}` : input.start.note;
+      const withTools = later.length > 0 ? `${input.start.note}\nYour tools added after the list above:\n${later.map(toolLine).join('\n')}` : input.start.note;
+      // What its conversation was told since that turn froze — its folders, its instructions —, after it: the
+      // prefix they share kept (review of S2).
+      const since = this.toldSinceFrozen(meta, parent);
+      const told = since.length > 0 ? `${since.join('\n')}\n${withTools}` : withTools;
       const mission = family.renderUser(input.start.mission);
       // Its budget, said (audit S5): how much it holds, and what its own prompt already takes of it.
       const head = estimateTokens(stable + project + family.renderSystemNote(told) + mission) + BUDGET_LINE_TOKENS;
@@ -1543,6 +1547,24 @@ export class ConversationEngine {
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
     const { prompt } = await this.systemPrompt(meta, family, instructions, window);
     return family.renderSystemNote(prompt.project);
+  }
+
+  /**
+   * What a conversation's project turn, as first frozen, no longer says (review of S2): the folders it works in now
+   * (its own branch made since, a folder added), and the instructions it was last told. None after a rebase or a
+   * change of model, whose project turn is rendered again now.
+   */
+  private toldSinceFrozen(meta: ConversationMeta, entries: readonly JournalEntry[]): string[] {
+    if (entries.some(isRefrozen)) return [];
+    const said: string[] = [];
+    const frozen = entries.find((entry): entry is Extract<JournalEntry, { kind: 'system' }> => entry.kind === 'system' && entry.perimeter !== undefined)?.perimeter;
+    if (frozen) {
+      const perimeter = renderPerimeterDelta(frozen, [...this.deps.prompt(meta).perimeter], meta.worktree ? meta.branch : undefined);
+      if (perimeter) said.push(perimeter.text);
+    }
+    const instructions = entries.findLast((entry): entry is Extract<JournalEntry, { kind: 'delta' }> => entry.kind === 'delta' && entry.delta.kind === 'instructions');
+    if (instructions) said.push(instructions.delta.text);
+    return said;
   }
 
   /** The context a turn of this conversation has: its own cap, else the engine's (tokens; infinite when unknown). */

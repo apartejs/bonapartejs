@@ -72,7 +72,7 @@ function model(missions: Record<string, string>[], work: (name: string) => strin
 async function rig(
   responder: (prompt: string) => string,
   mode: PlayMode = 'plume',
-  options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number; maxToolRounds?: number; instructions?: string } = {},
+  options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number; maxToolRounds?: number; instructions?: string; perimeter?: (root: string) => string[] } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-subagents-'));
   dirs.push(dir);
@@ -131,7 +131,7 @@ async function rig(
       generation: 1,
       ...(options.slots ? { slots: options.slots } : {}),
     }),
-    prompt: () => ({ kind: 'code', tools: registry.list(), perimeter: [root], replyLanguage: 'French' }),
+    prompt: () => ({ kind: 'code', tools: registry.list(), perimeter: options.perimeter?.(root) ?? [root], replyLanguage: 'French' }),
     ...(options.instructions !== undefined ? { instructions: async () => options.instructions } : {}),
   });
   const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode });
@@ -373,6 +373,25 @@ describe('a sub-agent on the built-in engine', () => {
       const [shared, project] = systems.map((entry) => entry.rendered ?? '');
       expect(project).toContain('Never write a shell string. Tests first.');
       expect(asked[0]!.prompt.startsWith(shared! + project!)).toBe(true);
+    });
+
+    it('what its conversation was told since its project turn froze — instructions changed, folders moved — is in its note, the shared prefix kept (review of S2)', async () => {
+      const options: { instructions: string; perimeter: (root: string) => string[] } = { instructions: 'Old rules: tabs.', perimeter: (root) => [root] };
+      const { run, store, meta, asked, root } = await rig(model([LECTEUR]), 'plume', options);
+      await run('Que vaut a ?');
+      expect(asked.at(-1)!.prompt).not.toContain('[project update]');
+      // AGENTS.md edited, and the conversation's folders now another one (its own branch, say).
+      options.instructions = 'New rules: spaces.';
+      const elsewhere = join(root, '..', 'worktree');
+      options.perimeter = () => [elsewhere];
+      await run('Et b ?');
+      const prompt = asked.at(-1)!.prompt;
+      const [shared, project] = (await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'system').map((entry) => entry.rendered ?? '');
+      expect(project).toContain('Old rules: tabs.');
+      expect(prompt.startsWith(shared! + project!)).toBe(true);
+      expect(prompt).toContain('The project instructions changed. They now read:\nNew rules: spaces.');
+      expect(prompt).toContain(`The project now spans these folders:\n- ${elsewhere}  (default for relative paths)`);
+      expect(prompt).toContain('This list supersedes anything said earlier about the project folders.');
     });
 
     it('its note: no context but its mission, its tools, its mode in a line, never ask, never retry, the answer then the evidence — never « nobody reads »', async () => {
