@@ -206,6 +206,9 @@ export function callTarget(name: string, input: Record<string, unknown>): string
     target = [program, ...args].filter((part) => part !== '').join(' ');
   } else if (name === 'run_subagent') {
     target = text(input['name']);
+  } else if (name === 'search') {
+    // What it looks for, not the folder it looks in (review of C1).
+    target = text(input['pattern']) || text(input['path']);
   } else {
     target = text(input['path']) || text(input['url']) || text(input['pattern']) || text(input['query']);
   }

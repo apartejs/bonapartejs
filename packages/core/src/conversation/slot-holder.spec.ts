@@ -163,6 +163,8 @@ describe('who holds the engine (audit C1)', () => {
     expect(callTarget('web_fetch', { url: 'https://example.com' })).toBe('https://example.com');
     expect(callTarget('run_subagent', { name: 'Lecteur', mission: 'Lis.' })).toBe('Lecteur');
     expect(callTarget('update_plan', {})).toBeUndefined();
+    // A search is said by what it looks for, not the folder it looks in (review of C1).
+    expect(callTarget('search', { pattern: 'hours =', path: 'src' })).toBe('hours =');
     expect(callTarget('run_command', { program: 'node', args: ['x'.repeat(100)] })!.length).toBe(60);
   });
 });
