@@ -413,14 +413,14 @@ describe('a sub-agent on the built-in engine', () => {
   describe('its own context (audit S5)', () => {
     const BIG = { name: 'Lecteur', mission: 'Read big.ts and say what it holds.', tools: 'read' };
     /** A sub-agent run alone (as one queued behind a pause), its conversation capped to `cap` tokens over what it starts with. */
-    async function alone(cap: (start: number) => number, mission = BIG.mission) {
+    async function alone(cap: (start: number) => number, mission = BIG.mission, maxToolRounds?: number) {
       const responder = (prompt: string): string => {
         if (!isSubagent(prompt)) return 'Bonjour.';
         if (prompt.includes('Your context is nearly full')) return 'Partial: big.ts holds x.';
         // It reads big.ts twice (about 2,000 tokens each time), then answers.
         return prompt.split('<|tool_response>').length > 2 ? 'Whole: big.ts holds x.' : call('read_file', { path: 'big.ts' });
       };
-      const made = await rig(responder, 'impro');
+      const made = await rig(responder, 'impro', maxToolRounds ? { maxToolRounds } : {});
       await writeFile(join(made.root, 'big.ts'), `export const x = '${'x'.repeat(6000)}';\n`);
       // Its conversation's prompt frozen: what the sub-agent's starts with, as on a real turn.
       await made.run('Bonjour.');
@@ -431,6 +431,7 @@ describe('a sub-agent on the built-in engine', () => {
         permissions: made.permissions,
         place: { roots: [made.root] },
         nCtx: 8192,
+        ...(maxToolRounds ? { maxToolRounds } : {}),
         signal: new AbortController().signal,
         engine: made.engine,
         emit: (event: StreamRunEvent) => events.push(event),
@@ -467,6 +468,17 @@ describe('a sub-agent on the built-in engine', () => {
       expect(asked[1]!.prompt).not.toContain('xxxxxxxxxx');
       expect(asked[1]!.prompt).toContain('Not shown: your context has no room left for it.');
       expect(end.kind).toBe('partial');
+    });
+
+    it('its last round by the limit of rounds, with results that would leave no room: not shown either — never an overflow that loses what it found (review of S4, S5)', async () => {
+      const { end, asked } = await alone((start) => start + 2500, BIG.mission, 1);
+      expect(asked.map((one) => one.grammar)).toEqual([true, false]);
+      expect(asked[1]!.prompt).not.toContain('xxxxxxxxxx');
+      expect(asked[1]!.prompt).toContain('Not shown: your context has no room left for it.');
+      // Its why stays the limit of rounds.
+      expect(asked[1]!.prompt).toContain('You reached your limit of 1 rounds of tools');
+      expect(end.kind).toBe('partial');
+      expect('result' in end && end.result).toMatch(/^The sub-agent was cut after 1 rounds of tools/);
     });
 
     it('its note says its budget', async () => {

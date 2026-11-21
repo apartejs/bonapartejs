@@ -2203,17 +2203,19 @@ export class ConversationEngine {
       let note = answer.last?.note;
       if (answer.last) last = { why: answer.last.why };
       roundOpening = family.beginAssistant({ thinking: run.thinking, continuing: true });
-      if (run.conclude && !last) {
+      if (run.conclude) {
         // A sub-agent whose context these results would nearly fill: its last answer now, with what it found (S5).
         const { window } = run.conclude;
         const held = journal.entries();
         const needed = (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(family.renderToolResults(results) + roundOpening);
-        if (needed + REPLY_ROOM > window || needed > window * NEARLY_FULL) {
+        const noRoom = needed + REPLY_ROOM > window;
+        if (!last && (noRoom || needed > window * NEARLY_FULL)) {
           last = { why: 'context', window };
           note = SUBAGENT_CONTEXT_NOTE;
-          // Results that would leave no room for that answer are not shown: the answer comes first.
-          if (needed + REPLY_ROOM > window) results = results.map((result) => ({ ...result, content: SUBAGENT_NOT_SHOWN }));
         }
+        // Results that would leave no room for that answer are not shown: the answer comes first — its last round by
+        // the limit of rounds too, its why kept (review of S4, S5).
+        if (noRoom) results = results.map((result) => ({ ...result, content: SUBAGENT_NOT_SHOWN }));
       }
       // Its last round's note is read with the results: inside the model's turn, where a system turn cannot go.
       if (note) results = withLastNote(results, note);
