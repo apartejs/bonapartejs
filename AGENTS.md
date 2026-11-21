@@ -1250,12 +1250,15 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   no IPC channel is needed for Stop. Pinned by `e2e/stop.spec.ts`.
 - **A Request follows its signal only while it lives**: undici holds the
   Request's own controller by a `WeakRef`, so a handler that keeps only
-  `request.signal` hears no Stop once the heap is collected — the real smoke
-  saw llama.cpp still generating 30 s after it. The handler and the service
-  path hold the Request until the turn ends; a test proves it with a forced
-  `gc()` (`node:v8` `setFlagsFromString('--expose-gc')`). In the app the
-  response's body cancelled stops the turn too, which is why the window never
-  showed it (`e2e/stop.spec.ts` collects the main process's heap).
+  `request.signal` hears no Stop once the heap is collected — the real smoke,
+  its poll raised to 30 s, saw llama.cpp still generating 30 s after Stop. The
+  handler and the service path hold the Request until the turn ends; a test
+  proves it with a forced `gc()` (`node:v8` `setFlagsFromString('--expose-gc')`).
+  In the app, the response's body cancelled stops the turn too: in
+  `e2e/stop.spec.ts`, after a collection of the main process's heap, that
+  cancel alone still stopped the turn. Whether Electron's `protocol.handle`
+  keeps its Request alive is not known — the cause the window never showed
+  the defect is not isolated.
 - **llama.cpp keeps one KV stream a slot** unless `--kv-unified`
   (llama-kv-cache.cpp: `n_stream = unified ? 1 : n_seq_max`; `-np auto`
   turns it on, an explicit `-np` does not), writes the count at the head of a

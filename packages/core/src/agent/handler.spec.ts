@@ -280,7 +280,7 @@ describe('the agent handler, streaming a turn', () => {
 
   it('cuts the completion when the request is aborted, though nothing holds the Request any more and the heap was collected', async () => {
     // A Request follows the signal it was made with only while it lives (undici: a WeakRef to its own controller).
-    // Electron's protocol.handle and the smoke drop theirs once the handler answers: a collection in the middle of a
+    // The smoke drops its own once the handler answers: a collection in the middle of a
     // reply then left Stop unheard, and llama.cpp generated to the end (the real smoke, 2026-11-21).
     setFlagsFromString('--expose-gc');
     const collect = runInNewContext('gc') as () => void;
