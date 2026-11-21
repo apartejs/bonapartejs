@@ -22,7 +22,7 @@
 
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { copyFile, mkdir, rm, utimes, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, open, rm, utimes, writeFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { KeyedQueue, readJsonFile, writeJsonFile } from '../fs/json-file.js';
@@ -55,14 +55,42 @@ interface Pinned {
   cacheTypeK: string;
   cacheTypeV: string;
   /**
-   * Absent from a manifest written before the count was recorded (2026-11-21): read as one, what the engine ran
-   * unless « En parallèle » was on — a state saved under two then is refused by llama.cpp, a re-read still said.
+   * Absent from a manifest written before the count was recorded (2026-11-21): read once from the slot file and
+   * written into the manifest (`streamsInSlotFile`); one when the file does not say.
    */
   kvStreams?: number;
 }
 
 /** The KV streams a state was saved under, or a server runs: one when not said. */
 const streamsOf = (config: { kvStreams?: number }): number => config.kvStreams ?? 1;
+
+/** « ggsq »: the head of a file of llama.cpp's `llama_state_seq_save_file` (LLAMA_STATE_SEQ_MAGIC). */
+const STATE_SEQ_MAGIC = 0x67677371;
+
+/**
+ * The KV streams llama.cpp wrote in a slot file, or undefined when the file does not say (absent, or not
+ * llama.cpp's). `llama_state_seq_save_file` writes three u32 — the magic, the version, the count of the u32 the
+ * server packed (its tokens and a header of its own: not the tokens the save reported) —, those u32, then the
+ * memory's state, whose first u32 is the number of streams (llama-kv-cache.cpp `state_write`; b11558 read, b12383
+ * checked on a real slot file under one and two slots, 2026-11-21).
+ */
+export async function streamsInSlotFile(path: string): Promise<number | undefined> {
+  let file;
+  try {
+    file = await open(path, 'r');
+    const head = Buffer.alloc(12);
+    if ((await file.read(head, 0, 12, 0)).bytesRead < 12 || head.readUInt32LE(0) !== STATE_SEQ_MAGIC) return undefined;
+    const field = Buffer.alloc(4);
+    if ((await file.read(field, 0, 4, 12 + 4 * head.readUInt32LE(8))).bytesRead < 4) return undefined;
+    const streams = field.readUInt32LE(0);
+    // A slot a stream, or one for them all: anything else is not a count this reader knows.
+    return streams >= 1 && streams <= 256 ? streams : undefined;
+  } catch {
+    return undefined;
+  } finally {
+    await file?.close().catch(() => undefined);
+  }
+}
 
 export interface KvManifest extends Pinned {
   schemaVersion: 2;
@@ -225,8 +253,29 @@ export class KvStore {
   }
 
   /** A saved state's manifest — what opening it will cost; null without one. */
-  manifest(stateId: string): Promise<KvManifest | null> {
-    return readManifest<KvManifest>(this.manifestPath(stateId));
+  async manifest(stateId: string): Promise<KvManifest | null> {
+    const path = this.manifestPath(stateId);
+    return this.withStreams(await readManifest<KvManifest>(path), this.slotFilename(stateId), path, `state:${stateId}`);
+  }
+
+  /**
+   * A manifest written before the KV streams were recorded (2026-11-21) says nothing of them; the slot file does,
+   * read once and written into the manifest (review of 2026-11-21). Read as one slot, a state saved under « En
+   * parallèle » then was promised as a restore under one slot — and read again in silence when llama.cpp refused
+   * it —, and refused under two although llama.cpp would load it. A file that does not say stays at one.
+   */
+  private async withStreams<T extends Pinned>(manifest: T | null, slotFile: string, path: string, queueKey: string): Promise<T | null> {
+    if (!manifest || manifest.kvStreams !== undefined) return manifest;
+    const kvStreams = await streamsInSlotFile(join(this.dir, slotFile));
+    if (kvStreams === undefined) return manifest;
+    await this.manifests
+      .run(queueKey, async () => {
+        // Saved again meanwhile: that manifest says its own count.
+        const current = await readManifest<T>(path);
+        if (current && current.kvStreams === undefined) await writeJsonFile(path, { ...current, kvStreams });
+      })
+      .catch(() => undefined);
+    return { ...manifest, kvStreams };
   }
 
   /** The tokens a state holds — what re-reading it would cost; undefined without one. */
@@ -257,7 +306,7 @@ export class KvStore {
    * server keeps the common part. False when there is no state to give.
    */
   async copyState(fromId: string, toId: string): Promise<boolean> {
-    const manifest = await readManifest<KvManifest>(this.manifestPath(fromId));
+    const manifest = await this.manifest(fromId);
     if (!manifest) return false;
     try {
       await copyFile(join(this.dir, this.slotFilename(fromId)), join(this.dir, this.slotFilename(toId)), constants.COPYFILE_FICLONE);
@@ -283,7 +332,7 @@ export class KvStore {
       slotFileBytes: saved.nWritten,
       savedAt: new Date().toISOString(),
     };
-    await writeJsonFile(this.manifestPath(stateId), manifest);
+    await this.manifests.run(`state:${stateId}`, () => writeJsonFile(this.manifestPath(stateId), manifest));
     await this.touch(this.slotFilename(stateId));
     await rm(this.evictionPath(stateId), { force: true });
     return manifest;
@@ -302,7 +351,7 @@ export class KvStore {
   }
 
   async restoreState(slots: KvSlots, idSlot: number, stateId: string, live: LiveConfig): Promise<RestoreOutcome> {
-    const manifest = await readManifest<KvManifest>(this.manifestPath(stateId));
+    const manifest = await this.manifest(stateId);
     if (!manifest) return { restored: false, reason: 'missing' };
     const verdict = canRestore(manifest, live);
     if (!verdict.ok) return { restored: false, reason: verdict.reason };
@@ -358,7 +407,8 @@ export class KvStore {
   }
 
   async restoreSeed(slots: KvSlots, idSlot: number, key: string, live: LiveConfig): Promise<SeedOutcome> {
-    const manifest = await readManifest<SeedManifest>(this.seedManifestPath(key));
+    const path = this.seedManifestPath(key);
+    const manifest = await this.withStreams(await readManifest<SeedManifest>(path), this.seedFilename(key), path, key);
     if (!manifest) return { restored: false, reason: 'missing' };
     const verdict = canRestore(manifest, live);
     if (!verdict.ok) return { restored: false, reason: verdict.reason };

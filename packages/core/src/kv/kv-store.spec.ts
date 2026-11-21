@@ -6,13 +6,13 @@
  * restored by every conversation that starts the same way.
  */
 
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { LlamaCppHttpClient } from '../backend/llamacpp/http-client.js';
 import { startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
-import { canRestore, KvStore, type LiveConfig } from './kv-store.js';
+import { canRestore, KvStore, memoriesRefusedBy, streamsInSlotFile, type KvSlots, type LiveConfig } from './kv-store.js';
 
 const LIVE: LiveConfig = { modelFingerprint: 'fp-gemma', nCtx: 8192, cacheTypeK: 'f16', cacheTypeV: 'f16' };
 
@@ -275,6 +275,84 @@ describe('KvStore — under a disk budget', () => {
     };
     await expect(store.saveState(slots, 0, 'c1_main', LIVE)).rejects.toThrow(/no space left/);
     expect(await store.has('c1_main')).toBe(false);
+  });
+});
+
+/**
+ * A slot file as llama.cpp writes it (`llama_state_seq_save_file`): the magic, the version, the count of the u32
+ * the server packed (its tokens and a header of its own), those u32, then the memory's state, streams first — the
+ * layout b12383 wrote under one and two slots (2026-11-21: 20 u32 packed for 16 tokens saved).
+ */
+function llamaSlotFile(packed: number, streams: number): Buffer {
+  const file = Buffer.alloc(12 + 4 * packed + 4 + 64);
+  file.writeUInt32LE(0x67677371, 0);
+  file.writeUInt32LE(4, 4);
+  file.writeUInt32LE(packed, 8);
+  file.writeUInt32LE(0xffffffff, 12);
+  file.writeUInt32LE(streams, 12 + 4 * packed);
+  return file;
+}
+
+/** A server that only says which files it was asked to restore. */
+const watching = (asked: string[]): KvSlots =>
+  ({
+    saveSlot: async () => ({ nSaved: 0, nWritten: 0 }),
+    restoreSlot: async (_: number, file: string) => (asked.push(file), { nRestored: 16 }),
+  }) as unknown as KvSlots;
+
+describe('KvStore — a manifest written before the KV streams were recorded (review of 2026-11-21)', () => {
+  const OLD = { schemaVersion: 2, ...LIVE, promptTokenCount: 16, slotFileBytes: 200, savedAt: '2026-11-20T10:00:00.000Z' };
+
+  async function oldState(dir: string, streams: number | null): Promise<void> {
+    await writeFile(join(dir, 'c1_main.manifest.json'), JSON.stringify({ ...OLD, stateId: 'c1_main' }));
+    if (streams !== null) await writeFile(join(dir, 'c1_main.slot'), llamaSlotFile(20, streams));
+  }
+
+  it('reads the count llama.cpp wrote in the slot file, once, and keeps it in the manifest', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-'));
+    dirs.push(dir);
+    await oldState(dir, 2);
+    const store = new KvStore(dir);
+    expect(await streamsInSlotFile(join(dir, 'c1_main.slot'))).toBe(2);
+    expect(await store.manifest('c1_main')).toMatchObject({ kvStreams: 2 });
+    expect(JSON.parse(await readFile(join(dir, 'c1_main.manifest.json'), 'utf8'))).toMatchObject({ kvStreams: 2, savedAt: OLD.savedAt });
+    // Saved under « En parallèle »: refused under one slot before llama.cpp is asked — opening it says so —, and
+    // restored under two, as llama.cpp would.
+    const asked: string[] = [];
+    const slots = watching(asked);
+    expect(await store.restoreState(slots, 0, 'c1_main', { ...LIVE, kvStreams: 1 })).toEqual({ restored: false, reason: 'slots' });
+    expect(asked).toEqual([]);
+    expect(await store.restoreState(slots, 0, 'c1_main', { ...LIVE, kvStreams: 2 })).toMatchObject({ restored: true });
+    expect(memoriesRefusedBy(await store.savedStates(), { nCtx: 8192, cacheType: 'f16', slots: 2 })).toBe(0);
+    expect(memoriesRefusedBy(await store.savedStates(), { nCtx: 8192, cacheType: 'f16', slots: 1 })).toBe(1);
+  });
+
+  it('a slot file that does not say — absent, or not llama.cpp\'s — leaves it at one, the manifest as it was', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-'));
+    dirs.push(dir);
+    await oldState(dir, null);
+    const store = new KvStore(dir);
+    expect((await store.manifest('c1_main'))?.kvStreams).toBeUndefined();
+    await writeFile(join(dir, 'c1_main.slot'), JSON.stringify({ tokens: [1, 2], streams: 2 }));
+    expect(await streamsInSlotFile(join(dir, 'c1_main.slot'))).toBeUndefined();
+    expect((await store.manifest('c1_main'))?.kvStreams).toBeUndefined();
+    expect(JSON.parse(await readFile(join(dir, 'c1_main.manifest.json'), 'utf8')).kvStreams).toBeUndefined();
+    expect(canRestore((await store.manifest('c1_main'))!, LIVE)).toEqual({ ok: true });
+  });
+
+  it('a seed saved under two slots before the count was recorded is refused under one before llama.cpp is asked', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'bp-kv-'));
+    dirs.push(dir);
+    const store = new KvStore(dir);
+    // Its key had no count then: the key one slot looks for now.
+    const key = store.seedKey('system prompt', LIVE);
+    await mkdir(join(dir, 'seeds'), { recursive: true });
+    await writeFile(join(dir, 'seeds', `${key}.manifest.json`), JSON.stringify({ ...OLD, key, served: 3, restoreMs: 10 }));
+    await writeFile(join(dir, store.seedFilename(key)), llamaSlotFile(20, 2));
+    const asked: string[] = [];
+    const slots = watching(asked);
+    expect(await store.restoreSeed(slots, 0, key, LIVE)).toEqual({ restored: false, reason: 'slots' });
+    expect(asked).toEqual([]);
   });
 });
 
