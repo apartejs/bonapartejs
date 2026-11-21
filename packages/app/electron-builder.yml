@@ -7,6 +7,12 @@ appId: dev.apartejs.bonaparte
 productName: bonaparte
 copyright: Copyright © 2026 Paul Richez
 
+# The packed package's name: a per-user installer puts the app under %LOCALAPPDATA%\Programs\<name>, which the
+# workspace's scoped name made « @apartebonaparte-app ». The data and the window's profile have their own paths
+# (startup.ts), so nothing else moves.
+extraMetadata:
+  name: bonaparte
+
 directories:
   output: dist
 
