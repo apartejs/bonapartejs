@@ -853,7 +853,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   days after — never with work not committed in it — and its branch only
   when every commit of it is merged into its base or on its upstream
   (`unsavedCommits`; audit 2026-11-21, D8): else it stays, said in the
-  archive dialog before and in the log after.
+  archive dialog before and in the log after. Deleted, the same at once:
+  its folder goes unless git cannot say it is clean (`isClean`) — then it
+  stays, unlocked —, its branch by the same rule, said in the delete dialog.
 - **The plugin host** (`core/src/plugins/host.ts`, `packages/plugin-sdk`):
   a manifest read before anything runs; one context per activation, torn
   down as one (its tools, its commands, its signal, its processes and

@@ -6,7 +6,7 @@
  * changed; the header says its branch, and opens its folder.
  */
 
-import { tempRepo } from '@aparte/bonaparte-core/testing';
+import { git, tempRepo } from '@aparte/bonaparte-core/testing';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -56,10 +56,27 @@ test('chosen before its first message, its worktree made at its first write; the
     await expect
       .poll(() => app.evaluate(() => (globalThis as { __openedFolders?: string[] }).__openedFolders ?? []))
       .toEqual([worktree]);
+
+    // Deleted, it says what becomes of its folder and its branch; work not committed stays where it is, unlocked
+    // (review of round 6).
+    await page.getByRole('button', { name: 'Plus d’actions' }).click();
+    await page.getByRole('menuitem', { name: 'Supprimer…' }).click();
+    const deleting = page.getByRole('dialog', { name: /^Supprimer « / });
+    await expect(deleting).toContainText('La branche bonaparte/heures reste tant qu’un de ses commits n’est ni poussé ni fusionné.');
+    await deleting.getByRole('button', { name: 'Supprimer' }).click();
+    await expect(deleting).toBeHidden();
+    await expect.poll(async () => (await git(['worktree', 'list', '--porcelain'], repo.dir)).stdout.replace(/\r\n/g, '\n').split('\n\n').find((block) => block.includes('heures')) ?? '', { timeout: 10_000 }).not.toMatch(/^locked/m);
+    expect(await readFile(join(worktree, 'notes.txt'), 'utf8')).toBe('second\n');
   } finally {
+    await removeWorktree(repo.dir, join(repo.dir, '.bonaparte', 'worktrees', 'heures'));
     await repo.remove();
   }
 });
+
+async function removeWorktree(repo: string, dir: string): Promise<void> {
+  await git(['worktree', 'unlock', dir], repo);
+  await git(['worktree', 'remove', '--force', dir], repo);
+}
 
 async function newProject(page: Page, git: boolean): Promise<void> {
   await page.getByRole('button', { name: 'Nouveau projet' }).click();

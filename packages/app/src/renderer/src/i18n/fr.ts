@@ -780,6 +780,8 @@ export const fr: Messages = {
     deleteQuestion: (title) => `Supprimer « ${title} » ?`,
     deleteWhat:
       'Ses messages, sa mémoire et les copies des fichiers gardées pour revenir en arrière partent avec elle. Les fichiers du projet restent tels qu’ils sont.',
+    deleteBranch: (branch) =>
+      `Son dossier de travail part aussi, sauf s’il garde du travail non commité : il reste alors où il est. La branche ${branch} reste tant qu’un de ses commits n’est ni poussé ni fusionné.`,
     cancel: 'Annuler',
     confirmDelete: 'Supprimer',
   },

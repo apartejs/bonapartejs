@@ -223,6 +223,7 @@ export function ConversationHeader(props: ConversationHeaderProps) {
         </header>
         <div className="aparte-dialog__body">
           <p>{words.deleteWhat}</p>
+          {props.branch ? <p className="conversation-delete__branch">{words.deleteBranch(props.branch.name)}</p> : null}
         </div>
         <footer className="aparte-dialog__footer">
           <button type="button" className="aparte-btn aparte-btn--ghost" onClick={() => setDeleting(false)}>

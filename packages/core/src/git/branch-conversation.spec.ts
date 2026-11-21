@@ -263,6 +263,37 @@ describe('a conversation on its own branch', { timeout: 30_000 }, () => {
     expect(existsSync(recent)).toBe(true);
   }, 30_000);
 
+  it('deleted, its worktree goes — never with work not committed, then only unlocked; its branch only once merged or pushed (review of round 6)', async () => {
+    const { core, repo, turn, branch } = await setup();
+    for (const [id, name] of [['c1', 'gardee'], ['c2', 'fusionnee'], ['c3', 'sale']] as const) {
+      await turn(id, 'Bonjour', branch(name));
+      await turn(id, 'Écris la note');
+    }
+    const kept = join(repo.dir, '.bonaparte', 'worktrees', 'gardee');
+    const merged = join(repo.dir, '.bonaparte', 'worktrees', 'fusionnee');
+    const dirty = join(repo.dir, '.bonaparte', 'worktrees', 'sale');
+    for (const dir of [kept, merged]) {
+      await writeFile(join(dir, 'done.txt'), `${dir}\n`);
+      expect((await git(['add', '-A'], dir)).code).toBe(0);
+      expect((await git(['commit', '-qm', 'done'], dir)).code).toBe(0);
+    }
+    expect((await git(['merge', '-q', '--ff-only', 'bonaparte/fusionnee'], repo.dir)).code).toBe(0);
+
+    for (const id of ['c1', 'c2', 'c3']) await core.removeConversation(id);
+    // Committed, never pushed nor merged: the folder goes, the branch and its commit stay.
+    expect(existsSync(kept)).toBe(false);
+    expect((await git(['log', '-1', '--format=%s', 'bonaparte/gardee'], repo.dir)).stdout.trim()).toBe('done');
+    // Merged: both go.
+    expect(existsSync(merged)).toBe(false);
+    expect((await git(['branch', '--list', 'bonaparte/fusionnee'], repo.dir)).stdout.trim()).toBe('');
+    // Work not committed is the person's: kept where it is, no longer locked by a conversation that is gone.
+    expect(await readFile(join(dirty, 'notes.txt'), 'utf8')).toBe('from the branch');
+    const listed = (await git(['worktree', 'list', '--porcelain'], repo.dir)).stdout.replace(/\r\n/g, '\n');
+    const entry = listed.split('\n\n').find((block) => block.includes('sale')) ?? '';
+    expect(entry).toContain('bonaparte/sale');
+    expect(entry).not.toMatch(/^locked/m);
+  });
+
   it('takes a branch name in any language', async () => {
     const { core, turn, branch } = await setup();
     await turn('c1', 'Bonjour', branch('réunion'));

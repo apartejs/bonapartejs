@@ -136,6 +136,12 @@ export async function uncommittedFiles(dir: string): Promise<number> {
   return result.code === 0 ? result.stdout.split('\n').filter(Boolean).length : 0;
 }
 
+/** Nothing left that is not committed — known, not guessed: a status git could not give is not clean. */
+export async function isClean(dir: string): Promise<boolean> {
+  const result = await git(['status', '--porcelain'], dir);
+  return result.code === 0 && result.stdout.trim() === '';
+}
+
 /** Everything committed, with a message — « Commiter d'abord ». */
 export async function commitAll(dir: string, message: string): Promise<boolean> {
   if ((await git(['add', '-A'], dir)).code !== 0) return false;

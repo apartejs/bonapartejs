@@ -778,6 +778,8 @@ export const en: Messages = {
     attach: 'Work in a project…',
     deleteQuestion: (title) => `Delete “${title}”?`,
     deleteWhat: 'Its messages, its memory and the copies of the files kept to go back go with it. The files of the project stay as they are.',
+    deleteBranch: (branch) =>
+      `Its working folder goes too, unless it holds work not committed — then it stays where it is. The branch ${branch} stays as long as one of its commits is neither pushed nor merged.`,
     cancel: 'Cancel',
     confirmDelete: 'Delete',
   },

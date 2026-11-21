@@ -653,6 +653,8 @@ export interface Messages {
     attach: string;
     deleteQuestion(title: string): string;
     deleteWhat: string;
+    /** On its own branch: what becomes of its folder and its branch. */
+    deleteBranch: (branch: string) => string;
     cancel: string;
     confirmDelete: string;
   };

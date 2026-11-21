@@ -131,7 +131,7 @@ import {
   type ProjectChanges,
 } from './project/store.js';
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
-import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, unsavedCommits, type BranchStatus } from './git/worktrees.js';
+import { branchRoots, branchStatus, commitAll, createWorktree, isClean, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, unsavedCommits, type BranchStatus } from './git/worktrees.js';
 import { openPr, prPlan, prStatus, type PrOpened, type PrPlan, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { git } from './git/git.js';
@@ -1516,7 +1516,7 @@ export function createCore(deps: CoreDeps): Core {
         const repo = await repoOf(meta);
         if (!repo) continue;
         // Work never committed there (a pull request merged meanwhile) is the person's: kept.
-        if ((await uncommittedFiles(meta.worktree)) > 0) continue;
+        if (!(await isClean(meta.worktree))) continue;
         const removed = await removeWorktree(repo, meta.worktree, meta.branch, meta.base ?? '');
         if (removed.branch === 'kept') log(`Kept the branch ${meta.branch} of an archived conversation: ${removed.unsaved ?? 'some'} commit(s) neither pushed nor merged.`);
         await conversationStore.update(meta.id, { worktree: undefined });
@@ -2695,6 +2695,23 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async removeConversation(id) {
+      // Its own branch's folder goes with it — never with work not committed there, then only unlocked: nothing of
+      // it is lost, and nothing holds it any more. The branch only when its commits are merged or pushed (audit D8).
+      const meta = await conversationStore.get(id);
+      const repo = meta?.worktree ? await repoOf(meta).catch(() => null) : null;
+      if (meta?.worktree && repo) {
+        try {
+          if (!(await isClean(meta.worktree))) {
+            await unlockWorktree(repo, meta.worktree);
+            log(`Kept the folder ${meta.worktree} of a deleted conversation: it holds work not committed, or git could not say.`);
+          } else if (meta.branch) {
+            const removed = await removeWorktree(repo, meta.worktree, meta.branch, meta.base ?? '');
+            if (removed.branch === 'kept') log(`Kept the branch ${meta.branch} of a deleted conversation: ${removed.unsaved ?? 'some'} commit(s) neither pushed nor merged.`);
+          }
+        } catch (error) {
+          log(`The folder ${meta.worktree} of a deleted conversation was left as it is: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
       // What it alone allowed, and its agent's page, go with it (audit D3).
       await grants.dropConversation(id).catch(() => undefined);
       plugins.forgetPage(id);
