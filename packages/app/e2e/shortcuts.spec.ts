@@ -21,8 +21,11 @@ test('the conversations’ keys: Ctrl N starts one, Ctrl ↑ ↓ go from one to 
   const ui = chat(page);
   await ui.send('Première question');
   await expect(ui.replies).toHaveCount(1, { timeout: 15_000 });
+  // The turn ended, not only its bubble shown: on GitHub's slower runner Ctrl N came while it still ran (CI, 2026-11-21).
+  await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+  await expect(ui.stopButton).toHaveCount(0, { timeout: 15_000 });
   await page.keyboard.press('Control+N');
-  await expect(ui.replies).toHaveCount(0);
+  await expect(ui.replies).toHaveCount(0, { timeout: 15_000 });
   await ui.send('Seconde question');
   await expect(ui.replies).toHaveCount(1, { timeout: 15_000 });
   // The title comes from the first message once the reply is kept: slower on a loaded machine.
