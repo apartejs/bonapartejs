@@ -796,7 +796,7 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   the whole built-in browser on web pages (Paul, 2026-11-20): its tools
   (`toolsFor`), its « Navigateur » pane and Ctrl Maj B, never a file;
   `browser_act` asked each time there (`PermissionEngine.forDiscussion`),
-  never refused by its Lecture, never free;
+  never refused by its Lecture, never free; its prompt names no folder;
   `attachProject` makes it a code conversation, the project and its tools
   told as notes at the next turn. At launch, a new conversation starts in
   the project made last.

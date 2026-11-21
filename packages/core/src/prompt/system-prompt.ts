@@ -133,7 +133,8 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
   const head = [IDENTITY[options.kind](options.platform), family.renderToolConvention(), AMENDMENT].filter((block) => block !== '');
   const stable = head.join('\n\n') + family.renderToolInventory(toolsFor(options.kind, options.tools));
 
-  const project = [renderPerimeter(options.perimeter)];
+  // A discussion has no folder: its own turn names none (its method says so), never a home folder to work in.
+  const project = options.kind === 'discussion' ? [] : [renderPerimeter(options.perimeter)];
   if (options.environment) project.push(options.environment);
   if (options.replyLanguage) project.push(`Write your replies to the user in ${options.replyLanguage}.`);
   if (options.projectInstructions) {
@@ -148,7 +149,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): SystemPrompt {
  * by its own API. Sent whole at every turn — nothing is frozen there, the service keeps no memory.
  */
 export function buildServicePrompt(options: Omit<SystemPromptOptions, 'family' | 'tools'>): string {
-  const blocks = [IDENTITY[options.kind](options.platform), renderPerimeter(options.perimeter)];
+  const blocks = [IDENTITY[options.kind](options.platform), ...(options.kind === 'discussion' ? [] : [renderPerimeter(options.perimeter)])];
   // The branch and the file names are a repository's choice: disarmed as its instructions are (security rule 5).
   if (options.environment) blocks.push(disarmForService(options.environment));
   if (options.replyLanguage) blocks.push(`Write your replies to the user in ${options.replyLanguage}.`);

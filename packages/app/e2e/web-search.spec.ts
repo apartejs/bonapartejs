@@ -54,5 +54,5 @@ test('a discussion has web_search among its tools, and still no file tool (task 
   await ui.send('Bonjour');
   await expect(ui.replyText).toHaveText('ok', { timeout: 15_000 });
   expect(prompts.at(-1)).toContain('web_search');
-  expect(prompts.at(-1)).not.toMatch(/read_file|edit_file|run_command/);
+  expect(prompts.at(-1)).not.toMatch(/declaration:(read_file|edit_file|write_file|run_command)[{]/);
 });

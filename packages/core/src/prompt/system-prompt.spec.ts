@@ -216,6 +216,10 @@ describe('buildSystemPrompt — the method and the environment (audit 2026-11-21
     expect(stable).toMatch(/web_fetch[^\n]*text/);
     expect(stable).toMatch(/browser_open[^\n]*(run|act)/);
     expect(stable).toContain('no folder');
+    // Its own turn does not say the opposite: no home folder its tools would work in.
+    const { project } = buildSystemPrompt(options({ kind: 'discussion', family: gemma, perimeter: [] }));
+    expect(project).not.toMatch(/home folder|relative paths/i);
+    expect(buildServicePrompt({ kind: 'discussion', perimeter: [], replyLanguage: 'French' })).not.toMatch(/home folder|relative paths/i);
   });
 
   it('names the platform in the shared turn — one machine, one seed —, nothing per conversation', () => {
