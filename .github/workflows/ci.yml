@@ -112,6 +112,13 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # The runner's screen is 1024 × 768: Windows shrinks the test window
+      # (1280 × 820) to it, and under 1 100 px the app draws its narrow layout,
+      # a pane over the conversation (rewind.spec.ts, first CI run, 2026-11-21).
+      - name: A screen as wide as a person's
+        shell: pwsh
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
       - name: End-to-end
         working-directory: packages/app
         run: pnpm exec playwright test --shard=${{ matrix.shard }}/4

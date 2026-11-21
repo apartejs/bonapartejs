@@ -71,6 +71,8 @@ test('ci.yml: the end-to-end tests run on Windows only, split over four jobs tha
   assert.match(job, /shard: \[1, 2, 3, 4\]/);
   assert.match(job, /playwright test --shard=\$\{\{ matrix\.shard \}\}\/4/);
   assert.doesNotMatch(jobs(ci).get('gate'), /End-to-end/, 'the gate no longer runs them');
+  // The runner's screen is 1024 × 768: the app's narrow layout (under 1 100 px) put a pane over the conversation.
+  assert.match(job, /Set-DisplayResolution -Width 1920 -Height 1080/);
   assert.match(jobs(ci).get('release'), /needs: \[gate, e2e\]/);
 });
 
