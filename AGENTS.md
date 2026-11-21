@@ -815,8 +815,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   model as the call's failure; the turn goes on. Its
   pull request: `CoreDeps.gh` (`gh`; a fake CLI in tests,
   `testing/fake-gh.mjs`; null in a test run that gives none — a test never
-  asks GitHub). Archived, the worktree is let go, removed with its branch
-  30 days after — never with work not committed in it.
+  asks GitHub). Archived, the worktree is let go, its folder removed 30
+  days after — never with work not committed in it — and its branch only
+  when every commit of it is merged into its base or on its upstream
+  (`unsavedCommits`; audit 2026-11-21, D8): else it stays, said in the
+  archive dialog before and in the log after.
 - **The plugin host** (`core/src/plugins/host.ts`, `packages/plugin-sdk`):
   a manifest read before anything runs; one context per activation, torn
   down as one (its tools, its commands, its signal, its processes and
