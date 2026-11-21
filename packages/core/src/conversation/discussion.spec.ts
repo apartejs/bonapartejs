@@ -13,13 +13,16 @@ import { createAgentHandler, AGENT_ENDPOINT } from '../agent/handler.js';
 import { createCore, type Core } from '../api.js';
 import { openJournal } from '../journal/journal.js';
 import { startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
+import { startFakeOpenAIServer, type FakeOpenAIServer } from '../testing/fake-openai-server.js';
 
 const dirs: string[] = [];
 const cores: Core[] = [];
 const servers: FakeLlamaServer[] = [];
+const openai: FakeOpenAIServer[] = [];
 afterEach(async () => {
   for (const core of cores.splice(0)) await core.stop().catch(() => undefined);
   for (const server of servers.splice(0)) await server.close();
+  for (const service of openai.splice(0)) await service.close();
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
 });
 
@@ -94,5 +97,126 @@ describe('a discussion (task 9.7)', () => {
     const { core, say } = await rig();
     await say('Bonjour');
     expect(await core.conversationStore.get('d1')).toMatchObject({ kind: 'code' });
+  });
+});
+
+describe('a discussion acts on a web page only once asked, each time (Paul, 2026-11-20; review of round 3, 8)', () => {
+  const Q = '<|"|>';
+  /** The model clicks « Accepter » then « Suivant » on its page, in one step, then says it is done. */
+  const click = (target: string): string => `<|tool_call>call:browser_act{action:${Q}click${Q},selector:${Q}${target}${Q}}<tool_call|>`;
+  const clicker = (prompt: string): string =>
+    prompt.lastIndexOf('<|tool_response>') > prompt.lastIndexOf('<|turn>user') ? 'Fait.' : click('#accept') + click('#next');
+
+  /** The built-in browser's act, as the app adds it: what it was asked to do is kept. */
+  async function withBrowser(core: Core): Promise<unknown[]> {
+    const acted: unknown[] = [];
+    core.plugins.add(
+      {
+        id: 'browser',
+        name: { en: 'Browser', fr: 'Navigateur' },
+        version: '1.0.0',
+        description: { en: 'Pages.', fr: 'Des pages.' },
+        effects: [{ effect: 'execute', what: { en: 'clicks in the agent’s page', fr: 'clique dans la page de l’agent' } }],
+        contributes: {
+          tools: [
+            {
+              name: 'browser_act',
+              description: 'Click or type in your own browser tab.',
+              effect: 'execute',
+              inputSchema: { type: 'object', properties: { action: { type: 'string' }, selector: { type: 'string' } } },
+            },
+          ],
+        },
+      },
+      { builtin: true },
+    );
+    await core.plugins.activate('browser', {
+      activate: (ctx) =>
+        ctx.registerToolHandler('browser_act', async ({ input }) => {
+          acted.push(input);
+          return { content: 'Clicked.' };
+        }),
+    });
+    return acted;
+  }
+
+  it('on the built-in engine: the click is asked, never refused by its Lecture, and runs once allowed', async () => {
+    const server = await startFakeLlamaServer({ responder: clicker });
+    servers.push(server);
+    const dir = await mkdtemp(join(tmpdir(), 'bp-discussion-act-'));
+    dirs.push(dir);
+    await mkdir(join(dir, 'data', 'config'), { recursive: true });
+    await writeFile(join(dir, 'data', 'config', 'global.json'), JSON.stringify({ backend: { mode: 'remote', url: server.url } }));
+    const core = createCore({ dataDir: join(dir, 'data'), env: {}, home: join(dir, 'home'), gh: null, logger: () => undefined });
+    cores.push(core);
+    const acted = await withBrowser(core);
+    const handler = createAgentHandler(core);
+    const post = async (body: Record<string, unknown>, query = ''): Promise<Line[]> => {
+      const response = await handler(
+        new Request(`${AGENT_ENDPOINT}/c/d1${query}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ v: 1, clientTools: [], ...body }) }),
+      );
+      return (await response.text()).split('\n').filter(Boolean).map((line) => JSON.parse(line) as Line);
+    };
+    const asked = { role: 'user', content: 'Clique sur Accepter' };
+    const first = await post({ messageId: 'm1', request: { messages: [asked], modelId: '' } }, '?kind=discussion');
+    expect(await core.conversationStore.get('d1')).toMatchObject({ kind: 'discussion' });
+    const suspended = first.at(-1) as Line & { pending: { toolCallId: string; name: string; reason: string; input?: unknown }[]; ticket: string };
+    expect(suspended.type).toBe('run-suspended');
+    // The second click waits behind the first.
+    expect(suspended.pending).toMatchObject([
+      { name: 'browser_act', reason: 'approval', input: { selector: '#accept' } },
+      { name: 'browser_act', reason: 'queued', input: { selector: '#next' } },
+    ]);
+    expect(acted).toEqual([]);
+    // « Autoriser » the first: it runs, and the resume judges the one behind it as the discussion's.
+    const waiting = suspended.pending.map((call) => ({ id: call.toolCallId, name: call.name, input: call.input }));
+    const second = await post({
+      messageId: 'm1',
+      request: { messages: [asked, { role: 'assistant', content: '', toolCalls: waiting }], modelId: '' },
+      resume: { ticket: suspended.ticket, outcomes: { [suspended.pending[0]!.toolCallId]: { kind: 'decision', approved: true } } },
+    });
+    // The click behind it is asked in its turn — never refused by Lecture.
+    expect(second.map((line) => line.type)).toContain('tool-resolved');
+    expect(second.map((line) => line.type)).not.toContain('tool-rejected');
+    expect(second.at(-1)).toMatchObject({ type: 'run-suspended', pending: [{ name: 'browser_act', reason: 'approval', input: { selector: '#next' } }] });
+    expect(acted).toEqual([{ action: 'click', selector: '#accept' }]);
+  });
+
+  it('on a service: the click is asked too, never refused by its Lecture', async () => {
+    const service = await startFakeOpenAIServer({
+      key: 'sk-test',
+      models: ['qwen3:8b'],
+      responder: (request) =>
+        request.messages.at(-1)?.role === 'tool' ? { text: 'Fait.' } : { calls: [{ name: 'browser_act', arguments: { action: 'click', selector: '#accept' } }] },
+    });
+    openai.push(service);
+    const dir = await mkdtemp(join(tmpdir(), 'bp-discussion-act-'));
+    dirs.push(dir);
+    const held = new Map<string, string>();
+    const core = createCore({
+      dataDir: join(dir, 'data'),
+      env: {},
+      home: join(dir, 'home'),
+      secrets: { get: async (n) => held.get(n), set: async (n, v) => void held.set(n, v), delete: async (n) => void held.delete(n), has: async (n) => held.has(n) },
+      llamaReleases: null,
+      gh: null,
+      logger: () => undefined,
+    });
+    cores.push(core);
+    const acted = await withBrowser(core);
+    const provider = await core.providers.add({ kind: 'openai-compat', label: 'Ollama', url: `${service.url}/v1`, server: 'ollama' }, 'sk-test');
+    const handler = createAgentHandler(core);
+    const response = await handler(
+      new Request(`${AGENT_ENDPOINT}/c/s1?kind=discussion&provider=${encodeURIComponent(provider.id)}&model=qwen3%3A8b`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ v: 1, clientTools: [], messageId: 'm1', request: { messages: [{ role: 'user', content: 'Clique sur Accepter' }], modelId: '' } }),
+      }),
+    );
+    const lines = (await response.text()).split('\n').filter(Boolean).map((line) => JSON.parse(line) as Line);
+    expect(await core.conversationStore.get('s1')).toMatchObject({ kind: 'discussion' });
+    expect(lines.map((line) => line.type)).not.toContain('tool-rejected');
+    expect(lines.at(-1)).toMatchObject({ type: 'run-suspended', pending: [{ name: 'browser_act', reason: 'approval' }] });
+    expect(acted).toEqual([]);
   });
 });
