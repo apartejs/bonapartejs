@@ -6,9 +6,9 @@
  * a stream name is not a file.
  */
 
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runShort } from '../engine/process-probe.js';
 import {
@@ -125,10 +125,12 @@ describe('the real location decides, not the spelling', () => {
     try {
       // deep/er/back leads back to the project: back/.. is the project's parent, not deep/er.
       await symlink(root, join(root, 'deep', 'er', 'back'), 'junction');
-      await symlink(join('deep', 'er', 'back', '..', 'bp-escaped.txt'), join(root, 'notes'), 'file');
+      // Spelled as it is stored: join would fold back/.. as text, and the link would point at deep/er.
+      await symlink(['deep', 'er', 'back', '..', 'bp-escaped.txt'].join(sep), join(root, 'notes'), 'file');
     } catch {
       return; // a relative file link needs a privilege on Windows: Linux and macOS run it
     }
+    expect((await readlink(join(root, 'notes'))).split(/[\\/]/)).toContain('..');
     expect(() => resolveInPerimeter([root], 'notes')).toThrow(PathOutsidePerimeterError);
   });
 
