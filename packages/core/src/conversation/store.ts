@@ -54,13 +54,18 @@ export interface ConversationMeta {
    * conversation older than the record — never unread then.
    */
   seenAt?: string;
+  /**
+   * When the person last wrote in it, as the window's document says (its last message of theirs): what the list
+   * is ordered by — a reply that ends, or that the page writes back late, moves nothing. Absent: its creation.
+   */
+  personAt?: string;
 }
 
 export type NewConversation = Pick<ConversationMeta, 'kind' | 'engineId' | 'modelId' | 'mode'> &
   Partial<Pick<ConversationMeta, 'projectId' | 'title'>>;
 
-type Changes = Partial<Omit<ConversationMeta, 'id' | 'createdAt' | 'updatedAt' | 'pinnedAt' | 'archivedAt' | 'seenAt'>>;
-type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt' | 'seenAt'>>;
+type Changes = Partial<Omit<ConversationMeta, 'id' | 'createdAt' | 'updatedAt' | 'pinnedAt' | 'archivedAt' | 'seenAt' | 'personAt'>>;
+type Marks = Partial<Pick<ConversationMeta, 'pinnedAt' | 'archivedAt' | 'seenAt' | 'personAt'>>;
 
 /** The window's document of a conversation, beside its journal. */
 const DOCUMENT = 'aparte.json';
@@ -178,7 +183,7 @@ export class ConversationStore {
     });
   }
 
-  /** Pinning, archiving or being seen is not activity: the order of the list does not move. */
+  /** Pinning, archiving or being seen is not activity: the order of the list does not move (`personAt` moves it). */
   mark(id: string, marks: Marks): Promise<ConversationMeta> {
     return this.change(id, (meta) => ({ ...meta, ...marks }));
   }

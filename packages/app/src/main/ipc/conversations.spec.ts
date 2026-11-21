@@ -150,6 +150,20 @@ describe('the conversation channels', () => {
     expect(back!.archivedAt).toBeUndefined();
   });
 
+  it('give each card when the person last wrote in it — what the list is ordered by, the same before and after a restart; a reply saved later moves nothing', async () => {
+    const { call } = await setup();
+    const person = { id: 'm1', role: 'user', content: 'Bonjour', timestamp: 1_000 };
+    await call('conversations.save', { document: { ...DOC, messages: [person] } });
+    // The reply, saved after the page revealed it: not the person's, the card keeps its time.
+    await call('conversations.save', { document: { ...DOC, messages: [person, { id: 'm2', role: 'assistant', content: 'ok', timestamp: 1_001 }] } });
+    expect(((await call('conversations.loadMeta', undefined)) as { personAt?: number }[])[0]?.personAt).toBe(1_000);
+    // A going back takes messages away: the card keeps the last time the person wrote.
+    await call('conversations.save', { document: { ...DOC, messages: [] } });
+    expect(((await call('conversations.loadMeta', undefined)) as { personAt?: number }[])[0]?.personAt).toBe(1_000);
+    await call('conversations.save', { document: { ...DOC, messages: [person, { ...person, id: 'm3', timestamp: 5_000 }] } });
+    expect(((await call('conversations.loadMeta', undefined)) as { personAt?: number }[])[0]?.personAt).toBe(5_000);
+  });
+
   it('keep the draft of the composer, conversation by conversation', async () => {
     const { call } = await setup();
     await call('conversations.save', { document: DOC });

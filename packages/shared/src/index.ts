@@ -168,6 +168,7 @@ export {
   conversationsLoadDraft,
   conversationsSaveDraft,
   conversationCardSchema,
+  lastWrittenAt,
   conversationDocumentSchema,
   conversationMemorySchema,
   conversationsDelete,

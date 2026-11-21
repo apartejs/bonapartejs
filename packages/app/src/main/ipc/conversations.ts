@@ -41,6 +41,7 @@ import {
   conversationsSettingsGet,
   conversationsSettingsSet,
   conversationsAttachProject,
+  lastWrittenAt,
   conversationsMove,
   type ConversationDocument,
   type ConversationMemoryView,
@@ -109,6 +110,7 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
       title: meta.title,
       createdAt: Date.parse(meta.createdAt),
       updatedAt: Date.parse(meta.updatedAt),
+      ...(meta.personAt ? { personAt: Date.parse(meta.personAt) } : {}),
       ...(meta.pinnedAt ? { pinnedAt: Date.parse(meta.pinnedAt) } : {}),
       ...(meta.archivedAt ? { archivedAt: Date.parse(meta.archivedAt) } : {}),
     })),
@@ -157,6 +159,12 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     // The title the page gave it (its first message, or the person's), on its card for the list.
     const title = typeof document['title'] === 'string' ? document['title'] : '';
     if (title !== meta.title) await store.rename(document.id, title);
+    // When the person last wrote in it, on its card: the list's order, read the same after a restart. Never earlier
+    // than it was — a going back takes messages away, not the time the person wrote.
+    const wrote = lastWrittenAt(document);
+    if (wrote !== null && (meta.personAt === undefined || wrote > Date.parse(meta.personAt))) {
+      await store.mark(document.id, { personAt: new Date(wrote).toISOString() });
+    }
   });
 
   ipc.handle(conversationsDelete, async ({ id }) => {

@@ -64,6 +64,42 @@ test('with « one list », every conversation is in one list, by date', async ({
 
 const MODELS = { 'gemma-4-e2e': { paddingBytes: 3 * 1024 * 1024 } };
 
+const titleOf = (text: string | null): string => (text?.includes('Seconde') ? 'Seconde' : text?.includes('Première') ? 'Première' : String(text));
+
+test('the rows are in the order the person wrote in them from the first draw: a reply that ends elsewhere moves none, after a restart neither', async ({ launch }) => {
+  // The replies last: the first ends after the person wrote in the second conversation, and the page writes it
+  // back then — which put « Première » above « Seconde » until the second reply ended (shortcuts.spec.ts:19).
+  test.setTimeout(90_000);
+  const words = Array.from({ length: 40 }, (_, index) => `mot${index}`).join(' ');
+  const first = await launch({ engine: { responder: () => words, paceMs: 40 }, keepData: true });
+  const { page, server } = first;
+  const ui = chat(page);
+  await ui.send('Première');
+  await expect(ui.streamingReplies).toHaveCount(1, { timeout: 15_000 });
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
+  await expect(ui.replies).toHaveCount(0);
+  await ui.send('Seconde');
+  const rows = page.locator('.bonaparte-conversations [data-conv-id]');
+  await expect(rows).toHaveCount(2, { timeout: 15_000 });
+  // From the moment both are listed until both replies are written back, « Seconde » stays on top.
+  const seen = new Set<string>();
+  const until = Date.now() + 15_000;
+  while (Date.now() < until && !(server.finished >= 2 && (await ui.streamingReplies.count()) === 0)) {
+    seen.add(titleOf(await rows.first().textContent()));
+    await page.waitForTimeout(50);
+  }
+  await page.waitForTimeout(1_000);
+  seen.add(titleOf(await rows.first().textContent()));
+  expect([...seen]).toEqual(['Seconde']);
+  await expect(rows.nth(1)).toContainText('Première');
+
+  // Read again from the core after a restart: the same order.
+  await first.close();
+  const again = await launch({ engine: { responder: () => 'ok' }, dataDir: first.dataDir });
+  await expect(again.page.locator('.bonaparte-conversations [data-conv-id]').first()).toContainText('Seconde', { timeout: 15_000 });
+  await expect(again.page.locator('.bonaparte-conversations [data-conv-id]').nth(1)).toContainText('Première');
+});
+
 test('each row says where its memory is — in the engine, or saved — by its name', async ({ launch }) => {
   const { page } = await launch({ managed: { models: MODELS } });
   await page.getByRole('button', { name: 'Démarrer' }).click();

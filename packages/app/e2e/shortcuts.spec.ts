@@ -28,12 +28,15 @@ test('the conversations’ keys: Ctrl N starts one, Ctrl ↑ ↓ go from one to 
   // The title comes from the first message once the reply is kept: slower on a loaded machine.
   await expect(title(page)).toHaveText('Seconde question', { timeout: 15_000 });
   await expect(page.locator('.bonaparte-conversations [data-conv-id]')).toHaveCount(2, { timeout: 15_000 });
-  // The rows' order is the list's (the one changed last first): a title kept late may move the first one up.
-  const secondFirst = ((await page.locator('.bonaparte-conversations [data-conv-id]').first().textContent()) ?? '').includes('Seconde');
-  await page.keyboard.press(secondFirst ? 'Control+ArrowDown' : 'Control+ArrowUp');
+  // The rows' order is the person's — the one written in last first —, whenever the first reply is written back:
+  // Ctrl ↑ ↓ follow it.
+  await expect(page.locator('.bonaparte-conversations [data-conv-id]').first()).toContainText('Seconde');
+  await page.keyboard.press('Control+ArrowDown');
   await expect(title(page)).toHaveText('Première question');
-  await page.keyboard.press(secondFirst ? 'Control+ArrowUp' : 'Control+ArrowDown');
+  await page.keyboard.press('Control+ArrowUp');
   await expect(title(page)).toHaveText('Seconde question');
+  await page.keyboard.press('Control+ArrowDown');
+  await expect(title(page)).toHaveText('Première question');
 });
 
 test('the agent’s keys: Ctrl Maj M changes the mode, Échap stops a reply, Ctrl Alt Z offers to go back', async ({ launch }) => {

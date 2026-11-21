@@ -131,10 +131,30 @@ export const conversationCardSchema = z.object({
   title: z.string(),
   createdAt: z.number(),
   updatedAt: z.number(),
+  /** When the person last wrote in it (the page's own time): what the list is ordered by, a reply moving nothing. */
+  personAt: z.number().optional(),
   pinnedAt: z.number().optional(),
   archivedAt: z.number().optional(),
 });
 export type ConversationCard = z.infer<typeof conversationCardSchema>;
+
+/**
+ * When the person last wrote in a conversation, read from its messages as the page keeps them: the time of the
+ * last message of theirs (a summary the page sends as the first message is not one); null when none says one.
+ * The window orders its list by it, and the main process keeps it on the card (`personAt`) for the next launch.
+ */
+export function lastWrittenAt(document: object): number | null {
+  const messages: unknown = (document as { messages?: unknown }).messages;
+  if (!Array.isArray(messages)) return null;
+  let last: number | null = null;
+  for (const message of messages as unknown[]) {
+    if (typeof message !== 'object' || message === null) continue;
+    const { role, timestamp, compaction } = message as { role?: unknown; timestamp?: unknown; compaction?: unknown };
+    if (role !== 'user' || compaction || typeof timestamp !== 'number' || !Number.isFinite(timestamp)) continue;
+    if (last === null || timestamp > last) last = timestamp;
+  }
+  return last;
+}
 
 export const conversationsLoadMeta = defineChannel('conversations.loadMeta', z.void(), z.array(conversationCardSchema));
 /** « Réglages de la conversation » (task 12.4): its own temperature, reasoning and context cap; null: the default. */

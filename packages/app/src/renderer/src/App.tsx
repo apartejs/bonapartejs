@@ -123,6 +123,7 @@ import { SearchPalette } from './dialogs/SearchPalette';
 import type { Messages } from './i18n/index';
 import { FirstRun } from './screens/FirstRun';
 import { ConversationHeader } from './shell/ConversationHeader';
+import { inActivityOrder } from './shell/order';
 import { Rail } from './shell/Rail';
 import { ENGINE_CHANGED, SETUP_ENGINE } from './settings/EngineMemory';
 import { SETTING_CHANGED, SettingsView, type SettingsPageName } from './settings/SettingsView';
@@ -790,6 +791,9 @@ function Workspace({
   startOver.current = newConversation;
   useEffect(() => setupCommands({ onNew: () => startOver.current() }), []);
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
+  // The list's order: the one the person wrote in last first — never moved by a reply written back late (shell/order).
+  const reached = useRef(new Map<string, number>()).current;
+  const orderedConversations = useMemo(() => inActivityOrder(activeConversations, reached), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
   // The conversations whose turn waits for the engine another one holds (audit C1): their row says it.
   const engineWaits = useEngineWaits();
@@ -951,7 +955,7 @@ function Workspace({
   useEffect(() => {
     if (!listed || reopened.current) return;
     reopened.current = true;
-    const last = activeConversations[0];
+    const last = orderedConversations[0];
     if (!last || conversationId) return;
     bridge
       .invoke(settingsGet, { key: 'reopenLast' })
@@ -962,7 +966,7 @@ function Workspace({
         }
       })
       .catch(() => undefined);
-  }, [listed, activeConversations, conversationId]);
+  }, [listed, orderedConversations, conversationId]);
   // After a restart, the conversations that wait for the person are mounted, not shown: their chat
   // asks again what was paused (resumeDeferred), and the card is there when they are opened.
   const pausedMounted = useRef(false);
@@ -1518,7 +1522,7 @@ function Workspace({
           messages={messages}
           mascot={mascot}
           engine={engine}
-          conversations={activeConversations}
+          conversations={orderedConversations}
           activeId={conversationId ?? null}
           statuses={statuses}
           running={runningConversations}
@@ -1538,7 +1542,7 @@ function Workspace({
           resources={entryOn('resource-monitor') ? resources : null}
           locale={locale}
           engine={engine}
-          conversations={activeConversations}
+          conversations={orderedConversations}
           activeId={conversationId ?? null}
           projects={projects}
           projectOf={projectOf}

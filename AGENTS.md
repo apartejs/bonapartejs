@@ -709,7 +709,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `conversations.status` (project, memory, waiting), asked again when
   something may have changed it — the bridge pushes nothing
   (`shell/statuses.ts`); the memory dot is a stylesheet regenerated on the
-  rows' `data-conv-id`, its name CSS alt text read after the title. aparté's
+  rows' `data-conv-id`, its name CSS alt text read after the title. The rows
+  are in the person's order (`shell/order.ts`): the one they wrote in last,
+  or made last, first — never aparté's `updatedAt`, which is when the page
+  wrote a thread back (a reply revealed late moved its row above the one the
+  person was writing in). The card keeps that time (`personAt`, recorded as
+  the document is saved, never lowered), so a restart reads the same order;
+  Ctrl ↑ ↓ follow the rows as drawn. aparté's
   list draws itself again for any new array, closing an open row menu: give
   it the same array while nothing it draws changed. Menus and tabs get
   aparté's keyboard through `aparte/kit.ts` (`useMenu`, which must be told
