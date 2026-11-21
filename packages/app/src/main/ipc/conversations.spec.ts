@@ -130,7 +130,7 @@ describe('the conversation channels', () => {
     await expect(call('conversations.save', { document: { ...DOC, id: '../x' } })).rejects.toThrow(/conversation id/);
   });
 
-  it('list the cards for the sidebar — titles from the page, dates, pins, archives — without reading the documents', async () => {
+  it('list the cards for the sidebar — titles from the page, dates, pins, archives — from the cards', async () => {
     const { call } = await setup();
     await call('conversations.save', { document: { ...DOC, title: 'Bonjour' } });
     const [card] = (await call('conversations.loadMeta', undefined)) as { id: string; title: string; createdAt: number; pinnedAt?: number }[];
@@ -162,6 +162,24 @@ describe('the conversation channels', () => {
     expect(((await call('conversations.loadMeta', undefined)) as { personAt?: number }[])[0]?.personAt).toBe(1_000);
     await call('conversations.save', { document: { ...DOC, messages: [person, { ...person, id: 'm3', timestamp: 5_000 }] } });
     expect(((await call('conversations.loadMeta', undefined)) as { personAt?: number }[])[0]?.personAt).toBe(5_000);
+  });
+
+  it('a card written before personAt gets it once, from its document — its row does not move up when it is first opened (review of 2026-11-21)', async () => {
+    const { call, store } = await setup();
+    // Saved before the card kept the time: the card alone, its document beside it.
+    await store.ensure('c-1', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    await store.saveDocument('c-1', { ...DOC, messages: [{ id: 'm1', role: 'user', content: 'Bonjour', timestamp: 4_000 }] });
+    await store.ensure('c-2', { kind: 'code', engineId: 'builtin', modelId: '', mode: 'repetition' });
+    await store.saveDocument('c-2', { ...DOC, id: 'c-2', messages: [] });
+    expect((await store.get('c-1'))?.personAt).toBeUndefined();
+    const cards = (await call('conversations.loadMeta', undefined)) as { id: string; createdAt: number; personAt?: number }[];
+    // The time its messages would give the row once loaded: the first draw already has it.
+    expect(cards.find((card) => card.id === 'c-1')?.personAt).toBe(4_000);
+    expect((await store.get('c-1'))?.personAt).toBe(new Date(4_000).toISOString());
+    // Nothing the person wrote: the time it was made, kept so that its document is not read at every launch.
+    const second = cards.find((card) => card.id === 'c-2')!;
+    expect(second.personAt).toBe(second.createdAt);
+    expect((await store.get('c-2'))?.personAt).toBeDefined();
   });
 
   it('keep the draft of the composer, conversation by conversation', async () => {

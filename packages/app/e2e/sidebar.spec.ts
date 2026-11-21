@@ -93,11 +93,33 @@ test('the rows are in the order the person wrote in them from the first draw: a 
   expect([...seen]).toEqual(['Seconde']);
   await expect(rows.nth(1)).toContainText('Première');
 
-  // Read again from the core after a restart: the same order.
+  // The person writes in « Première » again: its row goes up — an order the creation order does not give (review of
+  // 2026-11-21). Then « Seconde » is opened, which moves nothing, and is the one the next launch opens: only the
+  // card's time can put « Première » first before its messages are loaded.
+  await rows.filter({ hasText: 'Première' }).click();
+  await expect(ui.userMessages.first()).toContainText('Première');
+  await expect(ui.editor).toBeVisible();
+  await ui.send('Encore');
+  await expect(rows.first()).toContainText('Première', { timeout: 15_000 });
+  await expect(ui.streamingReplies).toHaveCount(0, { timeout: 15_000 });
+  await rows.filter({ hasText: 'Seconde' }).click();
+  await expect(chat(page).userMessages).toHaveCount(1);
+  await expect(chat(page).userMessages.first()).toContainText('Seconde');
+  await page.waitForTimeout(500);
+  await expect(rows.first()).toContainText('Première');
+
+  // Read again from the core after a restart: the same order, from the first draw.
   await first.close();
   const again = await launch({ engine: { responder: () => 'ok' }, dataDir: first.dataDir });
-  await expect(again.page.locator('.bonaparte-conversations [data-conv-id]').first()).toContainText('Seconde', { timeout: 15_000 });
-  await expect(again.page.locator('.bonaparte-conversations [data-conv-id]').nth(1)).toContainText('Première');
+  const after = again.page.locator('.bonaparte-conversations [data-conv-id]');
+  await expect(after).toHaveCount(2, { timeout: 15_000 });
+  const firsts = new Set<string>();
+  for (const stop = Date.now() + 3_000; Date.now() < stop; ) {
+    firsts.add(titleOf(await after.first().textContent()));
+    await again.page.waitForTimeout(50);
+  }
+  expect([...firsts]).toEqual(['Première']);
+  await expect(after.nth(1)).toContainText('Seconde');
 });
 
 test('each row says where its memory is — in the engine, or saved — by its name', async ({ launch }) => {

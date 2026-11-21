@@ -1537,6 +1537,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   A bound of ours sits under the second and over the first. A test of them
   fakes `setTimeout` alone (`vi.useFakeTimers({ toFake: [...] })`): undici
   follows it too.
+- **A slot file says its KV streams, after the server's own tokens**:
+  magic, version, then the count of u32 the server packed — its tokens and
+  a header of its own (`server_tokens::serialize`), not the tokens the save
+  reports (20 for 16 on b12383) —, those u32, then the memory's state, the
+  stream count first. A manifest older than `kvStreams` reads it there once
+  (`streamsInSlotFile`). And a restart's cost counts what is still in the
+  slots: the restart saves it first, under the settings that run now.
+- **llama.cpp reads a `LLAMA_ARG_*` for every flag missing from its
+  command line**, even beside `-np`: the managed server gets none of them
+  (`serverEnvironment`), or a person's `LLAMA_ARG_KV_UNIFIED` would steer it.
 
 ## Real-model smoke results
 

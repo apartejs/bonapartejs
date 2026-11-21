@@ -103,17 +103,43 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
   // The page's document — or, when it is missing, the conversation rebuilt from its journal.
   ipc.handle(conversationsLoadFull, async ({ id }) => (await core.conversationDocument(id)) as ConversationDocument | null);
 
-  // The sidebar's cards: read from the conversations' own cards, never from their documents.
+  /**
+   * When the person last wrote in a conversation whose card was written before it kept that time (review of
+   * 2026-11-21): read once from its document, as the page reads it once its messages are loaded — else its row
+   * rose the first time it was opened —, and kept on its card. Nothing the person wrote: the time it was made, kept
+   * too, so that its document is not read at every launch.
+   */
+  const personAtOf = async (meta: { id: string; createdAt: string; personAt?: string }): Promise<string | undefined> => {
+    if (meta.personAt) return meta.personAt;
+    try {
+      const document = await core.conversationDocument(meta.id);
+      if (!document) return undefined;
+      const wrote = lastWrittenAt(document);
+      const personAt = wrote === null ? meta.createdAt : new Date(wrote).toISOString();
+      await store.mark(meta.id, { personAt });
+      return personAt;
+    } catch {
+      // A conversation that cannot be read keeps its row where its card puts it.
+      return undefined;
+    }
+  };
+
+  // The sidebar's cards: read from the conversations' own cards — a document only once, for a card older than its time.
   ipc.handle(conversationsLoadMeta, async () =>
-    (await store.list()).map((meta) => ({
-      id: meta.id,
-      title: meta.title,
-      createdAt: Date.parse(meta.createdAt),
-      updatedAt: Date.parse(meta.updatedAt),
-      ...(meta.personAt ? { personAt: Date.parse(meta.personAt) } : {}),
-      ...(meta.pinnedAt ? { pinnedAt: Date.parse(meta.pinnedAt) } : {}),
-      ...(meta.archivedAt ? { archivedAt: Date.parse(meta.archivedAt) } : {}),
-    })),
+    Promise.all(
+      (await store.list()).map(async (meta) => {
+        const personAt = await personAtOf(meta);
+        return {
+          id: meta.id,
+          title: meta.title,
+          createdAt: Date.parse(meta.createdAt),
+          updatedAt: Date.parse(meta.updatedAt),
+          ...(personAt ? { personAt: Date.parse(personAt) } : {}),
+          ...(meta.pinnedAt ? { pinnedAt: Date.parse(meta.pinnedAt) } : {}),
+          ...(meta.archivedAt ? { archivedAt: Date.parse(meta.archivedAt) } : {}),
+        };
+      }),
+    ),
   );
   const now = (): string => new Date().toISOString();
   ipc.handle(conversationsPin, async ({ id }) => void (await store.mark(id, { pinnedAt: now() })));
