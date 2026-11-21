@@ -601,8 +601,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   it holds; a last round that alone overflows ends as context-full. It is
   a rebase like any other, said as it runs (the step `compact`) and as a
   line of the answer that stays (the activity `compaction`,
-  `aparte/compaction-line.ts`: about how many tokens before and after,
-  both estimated); the window sets no checkpoint, the divergence reads the
+  `aparte/compaction-line.ts`: about how many tokens before and after —
+  the engine's count before, the rebase scaled as it counted); the window sets no checkpoint, the divergence reads the
   whole history. A conversation too full for a summary of the whole has
   its last turn kept and the summary asked of what comes before it.
 - **A change of model** (`core/src/conversation/switch.ts`, the `engine`

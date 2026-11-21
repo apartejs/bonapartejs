@@ -953,14 +953,17 @@ export class ConversationEngine {
     if (instructions !== undefined) await this.deps.store.update(meta.id, { instructions });
     // The memory of the old prompt serves nothing any more.
     await this.deps.kv.forget(key);
+    // Two figures of one kind, the engine's: what it held before, as the gauge said it (three characters a token gave
+    // more than the context itself), and the rebase — which it has not read yet — scaled as it counted that same
+    // conversation (review of round 2, 10; round 3, 10). The window says them as « about ».
+    const estimated = estimateTokens(frozenPrompt(entries));
+    const tokensBefore = countedContext(entries) ?? estimated;
     return {
       summary,
       compactedTurns: plan.compactedTurns,
       keptTurns: plan.keptTurns,
-      // Two figures of one kind, the prompt's weight reckoned the same way before and after: the engine has counted
-      // no prompt of the rebase yet (review of round 2, 10). The window says them as « about ».
-      tokensBefore: estimateTokens(frozenPrompt(entries)),
-      tokensAfter: estimateTokens(rendered),
+      tokensBefore,
+      tokensAfter: Math.round(estimateTokens(rendered) * (tokensBefore / Math.max(1, estimated))),
     };
   }
 
