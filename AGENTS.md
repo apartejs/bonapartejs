@@ -523,7 +523,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   resume runs or refuses the calls as answered. What the model reads of the
   mode, and of the window's tools (`ask_user`), is a note appended at the
   start of a turn when it changed — never the frozen prompt, so one seed
-  serves every mode. A tool's `structuredContent` is for the window only
+  serves every mode; a compaction in the middle of a turn tells both again
+  after its summary (the rebase's `mode`, `windowTools`). A tool's `structuredContent` is for the window only
   (lines read, matches, exit code, the unified diff of a write): the families
   never render it.
 - **Approvals in the window** (`renderer/src/aparte/approvals.ts`,

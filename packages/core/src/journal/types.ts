@@ -109,9 +109,10 @@ export type JournalBody =
   /**
    * `keptFrom`: the first entry of the turns kept as they were (none kept: absent). `keptRound`: the turn under way
    * folded on itself (review of round 2, 5) — its message kept (`keptFrom`), its rounds before this answer folded into
-   * the summary, this answer and its results kept from here on.
+   * the summary, this answer and its results kept from here on. `mode` and `windowTools`: what a compaction in the
+   * middle of a turn told again after its summary — the mode and the window's tools the turn was told before it.
    */
-  | ({ kind: 'rebase'; summary: string; keptFrom?: string; keptRound?: string } & Refrozen)
+  | ({ kind: 'rebase'; summary: string; keptFrom?: string; keptRound?: string; mode?: PlayMode; windowTools?: ToolDef[] } & Refrozen)
   /**
    * A change of model (task 7.4): the prompt starts again from here, the conversation rendered again by the
    * new model's `family` (its `rendered`). `modelId`: the model file's path.

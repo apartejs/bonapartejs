@@ -1152,6 +1152,30 @@ describe('ConversationEngine — the context runs out (audit 2026-11-21, D2)', (
       expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
     });
 
+    it('a turn folded in its middle still reads its mode and the window’s tools, told once (review of round 3, 5 and 9)', async () => {
+      const ASK: ToolDef = { ...READ, name: 'ask_user', description: 'Ask the person a question with a few choices.', effect: 'ui', where: 'window' };
+      const { store, prompts, engine } = await rig({ server: { responder: task, nCtx: 8192 } });
+      const meta = await store.create({ kind: 'code', engineId: 'builtin', modelId: 'gemma', mode: 'lecture' });
+      const asking = { ...tools(900), defs: [READ, RUN, ASK] };
+      const result = await engine.turn(meta.id, { text: 'Lis les trois fichiers puis lance les tests', tools: asking }, () => undefined);
+      expect(result.stopped).toBeUndefined();
+      const entries = (await openJournal(store.dir, meta.id)).entries();
+      expect(entries.findLast((entry) => entry.kind === 'rebase')).toMatchObject({ keptRound: expect.any(String) });
+      // After the fold, the rounds read their mode and ask_user again, before the message they go on from.
+      const last = prompts.at(-1)!;
+      const summary = last.indexOf('[conversation summary]');
+      expect(summary).toBeGreaterThanOrEqual(0);
+      const rest = last.slice(summary);
+      expect(rest).toContain('[mode] Lecture');
+      expect(rest).toContain('ask_user');
+      expect(rest.indexOf('[mode] Lecture')).toBeLessThan(rest.indexOf('Lis les trois fichiers'));
+      // Told by the rebase: the next message tells neither again.
+      await engine.turn(meta.id, { text: 'Et ensuite ?', tools: asking }, () => undefined);
+      const next = prompts.at(-1)!;
+      expect(next.split('[mode] Lecture')).toHaveLength(2);
+      expect(next.split('[tool inventory update]')).toHaveLength(2);
+    });
+
     it('a turn that overflows again after its fold is folded again, as often as it needs (review of round 3, 2)', async () => {
       const files = ['a', 'b', 'c', 'd', 'e'];
       /** Reads a.txt to e.txt, each read from what its prompt still holds, then ends. */

@@ -928,12 +928,22 @@ export class ConversationEngine {
           .map((entry) => entry.rendered ?? '')
           .join('')
       : plan.kept.map((entry) => entry.rendered ?? '').join('');
-    const rendered = stable + family.renderSystemNote(prompt.project) + family.renderSystemNote(summaryNote(summary, fold !== null)) + kept;
+    // In the middle of a turn, its notes came before its message and are folded: its mode and the window's tools are
+    // told again after the summary, as the turn was told them — the next message asks only what changed since
+    // (review of round 3, 5 and 9). Before a message, the notes are asked again of the rebase instead.
+    const mode = options.slot ? lastToldMode(entries) : 'repetition';
+    const windowTools = options.slot ? lastToldWindowTools(entries) : [];
+    const windowNote = renderInventoryDelta([], windowTools);
+    const notes =
+      (windowNote ? family.renderSystemNote(windowNote.text) : '') + (mode !== 'repetition' ? family.renderSystemNote(renderModeDelta(mode).text) : '');
+    const rendered = stable + family.renderSystemNote(prompt.project) + family.renderSystemNote(summaryNote(summary, fold !== null)) + notes + kept;
     await journal.append({
       kind: 'rebase',
       summary,
       ...(plan.kept[0] ? { keptFrom: plan.kept[0].id } : {}),
       ...(fold ? { keptRound: fold.round[0]!.id } : {}),
+      ...(mode !== 'repetition' ? { mode } : {}),
+      ...(windowTools.length > 0 ? { windowTools } : {}),
       stable,
       replyLanguage: decor.replyLanguage,
       perimeter: [...decor.perimeter],
@@ -2057,6 +2067,8 @@ function lastToldMode(entries: readonly JournalEntry[]): PlayMode {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.kind === 'mode' && entry.delta.mode) return entry.delta.mode;
+    // A compaction in the middle of a turn told it again after its summary.
+    if (entry.kind === 'rebase' && entry.mode) return entry.mode;
     // A rebase or a change of model froze the system prompt again, which names no mode: told again.
     if (isRefrozen(entry)) break;
   }
@@ -2120,6 +2132,7 @@ function lastToldWindowTools(entries: readonly JournalEntry[]): ToolDef[] {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
     if (entry.kind === 'delta' && entry.delta.windowTools) return entry.delta.windowTools;
+    if (entry.kind === 'rebase' && entry.windowTools) return entry.windowTools;
     // A rebase or a change of model froze the system prompt again, without the window's tools: told again.
     if (isRefrozen(entry)) break;
   }
@@ -2180,14 +2193,17 @@ const SPOKEN = new Set<JournalEntry['kind']>(['user', 'assistant', 'tool-results
 
 /** Did the model present a plan (an update_plan that ran) since its last note of Lecture, in this branch? */
 function planSinceLecture(entries: readonly JournalEntry[]): boolean {
+  // The mode a note told, or a compaction in the middle of a turn told again.
+  const toldMode = (entry: JournalEntry): PlayMode | undefined =>
+    entry.kind === 'delta' && entry.delta.kind === 'mode' ? (entry.delta.mode ?? 'repetition') : entry.kind === 'rebase' ? entry.mode : undefined;
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index]!;
-    if (entry.kind === 'delta' && entry.delta.kind === 'mode') return false;
+    if (toldMode(entry)) return false;
     if (entry.kind === 'tool-results' && entry.results.some((result) => result.name === 'update_plan' && !result.failed)) {
       // A plan — when the mode told before it is Lecture.
       for (let back = index - 1; back >= 0; back -= 1) {
-        const earlier = entries[back]!;
-        if (earlier.kind === 'delta' && earlier.delta.kind === 'mode') return earlier.delta.mode === 'lecture';
+        const told = toldMode(entries[back]!);
+        if (told) return told === 'lecture';
       }
       return false;
     }
