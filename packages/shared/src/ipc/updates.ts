@@ -22,6 +22,20 @@ export const appUpdateSchema = z.object({
 });
 export type AppUpdateView = z.infer<typeof appUpdateSchema>;
 
+/**
+ * Why the app's own update could not be checked (audit 2026-11-21, N4): a private repository's releases answer 404 to
+ * an app that carries no token; no network; nothing published yet; GitHub refusing (403, 429); anything else with its
+ * own first line. The window says it in words — never « erreur inconnue ».
+ */
+export const appCheckSchema = z.object({
+  reason: z.enum(['private', 'offline', 'unpublished', 'refused', 'other']),
+  /** The HTTP status GitHub answered, when it answered one. */
+  status: z.number().nullable(),
+  /** The updater's own first line, for `other` only. */
+  detail: z.string().nullable(),
+});
+export type AppCheckView = z.infer<typeof appCheckSchema>;
+
 export const modelUpdateSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -37,6 +51,8 @@ export const updatesSchema = z.object({
   /** bonaparte's own version, and its update — null in a build that does not update itself. */
   current: z.string(),
   app: appUpdateSchema.nullable(),
+  /** Why the app's last check of its own update failed; null when it did not, or the build does not update itself. */
+  appCheck: appCheckSchema.nullable(),
   llama: z.object({ build: z.string(), bytes: z.number(), installing: progressSchema.nullable() }).nullable(),
   models: z.array(modelUpdateSchema),
   /** A reply runs: what installs waits for the end of the turn. */

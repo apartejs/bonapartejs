@@ -4433,6 +4433,20 @@ body {
   color: var(--aparte-text-muted);
 }
 
+/* The app's own update that could not be checked (audit N4): one line, its icon at the first line of the text. */
+.updates-dialog__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.updates-dialog__check > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
 .updates-dialog__list {
   display: grid;
   gap: 12px;

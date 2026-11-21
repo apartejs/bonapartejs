@@ -8,7 +8,7 @@
  */
 
 import { EventEmitter } from 'node:events';
-import type { AppUpdateView } from '@aparte/bonaparte-shared';
+import type { AppCheckView, AppUpdateView } from '@aparte/bonaparte-shared';
 
 /** What bonaparte uses of electron-updater's `autoUpdater`. */
 export interface UpdaterLike {
@@ -45,6 +45,8 @@ export interface AppUpdates {
   /** Asks the releases; null when there is nothing newer, or no way to know. */
   check(): Promise<AppUpdateView | null>;
   state(): AppUpdateView | null;
+  /** Why the last check failed (audit N4), said in « Mises à jour »; null once a check succeeds. */
+  failure(): AppCheckView | null;
   /** Once no reply runs: downloaded if it is not, then installed, the app restarted. */
   restart(): Promise<void>;
 }
@@ -64,6 +66,29 @@ export function newer(candidate: string, current: string): boolean {
   return a.pre === null && b.pre !== null;
 }
 
+const OFFLINE =
+  /net::ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|NAME_RESOLUTION_FAILED|NETWORK_CHANGED|NETWORK_ACCESS_DENIED|ADDRESS_UNREACHABLE|TIMED_OUT|CONNECTION_(REFUSED|RESET|TIMED_OUT|CLOSED|FAILED)|PROXY_CONNECTION_FAILED)|\b(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH)\b/;
+const UNPUBLISHED = new Set(['ERR_UPDATER_NO_PUBLISHED_VERSIONS', 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND', 'ERR_UPDATER_LATEST_VERSION_NOT_FOUND']);
+
+/**
+ * Why electron-updater could not check (audit 2026-11-21, N4). Its GitHub provider reads the releases feed without a
+ * token: a private repository answers 404 there, never 200. builder-util-runtime's `HttpError` carries `statusCode`;
+ * a wrapped one leaves it in the message (`HttpError: 404`).
+ */
+export function checkFailure(error: unknown): AppCheckView {
+  const message = error instanceof Error ? error.message : String(error);
+  const fields = (error ?? {}) as { statusCode?: unknown; code?: unknown };
+  const code = typeof fields.code === 'string' ? fields.code : '';
+  const status =
+    typeof fields.statusCode === 'number' ? fields.statusCode : Number.parseInt(/HttpError: (\d{3})\b/.exec(message)?.[1] ?? '', 10) || null;
+  if (UNPUBLISHED.has(code) || /No published versions on GitHub/.test(message)) return { reason: 'unpublished', status: null, detail: null };
+  if (OFFLINE.test(message) || OFFLINE.test(code)) return { reason: 'offline', status: null, detail: null };
+  if (status === 404 || status === 401) return { reason: 'private', status, detail: null };
+  if (status === 403 || status === 429) return { reason: 'refused', status, detail: null };
+  const line = message.split('\n').map((one) => one.trim()).find(Boolean) ?? code;
+  return { reason: 'other', status, detail: line.slice(0, 160) };
+}
+
 function notesOf(raw: unknown): string | null {
   if (typeof raw === 'string') return raw.trim() || null;
   if (Array.isArray(raw)) {
@@ -79,6 +104,7 @@ function notesOf(raw: unknown): string | null {
 export function createAppUpdates(deps: AppUpdatesDeps): AppUpdates {
   const { updater } = deps;
   let offer: AppUpdateView | null = null;
+  let failed: AppCheckView | null = null;
   let restarting: Promise<void> | undefined;
   if (updater) {
     updater.on('download-progress', (progress) => {
@@ -99,6 +125,7 @@ export function createAppUpdates(deps: AppUpdatesDeps): AppUpdates {
       updater.autoInstallOnAppQuit = auto;
       try {
         const found = await updater.checkForUpdates();
+        failed = null;
         // A download in the background that fails is said by the updater's 'error': never a rejection left unhandled,
         // which would close the app without saving its memory (review of phase 13).
         void found?.downloadPromise?.catch(() => undefined);
@@ -114,10 +141,12 @@ export function createAppUpdates(deps: AppUpdatesDeps): AppUpdates {
         return offer;
       } catch (error) {
         deps.log(`[bonaparte] the app's update could not be checked: ${error instanceof Error ? error.message : String(error)}`);
+        failed = checkFailure(error);
         return offer;
       }
     },
     state: () => offer,
+    failure: () => failed,
     restart() {
       if (!updater || !offer) return Promise.resolve();
       restarting ??= (async () => {
@@ -137,18 +166,22 @@ export function createAppUpdates(deps: AppUpdatesDeps): AppUpdates {
   };
 }
 
-/** A test run's update, read from `BONAPARTE_E2E_UPDATE` (`{ version, bytes?, notes? }`); restarting only counts. */
+/**
+ * A test run's update, read from `BONAPARTE_E2E_UPDATE` (`{ version, bytes?, notes? }`); restarting only counts. Or a
+ * check that fails as electron-updater's would: `{ fail: { message?, statusCode?, code? } }`.
+ */
 export function fakeUpdater(env: Record<string, string | undefined>): UpdaterLike | null {
   const raw = env['BONAPARTE_E2E_UPDATE'];
   if (!raw) return null;
-  let offer: { version?: unknown; bytes?: unknown; notes?: unknown };
+  let offer: { version?: unknown; bytes?: unknown; notes?: unknown; fail?: { message?: unknown; statusCode?: unknown; code?: unknown } };
   try {
     offer = JSON.parse(raw) as typeof offer;
   } catch {
     return null;
   }
-  if (typeof offer.version !== 'string') return null;
-  const version = offer.version;
+  const fail = offer.fail && typeof offer.fail === 'object' ? offer.fail : null;
+  if (typeof offer.version !== 'string' && !fail) return null;
+  const version = typeof offer.version === 'string' ? offer.version : '0.0.0';
   const bytes = typeof offer.bytes === 'number' ? offer.bytes : 0;
   const notes = typeof offer.notes === 'string' ? offer.notes : null;
   const fake = new (class extends EventEmitter {
@@ -156,6 +189,10 @@ export function fakeUpdater(env: Record<string, string | undefined>): UpdaterLik
     autoInstallOnAppQuit = false;
     restarted = 0;
     async checkForUpdates() {
+      if (fail) {
+        const error = new Error(typeof fail.message === 'string' ? fail.message : 'HttpError');
+        throw Object.assign(error, typeof fail.statusCode === 'number' ? { statusCode: fail.statusCode } : {}, typeof fail.code === 'string' ? { code: fail.code } : {});
+      }
       return { updateInfo: { version, releaseNotes: notes, files: [{ size: bytes }] } };
     }
     async downloadUpdate() {

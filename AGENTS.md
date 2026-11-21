@@ -1034,7 +1034,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `BONAPARTE_E2E_UPDATE`, `__bonaparteUpdater`). Nothing installs under a
   reply (`core.whenIdle()`, the supervisor's `whenFree`). `autoUpdateApp`:
   downloaded in the background, installed at the next quit. The entry is in
-  the sidebar and the rail, only when one is ready.
+  the sidebar and the rail when one is ready, or when the app's own check
+  failed (audit 2026-11-21, N4): `checkFailure` names why (`private` — the
+  releases of a private repository answer 404 to an app with no token —,
+  `offline`, `unpublished`, `refused`, or `other` with the updater's first
+  line), `UpdatesView.appCheck` carries it, and the dialog says it in words
+  (`dialogs/app-check.ts`), never « erreur inconnue ». A test run fails its
+  check with `BONAPARTE_E2E_UPDATE` `{ "fail": { statusCode, message } }`.
 - **What runs on Windows** (`core/src/process/spawn.ts`, audit 13.4): a
   bare program name is resolved on the PATH's full entries only (`.com`,
   `.exe`, the name with a dot as Windows completes it), never in the folder

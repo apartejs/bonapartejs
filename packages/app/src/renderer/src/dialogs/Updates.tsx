@@ -22,6 +22,7 @@ import { formatBytes, formatDuration } from '../format';
 import type { Messages } from '../i18n/index';
 import { BICORNE } from '../logo/Mascot';
 import { Icon, type IconName } from '../shell/icons';
+import { appCheckLine } from './app-check';
 
 export interface UpdatesProps {
   messages: Messages;
@@ -129,6 +130,8 @@ export function UpdatesDialog({ messages, locale, open, onClose }: UpdatesProps)
   };
 
   const count = updatesCount(view);
+  // The app's own update that could not be checked (audit N4): said above what is ready, in words.
+  const checkLine = view?.appCheck ? appCheckLine(words, view.appCheck) : null;
   return (
     <dialog ref={dialog} className="aparte-dialog updates-dialog" aria-labelledby={titleId} onClose={onClose}>
       <header className="aparte-dialog__header updates-dialog__header">
@@ -140,7 +143,13 @@ export function UpdatesDialog({ messages, locale, open, onClose }: UpdatesProps)
         </button>
       </header>
       <div className="aparte-dialog__body updates-dialog__body">
-        <p className="updates-dialog__intro">{count > 0 ? words.intro(count) : words.none}</p>
+        {checkLine ? (
+          <p className="aparte-alert aparte-alert--warning updates-dialog__check" role="note">
+            <Icon name="alert" />
+            <span>{checkLine}</span>
+          </p>
+        ) : null}
+        <p className="updates-dialog__intro">{count > 0 ? words.intro(count) : checkLine ? words.noneElse : words.none}</p>
         {count > 0 ? (
           <ul className="updates-dialog__list">
             {view?.app ? (

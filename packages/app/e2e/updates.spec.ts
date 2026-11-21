@@ -84,3 +84,20 @@ test('a new version of a model: its download, the conversations it makes to read
   await dialog.getByRole('button', { name: 'Fermer' }).click();
   await expect(page.getByRole('button', { name: /^Mises à jour/ })).toHaveCount(0);
 });
+
+test('the app’s own update that cannot be checked is said: a private repository sends the person to the releases (audit N4)', async ({ launch }) => {
+  // What electron-updater throws when the repository is private: its releases feed answers 404 to an app with no token.
+  const fail = JSON.stringify({ fail: { statusCode: 404, message: 'HttpError: 404 "method: GET url: https://github.com/apartejs/bonapartejs/releases.atom"' } });
+  const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_UPDATE: fail } });
+  // Nothing is ready, but the entry is there: a check that fails is never silence.
+  const entry = page.getByRole('button', { name: 'Mises à jour, l’app n’a pas pu être vérifiée' });
+  await expect(entry).toBeVisible({ timeout: 15_000 });
+  await entry.click();
+  const dialog = page.getByRole('dialog', { name: 'Mises à jour' });
+  await expect(dialog.getByRole('note')).toHaveText(
+    'La mise à jour de l’app n’a pas pu être vérifiée : les releases de bonaparte sont dans un dépôt GitHub privé, que l’app ne peut pas lire. Télécharge le nouvel installeur depuis les releases du dépôt, connecté à GitHub.',
+  );
+  await expect(dialog).toContainText('Rien d’autre à mettre à jour pour l’instant.');
+  await expect(dialog).not.toContainText(/inconnu/);
+  await expect(dialog.locator('.update-card')).toHaveCount(0);
+});

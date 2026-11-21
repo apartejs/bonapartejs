@@ -1274,6 +1274,17 @@ export const en: Messages = {
     autoHint: 'The engine and the model always ask.',
     note: 'Nothing installs while a conversation is working: the update waits for the end of the turn.',
     failed: (detail) => `The update did not go through: ${detail}`,
+    openFailed: 'Updates, the app could not be checked',
+    noneElse: 'Nothing else to update for now.',
+    appCheck: (why) => `The app’s update could not be checked: ${why}`,
+    appCheckWhy: {
+      private:
+        'bonaparte’s releases are in a private GitHub repository, which the app cannot read. Download the new installer from the repository’s releases, signed in to GitHub.',
+      offline: 'no network. It is checked again each time this window opens, and every six hours.',
+      unpublished: 'no version is published on GitHub yet (a draft release does not count).',
+      refused: (status) => `GitHub refused the request (HTTP ${status}), most likely too many requests in a short time. It is checked again in six hours.`,
+      other: (detail, status) => `the updater says “${detail}”${status === null ? '' : ` (HTTP ${status})`}.`,
+    },
   },
   conversationSettings: {
     menu: 'Conversation settings…',

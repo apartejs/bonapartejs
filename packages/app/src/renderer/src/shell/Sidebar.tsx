@@ -71,7 +71,8 @@ export interface SidebarProps {
   /** « À traiter » (task 8.4): what waits for the person, counted; the page open. */
   inbox: { count: number; open: boolean; onOpen(): void };
   /** « Mises à jour » (task 13.1): shown only when one is ready. */
-  updates?: { count: number; onOpen(): void };
+  /** What is ready, and whether the app's own update could not be checked (audit N4): either shows the entry. */
+  updates?: { count: number; checkFailed?: boolean; onOpen(): void };
 }
 
 /** A row as the list draws it: the conversation, where its memory is, its branch's files. */
@@ -321,13 +322,22 @@ export function Sidebar(props: SidebarProps) {
         )}
       </div>
       <EngineCard engine={props.engine} messages={messages} resources={props.resources ?? null} {...(props.locale ? { locale: props.locale } : {})} />
-      {props.updates && props.updates.count > 0 ? (
-        <button type="button" className="bonaparte-settings-link bonaparte-updates-link" aria-label={messages.updates.openCount(props.updates.count)} onClick={props.updates.onOpen}>
+      {props.updates && (props.updates.count > 0 || props.updates.checkFailed) ? (
+        <button
+          type="button"
+          className="bonaparte-settings-link bonaparte-updates-link"
+          aria-label={props.updates.count > 0 ? messages.updates.openCount(props.updates.count) : messages.updates.openFailed}
+          onClick={props.updates.onOpen}
+        >
           <Icon name="update" />
           {messages.updates.open}
-          <span className="bonaparte-inbox-entry__count" aria-hidden="true">
-            {props.updates.count}
-          </span>
+          {props.updates.count > 0 ? (
+            <span className="bonaparte-inbox-entry__count" aria-hidden="true">
+              {props.updates.count}
+            </span>
+          ) : (
+            <span className="aparte-badge aparte-badge--dot aparte-badge--warning bonaparte-updates-link__dot" aria-hidden="true" />
+          )}
         </button>
       ) : null}
       <button type="button" className="bonaparte-settings-link" onClick={props.onSettings}>

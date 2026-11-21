@@ -1194,6 +1194,18 @@ export interface Messages {
     autoHint: string;
     note: string;
     failed(detail: string): string;
+    /** The sidebar's entry when nothing is ready but the app's own update could not be checked (audit N4). */
+    openFailed: string;
+    /** The intro under that line, when nothing else is ready either. */
+    noneElse: string;
+    appCheck(why: string): string;
+    appCheckWhy: {
+      private: string;
+      offline: string;
+      unpublished: string;
+      refused(status: number): string;
+      other(detail: string, status: number | null): string;
+    };
   };
   conversationSettings: {
     menu: string;

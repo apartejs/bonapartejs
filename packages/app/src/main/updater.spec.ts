@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
-import { createAppUpdates, fakeUpdater, updaterKind, type UpdaterLike } from './updater.js';
+import { checkFailure, createAppUpdates, fakeUpdater, updaterKind, type UpdaterLike } from './updater.js';
 
 class Updater extends EventEmitter implements UpdaterLike {
   autoDownload = true;
@@ -155,5 +155,73 @@ describe('which updater runs (the Store, review of the distribution)', () => {
     expect(updaterKind({ e2e: false, packaged: true, windowsStore: true })).toBe('none');
     expect(updaterKind({ e2e: false, packaged: false, windowsStore: false })).toBe('none');
     expect(updaterKind({ e2e: true, packaged: false, windowsStore: false })).toBe('test');
+  });
+});
+
+/** An error as electron-updater throws it: builder-util-runtime's `HttpError` has `statusCode`, `newError` a `code`. */
+const updaterError = (message: string, extra: { statusCode?: number; code?: string } = {}): Error => Object.assign(new Error(message), extra);
+
+describe('the app’s update that cannot be checked is said, in words (audit 2026-11-21, N4)', () => {
+  it('a private repository: its releases feed answers 404 (or 401) to an app that has no token', () => {
+    expect(checkFailure(updaterError('404 "method: GET url: https://github.com/apartejs/bonapartejs/releases.atom"', { statusCode: 404 }))).toEqual({ reason: 'private', status: 404, detail: null });
+    expect(checkFailure(updaterError('HttpError: 401 Unauthorized', { statusCode: 401 }))).toMatchObject({ reason: 'private', status: 401 });
+    // The status inside the message when the updater wrapped it.
+    expect(checkFailure(updaterError('Cannot parse: HttpError: 404 \n"method: GET"'))).toMatchObject({ reason: 'private', status: 404 });
+  });
+
+  it('no network: Chromium’s and Node’s own words', () => {
+    for (const message of ['net::ERR_INTERNET_DISCONNECTED', 'net::ERR_NAME_NOT_RESOLVED', 'net::ERR_CONNECTION_TIMED_OUT', 'getaddrinfo ENOTFOUND github.com']) {
+      expect(checkFailure(updaterError(message)), message).toEqual({ reason: 'offline', status: null, detail: null });
+    }
+    expect(checkFailure(updaterError('connect', { code: 'ECONNREFUSED' }))).toMatchObject({ reason: 'offline' });
+  });
+
+  it('nothing published yet: a draft, or a release without its latest.yml', () => {
+    expect(checkFailure(updaterError('No published versions on GitHub', { code: 'ERR_UPDATER_NO_PUBLISHED_VERSIONS' }))).toMatchObject({ reason: 'unpublished' });
+    expect(checkFailure(updaterError('Cannot find latest.yml in the latest release artifacts: HttpError: 404', { code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' }))).toMatchObject({ reason: 'unpublished' });
+    expect(checkFailure(updaterError('Unable to find latest version on GitHub: HttpError: 404', { code: 'ERR_UPDATER_LATEST_VERSION_NOT_FOUND' }))).toMatchObject({ reason: 'unpublished' });
+  });
+
+  it('GitHub refusing (403, 429: too many requests) keeps its status', () => {
+    expect(checkFailure(updaterError('rate limited', { statusCode: 403 }))).toEqual({ reason: 'refused', status: 403, detail: null });
+    expect(checkFailure(updaterError('slow down', { statusCode: 429 }))).toMatchObject({ reason: 'refused', status: 429 });
+  });
+
+  it('anything else gives its own first line, cut short — never « erreur inconnue »', () => {
+    expect(checkFailure(updaterError(`sha512 checksum mismatch\n${'x'.repeat(500)}`))).toEqual({ reason: 'other', status: null, detail: 'sha512 checksum mismatch' });
+    expect(checkFailure(updaterError('y'.repeat(400))).detail).toHaveLength(160);
+    expect(checkFailure('a string thrown')).toEqual({ reason: 'other', status: null, detail: 'a string thrown' });
+    expect(checkFailure(updaterError('server error', { statusCode: 502 }))).toEqual({ reason: 'other', status: 502, detail: 'server error' });
+  });
+
+  it('the updater keeps why its last check failed, and forgets it once a check succeeds', async () => {
+    const updater = new Updater({ version: '1.1.0' });
+    const succeed = updater.checkForUpdates.bind(updater);
+    updater.checkForUpdates = async () => {
+      throw updaterError('404', { statusCode: 404 });
+    };
+    const updates = createAppUpdates(deps(updater));
+    expect(updates.failure()).toBeNull();
+    expect(await updates.check()).toBeNull();
+    expect(updates.failure()).toEqual({ reason: 'private', status: 404, detail: null });
+    updater.checkForUpdates = succeed;
+    expect(await updates.check()).toMatchObject({ version: '1.1.0' });
+    expect(updates.failure()).toBeNull();
+  });
+
+  it('a build that does not update itself has nothing to say', async () => {
+    const updates = createAppUpdates(deps(null));
+    await updates.check();
+    expect(updates.failure()).toBeNull();
+  });
+
+  it('a test run fails its check as asked: `BONAPARTE_E2E_UPDATE` `{ "fail": { "statusCode": 404 } }`', async () => {
+    const fake = fakeUpdater({ BONAPARTE_E2E_UPDATE: JSON.stringify({ fail: { statusCode: 404, message: 'HttpError: 404' } }) })!;
+    const updates = createAppUpdates(deps(fake));
+    expect(await updates.check()).toBeNull();
+    expect(updates.failure()).toEqual({ reason: 'private', status: 404, detail: null });
+    const offline = createAppUpdates(deps(fakeUpdater({ BONAPARTE_E2E_UPDATE: JSON.stringify({ fail: { message: 'net::ERR_INTERNET_DISCONNECTED' } }) })));
+    await offline.check();
+    expect(offline.failure()).toMatchObject({ reason: 'offline' });
   });
 });

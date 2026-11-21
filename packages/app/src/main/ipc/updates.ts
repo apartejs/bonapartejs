@@ -13,7 +13,8 @@ export type UpdatesCore = Pick<Core, 'updates' | 'updateLlamaCpp' | 'updateModel
 
 export async function readUpdates(core: UpdatesCore, app: AppUpdates | null, current: string, check: boolean): Promise<UpdatesView> {
   const [view, offer] = await Promise.all([core.updates({ check }), app ? (check ? app.check() : Promise.resolve(app.state())) : Promise.resolve(null)]);
-  return { current, app: offer, llama: view.llama, models: view.models, busy: view.busy };
+  // Read after the check: it is what says whether the app's own update could be checked (audit N4).
+  return { current, app: offer, appCheck: app?.failure() ?? null, llama: view.llama, models: view.models, busy: view.busy };
 }
 
 export function registerUpdateChannels(

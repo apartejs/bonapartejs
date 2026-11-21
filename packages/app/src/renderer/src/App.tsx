@@ -345,13 +345,20 @@ function Workspace({
   }, []);
   // « Réglages de la conversation… » (task 12.4): the conversation its dialog is open on.
   const [settingsOf, setSettingsOf] = useState<string | null>(null);
-  // « Mises à jour » (task 13.1): how many are ready, read at start, when the main process says so, and as the dialog closes.
+  // « Mises à jour » (task 13.1): how many are ready, read at start, when the main process says so, and as the dialog closes;
+  // and whether the app's own update could not be checked (audit N4), never silence.
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const [updatesReady, setUpdatesReady] = useState(0);
+  const [updatesCheckFailed, setUpdatesCheckFailed] = useState(false);
   useEffect(() => {
     if (updatesOpen) return;
     let live = true;
-    const read = (): void => void bridge.invoke(updatesList, { check: false }).then((view) => live && setUpdatesReady(updatesCount(view)));
+    const read = (): void =>
+      void bridge.invoke(updatesList, { check: false }).then((view) => {
+        if (!live) return;
+        setUpdatesReady(updatesCount(view));
+        setUpdatesCheckFailed(view.appCheck !== null);
+      });
     read();
     const off = bridge.on((event) => {
       if (event.kind === 'updates') read();
@@ -1482,7 +1489,7 @@ function Workspace({
           onSearch={() => setSearching(true)}
           onOpen={(id) => goTo(id)}
           onSettings={() => setSettingsPage('general')}
-          updates={{ count: updatesReady, onOpen: () => setUpdatesOpen(true) }}
+          updates={{ count: updatesReady, checkFailed: updatesCheckFailed, onOpen: () => setUpdatesOpen(true) }}
         />
       ) : (
         <Sidebar
@@ -1521,7 +1528,7 @@ function Workspace({
             },
           }}
           onSettings={() => setSettingsPage('general')}
-          updates={{ count: updatesReady, onOpen: () => setUpdatesOpen(true) }}
+          updates={{ count: updatesReady, checkFailed: updatesCheckFailed, onOpen: () => setUpdatesOpen(true) }}
         />
       )}
       <SearchPalette

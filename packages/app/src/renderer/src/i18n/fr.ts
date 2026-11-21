@@ -1277,6 +1277,17 @@ export const fr: Messages = {
     autoHint: 'Le moteur et le modèle demandent toujours.',
     note: 'Rien ne s’installe pendant qu’une conversation travaille : la mise à jour attend la fin du tour.',
     failed: (detail) => `La mise à jour n’a pas abouti : ${detail}`,
+    openFailed: 'Mises à jour, l’app n’a pas pu être vérifiée',
+    noneElse: 'Rien d’autre à mettre à jour pour l’instant.',
+    appCheck: (why) => `La mise à jour de l’app n’a pas pu être vérifiée : ${why}`,
+    appCheckWhy: {
+      private:
+        'les releases de bonaparte sont dans un dépôt GitHub privé, que l’app ne peut pas lire. Télécharge le nouvel installeur depuis les releases du dépôt, connecté à GitHub.',
+      offline: 'pas de réseau. Elle est vérifiée de nouveau à chaque ouverture de cette fenêtre, et toutes les six heures.',
+      unpublished: 'aucune version n’est encore publiée sur GitHub (une release en brouillon ne compte pas).',
+      refused: (status) => `GitHub a refusé la demande (HTTP ${status}), sans doute trop de demandes en peu de temps. Elle est vérifiée de nouveau dans six heures.`,
+      other: (detail, status) => `le programme de mise à jour dit « ${detail} »${status === null ? '' : ` (HTTP ${status})`}.`,
+    },
   },
   conversationSettings: {
     menu: 'Réglages de la conversation…',

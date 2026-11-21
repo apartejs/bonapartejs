@@ -36,7 +36,7 @@ export interface RailProps {
   onOpen(id: string): void;
   onSettings(): void;
   /** « Mises à jour » (task 13.1): shown only when one is ready. */
-  updates?: { count: number; onOpen(): void };
+  updates?: { count: number; checkFailed?: boolean; onOpen(): void };
 }
 
 type RailState = 'waiting' | 'queued' | 'running' | 'unread' | null;
@@ -97,8 +97,14 @@ export function Rail(props: RailProps) {
           </span>
         </span>
       ) : null}
-      {props.updates && props.updates.count > 0 ? (
-        <TipButton label={messages.updates.openCount(props.updates.count)} icon="update" side="end" className="bonaparte-updates-link" onClick={props.updates.onOpen} />
+      {props.updates && (props.updates.count > 0 || props.updates.checkFailed) ? (
+        <TipButton
+          label={props.updates.count > 0 ? messages.updates.openCount(props.updates.count) : messages.updates.openFailed}
+          icon="update"
+          side="end"
+          className="bonaparte-updates-link"
+          onClick={props.updates.onOpen}
+        />
       ) : null}
       <TipButton label={messages.settings.open} icon="settings" side="end" onClick={props.onSettings} />
     </nav>
