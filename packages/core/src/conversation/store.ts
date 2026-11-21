@@ -41,6 +41,8 @@ export interface ConversationMeta {
   pluginTools?: boolean;
   /** The project's instructions as the model last read them: a change is appended as a note (task 4.7). */
   instructions?: string;
+  /** The characters they were cut to when the model last read them — the context it was frozen or told for (review of round 3, 11). */
+  instructionsBudget?: number;
   /** Its last going back, while it can still be undone — until its next turn begins (task 7.1). */
   rewound?: { what: 'both' | 'conversation' | 'code'; fromBranchId: string; branchId: string; asTurn: string };
   createdAt: string;

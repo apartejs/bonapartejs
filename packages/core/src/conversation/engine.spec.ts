@@ -955,6 +955,29 @@ describe('ConversationEngine — the project instructions', () => {
     expect((await store.get(meta.id))?.instructions).toBe(text);
   });
 
+  it('an edit within the cut the model read is told after its context shrank, though past the cut of the new one (review of round 3, 11)', async () => {
+    const rules = (changed: number): string =>
+      '(from AGENTS.md)\n' + Array.from({ length: 2000 }, (_, index) => `Rule ${index + 1}${index + 1 === changed ? ', changed' : ''}.`).join('\n');
+    let text = rules(0);
+    const { store, prompts, conversation, say } = await rig({ live: { ...LIVE, nCtx: 32_768 }, instructions: async () => text });
+    const meta = await conversation();
+    await say(meta.id, 'Bonjour');
+    // Frozen at 32 k: about 15 700 characters read — line 1 200 among them.
+    expect(prompts.at(-1)).toContain('Rule 1200.');
+    // The context drops to 16 k, whose cut (about 7 900 characters) stops before line 1 200: nothing to tell yet.
+    await store.update(meta.id, { contextCap: 16_384 });
+    await say(meta.id, 'Encore');
+    expect(prompts.at(-1)).not.toContain('[project update]');
+    // Line 1 200 changes: the model read it, so it is told — the cut of now, with the line to read on from.
+    text = rules(1200);
+    await say(meta.id, 'Et puis ?');
+    expect(prompts.at(-1)).toContain('[project update]');
+    expect(prompts.at(-1)).toMatch(/is cut after line \d+/);
+    // Told once.
+    await say(meta.id, 'Et alors ?');
+    expect((await openJournal(store.dir, meta.id)).entries().filter((entry) => entry.kind === 'delta')).toHaveLength(1);
+  });
+
   it('a conversation frozen with the first version’s cut is not told its instructions again (audit I2)', async () => {
     const full = '(from AGENTS.md)\n' + 'Rule.\n'.repeat(5000);
     const { store, prompts, conversation, say } = await rig({ instructions: async () => full });

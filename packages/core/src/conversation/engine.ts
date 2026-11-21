@@ -914,7 +914,7 @@ export class ConversationEngine {
 
     // The system prompt frozen again, with the truth of the moment: every note folded in.
     const instructions = this.deps.instructions ? ((await this.deps.instructions(meta)) ?? '') : undefined;
-    const { asked: decor, prompt } = await this.systemPrompt(meta, family, instructions, window);
+    const { asked: decor, prompt, budget } = await this.systemPrompt(meta, family, instructions, window);
     const stable = family.renderSystem(prompt.stable);
     // Folded on itself, the turn reads on from its message, its model's turn opened as its first answer opened it, then
     // its last answer and the results it waits on — as it was frozen.
@@ -950,7 +950,7 @@ export class ConversationEngine {
       tools: [...decor.tools],
       rendered,
     });
-    if (instructions !== undefined) await this.deps.store.update(meta.id, { instructions });
+    if (instructions !== undefined) await this.deps.store.update(meta.id, { instructions, instructionsBudget: budget });
     // The memory of the old prompt serves nothing any more.
     await this.deps.kv.forget(key);
     // Two figures of one kind, the engine's: what it held before, as the gauge said it (three characters a token gave
@@ -1310,14 +1310,15 @@ export class ConversationEngine {
   private async systemPrompt(meta: ConversationMeta, family: FamilyLayer, instructions: string | undefined, window: number) {
     const asked = this.deps.prompt(meta);
     const environment = this.deps.environment ? await this.deps.environment(meta).catch(() => undefined) : undefined;
-    const said = instructions ? cutInstructions(instructions, instructionsBudget(window)) : '';
+    const budget = instructionsBudget(window);
+    const said = instructions ? cutInstructions(instructions, budget) : '';
     const prompt = buildSystemPrompt({
       ...asked,
       family,
       ...(environment ? { environment } : {}),
       ...(said ? { projectInstructions: said } : {}),
     });
-    return { asked, prompt };
+    return { asked, prompt, budget };
   }
 
   /** The context a turn of this conversation has: its own cap, else the engine's (tokens; infinite when unknown). */
@@ -1448,21 +1449,29 @@ export class ConversationEngine {
     meta: ConversationMeta,
     entries: readonly JournalEntry[],
     options: { family: FamilyLayer; window: number; instructions: string | undefined; tools?: TurnTools },
-  ): Promise<{ notes: NewJournalEntry[]; instructions?: string }> {
+  ): Promise<{ notes: NewJournalEntry[]; instructions?: string; instructionsBudget?: number }> {
     const { family, window, instructions } = options;
     const notes: NewJournalEntry[] = [];
     const note = (delta: Extract<NewJournalEntry, { kind: 'delta' }>['delta']): void => {
       notes.push({ kind: 'delta', delta, rendered: family.renderSystemNote(delta.text) });
     };
     let recorded: string | undefined;
+    let toldBudget: number | undefined;
     if (instructions !== undefined && !sameInstructions(meta.instructions ?? '', instructions)) {
       // The instructions changed since the model read them: a note, appended — the frozen text stays as it was.
-      // Compared as the model reads them, cut to this context; the whole text recorded still (review of round 2, 9).
+      // Compared as the model reads them: what it read, cut to the context it read them for, beside what it would read
+      // now — never less than that, so that a context that shrank hides no edit it read (review of round 2, 9; round 3,
+      // 11). Told cut to this context; the whole text recorded still.
       const budget = instructionsBudget(window);
-      const seen = cutInstructions(meta.instructions ?? '', budget);
-      const now = cutInstructions(instructions, budget);
-      const delta = sameInstructions(seen, now) ? null : renderInstructionsDelta(seen, now);
-      if (delta) note(delta);
+      const read = meta.instructionsBudget ?? budget;
+      const seen = cutInstructions(meta.instructions ?? '', read);
+      const delta = sameInstructions(seen, cutInstructions(instructions, Math.max(read, budget)))
+        ? null
+        : renderInstructionsDelta(seen, cutInstructions(instructions, budget));
+      if (delta) {
+        note(delta);
+        toldBudget = budget;
+      }
       recorded = instructions;
     }
     const asked = this.deps.prompt(meta);
@@ -1495,7 +1504,7 @@ export class ConversationEngine {
     const toldLanguage = lastToldReplyLanguage(entries);
     const reply = toldLanguage === undefined || !language ? null : renderReplyLanguageDelta(toldLanguage, language);
     if (reply) note({ ...reply, language });
-    return { notes, ...(recorded !== undefined ? { instructions: recorded } : {}) };
+    return { notes, ...(recorded !== undefined ? { instructions: recorded } : {}), ...(toldBudget !== undefined ? { instructionsBudget: toldBudget } : {}) };
   }
 
   /**
@@ -1511,7 +1520,7 @@ export class ConversationEngine {
     const { family } = engine;
     // The context the target runs with: its own, else the one its load takes (review of round 2, 3).
     const window = this.windowOf(meta, engine, engine.nCtx || engine.live?.nCtx || undefined);
-    const { asked, prompt } = await this.systemPrompt(meta, family, instructions, window);
+    const { asked, prompt, budget } = await this.systemPrompt(meta, family, instructions, window);
     const stable = family.renderSystem(prompt.stable);
     const written = branchModel(entries).family;
     const rendered = rerenderConversation(entries, {
@@ -1519,7 +1528,7 @@ export class ConversationEngine {
       head: stable + family.renderSystemNote(prompt.project),
       from: written ? familyLayer(written) : family,
     });
-    return { asked, stable, rendered };
+    return { asked, stable, rendered, budget };
   }
 
   /**
@@ -1563,7 +1572,7 @@ export class ConversationEngine {
       const entries = journal.entries();
       if (!entries.some((entry) => entry.kind === 'system')) return created;
       const instructions = this.deps.instructions ? ((await this.deps.instructions(created)) ?? '') : undefined;
-      const { asked, stable, rendered } = await this.refreezeFor(created, entries, target, instructions);
+      const { asked, stable, rendered, budget } = await this.refreezeFor(created, entries, target, instructions);
       await journal.append({
         kind: 'engine',
         engineId: created.engineId,
@@ -1575,7 +1584,7 @@ export class ConversationEngine {
         tools: [...asked.tools],
         rendered,
       });
-      return instructions === undefined ? created : this.deps.store.update(created.id, { instructions });
+      return instructions === undefined ? created : this.deps.store.update(created.id, { instructions, instructionsBudget: budget });
     });
   }
 
@@ -1594,7 +1603,7 @@ export class ConversationEngine {
     const last = entries.at(-1);
     const moved = last ? await this.fork(meta, journal, last.id, { memory: false }) : { meta, journal };
     const target = Number.isFinite(engineWindow) ? { ...engine, nCtx: engineWindow } : engine;
-    const { asked, stable, rendered } = await this.refreezeFor(moved.meta, entries, target, instructions);
+    const { asked, stable, rendered, budget } = await this.refreezeFor(moved.meta, entries, target, instructions);
     await moved.journal.append({
       kind: 'engine',
       engineId: meta.engineId,
@@ -1608,7 +1617,7 @@ export class ConversationEngine {
     });
     const updated = await this.deps.store.update(meta.id, {
       ...(engine.modelPath ? { modelId: engine.modelPath } : {}),
-      ...(instructions !== undefined ? { instructions } : {}),
+      ...(instructions !== undefined ? { instructions, instructionsBudget: budget } : {}),
     });
     return { meta: updated, journal: moved.journal };
   }
@@ -1640,7 +1649,7 @@ export class ConversationEngine {
     // A branch frozen again (a change of model) has its system turn in that entry: one started on a service has
     // no other, and never reads a second one after the person's message (review of phase 9).
     if (!journal.entries().some((entry) => entry.kind === 'system' || (isRefrozen(entry) && entry.rendered !== undefined))) {
-      const { asked, prompt } = await this.systemPrompt(meta, family, instructions, window);
+      const { asked, prompt, budget } = await this.systemPrompt(meta, family, instructions, window);
       await journal.append({
         kind: 'system',
         rendered: family.renderSystem(prompt.stable),
@@ -1651,7 +1660,7 @@ export class ConversationEngine {
         family: family.id,
       });
       await journal.append({ kind: 'system', rendered: family.renderSystemNote(prompt.project) });
-      if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions });
+      if (instructions !== undefined) meta = await this.deps.store.update(id, { instructions, instructionsBudget: budget });
     }
     // What the branch froze before this turn: a state saved after it is not behind for the notes this turn
     // appends next — they are read with the message, as it is.
@@ -1685,7 +1694,12 @@ export class ConversationEngine {
         }
       }
       for (const note of pending.notes) await journal.append(note);
-      if (pending.instructions !== undefined) meta = await this.deps.store.update(id, { instructions: pending.instructions });
+      if (pending.instructions !== undefined) {
+        meta = await this.deps.store.update(id, {
+          instructions: pending.instructions,
+          ...(pending.instructionsBudget !== undefined ? { instructionsBudget: pending.instructionsBudget } : {}),
+        });
+      }
     }
     const entries = journal.entries();
     const stable = stableOf(entries);

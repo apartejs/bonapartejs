@@ -646,7 +646,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   change of model: the target's; not known: 8 k), cut after a whole line
   with a note naming the file — the first folder's relative, another's
   absolute — and the line to read on from; a change past the cut tells
-  nothing. The five tools that make a plugin
+  nothing — the cut the model read, kept beside its text
+  (`ConversationMeta.instructionsBudget`), even once the context shrank. The five tools that make a plugin
   are out of the inventory unless « Plugins créés en conversation » is on
   or the conversation asked (« / plugin », `pluginTools`); `ask_user` is
   told in one paragraph (`deltas.ts`), never its schema; a turn on 16 k or
