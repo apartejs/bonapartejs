@@ -156,17 +156,25 @@ export function planTurnFold(entries: readonly JournalEntry[], estimate: (text: 
   if (entries.at(-1)?.kind === 'pending') throw new CompactionError('pending', 'A call waits for an answer: answer it before compacting.');
   const userAt = entries.findLastIndex((entry) => entry.kind === 'user');
   const lastAt = entries.findLastIndex((entry) => entry.kind === 'assistant');
-  const round = entries.slice(lastAt);
+  // The last round: the model's last answer and what answered its calls — the results, and on a resume the pause and
+  // the person's answers (rendered empty) —, never a rebase made after it, which kept this turn whole and left no room.
+  const round = entries.slice(lastAt).filter((entry) => !isRefrozen(entry));
   const earlier = entries
     .slice(userAt + 1, lastAt)
     .filter((entry): entry is Extract<JournalEntry, { kind: 'assistant' }> => entry.kind === 'assistant');
-  if (userAt < 0 || lastAt <= userAt || earlier.length === 0 || round.length < 2 || !round.slice(1).every((entry) => entry.kind === 'tool-results')) {
+  const answers = round.slice(1);
+  if (
+    userAt < 0 ||
+    lastAt <= userAt ||
+    earlier.length === 0 ||
+    !answers.some((entry) => entry.kind === 'tool-results') ||
+    !answers.every((entry) => entry.kind === 'tool-results' || entry.kind === 'pending' || entry.kind === 'outcomes')
+  ) {
     throw new CompactionError('not-worth', 'This turn has no earlier call to fold: nothing was compacted.');
   }
-  const { part, folded } = conversationPart(entries.slice(0, lastAt));
   const weigh = (list: readonly JournalEntry[]): number => estimate(list.map((entry) => entry.rendered ?? '').join(''));
   const user = entries[userAt] as Extract<JournalEntry, { kind: 'user' }>;
-  const compactedTokens = weigh([...folded, ...part.filter((entry) => entry.id !== user.id)]);
+  const compactedTokens = foldedWeight(entries.slice(0, lastAt), user, estimate, weigh);
   if (compactedTokens < MIN_FOLDED_ROUND_TOKENS) {
     throw new CompactionError('not-worth', 'This turn has too little to fold for a summary to be worth it: nothing was compacted.');
   }
@@ -177,7 +185,31 @@ export function planTurnFold(entries: readonly JournalEntry[], estimate: (text: 
     askedUntil: lastAt,
     kept: [user, ...round],
     keptTurns: 1,
-    compactedTurns: part.filter((entry) => entry.kind === 'user' && entry.id !== user.id).length,
+    compactedTurns: conversationPart(entries.slice(0, lastAt)).part.filter((entry) => entry.kind === 'user' && entry.id !== user.id).length,
     compactedTokens,
   };
+}
+
+/**
+ * What a fold replaces of the text before the turn's last round: the conversation's part but the turn's message — or,
+ * after a rebase of this same turn (an earlier fold, or the turn kept whole), the summary it carries and what it kept
+ * after the message, with what came since (review of round 3, 2).
+ */
+function foldedWeight(
+  before: readonly JournalEntry[],
+  user: JournalEntry,
+  estimate: (text: string) => number,
+  weigh: (list: readonly JournalEntry[]) => number,
+): number {
+  const userAt = before.indexOf(user);
+  const rebaseAt = before.findLastIndex(isRefrozen);
+  const rebase = before[rebaseAt];
+  if (rebase?.kind === 'rebase' && rebaseAt > userAt && rebase.keptFrom === user.id) {
+    const text = rebase.rendered ?? '';
+    const at = text.indexOf(user.rendered ?? '', (rebase.stable ?? '').length);
+    const kept = at < 0 ? text.slice((rebase.stable ?? '').length) : text.slice(at + (user.rendered ?? '').length);
+    return estimate(rebase.summary + kept) + weigh(before.slice(rebaseAt + 1));
+  }
+  const { part, folded } = conversationPart(before);
+  return weigh([...folded, ...part.filter((entry) => entry.id !== user.id)]);
 }

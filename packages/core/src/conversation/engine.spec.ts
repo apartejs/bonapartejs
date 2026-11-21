@@ -1119,6 +1119,58 @@ describe('ConversationEngine — the context runs out (audit 2026-11-21, D2)', (
       expect(rendered).toBeLessThan(estimateTokens(prompts.at(-1)!) + 2000);
     });
 
+    it('the results of an approved call that would not fit: the resumed turn is folded, and goes on to its end', async () => {
+      const { store, prompts, conversation, engine } = await rig({ server: { responder: task, nCtx: 8192 } });
+      const meta = await conversation();
+      // Répétition asks before a command: the reads pass, run_command waits for the person.
+      const asking = {
+        defs: [READ, RUN],
+        onCalls: async (calls: readonly { id: string; name: string; input: unknown }[]) =>
+          calls.some((call) => call.name === 'run_command')
+            ? { suspend: { pending: calls.map((one) => ({ toolCallId: one.id, name: one.name, input: one.input as Record<string, unknown>, reason: 'approval' as const })), ticket: 't' } }
+            : tools(300).onCalls(calls),
+      };
+      const paused = await engine.turn(meta.id, { text: 'Lis les trois fichiers puis lance les tests', tools: asking }, () => undefined);
+      expect(paused.suspended).toBeDefined();
+      const call = (await engine.paused(meta.id))!.calls[0]!;
+      // « Autoriser »: the tests' output, long, brought in by the answer.
+      await engine.recordAnswers(meta.id, {
+        outcomes: { [call.toolCallId]: { kind: 'decision', approved: true } },
+        results: [{ toolCallId: call.toolCallId, name: call.name, content: `Tests passed.\n${'ok test\n'.repeat(2000)}` }],
+      });
+      const events: TurnEvent[] = [];
+      const result = await engine.turn(meta.id, { resume: true, tools: tools(300) }, (event) => events.push(event));
+      expect(result.stopped).toBeUndefined();
+      expect(events.some((event) => event.type === 'compaction' && event.phase === 'end' && event.after !== undefined)).toBe(true);
+      const entries = (await openJournal(store.dir, meta.id)).entries();
+      const run = entries.findLast((entry) => entry.kind === 'assistant' && entry.raw.includes('run_command'));
+      expect(entries.findLast((entry) => entry.kind === 'rebase')).toMatchObject({ keptRound: run?.id });
+      const last = prompts.at(-1)!;
+      expect(last).toContain('[conversation summary]');
+      expect(last).toContain('Tests passed.');
+      expect(last).not.toContain('a.txt ligne');
+      expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
+    });
+
+    it('a turn that overflows again after its fold is folded again, as often as it needs (review of round 3, 2)', async () => {
+      const files = ['a', 'b', 'c', 'd', 'e'];
+      /** Reads a.txt to e.txt, each read from what its prompt still holds, then ends. */
+      const reads = (prompt: string): string => {
+        if (prompt.includes('Summarize this conversation so far')) return 'Facts:\n- the files hold lines.\nWork so far in this turn: read the files in order.';
+        const turn = prompt.slice(prompt.lastIndexOf('<|turn>user'));
+        const done = files.findLastIndex((file) => turn.includes(`${file}.txt ligne`));
+        if (done === files.length - 1) return 'Fini.';
+        return `<|tool_call>call:read_file{path:${Q}${files[done + 1]}.txt${Q}}<tool_call|>`;
+      };
+      const { store, conversation, engine } = await rig({ server: { responder: reads, nCtx: 8192 } });
+      const meta = await conversation();
+      const result = await engine.turn(meta.id, { text: 'Lis les cinq fichiers', tools: tools(1250) }, () => undefined);
+      expect(result.stopped).toBeUndefined();
+      const entries = (await openJournal(store.dir, meta.id)).entries();
+      expect(entries.filter((entry) => entry.kind === 'rebase').length).toBeGreaterThanOrEqual(2);
+      expect(entries.at(-1)).toMatchObject({ kind: 'assistant', raw: 'Fini.' });
+    });
+
     it('a round that alone exceeds the window still ends as context-full, said as such', async () => {
       const { conversation, engine } = await rig({ server: { responder: task, nCtx: 8192 } });
       const meta = await conversation();

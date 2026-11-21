@@ -18,7 +18,8 @@ import { familyLayer } from '../families/index.js';
 import { frozenPrompt, openJournal } from '../journal/journal.js';
 import { KvStore, type LiveConfig } from '../kv/kv-store.js';
 import { fakeTokenize, startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
-import { CompactionError, SUMMARY_QUESTION } from './compact.js';
+import type { JournalBody, JournalEntry } from '../journal/types.js';
+import { CompactionError, planTurnFold, SUMMARY_QUESTION } from './compact.js';
 import { ConversationEngine } from './engine.js';
 import { ConversationStore } from './store.js';
 
@@ -274,3 +275,63 @@ describe('a compaction is never undone in silence, nor its cost hidden (review o
   });
 });
 
+
+describe('planTurnFold — the turn under way folded on itself (review of round 3, 1 and 2)', () => {
+  let n = 0;
+  const entry = (body: JournalBody & { rendered?: string }): JournalEntry => ({ id: `e${(n += 1)}`, at: '2026-11-21T00:00:00.000Z', ...body }) as JournalEntry;
+  const tokens = (text: string): number => Math.ceil(text.length / 3);
+  const call = (path: string): JournalEntry => entry({ kind: 'assistant', raw: `read ${path}`, rendered: `<call ${path}>` });
+  const read = (path: string): JournalEntry =>
+    entry({ kind: 'tool-results', results: [{ toolCallId: path, name: 'read_file', content: 'x' }], rendered: `${path} line\n`.repeat(400) });
+  const head = (): JournalEntry[] => [entry({ kind: 'system', rendered: '<system>' }), entry({ kind: 'system', rendered: '<project>' })];
+
+  it('folds a turn again after a fold earlier in the same turn: what that rebase kept is what is folded now', () => {
+    const user = entry({ kind: 'user', text: 'Lis', rendered: '<user Lis>' });
+    const [a1, r1, a2, r2] = [call('a'), read('a'), call('b'), read('b')];
+    const rebase = entry({
+      kind: 'rebase',
+      summary: 'Facts: a read.',
+      keptFrom: user.id,
+      keptRound: a2.id,
+      stable: '<system>',
+      rendered: `<system><project>[summary]${user.rendered}<open>${a2.rendered}${r2.rendered}`,
+    });
+    const [a3, r3] = [call('c'), read('c')];
+    const fold = planTurnFold([...head(), user, a1, r1, a2, r2, rebase, a3, r3], tokens);
+    expect(fold.round.map((one) => one.id)).toEqual([a3.id, r3.id]);
+    expect(fold.user.id).toBe(user.id);
+    expect(fold.compactedTokens).toBeGreaterThanOrEqual(tokens(r2.rendered!));
+  });
+
+  it('folds a turn after a compaction that kept it whole and still left no room: the rebase is not part of its last round', () => {
+    const before = [entry({ kind: 'user', text: 'Un', rendered: '<user Un>' }), entry({ kind: 'assistant', raw: 'long', rendered: 'long '.repeat(3000) })];
+    const user = entry({ kind: 'user', text: 'Lis', rendered: '<user Lis>' });
+    const [a1, r1, a2, r2] = [call('a'), read('a'), call('b'), read('b')];
+    const rebase = entry({
+      kind: 'rebase',
+      summary: 'Facts: one long answer.',
+      keptFrom: user.id,
+      stable: '<system>',
+      rendered: `<system><project>[summary]${[user, a1, r1, a2, r2].map((one) => one.rendered).join('')}`,
+    });
+    const fold = planTurnFold([...head(), ...before, user, a1, r1, a2, r2, rebase], tokens);
+    expect(fold.round.map((one) => one.id)).toEqual([a2.id, r2.id]);
+    expect(fold.first.id).toBe(a1.id);
+  });
+
+  it('folds a turn resumed after an approval: its last round holds the pause and its answers besides the results', () => {
+    const user = entry({ kind: 'user', text: 'Lis puis teste', rendered: '<user>' });
+    const [a1, r1, a2] = [call('a'), read('a'), entry({ kind: 'assistant', raw: 'run pnpm', rendered: '<call run>' })];
+    const pause = entry({ kind: 'pending', calls: [], ticket: 't', rendered: '' });
+    const answers = entry({ kind: 'outcomes', outcomes: {}, rendered: '' });
+    const output = entry({ kind: 'tool-results', results: [], rendered: 'Tests passed.' });
+    const fold = planTurnFold([...head(), user, a1, r1, a2, pause, answers, output], tokens);
+    expect(fold.round.map((one) => one.id)).toEqual([a2.id, pause.id, answers.id, output.id]);
+  });
+
+  it('a round with no results is still no round to keep', () => {
+    const user = entry({ kind: 'user', text: 'Lis', rendered: '<user>' });
+    const answers = entry({ kind: 'outcomes', outcomes: {}, rendered: '' });
+    expect(() => planTurnFold([...head(), user, call('a'), read('a'), call('b'), answers], tokens)).toThrow(CompactionError);
+  });
+});

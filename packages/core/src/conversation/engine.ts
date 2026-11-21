@@ -1685,8 +1685,11 @@ export class ConversationEngine {
     // What the engine holds, as it counted it, and what this turn adds: an estimate of the whole (three
     // characters a token) refused, in prose, messages the engine had room for. The server refuses what does
     // not fit after all (below).
-    const used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(userRendered + opening);
-    if (used + REPLY_ROOM > window) throw new ContextFullError(this.contextFull(engine, used, window));
+    let used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(userRendered + opening);
+    // A resumed turn may overflow with what the person's answers brought in (an approved command's output): it is
+    // compacted in its slot before it reads on, as between two rounds (review of round 3, 1).
+    const overflows = used + REPLY_ROOM > window;
+    if (overflows && !input.resume) throw new ContextFullError(this.contextFull(engine, used, window));
 
     const user =
       input.text === undefined
@@ -1718,12 +1721,27 @@ export class ConversationEngine {
         owner,
         async (slot) => {
           if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
+          let prompt = frozen + userRendered + opening;
+          if (overflows) {
+            const compacted = await this.compactTurn(meta, journal, engine, { sink, window, slot, ...(signal ? { signal } : {}) }, opening);
+            const held = journal.entries();
+            used = (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(opening);
+            if (!compacted || used + REPLY_ROOM > window) {
+              // Nothing compacted: the memory saved before the pause stays the conversation's. A rebase that still
+              // leaves no room let that memory go: what the summary left in the slot is worth nothing either.
+              if (compacted) slot.discard();
+              else slot.unchanged();
+              throw new ContextFullError(this.contextFull(engine, used, window));
+            }
+            prompt = frozenPrompt(held) + opening;
+            this.lastRun.set(key, { engine, tokens: used });
+          }
           return this.rounds({
             journal,
             engine,
             owner,
             turning,
-            prompt: frozen + userRendered + opening,
+            prompt,
             opening,
             thinking,
             ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),

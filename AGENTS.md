@@ -587,13 +587,16 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   after it); a fork before a compaction or a change of model never carries
   the parent's memory. When the context runs out the core compacts on its
   own (audit 2026-11-21, D2): before a message that would not leave
-  `REPLY_ROOM` — its notes measured first —, and between two tool rounds
-  whose results would not — then the turn under way is kept as it was
+  `REPLY_ROOM` — its notes measured first —, between two tool rounds
+  whose results would not, and as a turn resumes on what the person's
+  answers brought in (an approved command's output) — then the turn under way is kept as it was
   frozen (`planCompactionKeeping`), or, when what precedes it is not worth
   folding (a fresh conversation, a rebase earlier in the turn) or it
   weighs too much, folded on itself (`planTurnFold`, the rebase's
   `keptRound`): its message and its last round kept, its earlier rounds
-  in the summary (« Work so far in this turn »). It goes on in the slot
+  in the summary (« Work so far in this turn »), folded again as often as
+  it overflows (what an earlier rebase of the turn kept is what is folded
+  then; a last round holds a pause and its answers too). It goes on in the slot
   it holds; a last round that alone overflows ends as context-full. It is
   a rebase like any other, said as it runs (the step `compact`) and as a
   line of the answer that stays (the activity `compaction`,
