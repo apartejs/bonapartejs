@@ -6,7 +6,7 @@
  * other one above, until this one's reply ended (shortcuts.spec.ts:19, 2026-11-21). Rows that move under the
  * person, and Ctrl ↑ ↓ going where they did not look. The person's own messages move a row; a reply, being
  * opened, a title or a going back move none. The core keeps the same time on each card (`personAt`), so that the
- * list reads the same before its messages are loaded, and after a restart.
+ * list reads the same before its messages are loaded, and after a restart. aparté's side: apartejs/aparte#293.
  */
 
 import { lastWrittenAt } from '@aparte/bonaparte-shared';
