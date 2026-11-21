@@ -2,17 +2,27 @@
 
 ## Supported versions
 
-bonaparte is pre-1.0. Only the **latest released version** of the
-`@aparte/bonaparte*` packages receives security fixes — they ship in lockstep,
-so upgrading one number upgrades the set.
+Only the **latest released version** of the `@aparte/bonaparte*` packages, and
+of the installer, receives security fixes — they ship in lockstep, so
+upgrading one number upgrades the set.
 
 ## Reporting a vulnerability
 
-Please **do not open a public issue** for a security problem.
+Please **do not describe a security problem where others can read it** — a
+public issue, a discussion, a pull request.
 
-Use GitHub's private vulnerability reporting:
+While the repository is private, GitHub offers no private vulnerability
+reporting on it. Open an issue on
+**https://github.com/apartejs/bonapartejs/issues** — only people with access
+to the repository see it — with the label `security` and a title that says
+no more than « Security report ». Without access, ask the maintainers on
+**https://github.com/apartejs/aparte/security/advisories/new** (the apartéJS
+library's repository, which is public and takes private reports), naming
+bonaparte in the title.
+
+Once the repository is public, use its own private reporting instead:
 **https://github.com/apartejs/bonapartejs/security/advisories/new**
-(Repository → Security → Report a vulnerability.)
+(Repository → Security → Report a vulnerability).
 
 You should get a first response within a few days. Please include the
 platform, the llama.cpp build, and a minimal reproduction — a conversation or
@@ -28,26 +38,41 @@ surface is the boundary between what the model may do and what it does.
   path, symlink or encoding trick that escapes the perimeter is in scope.
 - **Permission modes.** `lecture` must never write or execute; `repetition`
   must ask before every effectful call; `plume` must ask before commands. A tool
-  call that runs without the approval its mode requires is in scope.
-- **Shell tool.** `run_shell` is bounded (timeout, captured output). Escapes
-  from those bounds, or command injection through tool arguments, are in scope.
-- **Plugins.** Only built-in plugins load in this version; the host tears down a
-  plugin's registrations as one. A plugin surviving its deactivation, or reaching
-  the renderer beyond the typed bridge, is in scope.
-- **Browser plugin.** Pages open in a separate `WebContentsView`. Any path from a
-  loaded page to the main process, the preload bridge or the agent's tools is in
-  scope. External links open only through an allowlist.
-- **Local model server.** The managed `llama-server` binds to `127.0.0.1`. The
-  optional remote mode points bonaparte at a server you run yourself — its
-  exposure is your responsibility, not a bonaparte issue.
+  call that runs without the approval its mode requires is in scope — and so is
+  a rule kept by « Toujours autoriser » that lets through more than the exact
+  command, folder, site or tool its card named.
+- **Files that run later.** A write to `package.json`, a git hook, `.env`, a
+  `*.config.*` file and the like is asked in every mode; one that passes
+  without asking is in scope.
+- **Commands.** `run_command` runs a program with an argument array, never
+  through a shell, and a bare program name is found on the PATH only. Command
+  injection through tool arguments, or a program run from somewhere the card
+  did not show, is in scope.
+- **The network.** `web_fetch` and the agent's browser tab refuse local and
+  private addresses unless a setting allows them. Reaching one anyway — by a
+  redirect, DNS rebinding or an encoding of the address — is in scope.
+- **Plugins.** A plugin is read before anything of it runs; its Node half runs
+  in a process of its own, and its view in a sandboxed frame without the
+  bridge. A plugin reaching more than the effects it declared, surviving its
+  deactivation, or reaching the window beyond its frame, is in scope.
+- **Browser.** Pages open in a separate `WebContentsView`, in a session that
+  holds none of the person's logins for the agent's tab. Any path from a
+  loaded page to the main process, the preload bridge or the agent's tools is
+  in scope.
+- **Local model server.** The managed `llama-server` binds to `127.0.0.1` and
+  demands a key made for each launch. A service you add (Ollama, LM Studio, an
+  OpenAI-compatible API) is one you run or chose — its exposure is your
+  responsibility, not a bonaparte issue.
 - **Data on disk.** Conversation logs and saved KV states live under the
-  application data directory (`%APPDATA%\bonaparte`, `~/.bonaparte`) in clear.
-  They contain your prompts and tool outputs; they are not encrypted, by design.
+  application data directory (`%APPDATA%\bonaparte` on Windows, `~/.bonaparte`
+  elsewhere) in clear. They contain your prompts and tool outputs; they are not
+  encrypted, by design. API keys live in the system's vault, never there.
 
 Out of scope: prompt injection that merely *convinces* the model to request an
-action the permission mode then asks you about; behaviour of `impro` mode, which
-is documented as "everything passes"; vulnerabilities in llama.cpp itself
-(report those upstream at ggml-org/llama.cpp).
+action the permission mode then asks you about; what `impro` mode lets through
+without asking, as documented (it still asks what is always asked); and
+vulnerabilities in llama.cpp itself (report those upstream at
+ggml-org/llama.cpp).
 
 ## Disclosure
 
