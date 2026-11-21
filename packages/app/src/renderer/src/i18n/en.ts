@@ -905,7 +905,15 @@ export const en: Messages = {
     uncommitted: (files) => (files === 1 ? 'Its branch has 1 changed file, not committed yet.' : `Its branch has ${files} changed files, not committed yet.`),
     archiveAnyway: 'Archive anyway',
     commitFirst: 'Commit first',
-    archiveNote: 'Archived, the conversation keeps its folder and its branch 30 days; unarchiving it gives them back.',
+    unsaved: (commits) =>
+      commits === null
+        ? 'Whether its commits are pushed or merged cannot be told: its branch will be kept.'
+        : commits === 1
+          ? 'Its branch has 1 commit neither pushed nor merged: it will be kept.'
+          : `Its branch has ${commits} commits neither pushed nor merged: they will be kept.`,
+    archive: 'Archive',
+    archiveNote:
+      'Archived, the conversation keeps its folder and its branch 30 days; unarchiving it gives them back. Then its folder is removed, and its branch only when every commit of it is pushed or merged.',
   },
   terminal: {
     tabs: 'Terminals',

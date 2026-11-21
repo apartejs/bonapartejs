@@ -7,7 +7,7 @@
  * merged archives the conversation by itself.
  */
 
-import { tempRepo, type TempRepo } from '@aparte/bonaparte-core/testing';
+import { git, tempRepo, type TempRepo } from '@aparte/bonaparte-core/testing';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test, type LaunchOptions } from './fixtures/app.js';
@@ -75,6 +75,27 @@ test('archiving with changes not committed asks first; « Commiter d’abord » 
     expect(branch).not.toBe(main);
     // Archived, its folder stays.
     expect(await readFile(join(repo.dir, '.bonaparte', 'worktrees', 'heures', 'notes.txt'), 'utf8')).toBe('second\n');
+  } finally {
+    await repo.remove();
+  }
+});
+
+test('archiving a branch with commits neither pushed nor merged says they are kept; « Archiver » alone (audit D8)', async ({ launch }) => {
+  const repo = await tempRepo({ 'notes.txt': 'first\n' });
+  try {
+    const { page } = await onItsBranch(launch, repo);
+    const worktree = join(repo.dir, '.bonaparte', 'worktrees', 'heures');
+    expect((await git(['commit', '-qam', 'Work of the conversation'], worktree)).code).toBe(0);
+
+    await page.getByRole('button', { name: 'Plus d’actions' }).click();
+    await page.getByRole('menuitem', { name: 'Archiver' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Archiver « Change la note » ?' });
+    await expect(dialog).toContainText('Sa branche a 1 commit ni poussé ni fusionné : il sera gardé.');
+    await expect(dialog).toContainText('sa branche seulement si tous ses commits sont poussés ou fusionnés');
+    await expect(dialog).not.toContainText('pas encore commité');
+    await expect(dialog.getByRole('button', { name: 'Commiter d’abord' })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Archiver', exact: true }).click();
+    await expect(nav(page).getByRole('button', { name: /^Change la note/ })).toHaveCount(0, { timeout: 10_000 });
   } finally {
     await repo.remove();
   }

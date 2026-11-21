@@ -178,11 +178,14 @@ export const conversationsOpenPr = defineChannel('conversations.openPr', z.objec
 /** « Voir la PR »: its page, in the system's browser — the address the core read, never one the window names. */
 export const conversationsShowPr = defineChannel('conversations.showPr', z.object({ id: z.string().min(1).max(128) }), z.void());
 
-/** Before archiving a conversation on its branch: what is not committed there. */
+/**
+ * Before archiving a conversation on its branch: what is not committed there, and its commits neither pushed nor
+ * merged — kept after its days (audit D8); null when that cannot be told, kept all the same.
+ */
 export const conversationsArchiveCheck = defineChannel(
   'conversations.archiveCheck',
   z.object({ id: z.string().min(1).max(128) }),
-  z.object({ uncommitted: z.number() }),
+  z.object({ uncommitted: z.number(), unsaved: z.number().nullable() }),
 );
 
 /** « Commiter d'abord »: everything in its worktree committed. */

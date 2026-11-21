@@ -816,17 +816,18 @@ function Workspace({
   statusesNow.current = statuses;
   useWaitingMarks(statuses);
   // Archiving (task 6.8): a conversation whose branch has changes not committed asks first.
-  const [archiving, setArchiving] = useState<{ id: string; title: string; uncommitted: number } | null>(null);
+  const [archiving, setArchiving] = useState<{ id: string; title: string; uncommitted: number; unsaved: number | null } | null>(null);
   const archiveNow = (id: string): void => {
     void archive(id);
     setDeck((was) => forget(was, id));
     setPanesBy((all) => forgetPanes(all, id));
   };
-  // The core says what is not committed (none without a branch): the rows' states may not know the branch yet.
+  // The core says what is not committed, and what is neither pushed nor merged (none without a branch): the rows'
+  // states may not know the branch yet. Either is said before it is archived (audit D8).
   const askArchive = (id: string, title: string): void => {
     void bridge
       .invoke(conversationsArchiveCheck, { id })
-      .then(({ uncommitted }) => (uncommitted > 0 ? setArchiving({ id, title, uncommitted }) : archiveNow(id)))
+      .then(({ uncommitted, unsaved }) => (uncommitted > 0 || unsaved !== 0 ? setArchiving({ id, title, uncommitted, unsaved }) : archiveNow(id)))
       .catch(() => archiveNow(id));
   };
   // A pull request merged archives its conversation by itself — once it is at rest: never under a

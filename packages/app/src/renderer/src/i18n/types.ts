@@ -905,6 +905,9 @@ export interface Messages {
     cancel: string;
     archiveQuestion(title: string): string;
     uncommitted(files: number): string;
+    /** Its commits neither pushed nor merged, kept after its days (audit D8); null: cannot be told. */
+    unsaved(commits: number | null): string;
+    archive: string;
     archiveAnyway: string;
     commitFirst: string;
     archiveNote: string;

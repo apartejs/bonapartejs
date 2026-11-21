@@ -142,11 +142,43 @@ export async function commitAll(dir: string, message: string): Promise<boolean> 
   return (await git(['commit', '-q', '-m', message], dir)).code === 0;
 }
 
-/** A worktree and its branch gone for good (an archived conversation, after its days). */
-export async function removeWorktree(repo: string, dir: string, branch: string): Promise<void> {
+/**
+ * The commits of a branch that are neither in its base nor on its upstream: what deleting it would lose (audit D8).
+ * Null when it cannot be told — no such base, no such branch — and then nothing may count as safe.
+ */
+export async function unsavedCommits(repo: string, branch: string, base: string): Promise<number | null> {
+  const ref = `refs/heads/${branch}`;
+  if ((await git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], repo)).code !== 0) return null;
+  if ((await git(['rev-parse', '--verify', '--quiet', `${base}^{commit}`], repo)).code !== 0) return null;
+  // `@{upstream}` reads a branch's short name only.
+  const upstream = await git(['rev-parse', '--verify', '--quiet', `${branch}@{upstream}^{commit}`], repo);
+  const not = ['--not', base, ...(upstream.code === 0 ? [upstream.stdout.trim()] : [])];
+  const counted = await git(['rev-list', '--count', ref, ...not], repo);
+  if (counted.code !== 0) return null;
+  const count = Number.parseInt(counted.stdout.trim(), 10);
+  return Number.isFinite(count) ? count : null;
+}
+
+export interface RemovedWorktree {
+  /** Deleted only when every commit of it is in its base or on its upstream; else kept, with them. */
+  branch: 'deleted' | 'kept';
+  /** Its commits neither pushed nor merged; null when that could not be told. */
+  unsaved: number | null;
+}
+
+/**
+ * An archived conversation's worktree gone, after its days. Its folder goes (what is not committed there is the
+ * caller's to check first); its branch goes only when nothing of it would be lost — never `branch -D` on commits
+ * that are neither merged into its base nor pushed (audit D8).
+ */
+export async function removeWorktree(repo: string, dir: string, branch: string, base: string): Promise<RemovedWorktree> {
   await git(['worktree', 'unlock', dir], repo);
   await git(['worktree', 'remove', '--force', dir], repo);
-  await git(['branch', '-D', branch], repo);
+  const unsaved = await unsavedCommits(repo, branch, base);
+  if (unsaved !== 0) return { branch: 'kept', unsaved };
+  // Counted just now: every commit is safe elsewhere, so `-D` loses nothing (`-d` would ask HEAD, not the base).
+  const deleted = await git(['branch', '-D', branch], repo);
+  return deleted.code === 0 ? { branch: 'deleted', unsaved: 0 } : { branch: 'kept', unsaved: 0 };
 }
 
 const linesOf = (text: string): number => (text === '' ? 0 : text.replace(/\n$/, '').split('\n').length);

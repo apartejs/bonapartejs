@@ -67,6 +67,7 @@ interface ConversationCore {
   inbox: Core['inbox'];
   openPr: Core['openPr'];
   uncommitted: Core['uncommitted'];
+  unsavedCommits: Core['unsavedCommits'];
   commitBranch: Core['commitBranch'];
   conversationArchived: Core['conversationArchived'];
   rewindPreview: Core['rewindPreview'];
@@ -124,7 +125,7 @@ export function registerConversationChannels(ipc: IpcRegistry, core: Conversatio
     await core.conversationArchived(id, false).catch(() => undefined);
   });
   ipc.handle(conversationsOpenPr, ({ id }) => core.openPr(id));
-  ipc.handle(conversationsArchiveCheck, async ({ id }) => ({ uncommitted: await core.uncommitted(id) }));
+  ipc.handle(conversationsArchiveCheck, async ({ id }) => ({ uncommitted: await core.uncommitted(id), unsaved: await core.unsavedCommits(id) }));
   ipc.handle(conversationsCommitBranch, async ({ id }) => {
     const meta = await store.get(id);
     return core.commitBranch(id, `bonaparte: ${meta?.title || id}`);

@@ -219,7 +219,7 @@ describe('a conversation on its own branch', { timeout: 30_000 }, () => {
     expect(existsSync(join(worktree, 'notes.txt'))).toBe(false);
   });
 
-  it('archived 30 days ago, a worktree and its branch go at the next start — never with work not committed', async () => {
+  it('archived 30 days ago, a worktree goes at the next start — never with work not committed; its branch only once merged or pushed (audit D8)', async () => {
     const { core, repo, turn, branch, data } = await setup();
     await turn('c1', 'Bonjour', branch('propre'));
     await turn('c1', 'Écris la note');
@@ -227,20 +227,38 @@ describe('a conversation on its own branch', { timeout: 30_000 }, () => {
     await turn('c2', 'Écris la note');
     await turn('c3', 'Bonjour', branch('recente'));
     await turn('c3', 'Écris la note');
+    await turn('c4', 'Bonjour', branch('fusionnee'));
+    await turn('c4', 'Écris la note');
     const clean = join(repo.dir, '.bonaparte', 'worktrees', 'propre');
     const dirty = join(repo.dir, '.bonaparte', 'worktrees', 'sale');
     const recent = join(repo.dir, '.bonaparte', 'worktrees', 'recente');
-    for (const dir of [clean, recent]) await git(['add', '-A'], dir).then(() => git(['commit', '-qm', 'done'], dir));
+    const merged = join(repo.dir, '.bonaparte', 'worktrees', 'fusionnee');
+    for (const dir of [clean, recent, merged]) {
+      // A commit of its own whatever the turn wrote: what is counted is known. Its own text too — two commits of the
+      // same tree, parent and second are one commit, and merging one would merge both.
+      await writeFile(join(dir, 'done.txt'), `${dir}\n`);
+      expect((await git(['add', '-A'], dir)).code).toBe(0);
+      expect((await git(['commit', '-qm', 'done'], dir)).code).toBe(0);
+    }
+    expect((await git(['merge', '-q', '--ff-only', 'bonaparte/fusionnee'], repo.dir)).code).toBe(0);
+    // Said before it is archived: one commit neither pushed nor merged, kept; none for the merged one.
+    expect(await core.unsavedCommits('c1')).toBe(1);
+    expect(await core.unsavedCommits('c4')).toBe(0);
     const old = new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString();
-    for (const id of ['c1', 'c2']) {
+    for (const id of ['c1', 'c2', 'c4']) {
       await core.conversationStore.mark(id, { archivedAt: old });
       await core.conversationArchived(id, true);
     }
     await core.conversationStore.mark('c3', { archivedAt: new Date().toISOString() });
 
-    createCore({ dataDir: data, env: {}, logger: () => undefined });
-    await expect.poll(() => existsSync(clean), { timeout: 10_000 }).toBe(false);
-    await expect.poll(async () => (await git(['branch', '--list', 'bonaparte/propre'], repo.dir)).stdout.trim(), { timeout: 10_000 }).toBe('');
+    const lines: string[] = [];
+    createCore({ dataDir: data, env: {}, logger: (line) => lines.push(line) });
+    await expect.poll(() => existsSync(clean) || existsSync(merged), { timeout: 10_000 }).toBe(false);
+    await expect.poll(async () => (await git(['branch', '--list', 'bonaparte/fusionnee'], repo.dir)).stdout.trim(), { timeout: 10_000 }).toBe('');
+    // Committed, never pushed nor merged: the folder went, the branch and its commit stay — and the log says so.
+    await expect.poll(() => lines.filter((line) => line.includes('Kept the branch')), { timeout: 10_000 }).toEqual(['Kept the branch bonaparte/propre of an archived conversation: 1 commit(s) neither pushed nor merged.']);
+    expect((await git(['branch', '--list', 'bonaparte/propre'], repo.dir)).stdout.trim()).toBe('bonaparte/propre');
+    expect((await git(['log', '-1', '--format=%s', 'bonaparte/propre'], repo.dir)).stdout.trim()).toBe('done');
     expect(existsSync(dirty)).toBe(true);
     expect(existsSync(recent)).toBe(true);
   }, 30_000);

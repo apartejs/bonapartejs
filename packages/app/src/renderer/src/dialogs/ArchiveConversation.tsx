@@ -2,7 +2,9 @@
  * Archiving a conversation whose branch has changes not committed (board
  * « Branches et conversations », task 6.8): « Annuler », « Archiver quand
  * même », or « Commiter d'abord ». Archived, it keeps its folder and its
- * branch 30 days.
+ * branch 30 days. Its commits neither pushed nor merged are said too: kept
+ * after those days, the branch with them (audit D8) — « Archiver » alone
+ * when nothing else is to commit.
  */
 
 import { useEffect, useId, useRef } from 'react';
@@ -11,7 +13,7 @@ import type { Messages } from '../i18n/index';
 export interface ArchiveConversationProps {
   messages: Messages;
   /** The conversation asked about, and what its branch has not committed; null: closed. */
-  asking: { title: string; uncommitted: number } | null;
+  asking: { title: string; uncommitted: number; unsaved: number | null } | null;
   onCancel(): void;
   onArchive(): void;
   onCommitFirst(): void;
@@ -35,19 +37,28 @@ export function ArchiveConversation({ messages, asking, onCancel, onArchive, onC
         </h2>
       </header>
       <div className="aparte-dialog__body">
-        <p>{asking ? words.uncommitted(asking.uncommitted) : ''}</p>
+        {asking && asking.uncommitted > 0 ? <p>{words.uncommitted(asking.uncommitted)}</p> : null}
+        {asking && asking.unsaved !== 0 ? <p className="archive-conversation__kept">{words.unsaved(asking.unsaved)}</p> : null}
         <p className="aparte-field-hint">{words.archiveNote}</p>
       </div>
       <footer className="aparte-dialog__footer">
         <button type="button" className="aparte-btn aparte-btn--ghost" onClick={onCancel}>
           {words.cancel}
         </button>
-        <button type="button" className="aparte-btn aparte-btn--outline" onClick={onArchive}>
-          {words.archiveAnyway}
-        </button>
-        <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={onCommitFirst}>
-          {words.commitFirst}
-        </button>
+        {asking && asking.uncommitted === 0 ? (
+          <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={onArchive}>
+            {words.archive}
+          </button>
+        ) : (
+          <>
+            <button type="button" className="aparte-btn aparte-btn--outline" onClick={onArchive}>
+              {words.archiveAnyway}
+            </button>
+            <button type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={onCommitFirst}>
+              {words.commitFirst}
+            </button>
+          </>
+        )}
       </footer>
     </dialog>
   );

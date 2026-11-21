@@ -51,6 +51,7 @@ async function setup(open: (id: string) => Promise<unknown> = async () => null) 
     inbox: async () => ({ approvals: [], subagentRequests: [], questions: [], ciFailures: [], costs: [], unread: [] }),
     openPr: async () => null,
     uncommitted: async () => 0,
+    unsavedCommits: async () => 0,
     commitBranch: async () => false,
     conversationArchived: async () => undefined,
     rewindPreview: async () => ({ files: [], commands: [], memory: null }),

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { tempRepo, type TempRepo } from '../testing/temp-repo.js';
 import { git } from './git.js';
-import { branchRoots, branchStatus, commitAll, createWorktree, removeWorktree, repoRoot, uncommittedFiles } from './worktrees.js';
+import { branchRoots, branchStatus, commitAll, createWorktree, removeWorktree, repoRoot, uncommittedFiles, unsavedCommits } from './worktrees.js';
 
 let repos: TempRepo[] = [];
 afterEach(async () => {
@@ -71,9 +71,48 @@ describe('a conversation on its own branch', { timeout: 30_000 }, () => {
     expect(await uncommittedFiles(made.dir)).toBe(0);
     expect((await git(['log', '-1', '--format=%s'], made.dir)).stdout.trim()).toBe('Work of the conversation');
 
-    await removeWorktree(dir, made.dir, made.branch);
+    // Committed, never pushed nor merged: after its days the folder goes, the branch and its commit stay (audit D8).
+    expect(await unsavedCommits(dir, made.branch, 'main')).toBe(1);
+    expect(await removeWorktree(dir, made.dir, made.branch, 'main')).toEqual({ branch: 'kept', unsaved: 1 });
     expect(existsSync(made.dir)).toBe(false);
+    expect((await git(['branch', '--list', made.branch], dir)).stdout.trim()).toBe(made.branch);
+    expect((await git(['log', '-1', '--format=%s', made.branch], dir)).stdout.trim()).toBe('Work of the conversation');
+  });
+
+  it('a branch merged into its base goes with its folder', async () => {
+    const { dir } = await repo({ 'a.ts': 'a\n' });
+    const made = await createWorktree({ repo: dir, name: 'heures', base: 'main', prefix: 'bonaparte/' });
+    await writeFile(join(made.dir, 'a.ts'), 'A\n');
+    expect(await commitAll(made.dir, 'Work')).toBe(true);
+    expect((await git(['merge', '-q', '--ff-only', made.branch], dir)).code).toBe(0);
+    expect(await unsavedCommits(dir, made.branch, 'main')).toBe(0);
+    expect(await removeWorktree(dir, made.dir, made.branch, 'main')).toEqual({ branch: 'deleted', unsaved: 0 });
     expect((await git(['branch', '--list', made.branch], dir)).stdout.trim()).toBe('');
+  });
+
+  it('a branch whose commits are all on its upstream goes; one commit more than its upstream keeps it', async () => {
+    const { dir } = await repo({ 'a.ts': 'a\n' });
+    const remote = await repo({ 'README.md': 'the folder of the remote\n' });
+    await git(['init', '-q', '--bare', join(remote.dir, 'origin.git')], remote.dir);
+    expect((await git(['remote', 'add', 'origin', join(remote.dir, 'origin.git')], dir)).code).toBe(0);
+    const made = await createWorktree({ repo: dir, name: 'heures', base: 'main', prefix: 'bonaparte/' });
+    await writeFile(join(made.dir, 'a.ts'), 'A\n');
+    expect(await commitAll(made.dir, 'Pushed')).toBe(true);
+    expect((await git(['push', '-q', '-u', 'origin', made.branch], made.dir)).code).toBe(0);
+    expect(await unsavedCommits(dir, made.branch, 'main')).toBe(0);
+    await writeFile(join(made.dir, 'b.ts'), 'b\n');
+    expect(await commitAll(made.dir, 'Not pushed')).toBe(true);
+    expect(await unsavedCommits(dir, made.branch, 'main')).toBe(1);
+    expect(await removeWorktree(dir, made.dir, made.branch, 'main')).toEqual({ branch: 'kept', unsaved: 1 });
+    expect((await git(['branch', '--list', made.branch], dir)).stdout.trim()).toBe(made.branch);
+  });
+
+  it('a base that is gone: nothing can say the commits are safe — the branch stays', async () => {
+    const { dir } = await repo({ 'a.ts': 'a\n' });
+    const made = await createWorktree({ repo: dir, name: 'heures', base: 'main', prefix: 'bonaparte/' });
+    expect(await unsavedCommits(dir, made.branch, 'gone')).toBeNull();
+    expect(await removeWorktree(dir, made.dir, made.branch, 'gone')).toEqual({ branch: 'kept', unsaved: null });
+    expect((await git(['branch', '--list', made.branch], dir)).stdout.trim()).toBe(made.branch);
   });
 
   it('never copies a .env git does not ignore: tracked, or only not ignored, it would be committed', async () => {

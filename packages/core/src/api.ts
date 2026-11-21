@@ -129,7 +129,7 @@ import {
   type ProjectChanges,
 } from './project/store.js';
 import { listEntries, readText, type FileEntry, type FileText } from './files/browse.js';
-import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, type BranchStatus } from './git/worktrees.js';
+import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, unsavedCommits, type BranchStatus } from './git/worktrees.js';
 import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
 import { git } from './git/git.js';
@@ -475,6 +475,8 @@ export interface Core {
   openPr(conversationId: string): Promise<PrStatus | null>;
   /** What archiving a conversation on its branch would leave uncommitted: its files. */
   uncommitted(conversationId: string): Promise<number>;
+  /** Its branch's commits neither pushed nor merged into its base (audit D8); 0 without a branch, null when it cannot be told. */
+  unsavedCommits(conversationId: string): Promise<number | null>;
   /** « Commiter d'abord »: everything in its worktree committed. */
   commitBranch(conversationId: string, message: string): Promise<boolean>;
   /** Archived or taken out of it: its worktree let go, or held again; kept 30 days, then removed. */
@@ -1483,7 +1485,8 @@ export function createCore(deps: CoreDeps): Core {
     const project = meta.projectId ? await projectStore.get(meta.projectId) : undefined;
     return project?.roots[0] ? repoRoot(project.roots[0]) : null;
   };
-  // An archived conversation keeps its folder and its branch 30 days; then both go.
+  // An archived conversation keeps its folder and its branch 30 days; then its folder goes, and its branch only when
+  // every commit of it is in its base or on its upstream — else kept, with them (audit D8).
   const ARCHIVE_KEEP_MS = 30 * 24 * 3600 * 1000;
   void conversationStore
     .list()
@@ -1495,7 +1498,8 @@ export function createCore(deps: CoreDeps): Core {
         if (!repo) continue;
         // Work never committed there (a pull request merged meanwhile) is the person's: kept.
         if ((await uncommittedFiles(meta.worktree)) > 0) continue;
-        await removeWorktree(repo, meta.worktree, meta.branch);
+        const removed = await removeWorktree(repo, meta.worktree, meta.branch, meta.base ?? '');
+        if (removed.branch === 'kept') log(`Kept the branch ${meta.branch} of an archived conversation: ${removed.unsaved ?? 'some'} commit(s) neither pushed nor merged.`);
         await conversationStore.update(meta.id, { worktree: undefined });
       }
     })
@@ -2518,6 +2522,12 @@ export function createCore(deps: CoreDeps): Core {
     async uncommitted(conversationId) {
       const meta = await conversationStore.get(conversationId);
       return meta?.worktree ? uncommittedFiles(meta.worktree) : 0;
+    },
+
+    async unsavedCommits(conversationId) {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta?.worktree || !meta.branch) return 0;
+      return meta.base ? unsavedCommits(meta.worktree, meta.branch, meta.base) : null;
     },
 
     async commitBranch(conversationId, message) {

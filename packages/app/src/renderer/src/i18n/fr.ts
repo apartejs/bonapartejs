@@ -908,7 +908,15 @@ export const fr: Messages = {
       files === 1 ? 'Sa branche a 1 fichier modifié, pas encore commité.' : `Sa branche a ${files} fichiers modifiés, pas encore commités.`,
     archiveAnyway: 'Archiver quand même',
     commitFirst: 'Commiter d’abord',
-    archiveNote: 'Archivée, la conversation garde son dossier et sa branche 30 jours ; la désarchiver les rend.',
+    unsaved: (commits) =>
+      commits === null
+        ? 'On ne peut pas dire si ses commits sont poussés ou fusionnés : sa branche sera gardée.'
+        : commits === 1
+          ? 'Sa branche a 1 commit ni poussé ni fusionné : il sera gardé.'
+          : `Sa branche a ${commits} commits ni poussés ni fusionnés : ils seront gardés.`,
+    archive: 'Archiver',
+    archiveNote:
+      'Archivée, la conversation garde son dossier et sa branche 30 jours ; la désarchiver les rend. Ensuite son dossier est retiré, et sa branche seulement si tous ses commits sont poussés ou fusionnés.',
   },
   terminal: {
     tabs: 'Terminaux',
