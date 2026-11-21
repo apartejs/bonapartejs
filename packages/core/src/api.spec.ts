@@ -24,6 +24,9 @@ import { startFakeModelHub, type FakeModelHub } from './testing/fake-model-hub.j
 import { DigestMismatchError } from './models/download.js';
 import type { CatalogueEntry } from './models/catalogue.js';
 import { createHash } from 'node:crypto';
+import { stat } from 'node:fs/promises';
+import { readGgufInfo, kvCacheBytes } from './models/gguf.js';
+import { autoContext, estimateLoad } from './models/cost.js';
 
 const BIN = fileURLToPath(new URL('./testing/fake-llama-bin.mjs', import.meta.url));
 const GiB = 1024 ** 3;
@@ -752,6 +755,31 @@ describe('createCore — what the review of phase 2 found', () => {
     // Back to one after the other: no slot more to announce.
     expect((await core.restartCost({ subagents: 'sequential' })).parallel).toBeUndefined();
   }, 40_000);
+
+  it('two slots on a card that holds 32 k for one only (review of C2): the context drops to 16 k each, said, and the memories past it counted as lost', async () => {
+    // A card that holds the 32 k cache once, and not twice: the automatic context steps down for two slots.
+    let card = 24 * GiB;
+    const { core, gemma } = await setup({ gpuMemory: async () => card });
+    const info = await readGgufInfo(gemma);
+    const weights = (await stat(gemma)).size;
+    card = Math.ceil(estimateLoad(info, weights, 32_768, 'f16').totalBytes / 0.8) + 1;
+    expect(autoContext(info, weights, 'f16', card, 1)).toBe(32_768);
+    expect(autoContext(info, weights, 'f16', card, 2)).toBe(16_384);
+    await core.loadModel(gemma);
+    expect(await core.engineSettings()).toMatchObject({ nCtx: 32_768, nCtxAuto: true });
+    // A conversation of some 20 k tokens (the fake engine counts four characters a token), its memory saved.
+    await core.conversationStore.ensure('long', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('long', { text: 'word '.repeat(16_000) }, () => undefined);
+    await core.conversations.flush();
+
+    const cost = await core.restartCost({ subagents: 'parallel' });
+    // That memory holds more than a slot of 16 k: restored no more, it is read again — said before the restart.
+    expect(cost.memoriesLost).toBe(1);
+    expect(cost.parallel).toMatchObject({ slots: 2, nCtx: 16_384, nCtxBefore: 32_768 });
+    // Two caches of 16 k for one of 32 k: what comes more is the difference, not a whole slot.
+    const more = 2 * kvCacheBytes(info, 16_384, 'f16') - kvCacheBytes(info, 32_768, 'f16');
+    expect(cost.parallel!.vramBytesMore).toBe(Math.max(0, more));
+  }, 60_000);
 
   it('an engine being unloaded serves no new turn: it would be cut under it (review of phase 7)', async () => {
     const { core, gemma } = await setup();

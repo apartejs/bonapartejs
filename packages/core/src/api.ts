@@ -55,7 +55,7 @@ import {
   type FamilyLayer,
 } from './families/index.js';
 import { readJsonFile } from './fs/json-file.js';
-import { kvBytesPerToken, readGgufInfo, type GgufInfo } from './models/gguf.js';
+import { kvBytesPerToken, kvCacheBytes, readGgufInfo, type GgufInfo } from './models/gguf.js';
 import { autoContext } from './models/cost.js';
 import {
   defaultScanRoots,
@@ -2344,8 +2344,20 @@ export function createCore(deps: CoreDeps): Core {
       // restart.
       const twoSlots = next.subagents === 'parallel' && current.subagents !== 'parallel';
       const perSlot = twoSlots && next.nCtxAuto && !('nCtx' in changes) ? await autoNCtx(loaded?.path ?? (await resumeOf()).resume?.path, next.cacheType, 2) : next.nCtx;
+      // The relaunch takes that context for each slot: the memories are counted against it, and when the automatic
+      // context steps down for two (a card that holds the larger one once only), the drop is said, and what comes
+      // more is two caches of the new size less the one the slot has now (review of C2).
+      const relaunch = twoSlots ? { ...next, nCtx: perSlot } : next;
       const parallel = twoSlots
-        ? { slots: 2, nCtx: perSlot, vramBytesEach: loaded ? announceParallelSlots(loaded.info, perSlot, next.cacheType).vramBytesEach : null }
+        ? {
+            slots: 2,
+            nCtx: perSlot,
+            ...(perSlot < current.nCtx ? { nCtxBefore: current.nCtx } : {}),
+            vramBytesEach: loaded ? announceParallelSlots(loaded.info, perSlot, next.cacheType).vramBytesEach : null,
+            vramBytesMore: loaded
+              ? Math.max(0, 2 * kvCacheBytes(loaded.info, perSlot, next.cacheType) - kvCacheBytes(loaded.info, current.nCtx, current.cacheType))
+              : null,
+          }
         : undefined;
       // The memories these settings would refuse that the current ones serve: those it makes to read again.
       const states = await kv.savedStates();
@@ -2355,7 +2367,7 @@ export function createCore(deps: CoreDeps): Core {
         setting: Object.keys(changes)[0] ?? 'nCtx',
         loadSeconds: running?.announcement?.seconds ?? 0,
         loadEstimated: running?.announcement?.secondsEstimated ?? true,
-        memoriesLost: memoriesRefusedBy(served, next),
+        memoriesLost: memoriesRefusedBy(served, relaunch),
         replyRunning: supervisor.held,
         loaded: running !== undefined,
       });

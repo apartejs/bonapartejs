@@ -277,7 +277,17 @@ export const restartAnnouncementSchema = z.object({
   replyRunning: z.boolean(),
   loaded: z.boolean(),
   /** Sub-agents in parallel (task 8.3): the slot more, and its video memory (null with no model loaded). */
-  parallel: z.object({ slots: z.number(), nCtx: z.number().optional(), vramBytesEach: z.number().nullable() }).optional(),
+  parallel: z
+    .object({
+      slots: z.number(),
+      nCtx: z.number().optional(),
+      /** The context each slot had, when the automatic one steps down for two (review of C2). */
+      nCtxBefore: z.number().optional(),
+      vramBytesEach: z.number().nullable(),
+      /** What the relaunch takes more than the engine now: two caches of `nCtx` less the one of `nCtxBefore`. */
+      vramBytesMore: z.number().nullable().optional(),
+    })
+    .optional(),
 });
 
 export type RestartAnnouncementView = z.infer<typeof restartAnnouncementSchema>;

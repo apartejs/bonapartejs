@@ -649,6 +649,8 @@ export const en: Messages = {
       launchSettingNames: { nCtx: 'Context size', cacheType: 'K/V cache', subagents: 'Engine slots' },
       launchParallel: (bytes, context) =>
         `Two conversations, or two sub-agents, answer at the same time: ~${bytes} more video memory (a context of ${context} per slot), and the engine restarts.`,
+      launchParallelDrop: (from, to, bytes) =>
+        `Two conversations, or two sub-agents, answer at the same time: to fit the card, each conversation's context goes from ${from} to ${to}${bytes === null ? ', with no more video memory' : ` (~${bytes} more video memory)`}, and the engine restarts.`,
       launchParallelUnknown: 'Two conversations, or two sub-agents, answer at the same time; the video memory more is said once a model is loaded.',
       launchRestartTitle: (setting) => `“${setting}” applies when the engine restarts`,
       launchRestartReload: (duration) => `The model loads again: ~${duration}. The memory of the conversation in it is saved first.`,

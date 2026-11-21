@@ -65,6 +65,9 @@ export function useRestartAsk(onKept: (kept: LaunchChange) => void) {
   return { asking, pending, ask, keep, cancel: () => setAsking(null) };
 }
 
+/** Below this, the video memory two slots take more is said as none (two caches of half the size). */
+const ABOUT_NONE_BYTES = 32 * 1024 ** 2;
+
 const nameOf = (change: LaunchChange): 'nCtx' | 'cacheType' | 'subagents' =>
   'nCtx' in change ? 'nCtx' : 'cacheType' in change ? 'cacheType' : 'subagents';
 
@@ -101,10 +104,20 @@ export function RestartCard({ messages, locale, asking, pending, keep, cancel }:
               <p className="launch-restart__detail">
                 {parallel.vramBytesEach === null
                   ? words.launchParallelUnknown
-                  : words.launchParallel(
-                      formatBytes(parallel.vramBytesEach, { locale, units: messages.units }),
-                      words.launchContextValue(String(Math.round((parallel.nCtx ?? 0) / 1024))),
-                    )}
+                  : parallel.nCtxBefore !== undefined
+                    ? // The automatic context steps down for two slots: the drop is said, and what comes more is the
+                      // difference of the caches (review of C2).
+                      words.launchParallelDrop(
+                        words.launchContextValue(String(Math.round(parallel.nCtxBefore / 1024))),
+                        words.launchContextValue(String(Math.round((parallel.nCtx ?? 0) / 1024))),
+                        (parallel.vramBytesMore ?? 0) < ABOUT_NONE_BYTES
+                          ? null
+                          : formatBytes(parallel.vramBytesMore!, { locale, units: messages.units }),
+                      )
+                    : words.launchParallel(
+                        formatBytes(parallel.vramBytesMore ?? parallel.vramBytesEach, { locale, units: messages.units }),
+                        words.launchContextValue(String(Math.round((parallel.nCtx ?? 0) / 1024))),
+                      )}
               </p>
             ) : null}
             {cost.memoriesLost > 0 ? <p className="launch-restart__detail">{words.launchMemories(cost.memoriesLost)}</p> : null}

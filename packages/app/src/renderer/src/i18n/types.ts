@@ -539,6 +539,8 @@ export interface Messages {
       /** Sub-agents in parallel (task 8.3): the slot more and its video memory, or unknown with no model loaded. */
       /** Two slots: the video memory more, and the context each slot keeps. */
       launchParallel(bytes: string, context: string): string;
+      /** Two slots where the automatic context steps down (review of C2): from, to, and the video memory more (null: about none). */
+      launchParallelDrop(from: string, to: string, bytes: string | null): string;
       launchParallelUnknown: string;
       launchRestartTitle(setting: string): string;
       launchRestartReload(duration: string): string;

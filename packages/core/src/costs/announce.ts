@@ -127,8 +127,9 @@ export interface RestartAnnouncement {
   replyRunning: boolean;
   loaded: boolean;
   /** Sub-agents in parallel (task 8.3): the slot more, and what it holds (unknown with no model loaded). */
-  /** `nCtx`: the context each slot keeps (audit C2). */
-  parallel?: { slots: number; nCtx?: number; vramBytesEach: number | null };
+  /** `nCtx`: the context each slot keeps (audit C2); `nCtxBefore`: the one it had, when it drops; `vramBytesMore`:
+   *  the video memory the relaunch takes more than the engine now. */
+  parallel?: { slots: number; nCtx?: number; nCtxBefore?: number; vramBytesEach: number | null; vramBytesMore?: number | null };
 }
 
 /**

@@ -649,6 +649,8 @@ export const fr: Messages = {
       launchSettingNames: { nCtx: 'Taille du contexte', cacheType: 'Cache K/V', subagents: 'Slots du moteur' },
       launchParallel: (bytes, context) =>
         `Deux conversations, ou deux sous-agents, répondent en même temps : ~${bytes} de mémoire vidéo de plus (un contexte de ${context} par slot), le moteur redémarre.`,
+      launchParallelDrop: (from, to, bytes) =>
+        `Deux conversations, ou deux sous-agents, répondent en même temps : pour tenir sur la carte, le contexte de chaque conversation passe de ${from} à ${to}${bytes === null ? ', sans mémoire vidéo de plus' : ` (~${bytes} de mémoire vidéo de plus)`}, le moteur redémarre.`,
       launchParallelUnknown: 'Deux conversations, ou deux sous-agents, répondent en même temps ; la mémoire vidéo de plus se dit quand un modèle est chargé.',
       launchRestartTitle: (setting) => `« ${setting} » s’applique au redémarrage du moteur`,
       launchRestartReload: (duration) => `Le modèle se recharge : ~${duration}. La mémoire de la conversation en cours est sauvée avant.`,
