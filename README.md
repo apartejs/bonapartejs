@@ -43,19 +43,54 @@ disk I/O, not minutes of GPU time.
 
 ## Install
 
-**The installer** (Windows; macOS and Linux at best): download
-`bonaparte-setup-<version>.exe` from the
-[releases](https://github.com/apartejs/bonapartejs/releases). It installs for
-your user only, and keeps itself up to date — each update says what it costs
-before it is installed, and none installs while a conversation is working. The
-installer is not signed yet: Windows warns the first time.
+bonaparte is not published anywhere public yet. The installer is in the
+**releases of this repository**, which is private for now: you need a GitHub
+account with access to it, signed in.
 
-**From npm**, for developers:
+1. On GitHub, open the repository, then **Releases** (on the right of its main
+   page, or `/releases` after its address).
+2. In the newest release, under **Assets**, download
+   `bonaparte-setup-<version>.exe` (Windows, 64-bit). `latest.yml` beside it is
+   for the app's own updater: you do not need it.
+3. Run it. It installs for your user only, without administrator rights
+   (under `%LOCALAPPDATA%\Programs\bonaparte`), then opens the app.
 
-```sh
-npx @aparte/bonaparte          # launches the app (Electron is downloaded once, about 110 MB)
-npx @aparte/bonaparte doctor   # says what this machine has for the built-in engine
-```
+**The installer is not signed yet**, so Windows says so the first time:
+
+- **SmartScreen** shows « Windows a protégé votre ordinateur » (« Windows
+  protected your PC »). Click **Informations complémentaires** (« More info »),
+  then **Exécuter quand même** (« Run anyway »). It asks once per new version.
+- **Smart App Control** (Windows 11), when it is on, blocks an unsigned app
+  outright, with no button to go past it: the installer, the app, and the
+  llama.cpp it downloads. The only way through is to switch it off, in Windows
+  Security › App & browser control › Smart App Control settings — and on
+  many versions of Windows 11, once off it cannot be switched back on without
+  reinstalling Windows. That is your call to make; bonaparte cannot run beside
+  it until it is signed.
+
+**Updates.** While the repository is private, the app cannot read its
+releases: « Mises à jour » says so, and a new version is installed the same
+way — download its installer from the releases and run it over the old one.
+Your conversations and settings stay. Each update the app does offer (the
+engine, a model) says what it costs before it is done.
+
+**Where your data goes.** Everything bonaparte keeps — conversations and their
+memory (the KV states, from a few hundred MB to a few GB each for a long one),
+settings, projects, plugins, the models it downloads and the llama.cpp build it
+installs — is in `%APPDATA%\bonaparte` (`~/.bonaparte` on macOS and Linux).
+Your own model folders are only read, never moved.
+
+**Uninstall.** Windows Settings › Apps › Installed apps › bonaparte ›
+Uninstall. The data folder is kept on purpose, so that a reinstall finds your
+conversations: delete `%APPDATA%\bonaparte` yourself to free its space,
+models included.
+
+**From npm**, for developers: `npx @aparte/bonaparte` (the app) and
+`npx @aparte/bonaparte doctor` (what this machine has for the built-in engine)
+are ready in the repository but **not published yet**.
+
+macOS and Linux builds are possible (a `dmg`, an `AppImage`), at best: not
+signed, not tested, and not built by default.
 
 ## What it needs
 
@@ -67,7 +102,7 @@ npx @aparte/bonaparte doctor   # says what this machine has for the built-in eng
   card to larger ones from 8, 12, 16, 24 and 32 GB of video memory.
 - **Disk**: the model itself, and room for the conversations' memory (a few
   hundred MB to a few GB each for a long one; the budget is yours to set).
-- **Node 24 or newer**, only to run it with `npx`.
+- **Node 24 or newer**, only to run it with `npx`, once it is published.
 
 Without a card, connect a service (Ollama, LM Studio, an API) instead.
 
