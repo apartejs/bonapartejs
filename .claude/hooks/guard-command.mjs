@@ -39,9 +39,10 @@ function allowedPush(args) {
   const upstream = rest.length !== args.length - 1;
   if (rest.length !== 2 || rest[0] !== 'origin') return false;
   const ref = rest[1];
-  const main = ref === 'main';
   const tag = /^(?:refs\/tags\/)?v\d+\.\d+\.\d+$/.test(ref);
-  if (!main && !(tag && !upstream)) return false;
+  // main, or a working branch for a pull request (Paul, 2026-11-21): the same name on both sides, never archive/v0.
+  const branch = /^[a-z0-9][a-z0-9._/-]*$/i.test(ref) && !/^archive\//i.test(ref) && ref !== 'HEAD';
+  if (!branch && !(tag && !upstream)) return false;
   return REPOSITORY.test(originUrl());
 }
 const SKIP =

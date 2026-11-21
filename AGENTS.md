@@ -298,10 +298,13 @@ An issue can stay open after its fix has shipped.
   the graphics card alone. Ask Paul before the first Electron launch of a
   session.
 - **Local commits are free; NO push without Paul's validation in the app.** A
-  guard hook refuses `git push`, but for the two Paul opened on 2026-11-21:
-  `git push [-u] origin main` and `git push origin vX.Y.Z` (a release tag), to
-  apartejs/bonapartejs, never forced — and only when Paul asks. The work is
-  done on the branch `v1`, fast-forwarded into `main` when Paul validates.
+  guard hook refuses `git push`, but for what Paul opened on 2026-11-21:
+  `git push [-u] origin <branch>` (a working branch, or main) and
+  `git push origin vX.Y.Z` (a release tag), to apartejs/bonapartejs, never
+  forced, never archive/v0. The work is done on `v1` and reaches `main` by a
+  pull request, merged once its CI is green (« fusion quand vert »: the free
+  plan has no branch protection nor auto-merge for a private repository); a
+  green main tags its new version and builds its release.
 
 ### Sub-agents and skills of the project
 
