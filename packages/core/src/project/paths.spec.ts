@@ -12,6 +12,7 @@ import { basename, join, resolve, sep } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runShort } from '../engine/process-probe.js';
 import {
+  AmbiguousLinkError,
   displayInPerimeter,
   InvalidPathError,
   isInPerimeter,
@@ -117,6 +118,26 @@ describe('the real location decides, not the spelling', () => {
       return; // a relative link needs a privilege on Windows: Linux and macOS run it
     }
     expect(() => resolveInPerimeter([root], 'deep/er/back/evil')).toThrow(PathOutsidePerimeterError);
+  });
+
+  // Where the two readings of a `..` part — following the junction (POSIX), or folding it as text (Windows may) —
+  // a link that does not exist yet is never followed on Windows: j/../../x is root/x one way, root's parent the
+  // other. Only a machine that can make a relative file link runs it (GitHub's runners do; Paul's refuses, EPERM).
+  it("on Windows, a link whose '..' reads two ways is refused; elsewhere it is followed as the system does", async () => {
+    const root = await folder();
+    await mkdir(join(root, 'a', 'b'), { recursive: true });
+    try {
+      await symlink(join(root, 'a', 'b'), join(root, 'j'), 'junction');
+      await symlink(['j', '..', '..', 'x'].join(sep), join(root, 'notes'), 'file');
+    } catch {
+      return;
+    }
+    if (process.platform === 'win32') {
+      expect(() => resolveInPerimeter([root], 'notes')).toThrow(AmbiguousLinkError);
+    } else {
+      expect(resolveInPerimeter([root], 'notes')).toBe(join(root, 'notes'));
+      expect(realLocation(join(root, 'notes'))).toBe(join(realLocation(root), 'x'));
+    }
   });
 
   it("a '..' after a link inside a link's target goes up from where that link really leads", async () => {

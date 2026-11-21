@@ -75,12 +75,29 @@ const MAX_LINKS = 40;
 function linkTarget(link: string, links: number): string {
   const raw = readlinkSync(link);
   const absolute = isAbsolute(raw);
-  let at = absolute ? parse(raw).root : realLocation(dirname(link), links);
-  for (const part of (absolute ? raw.slice(parse(raw).root.length) : raw).split(/[\\/]+/)) {
+  const from = absolute ? parse(raw).root : realLocation(dirname(link), links);
+  let at = from;
+  const parts = (absolute ? raw.slice(parse(raw).root.length) : raw).split(/[\\/]+/);
+  for (const part of parts) {
     if (part === '' || part === '.') continue;
     at = part === '..' ? dirname(realLocation(at, links)) : join(at, part);
   }
+  // Windows may fold a target's `..` as text, from where the link stands, where a POSIX system follows each link
+  // met on the way: for a target that does not exist yet, both readings must land on the same place, or the path
+  // is refused — an extra refusal is safe, a write that lands elsewhere is not (CI review, 2026-11-21).
+  if (process.platform === 'win32' && parts.includes('..')) {
+    const folded = resolve(from, raw);
+    if (folded.toLowerCase() !== at.toLowerCase()) throw new AmbiguousLinkError(link, at, folded);
+  }
   return at;
+}
+
+/** A link whose target the two readings of `..` put in two places: never followed. */
+export class AmbiguousLinkError extends Error {
+  constructor(link: string, followed: string, folded: string) {
+    super(`Path refused: the link ${link} leads to ${followed} or to ${folded}, depending on how its '..' is read. Use the real path instead.`);
+    this.name = 'AmbiguousLinkError';
+  }
 }
 
 /**
