@@ -265,6 +265,16 @@ interface Tab {
    * (third review of step 2).
    */
   fresh?: boolean;
+  /** While a browser_open loads: the address it was judged on — a server's redirect to another site is not followed. */
+  opening?: URL;
+  /** Where a redirect not followed would have taken it. */
+  redirectedTo?: string;
+}
+
+/** A redirect that stays on the site judged: the same origin, or the same host made https from http on its usual port. */
+export function sameSite(from: URL, to: URL): boolean {
+  if (from.origin === to.origin) return true;
+  return from.protocol === 'http:' && to.protocol === 'https:' && from.hostname === to.hostname && from.port === '' && to.port === '';
 }
 
 /**
@@ -361,6 +371,20 @@ export class BrowserViews {
     };
     view.webContents.on('will-navigate', guard);
     view.webContents.on('will-redirect', guard);
+    // browser_open was judged on the site it named (a site « Toujours » remembered, review of round 6): a server's
+    // redirect to another one is not followed — the agent is told where, to open it, and have it judged, on its own.
+    view.webContents.on('will-redirect', (event: unknown, url: unknown, _inPlace: unknown, isMainFrame: unknown) => {
+      if (!tab.opening || isMainFrame === false || typeof url !== 'string') return;
+      let next: URL;
+      try {
+        next = new URL(url);
+      } catch {
+        return;
+      }
+      if (sameSite(tab.opening, next)) return;
+      (event as { preventDefault(): void }).preventDefault();
+      tab.redirectedTo = next.href;
+    });
     view.webContents.on('console-message', (...args: unknown[]) => this.consoleLine(tab, args));
     view.webContents.on('did-navigate', () => this.options.changed());
     view.webContents.on('page-title-updated', () => this.options.changed());
@@ -517,7 +541,21 @@ export class BrowserViews {
     delete tab.reachedPrivate;
     delete tab.fileRoot;
     delete tab.fileOffline;
-    return this.load(tab, url);
+    tab.opening = new URL(url);
+    delete tab.redirectedTo;
+    try {
+      const loaded = await this.load(tab, url);
+      if (tab.redirectedTo) {
+        // A redirect not followed is no failure of the page's: the tab does not say Chromium's « aborted ».
+        delete tab.error;
+        this.options.changed();
+        return { error: `Not opened: ${url} redirects to ${tab.redirectedTo}, another site than the one asked. To open it, call browser_open with that address.` };
+      }
+      return loaded;
+    } finally {
+      delete tab.opening;
+      delete tab.redirectedTo;
+    }
   }
 
   /**

@@ -3,7 +3,9 @@
  * Network: what it reads leaves the machine first. Only http and https;
  * never a local, private or link-local address — the machine, the network it
  * sits in, a cloud's metadata service — unless a setting allows it; every
- * redirect is checked again before it is followed. A name is resolved, and
+ * redirect is checked again before it is followed, and one to another site
+ * is said instead, to be fetched — and judged — on its own: the call was
+ * judged on its site (review of round 6). A name is resolved, and
  * all its addresses checked, before anything is asked of it — and the
  * connection is made through the same checked resolution: a name that answers
  * a public address, then a private one (DNS rebinding), reaches nothing
@@ -18,6 +20,12 @@ import type { ToolOutput } from '../types.js';
 import { describeError, refused, text, type BuiltinTool } from './common.js';
 
 const MAX_REDIRECTS = 5;
+
+/** A redirect that stays on the site asked: the same origin, or the same host made https from http on its usual port. */
+function sameSite(from: URL, to: URL): boolean {
+  if (from.origin === to.origin) return true;
+  return from.protocol === 'http:' && to.protocol === 'https:' && from.hostname === to.hostname && from.port === '' && to.port === '';
+}
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_CHARS = 2_000_000;
 
@@ -192,7 +200,17 @@ export function createWebFetch(options: WebFetchOptions = {}): BuiltinTool {
           const response = await fetchPage(url.href, { redirect: 'manual', signal, headers: { 'user-agent': 'bonaparte' } });
           const location = response.headers.get('location');
           if (response.status >= 300 && response.status < 400 && location) {
-            url = new URL(location, url);
+            const next = new URL(location, url);
+            // The call was judged on its site (a site « Toujours » remembered, review of round 6): another one is said,
+            // never reached from here — a private one refused as before.
+            if (!sameSite(url, next)) {
+              const refusal = await refusalFor(next);
+              if (refusal) return refused(refusal);
+              return {
+                content: `${url.href} redirects to ${next.href}, another site than the one asked. Nothing was read there: to read it, call web_fetch with that address.`,
+              };
+            }
+            url = next;
             continue;
           }
           const type = (response.headers.get('content-type') ?? '').toLowerCase();

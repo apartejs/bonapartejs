@@ -27,7 +27,7 @@ interface FakeView extends PageView {
 
 let nextId = 1;
 
-function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; redirectTo?: string } = {}): FakeView {
+function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; redirectTo?: string; serverRedirect?: string } = {}): FakeView {
   const id = nextId++;
   const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
   let url = '';
@@ -42,6 +42,14 @@ function fakeView(page: { title?: string; read?: unknown; failLoad?: boolean; re
       id,
       loadURL: async (target) => {
         view.loaded.push(target);
+        // A server whose redirect is told to the page as Chromium tells it: prevented, the load is aborted where it was.
+        if (page.serverRedirect) {
+          let prevented = false;
+          listeners.get('will-redirect')?.forEach((listener) => listener({ preventDefault: () => (prevented = true) }, page.serverRedirect));
+          if (prevented) throw new Error('ERR_ABORTED (-3) loading ' + target);
+          url = page.serverRedirect;
+          return;
+        }
         // A server that answers with a redirect: the page ends where it says.
         url = page.redirectTo ?? target;
         if (page.failLoad) throw new Error('ERR_CONNECTION_REFUSED');
@@ -625,6 +633,22 @@ describe('the network this machine is in, after a redirect (review of phase 10)'
     // The agent's tab stays the agent's, whoever drives it: the person typing in it does not take it there either.
     expect(await browser.navigate('agent:c1', 'http://192.168.1.1/')).toMatchObject({ error: expect.stringMatching(/private/) });
     expect(redirect(views[0]!, 'http://10.0.0.1/')).toBe(true);
+  });
+
+  it('a page the agent opens is not redirected to another site: it says where, to be opened — and judged — on its own (review of round 6)', async () => {
+    // browser_open was judged on the site asked (a site « Toujours » remembered): an open redirect there does not
+    // carry the agent, and what its address holds, to another one.
+    const away = rig({ serverRedirect: 'https://93.184.216.99/?d=secret' });
+    const opened = await away.browser.agentOpen('https://93.184.216.34/out?to=x', C1);
+    expect(opened).toMatchObject({ error: expect.stringMatching(/93\.184\.216\.99.*browser_open/) });
+    expect(away.views[0]!.webContents.getURL()).toBe('');
+    // The same site — or http made https on the same host — is followed.
+    const upgraded = rig({ serverRedirect: 'https://93.184.216.34/a' });
+    expect(await upgraded.browser.agentOpen('http://93.184.216.34/a', C1)).toMatchObject({ url: 'https://93.184.216.34/a' });
+    // The person's own tab follows whatever its page says.
+    const person = rig({ serverRedirect: 'https://elsewhere.example/' });
+    person.browser.openTab('t1');
+    expect(await person.browser.navigate('t1', 'https://93.184.216.34/')).toMatchObject({ url: 'https://elsewhere.example/' });
   });
 
   it('a page the person opened is never the agent’s: not read, pictured nor acted on, even shown (Paul, 2026-11-20)', async () => {

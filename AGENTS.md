@@ -925,7 +925,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   taken off whenever anything covers it — a dialog, a page over the
   conversation, the pane hidden — since a native view sits above the
   window's page. The agent's `browser_open` (an address: network, loopback
-  and public addresses, never a private one), `browser_read` and `browser_screenshot`
+  and public addresses, never a private one; a server's redirect to another
+  site is not followed but said, to be opened and judged on its own — as
+  `web_fetch` does), `browser_read` and `browser_screenshot`
   (read) and `browser_act` (execute) work on their conversation's own tab
   (`agent:<conversation>`, made at its first page, marked « Agent » in that
   conversation's pane and in no other's; each conversation's pane keeps its

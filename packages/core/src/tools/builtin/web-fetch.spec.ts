@@ -117,6 +117,25 @@ describe('web_fetch', () => {
     expect(asked).toEqual(['https://example.com/go']);
   });
 
+  it('follows a redirect on its own site only: another site is said, to be fetched — and judged — on its own (review of round 6)', async () => {
+    // A site remembered with « Toujours pour ce site » is judged by the first address alone: an open redirect there
+    // must not carry the request, and what its query holds, to another site.
+    const { fetch, lookup, asked } = web({
+      'https://docs.example.com/out?to=x': { status: 302, location: 'https://attacker.example/?d=secret' },
+      'http://docs.example.com/a': { status: 301, location: 'https://docs.example.com/a' },
+      'https://docs.example.com/a': { status: 302, location: '/b' },
+      'https://docs.example.com/b': { type: 'text/plain', body: 'the docs' },
+    });
+    const tool = createWebFetch({ fetch, lookup });
+    const away = await run(tool, 'https://docs.example.com/out?to=x');
+    expect(away.failed).toBeFalsy();
+    expect(away.content).toContain('https://attacker.example/?d=secret');
+    expect(away.content).toMatch(/call web_fetch/);
+    expect(asked).toEqual(['https://docs.example.com/out?to=x']);
+    // The same site — a path, or http made https on the same host — is followed.
+    expect((await run(tool, 'http://docs.example.com/a')).content).toContain('the docs');
+  });
+
   it('reaches a local address when the setting allows it', async () => {
     const { fetch, lookup } = web({ 'http://localhost:3000/': { type: 'text/plain', body: 'dev server' } }, { localhost: ['127.0.0.1'] });
     const result = await run(createWebFetch({ fetch, lookup, allowPrivate: () => true }), 'http://localhost:3000/');
