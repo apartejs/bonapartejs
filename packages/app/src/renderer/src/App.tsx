@@ -274,8 +274,9 @@ function Workspace({
         if (!parsed) return;
         defaultMode.current = parsed;
         setDefaultModeShown(parsed);
-        // Read after the first conversation was set up: a new one, outside a project, takes it now.
-        if (open.current === null && !project.current) {
+        // Read after the first conversation was set up: a new one, outside a project, takes it now — unless the
+        // person already picked one in the switch.
+        if (open.current === null && !project.current && !picked.current) {
           setMode(startingMode(parsed));
           picked.current = false;
         }
@@ -725,7 +726,10 @@ function Workspace({
         readProjects();
         // Its mode is the project's now: the switch shows it.
         const now = await bridge.invoke(modesGet, { id }).catch(() => null);
-        if (now) setMode(now.mode);
+        if (now) {
+          knownModes.current.set(id, now.mode);
+          setMode(now.mode);
+        }
       })
       .catch(() => setAttachFailed(true))
       .finally(() => setAttachBusy(false));
@@ -753,9 +757,13 @@ function Workspace({
         bornIn.current.set(id, projectId);
         setAsked((count) => count + 1);
         // Its mode is the project's now: the switch of the chat shown says it.
+        knownModes.current.delete(id);
         if (id === shownIdRef.current) {
           const now = await bridge.invoke(modesGet, { id }).catch(() => null);
-          if (now) setMode(now.mode);
+          if (now) {
+            knownModes.current.set(id, now.mode);
+            setMode(now.mode);
+          }
         }
       });
   };
@@ -897,6 +905,10 @@ function Workspace({
   // core, so a read then would answer the default mode; the switch's choice goes with that turn.
   // Only until it is left: coming back, its mode is the core's.
   const bornHere = useRef(new Set<string>());
+  // The mode this window last knew each conversation to run in (its birth here, the person's choice, the core's
+  // answer): shown at once when the conversation is shown again, before the core's answer comes — never the mode
+  // of the conversation shown before it, while that answer is slow or set aside by a newer one.
+  const knownModes = useRef(new Map<string, PlayMode>());
   useEffect(() => {
     if (!conversationId) return;
     return () => {
@@ -913,11 +925,15 @@ function Workspace({
       picked.current = false;
       return;
     }
+    const known = knownModes.current.get(conversationId);
+    if (known) setMode(known);
     let current = true;
     void bridge
       .invoke(modesGet, { id: conversationId })
       .then((view) => {
-        if (current && !bornHere.current.has(conversationId)) setMode(view.mode);
+        if (!current || bornHere.current.has(conversationId)) return;
+        knownModes.current.set(conversationId, view.mode);
+        setMode(view.mode);
       })
       .catch(() => undefined);
     return () => {
@@ -1007,6 +1023,7 @@ function Workspace({
         setMode(next);
         chosen.current = next;
         const id = open.current;
+        if (id) knownModes.current.set(id, next);
         // The go-ahead leaves when the composer is free (a reply still written, a question open),
         // and only into the conversation of the plan.
         void (id ? bridge.invoke(modesSet, { id, mode: next }) : Promise.resolve())
@@ -1400,6 +1417,7 @@ function Workspace({
   // The shortcuts of the conversations, the agent and the panes (task 12.1).
   const changeMode = (next: PlayMode): void => {
     setMode(next);
+    if (conversationId) knownModes.current.set(conversationId, next);
     if (!conversationId) picked.current = true;
     // The core keeps it: the next call of the conversation is decided in it.
     if (conversationId) void bridge.invoke(modesSet, { id: conversationId, mode: next }).catch(() => undefined);
@@ -1834,6 +1852,8 @@ function Workspace({
           // The panes opened before its first message are its own.
           setPanesBy((all) => movePanes(all, paneKey(null, key), id));
           bornHere.current.add(id);
+          // Its first turn carries the switch's choice: that is its mode.
+          knownModes.current.set(id, chosen.current);
           bornIn.current.set(id, project.current?.id ?? null);
         }}
         aboveComposer={
@@ -1930,6 +1950,7 @@ function Workspace({
                 // The writes after this one pass without asking; the commands still ask.
                 setMode('plume');
                 const id = request.conversationId;
+                if (id) knownModes.current.set(id, 'plume');
                 void allowAndSwitch({
                   setMode: () => (id ? bridge.invoke(modesSet, { id, mode: 'plume' }) : Promise.resolve()),
                   allow: () => approvals.answer(request.id, { approved: true }),

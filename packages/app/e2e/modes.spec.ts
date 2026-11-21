@@ -110,8 +110,12 @@ test('going back to a conversation shows its own mode, even one born in this win
   await answered(page, 'Second sujet');
   await expect(chat(page).modeShown).toHaveText('Plume');
 
+  // Each time, the conversation shown first — then its mode: the one this window knew of it is shown at once, the
+  // core's answer after (a full run once saw the first conversation's mode stay on the second, 2026-11-21).
   await page.locator('aparte-conversation-list').getByRole('button', { name: /Premier sujet/ }).click();
+  await expect(page.locator('.conversation-header')).toContainText('Premier sujet');
   await expect(chat(page).modeShown).toHaveText('Lecture');
   await page.locator('aparte-conversation-list').getByRole('button', { name: /Second sujet/ }).click();
+  await expect(page.locator('.conversation-header')).toContainText('Second sujet');
   await expect(chat(page).modeShown).toHaveText('Plume');
 });
