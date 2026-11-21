@@ -72,7 +72,7 @@ export function UpdatesDialog({ messages, locale, open, onClose }: UpdatesProps)
   const titleId = useId();
   const autoId = useId();
   const [view, setView] = useState<UpdatesView | null>(null);
-  const [auto, setAuto] = useState(true);
+  const [auto, setAuto] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
   const [asked, setAsked] = useState<Set<string>>(() => new Set());
   const style = { locale, units: messages.units };
@@ -97,7 +97,7 @@ export function UpdatesDialog({ messages, locale, open, onClose }: UpdatesProps)
       });
     };
     read(true);
-    void bridge.invoke(settingsGet, { key: 'autoUpdateApp' }).then((value) => live && setAuto(value !== false));
+    void bridge.invoke(settingsGet, { key: 'autoUpdateApp' }).then((value) => live && setAuto(value === true));
     const off = bridge.on((event) => {
       if (event.kind === 'updates') read(false);
     });

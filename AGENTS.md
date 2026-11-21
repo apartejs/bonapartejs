@@ -1071,7 +1071,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   memory is for the old file, read again one by one; the main process adds the
   app's own (electron-updater, in a packaged app only; a test run's from
   `BONAPARTE_E2E_UPDATE`, `__bonaparteUpdater`). Nothing installs under a
-  reply (`core.whenIdle()`, the supervisor's `whenFree`). `autoUpdateApp`:
+  reply (`core.whenIdle()`, the supervisor's `whenFree`). `autoUpdateApp`
+  (off until the person switches it on: a download said first otherwise):
   downloaded in the background, installed at the next quit. The entry is in
   the sidebar and the rail when one is ready, or when the app's own check
   failed (audit 2026-11-21, N4): `checkFailure` names why (`private` — the

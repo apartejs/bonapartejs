@@ -70,7 +70,7 @@ describe('the settings of the app (task 5.2)', () => {
       defaultModel: '',
       modelFolders: [],
       branchPrefix: 'bonaparte/',
-      autoUpdateApp: true,
+      autoUpdateApp: false,
       'notifications.replyDone': 'banner',
       'notifications.approval': 'banner',
       'notifications.question': 'badge',

@@ -94,7 +94,8 @@ export const APP_SETTINGS: SettingField[] = [
   { key: 'modelFolders', type: 'list', scopes: GLOBAL, default: [] },
   // Derived from the free space (task 3.4) until the person sets one.
   { key: 'kvBudgetBytes', type: 'number', scopes: GLOBAL, default: null, min: 0, step: 1, integer: true, advanced: true },
-  { key: 'autoUpdateApp', type: 'boolean', scopes: GLOBAL, default: true },
+  // Off until the person says so: a download nobody announced is a cost not said first (review of round 6).
+  { key: 'autoUpdateApp', type: 'boolean', scopes: GLOBAL, default: false },
   // « Garder la version actuelle » (task 13.1): the catalogue's ids whose new version is never offered again.
   { key: 'keptModels', type: 'list', scopes: GLOBAL, default: [] },
   // The shortcuts the person changed (task 12.1): an action's id → its keys, '' for none; the others keep their default.

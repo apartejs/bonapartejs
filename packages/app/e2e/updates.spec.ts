@@ -42,21 +42,22 @@ test('the app’s update: its card says its cost, and « Redémarrer » waits fo
   await expect.poll(() => restarted(app), { timeout: 15_000 }).toBe(1);
 });
 
-test('« Mettre à jour l’app toute seule »: on by default, switched off and kept', async ({ launch }) => {
+test('« Mettre à jour l’app toute seule »: off by default — the download said first —, switched on and kept (review of round 6)', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: () => 'ok' }, env: { BONAPARTE_E2E_UPDATE: UPDATE } });
   await page.getByRole('button', { name: 'Mises à jour, 1 prête' }).click({ timeout: 15_000 });
   const dialog = page.getByRole('dialog', { name: 'Mises à jour' });
   const auto = dialog.getByRole('switch', { name: 'Mettre à jour l’app toute seule.' });
-  await expect(auto).toBeChecked();
   await expect(dialog).toContainText('Le moteur et le modèle demandent toujours.');
-  // Off: the app's card says what it downloads first.
-  await auto.click();
+  // Off: nothing is downloaded unannounced, and the app's card says what it downloads first.
   await expect(auto).not.toBeChecked();
+  await expect(dialog.locator('.update-card').first()).toContainText('90 Mo à télécharger d’abord.');
+  await auto.click();
+  await expect(auto).toBeChecked();
   await dialog.getByRole('button', { name: 'Fermer' }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole('button', { name: 'Mises à jour, 1 prête' }).click();
-  await expect(auto).not.toBeChecked();
-  await expect(dialog.locator('.update-card').first()).toContainText('90 Mo à télécharger d’abord.');
+  await expect(auto).toBeChecked();
+  await expect(dialog.locator('.update-card').first()).not.toContainText('à télécharger d’abord');
 });
 
 test('a new version of a model: its download, the conversations it makes to read again, and « Garder la version actuelle »', async ({ launch }) => {

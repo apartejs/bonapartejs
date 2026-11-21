@@ -379,7 +379,7 @@ ${appTokens}`,
   const appUpdates = createAppUpdates({
     updater,
     current: __BONAPARTE_VERSION__,
-    auto: () => setting(core, 'autoUpdateApp', true),
+    auto: () => setting(core, 'autoUpdateApp', false),
     whenIdle: () => core.whenIdle(),
     beforeInstall: () => core.stop(),
     log: (line) => console.error(line),
