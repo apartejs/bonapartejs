@@ -142,3 +142,25 @@ test('going back to a conversation shows its own mode, even one born in this win
   await expect(page.locator('.conversation-header')).toContainText('Second sujet');
   await expect(chat(page).modeShown).toHaveText('Plume');
 });
+
+// aparté's select says « change » when its value is set by code too, and the mode element turned that into a
+// choice: an update of the switch that came late — the mode of the conversation left — was told to the core as the
+// next conversation's mode (« Second sujet » in Lecture, GitHub's slower runner, 2026-11-21). Only the person's own
+// choice in the switch is a choice.
+test('the switch set by code is never a choice: the conversation keeps its mode', async ({ launch }) => {
+  const { page } = await launch({ engine: { responder: model } });
+  await choose(page, 'Plume');
+  await answered(page, 'Premier sujet');
+  await expect(chat(page).modeShown).toHaveText('Plume');
+  // An echo, as a late update makes it: the inner select's value set by code, no one touching it — later than a
+  // choice's own change, which comes with the list open or right after it closed.
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    const select = document.querySelector('aparte-approval-mode aparte-select') as (HTMLElement & { value: string }) | null;
+    if (select) select.value = 'plan';
+  });
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
+  await page.locator('aparte-conversation-list').getByRole('button', { name: /Premier sujet/ }).click();
+  await expect(page.locator('.conversation-header')).toContainText('Premier sujet');
+  await expect(chat(page).modeShown).toHaveText('Plume');
+});
