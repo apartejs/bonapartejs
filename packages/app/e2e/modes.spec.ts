@@ -101,6 +101,29 @@ test('a mode chosen before the first message holds: the new conversation runs in
   await expect(chat(page).modeShown).toHaveText('Lecture');
 });
 
+test('while the core is slow to say a conversation’s mode, going back to it shows the one this window knew — never the previous conversation’s (review of round 6)', async ({ launch }) => {
+  const { app, page } = await launch({ engine: { responder: model } });
+  await choose(page, 'Lecture');
+  await answered(page, 'Premier sujet');
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
+  await choose(page, 'Plume');
+  await answered(page, 'Second sujet');
+  await expect(chat(page).modeShown).toHaveText('Plume');
+
+  // From now on the core takes 6 s to tell a mode: what is shown before is what this window knew.
+  await app.evaluate(() => void ((globalThis as { __bonaparteModesDelayMs?: number }).__bonaparteModesDelayMs = 6_000));
+  const list = page.locator('aparte-conversation-list');
+  await list.getByRole('button', { name: /Premier sujet/ }).click();
+  await expect(page.locator('.conversation-header')).toContainText('Premier sujet');
+  await expect(chat(page).modeShown).toHaveText('Lecture', { timeout: 2_000 });
+  await list.getByRole('button', { name: /Second sujet/ }).click();
+  await expect(page.locator('.conversation-header')).toContainText('Second sujet');
+  await expect(chat(page).modeShown).toHaveText('Plume', { timeout: 2_000 });
+  // And the core's answer, late, changes nothing.
+  await page.waitForTimeout(6_500);
+  await expect(chat(page).modeShown).toHaveText('Plume');
+});
+
 test('going back to a conversation shows its own mode, even one born in this window', async ({ launch }) => {
   const { page } = await launch({ engine: { responder: model } });
   await choose(page, 'Lecture');

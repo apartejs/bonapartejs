@@ -541,7 +541,10 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   (no React wrapper, apartejs/aparte#216). The mode chosen before a
   conversation's first message travels with that turn (`?mode=`): the page
   saves a new conversation before its first turn reaches the core, so a read
-  of the core then answers the default. A call paused before a reload is
+  of the core then answers the default. A conversation shown again shows at
+  once the mode this window last knew of it (`knownModes`), the core's
+  answer after; a test run makes that answer late with
+  `__bonaparteModesDelayMs`. A call paused before a reload is
   asked again as its conversation loads, before React knows which one is
   open: a capturing listener files it under the conversation aparté loaded
   (apartejs/aparte#221).

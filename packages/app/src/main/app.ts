@@ -440,6 +440,7 @@ ${appTokens}`,
         window.setTitleBarOverlay({ ...colours, height: TITLE_BAR_HEIGHT });
       }
     },
+    ...(options.e2e ? { modesDelayMs: () => (globalThis as { __bonaparteModesDelayMs?: number }).__bonaparteModesDelayMs ?? 0 } : {}),
     // A pull request's page, which the core read.
     openLink: async (url) => {
       if (options.e2e) {

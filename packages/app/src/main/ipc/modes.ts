@@ -9,8 +9,13 @@ import type { IpcRegistry } from './register.js';
 
 export type ModeCore = Pick<Core, 'modeOf' | 'setMode' | 'previewCall' | 'remembered'>;
 
-export function registerModeChannels(ipc: IpcRegistry, core: ModeCore): void {
-  ipc.handle(modesGet, ({ id }) => core.modeOf(id));
+/** `delayMs`: a test run's slow core, the mode told late — what the window shows meanwhile is what it knew. */
+export function registerModeChannels(ipc: IpcRegistry, core: ModeCore, delayMs?: () => number): void {
+  ipc.handle(modesGet, async ({ id }) => {
+    const late = delayMs?.() ?? 0;
+    if (late > 0) await new Promise((resolve) => setTimeout(resolve, late));
+    return core.modeOf(id);
+  });
   ipc.handle(modesSet, ({ id, mode }) => core.setMode(id, mode));
   ipc.handle(toolsPreview, ({ id, call }) => core.previewCall(id, call));
   // « Toujours autoriser » (audit D3): the core says what a rule is; the window names a call and a scope.

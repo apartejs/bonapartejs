@@ -62,6 +62,8 @@ export interface AppFacts {
   modelsChanged?(): void;
   /** The colours of the window's own buttons, drawn by the system over the app (`main/title-bar.ts`). */
   titleBar?(colours: { color: string; symbolColor: string }): void;
+  /** A test run's slow core: how long the mode of a conversation takes to be told (`__bonaparteModesDelayMs`). */
+  modesDelayMs?(): number;
 }
 
 export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFacts): void {
@@ -90,7 +92,7 @@ export function registerAllChannels(ipc: IpcRegistry, core: Core, facts: AppFact
     const pr = await core.prOf(id);
     if (pr && /^https:\/\/github\.com\//.test(pr.url)) await facts.openLink(pr.url);
   });
-  registerModeChannels(ipc, core);
+  registerModeChannels(ipc, core, facts.modesDelayMs);
   registerFileChannels(ipc, core);
   registerChangeChannels(ipc, core);
   registerPluginChannels(ipc, core, { chooseFolder: facts.chooseFolder, ...(facts.pluginsChanged ? { changed: facts.pluginsChanged } : {}) });
