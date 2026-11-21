@@ -49,7 +49,11 @@ export interface PermissionEngineDeps {
   dataDir: string;
   /** The rules « always allow » remembered: the app's, the project's and the conversation's own (audit D3). */
   rules?(projectId: string | undefined, conversationId: string | undefined): readonly AllowRule[];
-  /** The address of a conversation's agent's page, as the core last heard it: the site a browser_act acts on. */
+  /**
+   * The address of a conversation's agent's page, as the core last heard it: the site a browser_act acts on. Read
+   * synchronously — a service's approval policy cannot await (apartejs/aparte#291) —, and checked again in the page
+   * as it acts; what the page always confirms is refused there unless the call says `confirm`.
+   */
   pageOf?(conversationId: string): string | undefined;
   /** « Ask before going online » (on by default). */
   askBeforeNetwork?(): boolean;
