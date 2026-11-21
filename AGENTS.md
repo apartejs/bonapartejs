@@ -569,7 +569,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   A call the person approved runs before its turn takes the slot again: it
   holds nobody up. « Slots du moteur : 1 · 2 » (« Moteur et mémoire », the
   key `subagentsOnBuiltin`) serves two conversations as well as two
-  sub-agents (audit C2). The handler compares the window's
+  sub-agents (audit C2); with no context chosen it takes the one a load
+  chooses for two, the drop said and the memories past it counted
+  (`restartCost`'s `parallel.nCtxBefore`, `vramBytesMore`). The handler compares the window's
   messages with the journal (`agent/divergence.ts`): a new message, an
   answer asked again or a changed message (both branch), or a 409. The KV
   states live under `<data>/kv-slots/`, the conversations under
@@ -720,7 +722,8 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   name-based (`agent-<uuid>` from the conversation and the call), its
   journal `<conv>/agents/<agentId>/main.jsonl`, its prompt the parent's
   stable system turn and its own project turn as frozen (instructions,
-  folders, environment), a note (no context but the mission, its tools —
+  folders, environment), a note (what the conversation was told since —
+  its folders now, its instructions —, no context but the mission, its tools —
   those come after the freeze described —, its mode in a line, its budget,
   the answer first then `path:line`) and the mission; on the wire `agent-start` …
   events with its `agentId` … `agent-end`, and only its result enters the
@@ -736,7 +739,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   or `<service id>/<model>`) runs the new ones on a service
   (`agent/service-subagent.ts`, `routeSubagents`): the same loop and policy,
   each call through aparté's OpenAI-compatible adapter and direct transport,
-  no slot, what it reads disarmed, its journal opening with an `engine`
+  no slot of its own — its conversation keeps its slot meanwhile —, ended
+  as failed when the service sends nothing for `SERVICE_IDLE_MS` (under
+  Node's own five minutes), what it reads disarmed, its journal opening with an `engine`
   entry so a resume goes back there, its line « Nom · modèle »
   (apartejs/aparte#286). A conversation on a service runs its own on that
   service and model, inside aparté's run (`startAgent`): what its mode would
@@ -789,7 +794,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
 - **A conversation's own branch** (`core/src/git/`): chosen before its first
   message — offered first, and said why, when another conversation works in
   the project's folder (`projects.folderTaken`: a reply running, a pause,
-  changes standing; audit C4; said plainly without git) —
+  changes standing — in a repository those git still shows changed,
+  outside one those of the last six hours; audit C4; said plainly without
+  git) —
   (`worksIn=branch&branch=…&base=…` on the first turn, a name git
   takes, in any language), made by the loop's `beforeChange` hook before
   its first write or command is judged — so what the card shows, what is
@@ -820,7 +827,9 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `/v1/models`, within 5 s. A conversation on a service (`engineId` the
   service's id) runs in aparté's `createAparteAgentHandler`, wrapped by
   `serveOnService`: the core's registry, `PermissionEngine.evaluate` as its
-  approval policy, `ask_user` as the window's tool; its turns are written to
+  approval policy, `ask_user` as the window's tool, a call bounded by its
+  own tool and two hours as a net (`SERVICE_TOOL_TIMEOUT_MS`: aparté's five
+  minutes stopped the run, apartejs/aparte#290); its turns are written to
   the journal without `rendered` (a service keeps no memory). Every service
   is OpenAI-compatible, a llama-server already running too (`<address>/v1`);
   the built-in engine alone speaks `/completion`. A first turn with
