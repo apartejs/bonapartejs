@@ -69,16 +69,34 @@ test('ci.yml: the end-to-end tests run on one platform, Windows (minutes ×2 on 
   assert.match(e2e[0][2], /if: runner\.os == 'Windows'/);
 });
 
-test('release.yml: Windows by default; macOS (×10) and Linux only when asked', () => {
+test('release.yml: Windows by default; macOS (×10) and Linux only when asked; a run by hand builds what it checks', () => {
   assert.match(triggers(release), /^ {2}push:\n {4}tags: \['v\*'\]$/m);
   const os = /^ {8}os: (.+)$/m.exec(release);
   assert.ok(os, 'the matrix names its systems');
   assert.match(os[1], /windows-2025-vs2026/);
-  // macOS and Linux appear only behind the inputs of a run by hand.
-  assert.match(os[1], /inputs\.macos && ',"macos-latest"'/);
-  assert.match(os[1], /inputs\.linux && ',"ubuntu-latest"'/);
+  // Each system is left out unless asked: macOS and Linux unless a run by hand checks them; Windows only by a run by
+  // hand that unchecks it — so that macOS alone does not build and upload Windows again (review of round 6).
+  assert.match(release, /- os: \$\{\{ github\.event_name == 'workflow_dispatch' && !inputs\.windows && 'windows-2025-vs2026' \|\| 'none' \}\}/);
+  assert.match(release, /- os: \$\{\{ !inputs\.macos && 'macos-latest' \|\| 'none' \}\}/);
+  assert.match(release, /- os: \$\{\{ !inputs\.linux && 'ubuntu-latest' \|\| 'none' \}\}/);
+  assert.match(release, /^ {6}windows:\n(?: {8}.*\n)*? {8}type: boolean\n(?: {8}.*\n)*? {8}default: true$/m);
   assert.match(release, /^ {6}macos:\n(?: {8}.*\n)*? {8}type: boolean\n(?: {8}.*\n)*? {8}default: false$/m);
   assert.match(release, /^ {6}linux:\n(?: {8}.*\n)*? {8}type: boolean\n(?: {8}.*\n)*? {8}default: false$/m);
+});
+
+for (const [file, text] of [['ci.yml', ci], ['release.yml', release]]) {
+  test(`${file}: the job's token is never left in a checkout for every later step to read (review of round 6)`, () => {
+    const checkouts = [...text.matchAll(/^( *)- uses: actions\/checkout@.*\n((?:\1 {2}.*\n)*)/gm)];
+    assert.ok(checkouts.length > 0);
+    for (const [, , body] of checkouts) assert.match(body, /^\s+persist-credentials: false$/m);
+  });
+}
+
+test('release.yml: a tag publishes into a release still a draft — checked before anything is built (review of round 6)', () => {
+  const steps = jobs(release).get('installer');
+  const check = steps.indexOf('- name: Check the release is still a draft');
+  assert.ok(check > 0 && check < steps.indexOf('Install dependencies'), 'the draft is checked first');
+  assert.match(steps.slice(check, steps.indexOf('- name:', check + 1)), /isDraft/);
 });
 
 test('release.yml: only a tag makes a release; a run by hand keeps its installer as an artifact', () => {
