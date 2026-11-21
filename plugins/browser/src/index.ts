@@ -12,7 +12,7 @@ export { browser } from './node.js';
 export const browserManifest = defineManifest({
   id: 'browser',
   name: { en: 'Browser', fr: 'Navigateur' },
-  version: '1.0.0',
+  version: '0.1.0',
   description: { en: 'Pages the agent can read: console, DOM, screenshot.', fr: 'Des pages que l’agent peut lire : console, DOM, capture d’écran.' },
   effects: [
     { effect: 'network', what: { en: 'opens pages of the internet, and of this machine', fr: 'ouvre des pages d’Internet, et de cette machine' } },

@@ -11,7 +11,7 @@ export { MAX_HISTORY_CHARS, terminal } from './node.js';
 export const terminalManifest = defineManifest({
   id: 'terminal',
   name: { en: 'Terminal', fr: 'Terminal' },
-  version: '1.0.0',
+  version: '0.1.0',
   description: { en: 'A terminal per tab, in the project; the agent’s commands in their own tab.', fr: 'Un terminal par onglet, dans le projet ; les commandes de l’agent dans leur onglet.' },
   effects: [{ effect: 'execute', what: { en: 'a shell of this machine, in a terminal you type in', fr: 'un shell de cette machine, dans un terminal où tu tapes' } }],
   contributes: {

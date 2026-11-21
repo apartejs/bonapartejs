@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte-core",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "bonaparte — the core: engine, journal, KV memory, agent loop, tools, permissions. Pure Node, no Electron.",
   "license": "MIT",
   "author": "Paul Richez",

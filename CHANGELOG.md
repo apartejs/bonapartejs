@@ -5,7 +5,7 @@ All notable changes to bonaparte are documented here. The format follows
 [semantic versioning](https://semver.org/). Every `@aparte/bonaparte*` package
 ships at one version.
 
-## [1.0.0] - 2026-11-21
+## [0.1.0] - 2026-11-21
 
 The first version, restarted from zero on apartéJS 1.7 and built on 1.16:
 Windows, installed from the repository's releases.

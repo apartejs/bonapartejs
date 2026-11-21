@@ -9,19 +9,69 @@ import { fileURLToPath } from 'node:url';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'guard-command.mjs');
 
-/** Runs the hook the way Claude Code does: the hook input as JSON on stdin. */
-function guard(command, toolName = 'Bash') {
+const REPOSITORY = 'https://github.com/apartejs/bonapartejs.git';
+
+/** Runs the hook the way Claude Code does: the hook input as JSON on stdin; `origin` is what the remote says. */
+function guard(command, toolName = 'Bash', origin = REPOSITORY) {
   const result = spawnSync(process.execPath, [script], {
     input: JSON.stringify({ tool_name: toolName, tool_input: { command } }),
     encoding: 'utf8',
     windowsHide: true,
+    env: { ...process.env, BONAPARTE_GUARD_ORIGIN: origin },
   });
   return { status: result.status, stderr: result.stderr };
 }
 
+// Opened by Paul on 2026-11-21 (« Ouvre le garde »): main and a release tag, to the repository's origin, never forced.
+const allowedPushes = [
+  ['git push origin main', 'Bash'],
+  ['git push -u origin main', 'Bash'],
+  ['git push --set-upstream origin main', 'Bash'],
+  ['git push origin v1.0.0', 'Bash'],
+  ['git push origin refs/tags/v1.2.10', 'Bash'],
+  ['git push -u origin main', 'PowerShell'],
+];
+
+for (const [command, tool] of allowedPushes) {
+  test(`lets a push of main or a release tag to the repository through: ${command} (${tool})`, () => {
+    assert.equal(guard(command, tool).status, 0);
+  });
+}
+
+const narrowPushes = [
+  'git push origin main --force',
+  'git push -f origin main',
+  'git push --force-with-lease origin main',
+  'git push origin +main',
+  'git push origin main:other',
+  'git push origin dev',
+  'git push upstream main',
+  'git push --all origin',
+  'git push --tags origin',
+  'git push --mirror origin',
+  'git push origin --delete main',
+  'git push origin :main',
+  'git push origin main v1.0.0',
+  'git push origin v1.0',
+  'git push origin v1.0.0-rc',
+  'git push --no-verify origin main',
+  'git -C ../other push origin main',
+  'git push -u origin main && git push --force origin main',
+];
+
+for (const command of narrowPushes) {
+  test(`refuses a push outside main and a release tag: ${command}`, () => {
+    assert.equal(guard(command).status, 2);
+  });
+}
+
+test('refuses even main when origin is not the repository', () => {
+  assert.equal(guard('git push origin main', 'Bash', 'https://github.com/someone/else.git').status, 2);
+  assert.equal(guard('git push origin main', 'Bash', '').status, 2);
+});
+
 const pushes = [
   'git push',
-  'git push origin main',
   'git -C x push',
   'git -c user.name=x push --force',
   'git add . && git push',

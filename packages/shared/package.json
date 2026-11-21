@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte-shared",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "bonaparte — contracts shared by the core, the app and the plugins: modes, effects, IPC, manifests",
   "license": "MIT",
   "author": "Paul Richez",

@@ -1,6 +1,6 @@
 {
   "name": "@aparte/bonaparte",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "bonaparte — `npx @aparte/bonaparte` launches the app; `bonaparte doctor` says what the machine has for the built-in engine",
   "license": "MIT",
   "author": "Paul Richez",

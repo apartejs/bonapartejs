@@ -186,7 +186,7 @@ from the repository's releases, a tag making one draft; the packed app is
 run by a test before it is published. `npx @aparte/bonaparte` launches the
 app it carries. The security audit of the whole repository (the ten rules,
 `docs/superpowers/plans/securite.md`) found 23 defects, all fixed or ruled
-on; every package is at 1.0.0, and the tag `v1.0.0` waits for Paul.
+on; every package is at 0.1.0 (Paul, 2026-11-21: « plutôt 0 »), the first version published, tag `v0.1.0`.
 
 ## apartéJS frictions — MANDATORY
 

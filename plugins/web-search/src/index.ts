@@ -12,7 +12,7 @@ export { formatResults, webSearch } from './node.js';
 export const webSearchManifest = defineManifest({
   id: 'web-search',
   name: { en: 'Web search', fr: 'Recherche web' },
-  version: '1.0.0',
+  version: '0.1.0',
   description: {
     en: 'Search and read pages online. Nothing leaves without asking you.',
     fr: 'Chercher et lire des pages en ligne. Rien ne sort sans te le demander.',

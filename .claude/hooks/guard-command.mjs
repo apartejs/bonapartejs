@@ -2,7 +2,9 @@
 // Exit 0 lets the command run; exit 2 blocks it and hands stderr to the agent.
 //
 // It refuses what an agent must never do in this repository:
-//   - push (Paul pushes, after validating in the app);
+//   - push (Paul pushes, after validating in the app), but for main and a
+//     release tag to the repository's origin, never forced (opened by Paul on
+//     2026-11-21);
 //   - skip a git hook or a signature;
 //   - open a visible console window on Windows (it steals the foreground);
 //   - force a file past .gitignore (the design notes are private);
@@ -11,9 +13,37 @@
 //
 // It is a guard against accidents, not a sandbox: it reads a command the way
 // its shell would, well enough for the forms people actually type.
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
-const PUSH = 'Blocked: git push. Paul pushes, after validating in the app.';
+const PUSH =
+  'Blocked: git push. Paul pushes, after validating in the app — the only pushes let through (opened by Paul on 2026-11-21) are `git push [-u] origin main` and `git push origin vX.Y.Z`, to apartejs/bonapartejs, never forced.';
+
+/** The one repository a push may go to, whatever spelling git gives its address. */
+const REPOSITORY = /^(?:https:\/\/github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)apartejs\/bonapartejs(?:\.git)?\/?$/i;
+
+/** What `origin` points to, read from git; a test names it through BONAPARTE_GUARD_ORIGIN. */
+function originUrl() {
+  if (process.env.BONAPARTE_GUARD_ORIGIN !== undefined) return process.env.BONAPARTE_GUARD_ORIGIN;
+  const result = spawnSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf8', windowsHide: true, shell: false });
+  return result.status === 0 ? result.stdout.trim() : '';
+}
+
+/**
+ * The pushes Paul opened on 2026-11-21: `git push [-u|--set-upstream] origin main`, or `git push origin vX.Y.Z`
+ * (or refs/tags/vX.Y.Z) — one ref, no other option, no git option before `push`, and origin the repository.
+ */
+function allowedPush(args) {
+  if (args[0] !== 'push') return false;
+  const rest = args.slice(1).filter((arg) => arg !== '-u' && arg !== '--set-upstream');
+  const upstream = rest.length !== args.length - 1;
+  if (rest.length !== 2 || rest[0] !== 'origin') return false;
+  const ref = rest[1];
+  const main = ref === 'main';
+  const tag = /^(?:refs\/tags\/)?v\d+\.\d+\.\d+$/.test(ref);
+  if (!main && !(tag && !upstream)) return false;
+  return REPOSITORY.test(originUrl());
+}
 const SKIP =
   'Blocked: never skip a git hook or a signature (--no-verify, -n, --no-gpg-sign, commit.gpgsign=false). Fix what the hook reports instead.';
 const CONSOLE =
@@ -251,7 +281,7 @@ function refusal(words, shell) {
   if (name === 'git') {
     if (args.some((arg, i) => args[i - 1] === '-c' && /^commit\.gpgsign=(false|0|no|off)$/i.test(arg))) return SKIP;
     const subcommand = gitSubcommand(args);
-    if (subcommand === 'push') return PUSH;
+    if (subcommand === 'push' && !allowedPush(args)) return PUSH;
     // For `git commit`, -n is the short form of --no-verify.
     if (subcommand === 'commit' && hasShortFlag(args, 'n')) return SKIP;
     if (subcommand === 'add' && (args.includes('--force') || hasShortFlag(args, 'f'))) return FORCE_ADD;

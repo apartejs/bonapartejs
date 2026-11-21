@@ -13,7 +13,7 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
   {
     id: 'subagents',
     name: { en: 'Sub-agents', fr: 'Sous-agents' },
-    version: '1.0.0',
+    version: '0.1.0',
     description: {
       en: 'The agent hands parts of a task to other agents, one line each, under the same permissions.',
       fr: 'L’agent confie des parties d’une tâche à d’autres agents, une ligne chacun, sous les mêmes permissions.',
@@ -23,7 +23,7 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
   {
     id: 'project-scripts',
     name: { en: 'Project scripts', fr: 'Scripts du projet' },
-    version: '1.0.0',
+    version: '0.1.0',
     description: {
       en: 'The scripts of package.json, launched in one click in the terminal.',
       fr: 'Les scripts de package.json, lancés en un clic dans le terminal.',
@@ -33,7 +33,7 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
   {
     id: 'conversation-settings',
     name: { en: 'Conversation settings', fr: 'Réglages de conversation' },
-    version: '1.0.0',
+    version: '0.1.0',
     description: {
       en: 'Temperature, reasoning and context cap, conversation by conversation.',
       fr: 'Température, réflexion et plafond de contexte, conversation par conversation.',
@@ -43,7 +43,7 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
   {
     id: 'resource-monitor',
     name: { en: 'Resource monitor', fr: 'Moniteur de ressources' },
-    version: '1.0.0',
+    version: '0.1.0',
     description: {
       en: 'Processor, memory and graphics card, live.',
       fr: 'Processeur, mémoire et carte graphique, en direct.',
@@ -55,7 +55,7 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
     // 900 tokens in every prompt (audit 2026-11-21, I2).
     id: 'conversation-plugins',
     name: { en: 'Plugins made in a conversation', fr: 'Plugins créés en conversation' },
-    version: '1.0.0',
+    version: '0.1.0',
     description: {
       en: 'The agent writes a plugin in any conversation, tries it there and offers to install it. Without it, only a conversation that asks with « / plugin ».',
       fr: 'L’agent écrit un plugin dans toute conversation, l’essaie là et propose de l’installer. Sans lui, seulement une conversation qui le demande avec « / plugin ».',
@@ -65,7 +65,7 @@ export const CORE_ENTRIES: readonly PluginManifestInput[] = [
   {
     id: 'auto-titles',
     name: { en: 'Automatic titles', fr: 'Titres automatiques' },
-    version: '1.0.0',
+    version: '0.1.0',
     description: {
       en: 'A title for each conversation, taken from its first message.',
       fr: 'Un titre pour chaque conversation, tiré de son premier message.',
