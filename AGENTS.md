@@ -1437,6 +1437,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   model. Its registry refuses what is not its own, in words it can act on;
   the same call failing three times stops it, and a reasoning past
   `SUBAGENT_THINKING_CHARS` cuts its answer — both said to the main agent.
+- **Two clocks already bound a call to a service**: aparté's handler gives
+  every tool call five minutes and then stops the whole run
+  (apartejs/aparte#290), and Node's fetch gives up after five minutes
+  without a byte (undici's headers and body timeouts), as « fetch failed ».
+  A bound of ours sits under the second and over the first. A test of them
+  fakes `setTimeout` alone (`vi.useFakeTimers({ toFake: [...] })`): undici
+  follows it too.
 
 ## Real-model smoke results
 
