@@ -12,7 +12,7 @@
 import { createHash } from 'node:crypto';
 import { EXTENSION_TOOLS } from '../tools/builtin/extensions.js';
 import type { StreamRunEvent } from '@aparte/engine';
-import type { CallsAnswer, CallsSlot, ConversationEngine, ModelCall, TurnEvent, TurnResult } from '../conversation/engine.js';
+import { ContextFullError, type CallsAnswer, type CallsSlot, type ConversationEngine, type ModelCall, type TurnEvent, type TurnResult } from '../conversation/engine.js';
 import type { Outcome, PendingCall, SubagentHold } from '../journal/types.js';
 import { readSubagentSpec, RUN_SUBAGENT, type SubagentSpec } from '../tools/builtin/run-subagent.js';
 import type { ToolSet } from '../tools/registry.js';
@@ -133,6 +133,18 @@ function cutResult(concluded: NonNullable<TurnResult['concluded']>, rounds: numb
   return `${why} What it found:\n${answer || '(it said nothing)'}`;
 }
 
+/** What the main agent reads of a sub-agent that failed. Its context full is its own, never « the conversation » (S5). */
+function failureOf(error: unknown): string {
+  if (error instanceof ContextFullError) {
+    const { used, window } = error.announcement;
+    return (
+      `The sub-agent's own context (${window} tokens) filled up: its prompt took ${used} of them, and what it found is lost. ` +
+      'Give it a shorter mission that reads less, or do the work yourself.'
+    );
+  }
+  return `The sub-agent failed: ${error instanceof Error ? error.message : String(error)}`;
+}
+
 /**
  * Its status on the wire. A sub-agent cut short is not « done »: aparté has no status for it
  * (apartejs/aparte#285), so its line says it stopped, its result kept.
@@ -200,7 +212,7 @@ async function drive(
     else if (done.concluded) end = { kind: 'partial', result: cutResult(done.concluded, maxRounds, done.answer) };
     else end = { kind: 'done', result: done.answer || 'The sub-agent gave no answer.' };
   } catch (error) {
-    end = { kind: 'failed', result: `The sub-agent failed: ${error instanceof Error ? error.message : String(error)}` };
+    end = { kind: 'failed', result: failureOf(error) };
   }
   // Its last text whole before its end: aparté's parser may still hold a closing backtick.
   emit({ type: 'text-flush', agentId } as StreamRunEvent);

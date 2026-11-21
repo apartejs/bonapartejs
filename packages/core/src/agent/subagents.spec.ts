@@ -28,6 +28,7 @@ import { builtinTools } from '../tools/builtin/index.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { AGENT_ENDPOINT, createAgentHandler } from './handler.js';
 import { runAgentTurn } from './loop.js';
+import { runQueuedSubagent } from './subagents.js';
 
 let servers: FakeLlamaServer[] = [];
 let dirs: string[] = [];
@@ -156,7 +157,7 @@ async function rig(
     );
     return { result, events, said };
   };
-  return { dir, root, store, engine, meta, run, order, placed, grammars, asked };
+  return { dir, root, store, engine, meta, run, order, placed, grammars, asked, registry, permissions };
 }
 
 const of = (events: StreamRunEvent[], type: StreamRunEvent['type']) => events.filter((event) => event.type === type) as Record<string, any>[];
@@ -361,6 +362,78 @@ describe('a sub-agent on the built-in engine', () => {
     const outcome = of(events, 'tool-resolved').find((event) => event['toolCallId'] === launch['toolCallId'])!;
     expect(String(outcome['result'])).toMatch(/^The sub-agent was cut after 3 rounds of tools, before it finished\./);
     expect(String(outcome['result'])).toContain('Partial: a is 1; b.ts not read.');
+  });
+
+  describe('its own context (audit S5)', () => {
+    const BIG = { name: 'Lecteur', mission: 'Read big.ts and say what it holds.', tools: 'read' };
+    /** A sub-agent run alone (as one queued behind a pause), its conversation capped to `cap` tokens over what it starts with. */
+    async function alone(cap: (start: number) => number, mission = BIG.mission) {
+      const responder = (prompt: string): string => {
+        if (!isSubagent(prompt)) return 'Bonjour.';
+        if (prompt.includes('Your context is nearly full')) return 'Partial: big.ts holds x.';
+        // It reads big.ts twice (about 2,000 tokens each time), then answers.
+        return prompt.split('<|tool_response>').length > 2 ? 'Whole: big.ts holds x.' : call('read_file', { path: 'big.ts' });
+      };
+      const made = await rig(responder, 'impro');
+      await writeFile(join(made.root, 'big.ts'), `export const x = '${'x'.repeat(6000)}';\n`);
+      // Its conversation's prompt frozen: what the sub-agent's starts with, as on a real turn.
+      await made.run('Bonjour.');
+      const parent = (events: StreamRunEvent[]) => ({
+        conversationId: made.meta.id,
+        mode: 'impro' as const,
+        registry: made.registry,
+        permissions: made.permissions,
+        place: { roots: [made.root] },
+        nCtx: 8192,
+        signal: new AbortController().signal,
+        engine: made.engine,
+        emit: (event: StreamRunEvent) => events.push(event),
+      });
+      const queued = (id: string, input: Record<string, string>) => ({ toolCallId: id, name: 'run_subagent', input, reason: 'queued' as const });
+      // What its first prompt holds, as the engine counts it: a probe of the same note and mission.
+      const probe: StreamRunEvent[] = [];
+      await runQueuedSubagent(parent(probe), queued('probe', { ...BIG, mission }));
+      const probeId = String(of(probe, 'agent-start')[0]!['agentId']);
+      const first = (await made.engine.subagentJournal(made.meta.id, probeId)).entries().find((entry) => entry.kind === 'assistant');
+      const start = (first?.kind === 'assistant' && first.usage?.contextTokens) || 0;
+      await made.store.settle(made.meta.id, { contextCap: cap(start) });
+      made.asked.length = 0;
+      const events: StreamRunEvent[] = [];
+      const end = await runQueuedSubagent(parent(events), queued('real', { ...BIG, mission }));
+      return { end, events, asked: made.asked };
+    }
+
+    it('results that would fill most of it: shown, then its last answer without tools — the main agent reads it as cut', async () => {
+      // About 2,000 tokens of results each time over 4,700 of room (the engine counts the first at 1,500): the second read passes 80 %, yet leaves room.
+      const { end, asked } = await alone((start) => start + 4700);
+      expect(asked.map((one) => one.grammar)).toEqual([true, true, false]);
+      expect(asked[1]!.prompt).not.toContain('Your context is nearly full');
+      expect(asked[2]!.prompt.split('xxxxxxxxxx').length).toBeGreaterThan(2);
+      expect(asked[2]!.prompt).toContain('Your context is nearly full: answer now with what you found');
+      expect(end.kind).toBe('partial');
+      expect('result' in end && end.result).toMatch(/^The sub-agent was cut when its own context \(\d+ tokens\) was nearly full, before it finished\./);
+      expect('result' in end && end.result).toContain('Partial: big.ts holds x.');
+    });
+
+    it('results that would leave it no room to answer: not shown, and it answers with what it has', async () => {
+      const { end, asked } = await alone((start) => start + 2500);
+      expect(asked.map((one) => one.grammar)).toEqual([true, false]);
+      expect(asked[1]!.prompt).not.toContain('xxxxxxxxxx');
+      expect(asked[1]!.prompt).toContain('Not shown: your context has no room left for it.');
+      expect(end.kind).toBe('partial');
+    });
+
+    it('its note says its budget', async () => {
+      const { asked } = await alone(() => 8192);
+      expect(asked[0]!.prompt).toMatch(/Your context holds \d+ tokens; this prompt takes about \d+ of them\./);
+    });
+
+    it('a mission its context cannot hold: said as its own context, never « the conversation »', async () => {
+      const { end } = await alone(() => 8192, `Read big.ts. ${'Context. '.repeat(3000)}`);
+      expect(end.kind).toBe('failed');
+      expect('result' in end && end.result).toMatch(/^The sub-agent's own context \(8192 tokens\) filled up/);
+      expect('result' in end && end.result).not.toMatch(/conversation is full/);
+    });
   });
 
   it('the tool says when to give a sub-agent all its tools: a mission that writes a file or runs a command', () => {

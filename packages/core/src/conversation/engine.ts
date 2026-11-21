@@ -293,6 +293,15 @@ export const SUBAGENT_CONTEXT_NOTE = 'Your context is nearly full: answer now wi
 /** A result that would leave a sub-agent no room to answer: not shown to it. */
 export const SUBAGENT_NOT_SHOWN = 'Not shown: your context has no room left for it.';
 
+/** A sub-agent's budget, in its note (audit S5). Sent to the model: English. */
+export function budgetLine(window: number, head: number): string {
+  return (
+    `Your context holds ${window} tokens; this prompt takes about ${head} of them. Read only what the mission needs ` +
+    '(a part of a long file, a search before a read): when your context nearly fills, you are asked to answer at once.'
+  );
+}
+const BUDGET_LINE_TOKENS = estimateTokens(budgetLine(1_000_000, 100_000));
+
 /** The results of a round, the last one read with a note after it (a turn's last round with tools, audit S4 and S5). */
 export function withLastNote(results: readonly ToolResult[], note: string): ToolResult[] {
   return results.map((result, index) => (index === results.length - 1 ? { ...result, content: `${result.content}\n\n${note}` } : result));
@@ -1212,20 +1221,27 @@ export class ConversationEngine {
     const { family, client } = engine;
     const { signal } = options;
     const journal = await this.subagentJournal(conversationId, agent.agentId);
+    const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
+    // Its context: its conversation's (its cap, else the engine's) — what its budget and its last answer count from.
+    const window = this.windowOf(meta, engine, engineWindow);
     if (input.start && journal.entries().length === 0) {
       const parent = (await openJournal(this.deps.store.dir, conversationId, meta.branchId)).entries();
-      await journal.append({ kind: 'system', rendered: stableOf(parent) });
-      await journal.append({ kind: 'system', rendered: family.renderSystemNote(input.start.note) });
-      await journal.append({ kind: 'user', text: input.start.mission, rendered: family.renderUser(input.start.mission) });
+      const stable = stableOf(parent);
+      const mission = family.renderUser(input.start.mission);
+      // Its budget, said (audit S5): how much it holds, and what its own prompt already takes of it.
+      const head = estimateTokens(stable + family.renderSystemNote(input.start.note) + mission) + BUDGET_LINE_TOKENS;
+      const note = Number.isFinite(window) ? `${input.start.note}\n${budgetLine(window, head)}` : input.start.note;
+      await journal.append({ kind: 'system', rendered: stable });
+      await journal.append({ kind: 'system', rendered: family.renderSystemNote(note) });
+      await journal.append({ kind: 'user', text: input.start.mission, rendered: mission });
     }
     const entries = journal.entries();
     const frozen = frozenPrompt(entries);
-    const engineWindow = engine.live?.nCtx || (await client.props()).nCtx || Number.POSITIVE_INFINITY;
     // A sub-agent reasons as its conversation does: off by default on a small context (audit I2).
     const thinking = input.thinking ?? defaultThinking(engineWindow);
     const opening = family.beginAssistant({ thinking, ...(input.resume ? { continuing: true } : {}) });
     const used = (countedContext(entries) ?? estimateTokens(frozen)) + estimateTokens(opening);
-    if (used + REPLY_ROOM > engineWindow) throw new ContextFullError(this.contextFull(engine, used, engineWindow));
+    if (used + REPLY_ROOM > window) throw new ContextFullError(this.contextFull(engine, used, window));
 
     const owner: SlotOwner = { kind: 'subagent', conversationId, agentId: agent.agentId, name: agent.name };
     const key = ownerKey(owner);
@@ -1259,8 +1275,9 @@ export class ConversationEngine {
         slot,
         thinkingCap: this.deps.subagentThinkingChars ?? SUBAGENT_THINKING_CHARS,
         tooLong: async () => {
-          throw new ContextFullError(this.contextFull(engine, used, engineWindow));
+          throw new ContextFullError(this.contextFull(engine, used, window));
         },
+        ...(Number.isFinite(window) ? { conclude: { window } } : {}),
       });
     let result: TurnResult;
     try {
