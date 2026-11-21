@@ -1026,7 +1026,11 @@ describe('createCore — the modes and the previews of the window', () => {
   });
 
   it('« Permissions »: a file added to « toujours demandé » asks even in Plume; the network asked or not', async () => {
-    const { core, dir } = await setup();
+    // A home that does not hold the project, on every platform (Windows' temporary folder is under the person's
+    // home, Linux's is not): the project just made is judged in its own folders, never in the home folder.
+    const home = await mkdtemp(join(tmpdir(), 'bp-core-home-'));
+    dirs.push(home);
+    const { core, dir } = await setup({ home });
     const folder = join(dir, 'project');
     await mkdir(folder, { recursive: true });
     const project = await core.projects.create({ name: 'p', roots: [folder] });

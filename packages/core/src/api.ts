@@ -1465,8 +1465,9 @@ export function createCore(deps: CoreDeps): Core {
   for (const tool of builtinTools()) tools.register(tool.def, tool.handler);
   // Without a project the perimeter is the home folder — a test run's own, when it gives one.
   const perimeter = (): string[] => (deps.home ? [deps.home] : []);
-  // The projects (task 5.3): a conversation of a project works in its folders. Their roots are read
-  // before a turn, a preview or a resume (rootsOf), so the policy — which decides at once — finds them.
+  // The projects (task 5.3): a conversation of a project works in its folders. Their roots are read at
+  // start, kept as a project is made or changed, and read again before a turn, a preview or a resume
+  // (rootsOf), so the policy — which decides at once — finds them.
   const projectStore = new ProjectStore(deps.dataDir);
   const projectRoots = new Map<string, string[]>();
   // What each project adds to « toujours demandé », kept as projects are read and changed.
@@ -1474,7 +1475,11 @@ export function createCore(deps: CoreDeps): Core {
   void projectStore
     .list()
     .then((projects) => {
-      for (const project of projects) projectAlwaysAsk.set(project.id, project.alwaysAsk ?? []);
+      for (const project of projects) {
+        // What a project made or changed meanwhile said is newer than this read.
+        if (!projectRoots.has(project.id)) projectRoots.set(project.id, project.roots);
+        if (!projectAlwaysAsk.has(project.id)) projectAlwaysAsk.set(project.id, project.alwaysAsk ?? []);
+      }
     })
     .catch(() => undefined);
   // « Permissions », as the person leaves them: the network asked, the files always asked.
@@ -2647,7 +2652,14 @@ export function createCore(deps: CoreDeps): Core {
       detect: (folder) => detectProject(folder),
       list: () => projectStore.list(),
       get: (id) => projectStore.get(id),
-      create: (input) => projectStore.create(input),
+      // The policy knows a project's folders from the moment it exists, as it knows them once changed:
+      // a project not known yet would be judged in the home folder.
+      async create(input) {
+        const project = await projectStore.create(input);
+        projectRoots.set(project.id, project.roots);
+        projectAlwaysAsk.set(project.id, project.alwaysAsk ?? []);
+        return project;
+      },
       async update(id, changes) {
         const project = await projectStore.update(id, changes);
         projectRoots.set(project.id, project.roots);
@@ -2657,6 +2669,8 @@ export function createCore(deps: CoreDeps): Core {
       // What the project remembered goes with it (audit D3).
       remove: async (id) => {
         await projectStore.remove(id);
+        projectRoots.delete(id);
+        projectAlwaysAsk.delete(id);
         await grants.dropProject(id).catch(() => undefined);
       },
       async folderTaken(id) {
