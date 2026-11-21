@@ -120,10 +120,12 @@ describe('CheckpointStore', () => {
     await write(store, 'turn-1', edited, 'a.ts', 'v1');
     await write(store, 'turn-2', edited, 'a.ts', 'v2');
     await write(store, 'turn-2', created, 'new.ts', 'fresh');
-    expect(await store.files('conv')).toEqual([
+    expect(await store.files('conv')).toMatchObject([
       { path: edited, display: 'a.ts', created: false },
       { path: created, display: 'new.ts', created: true },
     ]);
+    // When the last turn that changed it wrote (review of C4).
+    expect((await store.files('conv')).every((file) => typeof file.lastAt === 'string')).toBe(true);
     expect((await store.original('conv', edited))?.toString('utf8')).toBe('v0');
     expect(await store.original('conv', created)).toBeNull();
     expect(await store.original('conv', join(repo, 'untouched.ts'))).toBeUndefined();

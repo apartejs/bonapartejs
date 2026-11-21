@@ -132,6 +132,7 @@ import { listEntries, readText, type FileEntry, type FileText } from './files/br
 import { branchRoots, branchStatus, commitAll, createWorktree, lockWorktree, removeWorktree, repoRoot, uncommittedFiles, unlockWorktree, type BranchStatus } from './git/worktrees.js';
 import { openPr, prStatus, type PrStatus } from './git/pr.js';
 import { currentBranch } from './git/branch.js';
+import { git } from './git/git.js';
 import { AddedPlugins } from './plugins/added.js';
 import { ASKED_ENTRY, ENTRY_TOOLS } from './plugins/entries.js';
 import { EXTENSION_ENTRY, ExtensionStore } from './plugins/extensions.js';
@@ -700,6 +701,8 @@ type GlobalConfig = z.infer<typeof globalConfigSchema>;
 
 /** The binaries tried, in order, when none is configured: the server, then the unified CLI. */
 const LLAMA_CANDIDATES = ['llama-server', 'llama'];
+/** Outside a repository, changes a conversation applied take the folder this long after they were written (C4). */
+const RECENT_CHANGE_MS = 6 * 3600_000;
 
 const samePath = (a: string, b: string): boolean =>
   resolve(a).replace(/\\/g, '/').toLowerCase() ===
@@ -881,6 +884,26 @@ export function createCore(deps: CoreDeps): Core {
               .get(path)!);
     if (!read) return floor;
     return autoContext(read.info, read.bytes, cacheType, await gpuBytes(), slots);
+  }
+
+  /**
+   * Whether changes a conversation applied still stand in the folder (review of C4): in a repository, those git still
+   * shows changed — work committed is done; outside one, those written within `RECENT_CHANGE_MS`, since nothing
+   * else says the work is over.
+   */
+  async function stillChanged(files: readonly ChangedFile[]): Promise<boolean> {
+    const repos = new Map<string, Promise<string | null>>();
+    for (const file of files) {
+      const dir = dirname(file.path);
+      const repo = await (repos.get(dir) ?? repos.set(dir, repoRoot(dir).catch(() => null)).get(dir)!);
+      if (repo) {
+        const status = await git(['status', '--porcelain', '--untracked-files=all', '--', file.path], repo).catch(() => null);
+        if (status?.code === 0 ? status.stdout.trim() !== '' : true) return true;
+      } else if (file.lastAt === undefined || Date.now() - Date.parse(file.lastAt) < RECENT_CHANGE_MS) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** The slots llama.cpp runs: one, or two when the sub-agents work in parallel (task 8.3). */
@@ -2568,7 +2591,7 @@ export function createCore(deps: CoreDeps): Core {
           if (meta.worktree || meta.worksIn === 'branch') continue;
           const last = (await openJournal(conversationStore.dir, meta.id, meta.branchId).catch(() => null))?.entries().at(-1);
           const alive =
-            turning.has(meta.id) || last?.kind === 'pending' || (await checkpoints.files(meta.id).catch(() => [])).length > 0;
+            turning.has(meta.id) || last?.kind === 'pending' || (await stillChanged(await checkpoints.files(meta.id).catch(() => [])));
           if (alive) return { conversationId: meta.id, title: meta.title };
         }
         return null;

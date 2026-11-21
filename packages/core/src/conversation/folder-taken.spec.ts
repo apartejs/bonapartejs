@@ -4,7 +4,8 @@
  * is told who: the window then offers its own branch first. One on its own branch, or archived, takes nothing.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { git } from '../git/git.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -75,6 +76,41 @@ describe('who works in a project folder (audit C4)', () => {
     expect(await core.projects.folderTaken(project.id)).toEqual({ conversationId: 'c1', title: 'Refonte du login' });
     const [changed] = await core.checkpoints.files('c1');
     await core.checkpoints.revertFile('c1', changed!.path);
+    expect(await core.projects.folderTaken(project.id)).toBeNull();
+  });
+
+  it('in a git project, changes committed take the folder no more: only what git still shows changed counts (review of C4)', async () => {
+    const { core, project, folder, say } = await rig();
+    await writeFile(join(folder, 'notes.txt'), 'ancien\n');
+    const run = async (...args: string[]) => expect((await git(args, folder)).code).toBe(0);
+    await run('init', '-q', '-b', 'main');
+    await run('config', 'user.email', 'test@example.invalid');
+    await run('config', 'user.name', 'Test');
+    await run('config', 'commit.gpgsign', 'false');
+    await run('config', 'core.autocrlf', 'false');
+    await run('add', '-A');
+    await run('commit', '-q', '-m', 'first');
+    await say('c1', 'Écris la note', `?project=${project.id}&mode=plume`);
+    expect(await core.projects.folderTaken(project.id)).toMatchObject({ conversationId: 'c1' });
+    // The person commits the work: the conversation, idle, works in the folder no more.
+    await run('commit', '-q', '-am', 'the note');
+    expect(await core.checkpoints.files('c1')).toHaveLength(1);
+    expect(await core.projects.folderTaken(project.id)).toBeNull();
+  });
+
+  it('without git, changes count only while they are recent: a day after, the folder is free (review of C4)', async () => {
+    const { core, project, folder, say } = await rig();
+    await writeFile(join(folder, 'notes.txt'), 'ancien\n');
+    await say('c1', 'Écris la note', `?project=${project.id}&mode=plume`);
+    expect(await core.projects.folderTaken(project.id)).toMatchObject({ conversationId: 'c1' });
+    // The turn wrote a day ago.
+    const turns = join(core.checkpoints.dir, 'c1');
+    for (const turn of await readdir(turns)) {
+      const path = join(turns, turn, 'manifest.json');
+      const manifest = JSON.parse(await readFile(path, 'utf8')) as { at?: string };
+      manifest.at = new Date(Date.now() - 24 * 3600_000).toISOString();
+      await writeFile(path, JSON.stringify(manifest));
+    }
     expect(await core.projects.folderTaken(project.id)).toBeNull();
   });
 

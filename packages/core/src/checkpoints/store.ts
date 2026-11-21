@@ -52,6 +52,8 @@ export interface ChangedFile {
   display: string;
   /** It did not exist before the conversation first wrote it. */
   created: boolean;
+  /** When the last turn that changed it first wrote (ISO), when known. */
+  lastAt?: string;
 }
 
 export interface TurnChanges {
@@ -211,7 +213,8 @@ export class CheckpointStore {
   async files(conversationId: string): Promise<ChangedFile[]> {
     return [...(await this.standing(conversationId)).values()].map((changes) => {
       const first = changes[0]!.entry;
-      return { path: first.path, display: first.display, created: !first.existed };
+      const lastAt = changes.at(-1)!.manifest.at;
+      return { path: first.path, display: first.display, created: !first.existed, ...(lastAt ? { lastAt } : {}) };
     });
   }
 
