@@ -28,7 +28,10 @@ jobs:
   # Windows only, the product's platform: on both, they doubled the run.
   # Ninety minutes: the end-to-end tests take some 14 on the maintainer's
   # machine, and a private repository's Windows runner has two cores.
+  # On a pull request (and by hand): a merge into main is the code that passed here, the branch up to date — never
+  # run twice.
   gate:
+    if: github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +87,7 @@ jobs:
   # is public, its minutes free).
   e2e:
     name: e2e ${{ matrix.shard }}/4
+    if: github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -136,7 +140,6 @@ jobs:
   # the tag). Once a version: an existing tag is left alone, so the next pushes to main release nothing until the
   # version changes. A tag pushed with GitHub's token runs no workflow; a dispatch on that tag does, as a tag would.
   release:
-    needs: [gate, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10

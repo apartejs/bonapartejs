@@ -73,7 +73,10 @@ test('ci.yml: the end-to-end tests run on Windows only, split over four jobs tha
   assert.doesNotMatch(jobs(ci).get('gate'), /End-to-end/, 'the gate no longer runs them');
   // The runner's screen is 1024 × 768: the app's narrow layout (under 1 100 px) put a pane over the conversation.
   assert.match(job, /Set-DisplayResolution -Width 1920 -Height 1080/);
-  assert.match(jobs(ci).get('release'), /needs: \[gate, e2e\]/);
+  // The tests run on a pull request: a merge into main is the code they passed (strict: up to date), never run twice.
+  assert.match(jobs(ci).get('gate'), /if: github.event_name != 'push'/);
+  assert.match(job, /if: github.event_name != 'push'/);
+  assert.doesNotMatch(jobs(ci).get('release'), /needs:/);
 });
 
 test('release.yml: Windows by default; macOS (×10) and Linux only when asked; a run by hand builds what it checks', () => {
@@ -143,7 +146,7 @@ test('release.yml: the draft release carries the version’s own notes from CHAN
 test('ci.yml: a green main tags its version once, and dispatches the release on that tag', () => {
   const job = jobs(ci).get('release');
   assert.ok(job, 'ci.yml has a release job');
-  assert.match(job, /needs: \[gate, e2e\]/);
+  assert.doesNotMatch(job, /needs:/, 'after a merge, the pull request already passed the tests');
   assert.match(job, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
   assert.match(job, /contents: write/);
   assert.match(job, /actions: write/);
