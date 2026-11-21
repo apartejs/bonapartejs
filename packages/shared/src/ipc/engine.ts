@@ -28,8 +28,11 @@ export const engineStateSchema = z.object({
   resume: z
     .object({ path: z.string(), name: z.string(), unloadedAt: z.string().optional(), idleMinutes: z.number().optional() })
     .optional(),
-  /** A sub-agent works in the engine now (task 8.2): « Occupé : sous-agent … ». */
-  working: z.object({ subagent: z.string() }).optional(),
+  /**
+   * Who works in the engine now (task 8.2, audit C1): a conversation by its title (empty while it has none), or one
+   * of its sub-agents by its name — « Occupé : … »; `others`, how many more work beside it (two slots).
+   */
+  working: z.object({ title: z.string(), subagent: z.string().optional(), others: z.number() }).optional(),
 });
 
 export type EngineStateView = z.infer<typeof engineStateSchema>;
@@ -274,7 +277,7 @@ export const restartAnnouncementSchema = z.object({
   replyRunning: z.boolean(),
   loaded: z.boolean(),
   /** Sub-agents in parallel (task 8.3): the slot more, and its video memory (null with no model loaded). */
-  parallel: z.object({ slots: z.number(), vramBytesEach: z.number().nullable() }).optional(),
+  parallel: z.object({ slots: z.number(), nCtx: z.number().optional(), vramBytesEach: z.number().nullable() }).optional(),
 });
 
 export type RestartAnnouncementView = z.infer<typeof restartAnnouncementSchema>;

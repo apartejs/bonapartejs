@@ -48,7 +48,14 @@ function turnEventToLine(event: TurnEvent, rereading: { on: boolean }, agentId?:
       return { type: 'turn-start', ...mine };
     case 'step':
       if (event.name === 'reread') rereading.on = event.phase === 'start';
-      return { type: event.phase === 'start' ? 'step-start' : 'step-end', name: event.name, ...mine };
+      // A wait for the slot names who holds it (audit C1): a field aparté's step does not have, read by the window's
+      // runner before aparté draws the step (apartejs/aparte#288).
+      return {
+        type: event.phase === 'start' ? 'step-start' : 'step-end',
+        name: event.name,
+        ...(event.phase === 'start' && event.holder ? { holder: event.holder } : {}),
+        ...mine,
+      } as StreamRunEvent;
     case 'progress':
       // The progress of a prompt read again: the bar of the `reread` activity.
       return rereading.on

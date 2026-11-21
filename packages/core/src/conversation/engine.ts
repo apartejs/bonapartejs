@@ -160,8 +160,11 @@ export interface ConversationEngineDeps {
 
 export type TurnEvent =
   | DemuxEvent
-  /** What the turn waits for, said while it waits: the slot, a restore, a seed, a re-read. */
-  | { type: 'step'; name: 'slot-wait' | 'restore' | 'seed' | 'reread'; phase: 'start' | 'end' }
+  /**
+   * What the turn waits for, said while it waits: the slot, a restore, a seed, a re-read. A wait for the slot says
+   * who holds it and what it does (`holder`, audit C1), said again each time that changes.
+   */
+  | { type: 'step'; name: 'slot-wait' | 'restore' | 'seed' | 'reread'; phase: 'start' | 'end'; holder?: SlotHolder }
   /** The prompt being read, as the server counts it. */
   | { type: 'progress'; done: number; total: number }
   /**
@@ -176,6 +179,40 @@ export type TurnEvent =
    * turn's first call is said by whoever opened the run (the handler; a sub-agent's `agent-start`).
    */
   | { type: 'round' };
+
+/** What an owner of a slot is doing (audit C1): answering, running one of its tools, or compacting. */
+export type EngineDoing = { kind: 'answer' } | { kind: 'tool'; tool: string; target?: string } | { kind: 'compact' };
+
+/** Who works in the engine: a conversation, by its title, or one of its sub-agents, by its name — and what it does. */
+export interface SlotHolder {
+  conversationId: string;
+  /** Its conversation's title; empty while it has none. */
+  title: string;
+  subagent?: string;
+  doing: EngineDoing;
+}
+
+/** How long a target is said at most: the start of a command, a path. */
+const TARGET_CHARS = 60;
+
+/** What a call works on, as a short line: the command and its arguments, a path, an address, a pattern. */
+export function callTarget(name: string, input: Record<string, unknown>): string | undefined {
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+  let target = '';
+  if (name === 'run_command') {
+    const args = Array.isArray(input['args']) ? input['args'].filter((arg): arg is string => typeof arg === 'string') : [];
+    // A program named by its path is said by its name: « node.exe », not the folder it lives in.
+    const program = text(input['program']).split(/[\\/]/).pop() ?? '';
+    target = [program, ...args].filter((part) => part !== '').join(' ');
+  } else if (name === 'run_subagent') {
+    target = text(input['name']);
+  } else {
+    target = text(input['path']) || text(input['url']) || text(input['pattern']) || text(input['query']);
+  }
+  target = target.replace(/\s+/g, ' ');
+  if (target === '') return undefined;
+  return target.length > TARGET_CHARS ? `${target.slice(0, TARGET_CHARS - 1)}…` : target;
+}
 
 /** A call the model wrote, given an id: what the tool rounds answer. */
 export interface ModelCall {
@@ -459,6 +496,10 @@ function renderedAfter(entries: readonly JournalEntry[], savedAt: string): strin
     .join('');
 }
 
+/** Who does something, whatever branch it is on: a conversation, or one of its sub-agents. */
+const doerKey = (owner: Exclude<SlotOwner, { kind: 'side' }>): string =>
+  owner.kind === 'subagent' ? `${owner.conversationId}/${owner.agentId}` : owner.conversationId;
+
 const ownerKey = (owner: SlotOwner): string =>
   owner.kind === 'conversation'
     ? `${owner.conversationId}_${owner.branchId}`
@@ -485,6 +526,118 @@ export class ConversationEngine {
         if (owner.kind === 'conversation') this.deps.onSaveError?.(error, owner.conversationId);
       },
     });
+  }
+
+  /** Each conversation's title as its last turn read it: what a wait for the slot names (audit C1). */
+  private readonly titles = new Map<string, string>();
+  /** What each owner at work does now, by `doerKey`. */
+  private readonly doings = new Map<string, EngineDoing>();
+  /** The turns that wait for a slot: told again when who holds it, or what it does, changes. */
+  private readonly waiters = new Set<{ owner: SlotOwner; sink: (event: TurnEvent) => void; told: string }>();
+  private watchingWaiters = false;
+
+  /** Who works in the engine now (audit C1): each conversation or sub-agent in a slot, and what it does. */
+  get holders(): SlotHolder[] {
+    return this.scheduler.busy.flatMap((owner) => (owner.kind === 'side' ? [] : [this.holderOf(owner)]));
+  }
+
+  private holderOf(owner: Exclude<SlotOwner, { kind: 'side' }>): SlotHolder {
+    return {
+      conversationId: owner.conversationId,
+      title: this.titles.get(owner.conversationId) ?? '',
+      ...(owner.kind === 'subagent' ? { subagent: owner.name } : {}),
+      doing: this.doings.get(doerKey(owner)) ?? { kind: 'answer' },
+    };
+  }
+
+  /** Told each time who works in the engine, or what it does, changes. */
+  onHolders(listener: (holders: SlotHolder[]) => void): () => void {
+    let last = JSON.stringify(this.holders);
+    const check = (): void => {
+      const now = this.holders;
+      const said = JSON.stringify(now);
+      if (said === last) return;
+      last = said;
+      listener(now);
+    };
+    this.holderListeners.add(check);
+    const off = this.scheduler.onChange(check);
+    return () => {
+      off();
+      this.holderListeners.delete(check);
+    };
+  }
+
+  private readonly holderListeners = new Set<() => void>();
+
+  /** What an owner at work does now: its waiters and the engine's card hear it. */
+  private doing(owner: SlotOwner, doing: EngineDoing): void {
+    if (owner.kind === 'side') return;
+    const key = doerKey(owner);
+    const was = this.doings.get(key);
+    if (was && JSON.stringify(was) === JSON.stringify(doing)) return;
+    this.doings.set(key, doing);
+    this.tellWaiters();
+    for (const listener of this.holderListeners) listener();
+  }
+
+  /** The tool an owner's call runs now (the loop says each call as it starts it). */
+  callRuns(conversationId: string, agentId: string | undefined, call: { name: string; input: unknown }): void {
+    const owner = this.scheduler.busy.find(
+      (busy) => busy.kind !== 'side' && busy.conversationId === conversationId && (busy.kind === 'subagent' ? busy.agentId === agentId : agentId === undefined),
+    );
+    if (!owner) return;
+    const input = typeof call.input === 'object' && call.input !== null ? (call.input as Record<string, unknown>) : {};
+    const target = callTarget(call.name, input);
+    this.doing(owner, { kind: 'tool', tool: call.name, ...(target ? { target } : {}) });
+  }
+
+  /** Who a waiter waits for: the first owner at work that is not itself. */
+  private holderFor(owner: SlotOwner): SlotHolder | undefined {
+    const first = this.scheduler.busy.find((other) => other.kind !== 'side' && ownerKey(other) !== ownerKey(owner));
+    return first && first.kind !== 'side' ? this.holderOf(first) : undefined;
+  }
+
+  /** Each waiter whose holder changed hears it again: its step ends and starts again, naming the new one. */
+  private tellWaiters(): void {
+    for (const waiter of this.waiters) {
+      const holder = this.holderFor(waiter.owner);
+      if (!holder) continue;
+      const said = JSON.stringify(holder);
+      if (said === waiter.told) continue;
+      waiter.told = said;
+      waiter.sink({ type: 'step', name: 'slot-wait', phase: 'end' });
+      waiter.sink({ type: 'step', name: 'slot-wait', phase: 'start', holder });
+    }
+  }
+
+  /**
+   * A turn about to ask for a slot: when it will wait, its step says so and who holds the slot (audit C1). The
+   * holders' titles are read again first. `end` closes the step (its job began); `forget`, a wait that failed.
+   */
+  private async waitStep(owner: SlotOwner, sink: (event: TurnEvent) => void): Promise<{ end(): void; forget(): void } | null> {
+    if (!this.crowded) return null;
+    for (const busy of this.scheduler.busy) {
+      if (busy.kind === 'side') continue;
+      const meta = await this.deps.store.get(busy.conversationId).catch(() => null);
+      if (meta) this.titles.set(meta.id, meta.title);
+    }
+    if (!this.watchingWaiters) {
+      this.watchingWaiters = true;
+      this.scheduler.onChange(() => this.tellWaiters());
+    }
+    const holder = this.holderFor(owner);
+    const waiter = { owner, sink, told: holder ? JSON.stringify(holder) : '' };
+    this.waiters.add(waiter);
+    sink({ type: 'step', name: 'slot-wait', phase: 'start', ...(holder ? { holder } : {}) });
+    return {
+      end: () => {
+        if (this.waiters.delete(waiter)) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
+      },
+      forget: () => {
+        this.waiters.delete(waiter);
+      },
+    };
   }
 
   /** The sub-agent working in the engine now, by its name (task 8.2: « Occupé : sous-agent … »); none: null. */
@@ -900,6 +1053,7 @@ export class ConversationEngine {
     let summary = '';
     let cut = false;
     const summarise = async (slot: { id: number }): Promise<void> => {
+      this.doing(owner, { kind: 'compact' });
       const demux = family.createDemux();
       const take = (pieces: DemuxEvent[]): void => {
         for (const piece of pieces) if (piece.type === 'text') summary += piece.delta;
@@ -1218,6 +1372,7 @@ export class ConversationEngine {
   ): Promise<TurnResult & { answer: string }> {
     const meta = await this.deps.store.get(conversationId);
     if (!meta) throw new Error(`There is no conversation ${conversationId}.`);
+    this.titles.set(meta.id, meta.title);
     const engine = await this.deps.engine();
     if (!engine) throw new NoEngineError();
     this.follow(engine);
@@ -1306,26 +1461,29 @@ export class ConversationEngine {
           return done;
         });
       } else {
-        const waits = this.crowded;
-        if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'start' });
-        result = await this.scheduler.run(
-          owner,
-          async (slot) => {
-            if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
-            let done: TurnResult;
-            try {
-              done = await work(slot);
-            } catch (error) {
-              slot.discard();
-              throw error;
-            }
-            // Done: what it leaves in the slot is worth nothing — said before the job ends, since the next
-            // owner takes the slot the moment it does, and would save it (review of phase 8).
-            if (!done.suspended) slot.discard();
-            return done;
-          },
-          signal ? { signal } : {},
-        );
+        const wait = await this.waitStep(owner, sink);
+        try {
+          result = await this.scheduler.run(
+            owner,
+            async (slot) => {
+              wait?.end();
+              let done: TurnResult;
+              try {
+                done = await work(slot);
+              } catch (error) {
+                slot.discard();
+                throw error;
+              }
+              // Done: what it leaves in the slot is worth nothing — said before the job ends, since the next
+              // owner takes the slot the moment it does, and would save it (review of phase 8).
+              if (!done.suspended) slot.discard();
+              return done;
+            },
+            signal ? { signal } : {},
+          );
+        } finally {
+          wait?.forget();
+        }
       }
     } catch (error) {
       if (signal?.aborted && error instanceof DOMException && error.name === 'AbortError') {
@@ -1804,13 +1962,13 @@ export class ConversationEngine {
     this.turning.set(key, turning);
     this.lastRun.set(key, { engine, tokens: used });
 
-    const waits = this.crowded;
-    if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'start' });
+    this.titles.set(meta.id, meta.title);
+    const wait = await this.waitStep(owner, sink);
     try {
       return await this.scheduler.run(
         owner,
         async (slot) => {
-          if (waits) sink({ type: 'step', name: 'slot-wait', phase: 'end' });
+          wait?.end();
           let prompt = frozen + userRendered + opening;
           if (overflows) {
             const compacted = await this.compactTurn(meta, journal, engine, { sink, window, slot, ...(signal ? { signal } : {}) }, opening);
@@ -1863,6 +2021,7 @@ export class ConversationEngine {
       }
       throw error;
     } finally {
+      wait?.forget();
       this.turning.delete(key);
     }
   }
@@ -1922,6 +2081,7 @@ export class ConversationEngine {
     };
     for (let round = 0; ; round += 1) {
       if (round > 0) sink({ type: 'round' });
+      this.doing(owner, { kind: 'answer' });
       const demux = family.createDemux();
       let raw = '';
       let truncated = false;
@@ -2017,6 +2177,10 @@ export class ConversationEngine {
         return truncated ? { usage, truncated: true as const } : { usage };
       }
 
+      // What it does now, for whoever waits for its slot (audit C1): the loop says each call as it starts it.
+      const first = calls[0]!;
+      const target = callTarget(first.name, first.input);
+      this.doing(owner, { kind: 'tool', tool: first.name, ...(target ? { target } : {}) });
       const answer = await tools.onCalls(calls, slot.lend ? { lend: slot.lend } : undefined);
       if ('stop' in answer) return { usage, limited: true as const };
       if ('suspend' in answer) {

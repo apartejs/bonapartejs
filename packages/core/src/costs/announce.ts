@@ -127,7 +127,8 @@ export interface RestartAnnouncement {
   replyRunning: boolean;
   loaded: boolean;
   /** Sub-agents in parallel (task 8.3): the slot more, and what it holds (unknown with no model loaded). */
-  parallel?: { slots: number; vramBytesEach: number | null };
+  /** `nCtx`: the context each slot keeps (audit C2). */
+  parallel?: { slots: number; nCtx?: number; vramBytesEach: number | null };
 }
 
 /**

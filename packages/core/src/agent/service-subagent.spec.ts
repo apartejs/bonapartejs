@@ -143,8 +143,8 @@ describe('a sub-agent on a service, for a conversation on the built-in engine (a
     expect(prompts.some((prompt) => prompt.includes('You are a sub-agent'))).toBe(false);
     // Its tool ran in the core: the file's content reached the service as the call's result.
     expect(JSON.stringify(theirs[1]!.messages)).toContain('export const a = 1;');
-    // Nobody held the engine for it.
-    expect((await Promise.all(states)).every((state) => state.working === undefined)).toBe(true);
+    // No sub-agent held the engine for it: only its conversation worked there (audit C1).
+    expect((await Promise.all(states)).every((state) => state.working?.subagent === undefined)).toBe(true);
     // Its events under its id, its end, its result read by the conversation.
     expect(lines.filter((line) => line['agentId'] === agentId).map((line) => line.type)).toEqual(expect.arrayContaining(['tool-start', 'tool-resolved', 'text-delta', 'agent-end']));
     expect(of(lines, 'agent-end')[0]).toMatchObject({ status: 'done', result: 'From the service: a is 1.' });

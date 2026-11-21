@@ -10,6 +10,7 @@
 import { AGENT_ENDPOINT, type PlayMode } from '@aparte/bonaparte-shared';
 import { createAgentStreamRunner } from '@aparte/core';
 import { activityOf, type TurnActivity } from '../logo/mascot-state';
+import { endWaits, hearWait } from './engine-wait';
 
 /** Said on the window as a turn's work changes (task 12.2): `{ conversationId, activity }`. */
 export const TURN_ACTIVITY = 'bonaparte-turn-activity';
@@ -80,12 +81,17 @@ export function createConversationRunner(options: ConversationRunnerOptions = {}
       (options.onActivity ?? toWindow)(conversationId, activity);
     };
     const emitter: typeof turn.emitter = (event) => {
-      say(activityOf(event as unknown as { type: string } & Record<string, unknown>));
+      const heard = event as unknown as { type: string } & Record<string, unknown>;
+      say(activityOf(heard));
+      // Who holds the engine, kept before aparté draws the step that names it (audit C1).
+      hearWait(conversationId, heard);
       turn.emitter(event);
     };
-    return runner({ ...turn, emitter }).catch((error: unknown) => {
-      say(turn.signal.aborted ? 'stopped' : 'failed');
-      throw error;
-    });
+    return runner({ ...turn, emitter })
+      .catch((error: unknown) => {
+        say(turn.signal.aborted ? 'stopped' : 'failed');
+        throw error;
+      })
+      .finally(() => endWaits(conversationId));
   };
 }

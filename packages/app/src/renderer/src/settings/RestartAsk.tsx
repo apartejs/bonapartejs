@@ -101,7 +101,10 @@ export function RestartCard({ messages, locale, asking, pending, keep, cancel }:
               <p className="launch-restart__detail">
                 {parallel.vramBytesEach === null
                   ? words.launchParallelUnknown
-                  : words.launchParallel(formatBytes(parallel.vramBytesEach, { locale, units: messages.units }))}
+                  : words.launchParallel(
+                      formatBytes(parallel.vramBytesEach, { locale, units: messages.units }),
+                      words.launchContextValue(String(Math.round((parallel.nCtx ?? 0) / 1024))),
+                    )}
               </p>
             ) : null}
             {cost.memoriesLost > 0 ? <p className="launch-restart__detail">{words.launchMemories(cost.memoriesLost)}</p> : null}

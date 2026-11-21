@@ -74,6 +74,26 @@ export function LaunchSettings({ messages, locale, idleMinutes, change, onKept }
           />
         }
       />
+      <Row
+        label={words.launchSlots}
+        hint={words.launchSlotsHint}
+        control={
+          // The key stays the sub-agents' (task 8.3): two slots serve any two owners, conversations too (audit C2).
+          <Choice
+            small
+            label={words.launchSlots}
+            value={shown.subagents === 'parallel' ? '2' : '1'}
+            options={[
+              { value: '1', label: '1' },
+              { value: '2', label: '2' },
+            ]}
+            onChange={(next) => {
+              const subagents = next === '2' ? 'parallel' : 'sequential';
+              restart.ask(subagents === kept.subagents ? null : { subagents });
+            }}
+          />
+        }
+      />
       {typeof kept.gpuLayers === 'number' ? (
         <Row
           label={words.launchLayers}

@@ -9,7 +9,6 @@ import { appOpenDataFolder, conversationsExport, providersList, providersModels 
 import { useEffect, useState } from 'react';
 import { bridge } from '../bridge';
 import { Choice, Row, Section, Switch } from './controls';
-import { RestartCard, useRestartAsk } from './RestartAsk';
 import type { PageProps } from './SettingsView';
 
 /** Said on the window when the language changed: the page asks the main process its words again. */
@@ -17,16 +16,9 @@ export const LOCALE_CHANGED = 'bonaparte-locale';
 
 type Notify = 'banner' | 'badge' | 'off';
 
-export function GeneralPage({ messages, locale, values, change, known }: PageProps) {
+export function GeneralPage({ messages, locale, values, change }: PageProps) {
   const words = messages.settings.general;
   const [exported, setExported] = useState<string | null>(null);
-  // The sub-agents in parallel restart the engine (task 8.3): said first, kept only on a choice — by the core,
-  // with its restart; the settings' values are told, so every page shows it (review of phase 8).
-  const restart = useRestartAsk((kept) => {
-    if ('subagents' in kept) known('subagentsOnBuiltin', kept.subagents);
-  });
-  const subagentsKept = values['subagentsOnBuiltin'] === 'parallel' ? 'parallel' : 'sequential';
-  const asked = restart.asking && 'subagents' in restart.asking.change ? restart.asking.change.subagents : null;
   const language = values['language'] === 'fr' || values['language'] === 'en' ? values['language'] : locale;
   const notify = (key: string, label: string) => (
     <Row
@@ -125,23 +117,6 @@ export function GeneralPage({ messages, locale, values, change, known }: PagePro
             />
           }
         />
-        <Row
-          label={words.subagents}
-          hint={words.subagentsHint}
-          control={
-            <Choice
-              small
-              label={words.subagents}
-              value={asked ?? subagentsKept}
-              options={[
-                { value: 'sequential', label: words.subagentsSequential },
-                { value: 'parallel', label: words.subagentsParallel },
-              ]}
-              onChange={(next) => restart.ask(next === subagentsKept ? null : { subagents: next })}
-            />
-          }
-        />
-        <RestartCard messages={messages} locale={locale} {...restart} />
         <SubagentsEngine words={words} value={typeof values['subagentsEngine'] === 'string' ? values['subagentsEngine'] : 'conversation'} change={(next) => change('subagentsEngine', next)} />
       </Section>
       <Section title={words.notifications} hint={words.notificationsHint}>

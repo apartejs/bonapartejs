@@ -66,7 +66,7 @@ import {
 import type { SpawnFn } from './process/spawn.js';
 import { settingDefault } from './settings/catalog.js';
 import { SettingsStore } from './settings/store.js';
-import type { MemoryRow } from './conversation/engine.js';
+import type { MemoryRow, SlotHolder } from './conversation/engine.js';
 import type { SeedStats } from './kv/kv-store.js';
 import { exportConversations } from './conversation/export.js';
 import { createBranches, type Branches } from './conversation/branches.js';
@@ -260,8 +260,11 @@ export interface EngineState {
    * one, else the one loaded last. Absent when none is known: the first launch.
    */
   resume?: { path: string; name: string; unloadedAt?: string; idleMinutes?: number };
-  /** A sub-agent works in the engine now (task 8.2): the card says « Occupé : sous-agent … ». */
-  working?: { subagent: string };
+  /**
+   * Who works in the engine now (task 8.2, audit C1): the card says « Occupé : … » — a conversation by its title, a
+   * sub-agent by its name; `others`, how many more work beside it.
+   */
+  working?: { title: string; subagent?: string; others: number };
 }
 
 /**
@@ -1264,7 +1267,7 @@ export function createCore(deps: CoreDeps): Core {
           }
         : {}),
       ...(engine.mode === 'managed' && !model ? await resumeOf() : {}),
-      ...(conversations.subagentAtWork !== null ? { working: { subagent: conversations.subagentAtWork } } : {}),
+      ...workingOf(conversations.holders),
     };
   }
 
@@ -1722,8 +1725,14 @@ export function createCore(deps: CoreDeps): Core {
         `[bonaparte] the memory of ${conversationId} was not saved: ${error instanceof Error ? error.message : String(error)}`,
       ),
   });
-  // A sub-agent takes the engine, or leaves it: the card says who works there (task 8.2).
-  conversations.onSubagentAtWork(() => deps.engineChanged?.());
+  // A conversation or a sub-agent takes the engine, or leaves it: the card says who works there (task 8.2, audit C1).
+  let working = JSON.stringify(workingOf(conversations.holders));
+  conversations.onHolders((holders) => {
+    const now = JSON.stringify(workingOf(holders));
+    if (now === working) return;
+    working = now;
+    deps.engineChanged?.();
+  });
   // The branches of a conversation (task 7.2): « Brancher », and the sibling the person picks in the chat.
   const branches = createBranches({
     engine: conversations,
@@ -2325,11 +2334,14 @@ export function createCore(deps: CoreDeps): Core {
     async restartCost(changes) {
       const current = (await launchSettings()) as EngineLaunchSettings;
       const next = { ...current, ...changes };
-      // In parallel (task 8.3): one slot more, and what it holds — said beside the restart.
-      const parallel =
-        next.subagents === 'parallel' && current.subagents !== 'parallel'
-          ? { slots: 2, vramBytesEach: loaded ? announceParallelSlots(loaded.info, next.nCtx, next.cacheType).vramBytesEach : null }
-          : undefined;
+      // Two slots (task 8.3, audit C2): one slot more, the context each keeps — the one the load would choose for
+      // two when none was chosen, as the supervisor launches it — and what that slot's cache holds, said beside the
+      // restart.
+      const twoSlots = next.subagents === 'parallel' && current.subagents !== 'parallel';
+      const perSlot = twoSlots && next.nCtxAuto && !('nCtx' in changes) ? await autoNCtx(loaded?.path ?? (await resumeOf()).resume?.path, next.cacheType, 2) : next.nCtx;
+      const parallel = twoSlots
+        ? { slots: 2, nCtx: perSlot, vramBytesEach: loaded ? announceParallelSlots(loaded.info, perSlot, next.cacheType).vramBytesEach : null }
+        : undefined;
       // The memories these settings would refuse that the current ones serve: those it makes to read again.
       const states = await kv.savedStates();
       const served = states.filter((state) => memoriesRefusedBy([state], current) === 0);
@@ -2931,6 +2943,13 @@ export class ModelNotListedError extends Error {
     super(`This file is not among the models bonaparte found: ${path}`);
     this.name = 'ModelNotListedError';
   }
+}
+
+/** Who works in the engine, as its card says it (audit C1): the first holder, and how many more. */
+function workingOf(holders: readonly SlotHolder[]): Pick<EngineState, 'working'> {
+  const [first, ...rest] = holders;
+  if (!first) return {};
+  return { working: { title: first.title, ...(first.subagent ? { subagent: first.subagent } : {}), others: rest.length } };
 }
 
 function nameOf(path: string): string {

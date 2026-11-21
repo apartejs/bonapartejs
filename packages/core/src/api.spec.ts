@@ -735,6 +735,8 @@ describe('createCore — what the review of phase 2 found', () => {
     const cost = await core.restartCost({ subagents: 'parallel' });
     expect(cost).toMatchObject({ kind: 'restart', setting: 'subagents', loaded: true, parallel: { slots: 2 } });
     expect(cost.parallel!.vramBytesEach).toBeGreaterThan(0);
+    // The context each slot keeps, said with it (audit C2).
+    expect(cost.parallel!.nCtx).toBe((await core.engineSettings()).nCtx);
     // Nothing restarts, nothing is kept, by asking.
     expect((await core.memory()).engine.slots).toBe(1);
     expect(await core.engineSettings()).toMatchObject({ subagents: 'sequential' });

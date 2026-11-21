@@ -53,7 +53,7 @@ export interface SidebarProps {
   /** The project each conversation works in: what the core says, else where it was started here. */
   projectOf(id: string): string | null;
   /** Where each conversation's memory is, and its branch's changed files, as the core says. */
-  marksOf(id: string): { memory: Memory; branchFiles?: number; pr?: RowPr; unread?: boolean };
+  marksOf(id: string): { memory: Memory; branchFiles?: number; pr?: RowPr; unread?: boolean; queued?: boolean };
   grouping: 'project' | 'single';
   onCollapse(): void;
   onNewConversation(): void;
@@ -75,7 +75,7 @@ export interface SidebarProps {
 }
 
 /** A row as the list draws it: the conversation, where its memory is, its branch's files. */
-type Row = ListedConversation & { memory: Memory; branchFiles?: number; pr?: RowPr; unread?: boolean };
+type Row = ListedConversation & { memory: Memory; branchFiles?: number; pr?: RowPr; unread?: boolean; queued?: boolean };
 
 /** Where a list's rows may go: the projects, as aparté's list names a group. */
 type Target = { key: string; label: string };
@@ -101,7 +101,7 @@ function List({
   // aparté's list draws itself again whenever it is given a new array — closing a row's open
   // menu: it gets a new one only when what it draws has changed.
   const drawn = items
-    .map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt, item.memory, item.branchFiles, item.pr ? `${item.pr.number}${item.pr.state}${item.pr.ci}` : '', item.unread ? 'unread' : ''].join('\u0000'))
+    .map((item) => [item.id, item.title, item.updatedAt, item.pinnedAt, item.archivedAt, item.memory, item.branchFiles, item.pr ? `${item.pr.number}${item.pr.state}${item.pr.ci}` : '', item.unread ? 'unread' : '', item.queued ? 'queued' : ''].join('\u0000'))
     .join('\u0001');
   // A flat list has no « Épinglées » group: a pinned conversation comes first, the last pinned at the top.
   const conversations = useMemo(
@@ -112,7 +112,7 @@ function List({
   const renderMeta = useMemo(() => {
     const marks = new Map(items.map((item) => [item.id, item]));
     return (item: { id: string }) =>
-      rowMarks(marks.get(item.id)?.memory ?? null, marks.get(item.id)?.branchFiles, words, marks.get(item.id)?.pr, marks.get(item.id)?.unread === true);
+      rowMarks(marks.get(item.id)?.memory ?? null, marks.get(item.id)?.branchFiles, words, marks.get(item.id)?.pr, marks.get(item.id)?.unread === true, marks.get(item.id)?.queued === true);
   }, [drawn, words]);
   // The same array while the projects are the same: a new one draws the rows again, closing an open menu.
   const targetsKey = targets.map((target) => `${target.key}\u0000${target.label}`).join('\u0001');
@@ -228,6 +228,7 @@ export function Sidebar(props: SidebarProps) {
       ...(marks.branchFiles !== undefined ? { branchFiles: marks.branchFiles } : {}),
       ...(marks.pr ? { pr: marks.pr } : {}),
       ...(marks.unread ? { unread: true } : {}),
+      ...(marks.queued ? { queued: true } : {}),
     };
   });
   const known = new Set(projects.map((project) => project.id));

@@ -168,6 +168,40 @@ export const fr: Messages = {
     reread: 'Relit la conversation',
     compact: 'Contexte plein : résume la conversation pour continuer',
   },
+  engineWait: {
+    line: (who, doing) => `Attend le moteur : ${who} ${doing}`,
+    conversation: (title) => `« ${title} »`,
+    subagent: (name, title) => `le sous-agent ${name} de « ${title} »`,
+    untitled: 'Nouvelle conversation',
+    answer: 'répond',
+    compact: 'résume sa conversation',
+    tool: (tool, target) => {
+      const on = target ? ` ${target}` : '';
+      switch (tool) {
+        case 'run_command':
+          return `lance${on}`;
+        case 'read_file':
+          return `lit${on}`;
+        case 'list_files':
+          return `liste${on}`;
+        case 'search':
+          return `cherche${on}`;
+        case 'edit_file':
+          return `modifie${on}`;
+        case 'write_file':
+          return `écrit${on}`;
+        case 'web_fetch':
+          return `ouvre${on}`;
+        case 'web_search':
+          return `cherche${on} sur le web`;
+        case 'run_subagent':
+          return `lance le sous-agent${on}`;
+        default:
+          return `utilise ${tool}`;
+      }
+    },
+    row: 'attend le moteur',
+  },
   memory: {
     restoreTitle: (tokens) => `Mémoire sauvée : ${tokens} jetons`,
     restoreLine: (seconds, instead) => `Reprise en ~${seconds} au lieu de ~${instead} de relecture.`,
@@ -203,7 +237,9 @@ export const fr: Messages = {
     ready: 'Moteur prêt',
     line: (context, slots) => `Prêt · contexte ${context} · ${slots} ${slots > 1 ? 'slots' : 'slot'}`,
     busy: 'Moteur occupé',
-    working: (subagent) => `Occupé : sous-agent ${subagent}`,
+    working: (who, others) => (others > 0 ? `Occupé : ${who} et ${others} autre${others > 1 ? 's' : ''}` : `Occupé : ${who}`),
+    subagent: (name) => `sous-agent ${name}`,
+    conversation: (title) => `« ${title} »`,
   },
   modes: { lecture: 'Lecture', repetition: 'Répétition', plume: 'Plume', impro: 'Impro' },
   approval: {
@@ -500,10 +536,6 @@ export const fr: Messages = {
       worksInHint: 'Le choix se refait à la création, depuis « Nouvelle conversation ».',
       worksInFolder: 'Dans le dossier du projet',
       worksInBranch: 'Sur sa branche',
-      subagents: 'Sous-agents du moteur intégré',
-      subagentsHint: 'En parallèle : un slot de plus par sous-agent, de la mémoire vidéo en plus et un redémarrage du moteur, annoncés avant.',
-      subagentsSequential: 'L’un après l’autre',
-      subagentsParallel: 'En parallèle',
       subagentsEngine: 'Moteur des sous-agents',
       subagentsEngineHint:
         'Sur un service, les missions et tout ce que lit un sous-agent (fichiers, résultats de commandes) partent vers ce service. Il ne prend pas de slot au moteur intégré. Une conversation sur un service garde le sien.',
@@ -594,6 +626,8 @@ export const fr: Messages = {
       launchContextValue: (thousands) => `${thousands} k`,
       launchCache: 'Cache K/V',
       launchCacheHint: 'f16 est exact ; q8_0 et q4_0 prennent moins de mémoire vidéo, au prix d’un peu de précision.',
+      launchSlots: 'Slots du moteur',
+      launchSlotsHint: 'Avec 2 slots, deux conversations, ou deux sous-agents, répondent en même temps ; chaque slot a son contexte et son cache en mémoire vidéo. Avec 1, chacun attend son tour.',
       launchCacheTypes: { f16: 'f16', q8_0: 'q8_0', q4_0: 'q4_0' },
       launchLayers: 'Sur la carte graphique',
       launchLayersHint: (layers) =>
@@ -603,9 +637,10 @@ export const fr: Messages = {
       launchIdleHint: 'Sans activité, le modèle rend la mémoire vidéo ; tes conversations restent, et il se recharge en un clic.',
       launchIdleMinutes: (minutes) => (minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`),
       launchIdleNever: 'Jamais',
-      launchSettingNames: { nCtx: 'Taille du contexte', cacheType: 'Cache K/V', subagents: 'Sous-agents du moteur intégré' },
-      launchParallel: (bytes) => `En parallèle : un slot de plus pour les sous-agents, environ ${bytes} de mémoire vidéo.`,
-      launchParallelUnknown: 'En parallèle : un slot de plus pour les sous-agents ; sa mémoire vidéo se dit quand un modèle est chargé.',
+      launchSettingNames: { nCtx: 'Taille du contexte', cacheType: 'Cache K/V', subagents: 'Slots du moteur' },
+      launchParallel: (bytes, context) =>
+        `Deux conversations, ou deux sous-agents, répondent en même temps : ~${bytes} de mémoire vidéo de plus (un contexte de ${context} par slot), le moteur redémarre.`,
+      launchParallelUnknown: 'Deux conversations, ou deux sous-agents, répondent en même temps ; la mémoire vidéo de plus se dit quand un modèle est chargé.',
       launchRestartTitle: (setting) => `« ${setting} » s’applique au redémarrage du moteur`,
       launchRestartReload: (duration) => `Le modèle se recharge : ~${duration}. La mémoire de la conversation en cours est sauvée avant.`,
       launchNextLoad: 'Aucun modèle ne tourne : ce réglage s’applique au prochain chargement.',

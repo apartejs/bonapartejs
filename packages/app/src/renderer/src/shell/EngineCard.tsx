@@ -54,16 +54,22 @@ function Resources({ sample, messages, locale }: { sample: ResourceSampleView; m
 
 export function EngineCard({ engine, messages, resources, locale }: { engine: EngineStateView; messages: Messages; resources?: ResourceSampleView | null; locale?: string }) {
   if (!engine.model) return null;
-  // A sub-agent works in the engine (task 8.2): its conversation waits on disk, and the card says who works.
-  const subagent = engine.working?.subagent;
+  // A conversation or one of its sub-agents works in the engine (task 8.2, audit C1): the card says who.
+  const working = engine.working;
+  const words = messages.engineCard;
+  const who = working
+    ? working.subagent
+      ? words.subagent(working.subagent)
+      : words.conversation(working.title.trim() || messages.engineWait.untitled)
+    : null;
   return (
-    <div className="aparte-card engine-card" data-working={subagent ? 'subagent' : undefined}>
+    <div className="aparte-card engine-card" data-working={working ? (working.subagent ? 'subagent' : 'conversation') : undefined}>
       <div className="engine-card__name">
-        <span className="engine-card__dot" role="img" aria-label={subagent ? messages.engineCard.busy : messages.engineCard.ready} />
+        <span className="engine-card__dot" role="img" aria-label={working ? words.busy : words.ready} />
         <span className="engine-card__model">{engine.model.name}</span>
       </div>
       <p className="engine-card__line">
-        {subagent ? messages.engineCard.working(subagent) : messages.engineCard.line(contextSize(engine.model.nCtx), engine.model.slots ?? 1)}
+        {working && who ? words.working(who, working.others) : words.line(contextSize(engine.model.nCtx), engine.model.slots ?? 1)}
       </p>
       {resources ? <Resources sample={resources} messages={messages} locale={locale ?? 'fr'} /> : null}
     </div>

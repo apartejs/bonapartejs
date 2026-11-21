@@ -164,32 +164,33 @@ test('a request of a sub-agent names it; refusing it stops only it — it return
   await expect(pane(page).locator('.subagents-pane__summary')).toHaveText('1 sous-agent · 1 fini');
 });
 
-test('« En parallèle » says first what it costs — one slot more, a restart — and keeps nothing before a choice (task 8.3)', async ({ launch }) => {
+test('« Slots du moteur » says first what two cost — two conversations or two sub-agents at once, a restart — and keeps nothing before a choice (task 8.3, audit C2)', async ({ launch }) => {
   const { page } = await launch();
   await page.getByRole('button', { name: 'Réglages', exact: true }).click();
-  const choice = page.getByRole('radiogroup', { name: 'Sous-agents du moteur intégré' });
-  await choice.locator('label', { hasText: 'En parallèle' }).click();
-  const card = page.locator('.launch-restart');
-  await expect(card).toBeVisible();
-  await expect(card).toContainText('« Sous-agents du moteur intégré » s’applique au redémarrage du moteur');
-  await expect(card).toContainText('un slot de plus pour les sous-agents');
-  await card.getByRole('button', { name: 'Annuler' }).click();
-  await expect(card).toHaveCount(0);
-  await expect(choice.getByRole('radio', { name: 'L’un après l’autre' })).toBeChecked();
-
-  // Kept (no model loaded: for the next load), the choice stays; going back asks again (review of phase 8).
-  await choice.locator('label', { hasText: 'En parallèle' }).click();
-  await card.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(card).toHaveCount(0);
-  await expect(choice.getByRole('radio', { name: 'En parallèle' })).toBeChecked();
-  // Another page, then back: still what was kept.
   const nav = page.getByRole('navigation', { name: 'Réglages' });
   await nav.getByRole('link', { name: 'Moteur et mémoire' }).click();
-  await nav.getByRole('link', { name: 'Général' }).click();
-  await expect(choice.getByRole('radio', { name: 'En parallèle' })).toBeChecked();
-  await choice.locator('label', { hasText: 'L’un après l’autre' }).click();
+  const choice = page.getByRole('radiogroup', { name: 'Slots du moteur' });
+  await choice.locator('label', { hasText: '2' }).click();
+  const card = page.locator('.launch-restart');
   await expect(card).toBeVisible();
-  await expect(card).toContainText('« Sous-agents du moteur intégré » s’applique au redémarrage du moteur');
+  await expect(card).toContainText('« Slots du moteur » s’applique au redémarrage du moteur');
+  await expect(card).toContainText('Deux conversations, ou deux sous-agents, répondent en même temps');
+  await card.getByRole('button', { name: 'Annuler' }).click();
+  await expect(card).toHaveCount(0);
+  await expect(choice.getByRole('radio', { name: '1' })).toBeChecked();
+
+  // Kept (no model loaded: for the next load), the choice stays; going back asks again (review of phase 8).
+  await choice.locator('label', { hasText: '2' }).click();
+  await card.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(card).toHaveCount(0);
+  await expect(choice.getByRole('radio', { name: '2' })).toBeChecked();
+  // Another page, then back: still what was kept.
+  await nav.getByRole('link', { name: 'Général' }).click();
+  await nav.getByRole('link', { name: 'Moteur et mémoire' }).click();
+  await expect(choice.getByRole('radio', { name: '2' })).toBeChecked();
+  await choice.locator('label', { hasText: '1' }).click();
+  await expect(card).toBeVisible();
+  await expect(card).toContainText('« Slots du moteur » s’applique au redémarrage du moteur');
 });
 
 test('« Moteur des sous-agents » on a service: what leaves is said before the choice, and the sub-agent’s line names the service’s model (audit S1)', async ({ launch }) => {

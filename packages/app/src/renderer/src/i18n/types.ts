@@ -140,6 +140,22 @@ export interface Messages {
   /** What the window says while a turn waits: the core's steps, by key. */
   /** `compact`: the context ran out, and the conversation is compacted on its own (audit 2026-11-21, D2). */
   steps: Record<'slot-wait' | 'restore' | 'seed' | 'reread' | 'compact', string>;
+  /**
+   * A wait for the engine that says who holds it (audit C1): « Attend le moteur : « Refonte du login » lance pnpm
+   * test ». `who`: the conversation's title (or `untitled`), or its sub-agent; `doing`, what it does.
+   */
+  engineWait: {
+    line(who: string, doing: string): string;
+    conversation(title: string): string;
+    subagent(name: string, title: string): string;
+    untitled: string;
+    answer: string;
+    compact: string;
+    /** A tool running: by its name, with its target when it has one. */
+    tool(tool: string, target: string | undefined): string;
+    /** The row of a conversation that waits for the engine, named after its title. */
+    row: string;
+  };
   memory: {
     restoreTitle(tokens: string): string;
     restoreLine(seconds: string, instead: string): string;
@@ -174,7 +190,11 @@ export interface Messages {
     line(context: string, slots: number): string;
     /** A sub-agent works in the engine (task 8.2): the dot's name, and the line. */
     busy: string;
-    working(subagent: string): string;
+    /** « Occupé : … » (audit C1): who works, and how many more beside it. */
+    working(who: string, others: number): string;
+    /** Who works: one of a conversation's sub-agents, by its name; or a conversation, by its title. */
+    subagent(name: string): string;
+    conversation(title: string): string;
   };
   /** The four modes: the product's names, the same in every language. */
   modes: Record<'lecture' | 'repetition' | 'plume' | 'impro', string>;
@@ -413,10 +433,6 @@ export interface Messages {
       worksInHint: string;
       worksInFolder: string;
       worksInBranch: string;
-      subagents: string;
-      subagentsHint: string;
-      subagentsSequential: string;
-      subagentsParallel: string;
       /** « Moteur des sous-agents » (audit S1): the conversation's engine, or a service and one of its models. */
       subagentsEngine: string;
       subagentsEngineHint: string;
@@ -505,6 +521,9 @@ export interface Messages {
       launchContextValue(thousands: string): string;
       launchCache: string;
       launchCacheHint: string;
+      /** « Slots du moteur » (audit C2): two conversations, or two sub-agents, answer at the same time. */
+      launchSlots: string;
+      launchSlotsHint: string;
       launchCacheTypes: Record<'f16' | 'q8_0' | 'q4_0', string>;
       /** Part of a model too big for the card on the processor (task 12.3), put back on the card (review 12). */
       launchLayers: string;
@@ -517,7 +536,8 @@ export interface Messages {
       /** A setting that restarts the engine (board « Coûts annoncés », 6). */
       launchSettingNames: Record<'nCtx' | 'cacheType' | 'subagents', string>;
       /** Sub-agents in parallel (task 8.3): the slot more and its video memory, or unknown with no model loaded. */
-      launchParallel(bytes: string): string;
+      /** Two slots: the video memory more, and the context each slot keeps. */
+      launchParallel(bytes: string, context: string): string;
       launchParallelUnknown: string;
       launchRestartTitle(setting: string): string;
       launchRestartReload(duration: string): string;

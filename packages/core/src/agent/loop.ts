@@ -42,7 +42,10 @@ export interface AgentTurnContext {
   registry: ToolSet;
   permissions: PermissionEngine;
   /** The conversation engine: its turns, and its sub-agents' when it runs them (task 8.1). */
-  conversations: { turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> } & Partial<SubagentEngine>;
+  conversations: { turn(id: string, input: TurnInput, sink: (event: TurnEvent) => void, signal?: AbortSignal): Promise<TurnResult> } & Partial<SubagentEngine> & {
+    /** A call starts (not one queued): what its owner does now, for whoever waits for the engine (audit C1). */
+    callRuns?(conversationId: string, agentId: string | undefined, call: { name: string; input: unknown }): void;
+  };
   /** The perimeter the tools run in. */
   roots: readonly string[];
   /** The engine's context: what a tool's output is cut to. */
@@ -78,9 +81,17 @@ export interface AgentTurnContext {
  */
 export async function runAgentTurn(
   ctx: AgentTurnContext,
-  emit: (event: StreamRunEvent) => void,
+  told: (event: StreamRunEvent) => void,
   onTurnEvent: (event: TurnEvent) => void,
 ): Promise<TurnResult> {
+  // Each call that starts is what its owner does now: a turn waiting for the engine says it (audit C1).
+  const emit = (event: StreamRunEvent): void => {
+    if (event.type === 'tool-start' && !(event as { queued?: boolean }).queued) {
+      const agentId = (event as { agentId?: string }).agentId;
+      ctx.conversations.callRuns?.(ctx.conversationId, agentId ?? undefined, { name: event.name, input: event.input });
+    }
+    told(event);
+  };
   const maxRounds = ctx.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   const windowTools = new Map((ctx.windowTools ?? []).map((tool) => [tool.name, tool]));
   const defs = [...ctx.registry.list(), ...windowTools.values()];

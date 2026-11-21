@@ -559,7 +559,17 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   takes the slot, whose restore hook brings the conversation's KV state, else
   the seed (its first system turn, prepared once by a prefill and shared),
   and says what it waits for as steps (`slot-wait`, `restore`, `seed`,
-  `reread`) that the window labels. The handler compares the window's
+  `reread`) that the window labels. A wait for the slot names who holds it
+  and what it does (`holder`: a title or a sub-agent, answering, a tool and
+  its target, compacting — audit C1), said again as it changes; the
+  window's runner keeps it before aparté draws the step, which has no field
+  for it (`aparte/engine-wait.ts`, apartejs/aparte#288), and the row of a
+  conversation that waits wears an hourglass (apartejs/aparte#289). The
+  engine card's « Occupé : … » reads the same holders (`EngineState.working`).
+  A call the person approved runs before its turn takes the slot again: it
+  holds nobody up. « Slots du moteur : 1 · 2 » (« Moteur et mémoire », the
+  key `subagentsOnBuiltin`) serves two conversations as well as two
+  sub-agents (audit C2). The handler compares the window's
   messages with the journal (`agent/divergence.ts`): a new message, an
   answer asked again or a changed message (both branch), or a 409. The KV
   states live under `<data>/kv-slots/`, the conversations under

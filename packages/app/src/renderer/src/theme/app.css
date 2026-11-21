@@ -4632,3 +4632,26 @@ summary,
 .bonaparte-brand__mark {
   -webkit-app-region: no-drag;
 }
+
+/* A conversation whose turn waits for the engine another one holds (audit C1): an hourglass after its title, in the
+   muted ink, and aparté's running dot and shimmer stilled — it does not answer yet (apartejs/aparte#289). */
+.conv-queued {
+  display: inline-flex;
+  flex: none;
+  color: var(--aparte-text-muted);
+}
+
+.conv-queued .aparte-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.aparte-conv-item[data-status='running']:has(.conv-queued) .aparte-conv-item__status {
+  display: none;
+}
+
+.aparte-conv-item:has(.conv-queued) .aparte-shimmer {
+  animation: none;
+  background-image: none;
+  -webkit-text-fill-color: currentColor;
+}

@@ -73,10 +73,20 @@ export function memoryMarkOf(memory: Memory, words: Messages['shell']['memory'])
 }
 
 /** The marks of a row: its memory (drawn before the title), its branch and its files (after it). */
-export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages, pr?: RowPr, unread = false): HTMLElement {
+export function rowMarks(memory: Memory, branchFiles: number | undefined, words: Messages, pr?: RowPr, unread = false, queued = false): HTMLElement {
   const marks = document.createElement('span');
   marks.className = 'conv-marks';
   marks.append(memoryMark(memory, words.shell.memory));
+  if (queued) {
+    // Its turn waits for the engine another conversation holds (audit C1): said, not « en cours » — aparté's row
+    // knows only running and waiting for the person (apartejs/aparte#289); the stylesheet stills its shimmer.
+    const mark = document.createElement('span');
+    mark.className = 'conv-queued';
+    mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', words.engineWait.row);
+    mark.innerHTML = HOURGLASS_GLYPH;
+    marks.append(mark);
+  }
   if (unread) {
     // A reply finished since the person last looked (task 8.4): a blue dot, named.
     const mark = document.createElement('span');
@@ -121,6 +131,8 @@ const MERGED_GLYPH =
   '<svg class="aparte-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8"/><path d="M6 8a6 6 0 0 0 6 4h4"/></svg>';
 
 /** A git branch, the shell's own glyph (constant markup). */
+const HOURGLASS_GLYPH =
+  '<svg class="aparte-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/></svg>';
 const BRANCH_GLYPH =
   '<svg class="aparte-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10"/><path d="M18 9a6 6 0 0 1-6 6H8"/></svg>';
 

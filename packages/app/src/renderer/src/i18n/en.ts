@@ -161,6 +161,40 @@ export const en: Messages = {
     new: 'New conversation',
     list: 'Conversations',
   },
+  engineWait: {
+    line: (who, doing) => `Waiting for the engine: ${who} ${doing}`,
+    conversation: (title) => `“${title}”`,
+    subagent: (name, title) => `the sub-agent ${name} of “${title}”`,
+    untitled: 'New conversation',
+    answer: 'is answering',
+    compact: 'is summarising its conversation',
+    tool: (tool, target) => {
+      const on = target ? ` ${target}` : '';
+      switch (tool) {
+        case 'run_command':
+          return `is running${on}`;
+        case 'read_file':
+          return `is reading${on}`;
+        case 'list_files':
+          return `is listing${on}`;
+        case 'search':
+          return `is searching${on}`;
+        case 'edit_file':
+          return `is editing${on}`;
+        case 'write_file':
+          return `is writing${on}`;
+        case 'web_fetch':
+          return `is opening${on}`;
+        case 'web_search':
+          return `is searching the web for${on}`;
+        case 'run_subagent':
+          return `is starting the sub-agent${on}`;
+        default:
+          return `is using ${tool}`;
+      }
+    },
+    row: 'waiting for the engine',
+  },
   steps: {
     'slot-wait': 'Waiting for the engine',
     restore: 'Restoring the memory',
@@ -203,7 +237,9 @@ export const en: Messages = {
     ready: 'Engine ready',
     line: (context, slots) => `Ready · context ${context} · ${slots} ${slots > 1 ? 'slots' : 'slot'}`,
     busy: 'Engine busy',
-    working: (subagent) => `Busy: sub-agent ${subagent}`,
+    working: (who, others) => (others > 0 ? `Busy: ${who} and ${others} more` : `Busy: ${who}`),
+    subagent: (name) => `sub-agent ${name}`,
+    conversation: (title) => `“${title}”`,
   },
   modes: { lecture: 'Lecture', repetition: 'Répétition', plume: 'Plume', impro: 'Impro' },
   approval: {
@@ -500,10 +536,6 @@ export const en: Messages = {
       worksInHint: 'The choice is made again when it is created, from “New conversation”.',
       worksInFolder: 'In the project’s folder',
       worksInBranch: 'On its own branch',
-      subagents: 'Sub-agents of the built-in engine',
-      subagentsHint: 'In parallel: one more slot per sub-agent, more video memory and a restart of the engine, announced first.',
-      subagentsSequential: 'One after the other',
-      subagentsParallel: 'In parallel',
       subagentsEngine: 'Sub-agents’ engine',
       subagentsEngineHint:
         'On a service, the missions and everything a sub-agent reads (files, command output) go to that service. It takes no slot of the built-in engine. A conversation on a service keeps its own.',
@@ -594,6 +626,8 @@ export const en: Messages = {
       launchContextValue: (thousands) => `${thousands} k`,
       launchCache: 'K/V cache',
       launchCacheHint: 'f16 is exact; q8_0 and q4_0 take less video memory, at the cost of some precision.',
+      launchSlots: 'Engine slots',
+      launchSlotsHint: 'With 2 slots, two conversations, or two sub-agents, answer at the same time; each slot has its own context and its cache in video memory. With 1, each waits its turn.',
       launchCacheTypes: { f16: 'f16', q8_0: 'q8_0', q4_0: 'q4_0' },
       launchLayers: 'On the graphics card',
       launchLayersHint: (layers) =>
@@ -603,9 +637,10 @@ export const en: Messages = {
       launchIdleHint: 'Without activity, the model gives the video memory back; your conversations stay, and it loads again in one click.',
       launchIdleMinutes: (minutes) => (minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`),
       launchIdleNever: 'Never',
-      launchSettingNames: { nCtx: 'Context size', cacheType: 'K/V cache', subagents: 'Sub-agents of the built-in engine' },
-      launchParallel: (bytes) => `In parallel: one slot more for the sub-agents, about ${bytes} of video memory.`,
-      launchParallelUnknown: 'In parallel: one slot more for the sub-agents; its video memory is said once a model is loaded.',
+      launchSettingNames: { nCtx: 'Context size', cacheType: 'K/V cache', subagents: 'Engine slots' },
+      launchParallel: (bytes, context) =>
+        `Two conversations, or two sub-agents, answer at the same time: ~${bytes} more video memory (a context of ${context} per slot), and the engine restarts.`,
+      launchParallelUnknown: 'Two conversations, or two sub-agents, answer at the same time; the video memory more is said once a model is loaded.',
       launchRestartTitle: (setting) => `“${setting}” applies when the engine restarts`,
       launchRestartReload: (duration) => `The model loads again: ~${duration}. The memory of the conversation in it is saved first.`,
       launchNextLoad: 'No model runs: this setting applies at the next load.',

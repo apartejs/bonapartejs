@@ -52,6 +52,7 @@ import { registerRereadProgress } from './aparte/reread-progress';
 import { registerCompactionLine } from './aparte/compaction-line';
 import { createConversationRunner } from './aparte/runner';
 import { registerStepLabels } from './aparte/step-labels';
+import { useEngineWaits } from './aparte/engine-wait';
 import { registerToolLines } from './aparte/tool-lines';
 import { registerExtensionCard } from './aparte/extension-card';
 import { speakAsBonaparte } from './aparte/words';
@@ -760,6 +761,8 @@ function Workspace({
   useEffect(() => setupCommands({ onNew: () => startOver.current() }), []);
   const listedIds = useMemo(() => activeConversations.map((conversation) => conversation.id), [activeConversations]);
   const statuses = useConversationStatuses(listedIds, asked);
+  // The conversations whose turn waits for the engine another one holds (audit C1): their row says it.
+  const engineWaits = useEngineWaits();
   // What waits for the person, read again when something may have changed it.
   useEffect(() => {
     void bridge
@@ -1478,6 +1481,7 @@ function Workspace({
             ...(statuses[id]?.pr ? { pr: statuses[id]!.pr! } : {}),
             // Unread: never the conversation the person is looking at.
             ...(statuses[id]?.unread && id !== conversationId ? { unread: true } : {}),
+            ...(engineWaits.has(id) ? { queued: true } : {}),
           })}
           grouping={grouping}
           onCollapse={toggleSidebar}
