@@ -266,7 +266,9 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     let reply = '';
     let restoreStarted = 0;
     let restoreMs: number | null = null;
-    const result = await core.conversations.turn(id, { text, thinking: false }, (event) => {
+    // The conversation's temperature over its family's sampling (audit D6): the smoke's turns sample as fixed as its
+    // direct calls — Qwen3 without reasoning samples at 0.7, where a 1.7B model echoed its last answer.
+    const result = await core.conversations.turn(id, { text, thinking: false, temperature: SAMPLING.temperature }, (event) => {
       if (event.type === 'step') {
         steps.push(`${event.name}:${event.phase}`);
         if (event.name === 'restore' && event.phase === 'start') restoreStarted = performance.now();
@@ -378,6 +380,16 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     });
   }
 
+  /**
+   * A conversation the runner's turns go to, its temperature the smoke's: since audit D6 a turn samples by its family
+   * unless its conversation says otherwise, and Gemma 4 at its own 1.0 handed two leads one per step, never in one
+   * (2026-11-21) — the smoke judges the harness, not the model's initiative.
+   */
+  async function smokeConversation(id: string): Promise<void> {
+    await core.conversationStore.ensure(id, { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    await core.conversationStore.settle(id, { temperature: SAMPLING.temperature });
+  }
+
   /** What the client hands its runner for one turn. */
   function turnOf(messageId: string, text: string, events: StreamRunEvent[]): RunnerOptions {
     return {
@@ -392,7 +404,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
 
   it('a real call through the runner: the model reads a file, the result comes back, it answers from it — and the prefix is kept', async () => {
     await writeFile(join(home, 'notes.txt'), 'The code word is PERIWINKLE.\n');
-    await core.conversationStore.ensure('smoke-agent-read', { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    await smokeConversation('smoke-agent-read');
     const events: StreamRunEvent[] = [];
     const usage = (await runnerFor('smoke-agent-read')(
       turnOf('m-read', 'Use the read_file tool to read notes.txt, then reply with the code word it contains and nothing else.', events),
@@ -413,7 +425,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
 
   it('a real edit pauses for the person; their answer resumes the turn, and only then is the file written', async () => {
     await writeFile(join(home, 'todo.txt'), 'buy milk\n');
-    await core.conversationStore.ensure('smoke-agent-edit', { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    await smokeConversation('smoke-agent-edit');
     const runner = runnerFor('smoke-agent-edit');
     const ask = 'Use the edit_file tool on todo.txt to replace "buy milk" with "buy bread". Then reply with DONE.';
     const first: StreamRunEvent[] = [];
@@ -548,7 +560,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
   /** One turn that hands the model's leads to sub-agents: each reads one file and gives its code word back. */
   async function leads(id: string, files: Record<string, string>): Promise<Leads> {
     for (const [name, word] of Object.entries(files)) await writeFile(join(home, name), `The code word is ${word}.\n`);
-    await core.conversationStore.ensure(id, { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    await smokeConversation(id);
     const names = Object.keys(files);
     const ask =
       `Call the run_subagent tool ${names.length} times in this same step, one call for each of these files: ${names.join(', ')}. ` +
@@ -670,7 +682,7 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
     const name = `mcp__files__${reader!.name}`;
     const path = join(home, 'mcp-notes.txt');
 
-    await core.conversationStore.ensure('smoke-mcp', { kind: 'code', engineId: 'builtin', modelId: MODEL!, mode: 'repetition' });
+    await smokeConversation('smoke-mcp');
     const runner = runnerFor('smoke-mcp');
     const ask = `Use the ${name} tool to read the file ${path}, then reply with the code word it contains and nothing else.`;
     const first: StreamRunEvent[] = [];
@@ -697,7 +709,8 @@ describe.skipIf(!MODEL)('REAL SMOKE — the built-in engine', () => {
 
   it.skipIf(!MODEL2)('a change of model: said first, then the conversation rendered again in the new family and answered there', async () => {
     const id = 'smoke-switch';
-    await turnIn(id, 'Remember this code word: SAFFRON. Reply with OK and nothing else.');
+    // Not « reply with OK »: a 1.7B model without reasoning echoed that OK to the next question (2026-11-21).
+    await turnIn(id, 'Remember this code word: SAFFRON. Reply with one short sentence saying you will remember it.');
     const cost = await core.modelSwitch(MODEL2!, id);
     const started = Date.now();
     await core.switchModel(MODEL2!, { conversationId: id });
