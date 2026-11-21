@@ -129,3 +129,18 @@ test('release.yml: packing and running the packed app are two steps (pwsh would 
 test('release.yml: the draft release carries the version’s own notes from CHANGELOG.md', () => {
   assert.match(jobs(release).get('draft'), /--notes-file/);
 });
+
+// Paul, 2026-11-21 (« gère la CI, je ne vais pas regarder à chaque fois »): a version new on a green main is tagged
+// and its release built, with no one to push the tag. A tag pushed with GitHub's token runs no workflow; a dispatch
+// does.
+test('ci.yml: a green main tags its version once, and dispatches the release on that tag', () => {
+  const job = jobs(ci).get('release');
+  assert.ok(job, 'ci.yml has a release job');
+  assert.match(job, /needs: gate/);
+  assert.match(job, /if: github\.event_name == 'push' && github\.ref == 'refs\/heads\/main'/);
+  assert.match(job, /contents: write/);
+  assert.match(job, /actions: write/);
+  assert.match(job, /git\/ref\/tags\/\$tag/, 'an existing tag is left alone');
+  assert.match(job, /CHANGELOG\.md/, 'a version without notes is not tagged');
+  assert.match(job, /gh workflow run release\.yml .*--ref "\$tag"/);
+});

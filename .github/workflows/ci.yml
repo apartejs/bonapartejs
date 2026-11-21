@@ -92,3 +92,34 @@ jobs:
           path: packages/app/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # A version new on a green main is tagged and its release built (Paul, 2026-11-21: no one watches the CI to push
+  # the tag). Once a version: an existing tag is left alone, so the next pushes to main release nothing until the
+  # version changes. A tag pushed with GitHub's token runs no workflow; a dispatch on that tag does, as a tag would.
+  release:
+    needs: gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Tag the version and dispatch its release, once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./packages/app/package.json').version")
+          tag="v$version"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag exists: nothing to release until the version changes."
+            exit 0
+          fi
+          grep -q "^## \[$version\]" CHANGELOG.md || { echo "CHANGELOG.md has no section for $version: not tagged."; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
+          echo "Tagged $tag on $GITHUB_SHA; its release is building."
