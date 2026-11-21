@@ -7,8 +7,10 @@
  * aparté's handler — not that handler itself: a sub-agent's pause is its conversation's, answered by the core
  * across a restart, never a ticket of its own and a history the window sends again.
  *
- * It takes no slot: the conversation's memory is neither saved nor restored around it, and the built-in engine
- * may serve another conversation meanwhile. What it reads is disarmed for any family a service may run
+ * It takes no slot of its own: the conversation's memory is neither saved nor restored around it. A conversation
+ * on the built-in engine keeps its slot while its sub-agent works — the call runs inside its turn —, so with one
+ * slot another conversation waits, said by its step (review of S1); one on a service holds none. A service that
+ * sends nothing for `SERVICE_IDLE_MS` ends it, in words the main agent can act on. What it reads is disarmed for any family a service may run
  * (security rule 5), as a service turn's is. Its thread is its journal, beside the built-in sub-agents': its first
  * entry says the service and the model it runs on, so that a resume goes back there.
  */
@@ -25,6 +27,12 @@ import type { Provider } from '../providers/registry.js';
 import type { ToolResult } from '../tools/types.js';
 import { disarm, disarmDeep } from './endpoint.js';
 import type { SubagentEngine } from './subagents.js';
+
+/**
+ * How long a service may send nothing — before its first word or between two — before its sub-agent ends: under
+ * Node's own five minutes (undici's headers and body timeouts), which would end it as « fetch failed ».
+ */
+export const SERVICE_IDLE_MS = 4 * 60_000;
 
 /** Where a sub-agent runs on a service: the service (its id among the providers) and one of its models. */
 export interface ServicePlace {
@@ -141,6 +149,15 @@ export class ServiceSubagents {
       if (round > 0) sink({ type: 'round' });
       let text = '';
       const calls: ModelCall[] = [];
+      // A service that sends nothing for a while ends the sub-agent (review of S1): its conversation would wait
+      // for ever, and on the built-in engine hold its slot meanwhile.
+      const idle = new AbortController();
+      let timer = setTimeout(() => idle.abort(), SERVICE_IDLE_MS);
+      const heard = (): void => {
+        clearTimeout(timer);
+        timer = setTimeout(() => idle.abort(), SERVICE_IDLE_MS);
+      };
+      const callSignal = signal ? AbortSignal.any([signal, idle.signal]) : idle.signal;
       try {
         const response = await this.transport.chat(
           adapter,
@@ -154,14 +171,16 @@ export class ServiceSubagents {
             ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
           },
           key,
-          { providerId: provider.id, ...(signal ? { signal } : {}) },
+          { providerId: provider.id, signal: callSignal },
         );
+        heard();
         if (typeof response === 'string') text = response;
         else {
           const reader = response.getReader();
           for (;;) {
             const { done, value } = await reader.read();
             if (done) break;
+            heard();
             const event = value as AparteStreamEvent;
             if (event.type === 'text') {
               text += event.delta;
@@ -177,9 +196,18 @@ export class ServiceSubagents {
           await journal.append({ kind: 'assistant', raw: text, stopped: 'user' });
           return { usage, stopped: 'user', answer: text.trim() };
         }
+        if (idle.signal.aborted) {
+          await journal.append({ kind: 'assistant', raw: text, stopped: 'engine' });
+          throw new Error(
+            `the service running ${place.model} sent nothing for ${SERVICE_IDLE_MS / 60_000} minutes: it may be stuck or overloaded. ` +
+              'Do the work yourself, or try the sub-agent again later.',
+          );
+        }
         if ((error as { code?: unknown }).code === 'USAGE_CONTEXT_EXCEEDED') throw new SubagentContextFullError(place.model);
         await journal.append({ kind: 'assistant', raw: text, stopped: 'engine' });
         throw error;
+      } finally {
+        clearTimeout(timer);
       }
       await journal.append({ kind: 'assistant', raw: text, usage, ...(calls.length > 0 && !last ? { calls } : {}) });
       if (last) return { usage, concluded: last, answer: text.trim() };

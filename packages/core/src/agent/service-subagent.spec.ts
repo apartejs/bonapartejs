@@ -15,7 +15,7 @@ import type { SecretStore } from '../providers/secrets.js';
 import { startFakeLlamaServer, type FakeLlamaServer } from '../testing/fake-llama-server.js';
 import { startFakeOpenAIServer, type FakeChatRequest, type FakeOpenAIAnswer, type FakeOpenAIServer } from '../testing/fake-openai-server.js';
 import { AGENT_ENDPOINT, createAgentHandler } from './handler.js';
-import { ASK_REFUSED, messagesOf, readSubagentsEngine } from './service-subagent.js';
+import { ASK_REFUSED, messagesOf, readSubagentsEngine, SERVICE_IDLE_MS } from './service-subagent.js';
 
 const dirs: string[] = [];
 const cores: Core[] = [];
@@ -225,8 +225,8 @@ describe('run_subagent in a conversation on a service (audit S3)', () => {
       const posting = post('s1', {}, onService);
       for (let round = 0; round < 2; round += 1) {
         if (gates.length === 0) await new Promise<void>((resolve) => (reached = resolve));
-        // Four minutes a round: eight in all.
-        await vi.advanceTimersByTimeAsync(4 * 60_000);
+        // Three minutes a round: six in all.
+        await vi.advanceTimersByTimeAsync(3 * 60_000);
         gates.shift()!();
       }
       const lines = await posting;
@@ -234,6 +234,33 @@ describe('run_subagent in a conversation on a service (audit S3)', () => {
       expect(of(lines, 'agent-end')[0]).toMatchObject({ status: 'done', result: 'From the service: a is 1.' });
       expect(lines.filter((line) => line.type === 'text-delta' && !line['agentId']).map((line) => line['delta']).join('')).toContain('Synthèse du service.');
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a service that stops sending ends its sub-agent as failed, in words the main agent can act on — never a turn held for ever (review of S1)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const stuck: (() => void)[] = [];
+    try {
+      let reached = (): void => undefined;
+      const stalls = (request: FakeChatRequest): FakeOpenAIAnswer | Promise<FakeOpenAIAnswer> => {
+        if (!isSubagent(request)) return main(request);
+        return new Promise((resolve) => {
+          stuck.push(() => resolve({ text: 'too late' }));
+          reached();
+        });
+      };
+      const { post, onService, service } = await rig({ setting: false, service: stalls });
+      const posting = post('s1', {}, onService);
+      if (stuck.length === 0) await new Promise<void>((resolve) => (reached = resolve));
+      await vi.advanceTimersByTimeAsync(SERVICE_IDLE_MS + 1_000);
+      const lines = await posting;
+      expect(of(lines, 'agent-end')[0]).toMatchObject({ status: 'failed' });
+      const told = service.requests.filter((request) => !isSubagent(request)).at(-1)!;
+      expect(JSON.stringify(told.messages)).toContain('sent nothing for');
+      expect(lines.at(-1)!.type).toBe('run-done');
+    } finally {
+      for (const release of stuck) release();
       vi.useRealTimers();
     }
   });
