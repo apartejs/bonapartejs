@@ -504,6 +504,12 @@ export const en: Messages = {
       subagentsHint: 'In parallel: one more slot per sub-agent, more video memory and a restart of the engine, announced first.',
       subagentsSequential: 'One after the other',
       subagentsParallel: 'In parallel',
+      subagentsEngine: 'Sub-agents’ engine',
+      subagentsEngineHint:
+        'On a service, the missions and everything a sub-agent reads (files, command output) go to that service. It takes no slot of the built-in engine. A conversation on a service keeps its own.',
+      subagentsEngineConversation: 'The conversation’s',
+      subagentsEngineOption: (model, service) => `${model} · ${service}`,
+      subagentsEngineNone: 'No service added: your sub-agents run on their conversation’s engine.',
       notifications: 'Notifications',
       notificationsHint: 'When bonaparte is not in front.',
       notifyReplyDone: 'A reply is finished',

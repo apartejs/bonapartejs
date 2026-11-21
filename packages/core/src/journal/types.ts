@@ -97,7 +97,8 @@ export type JournalBody =
   | { kind: 'system'; replyLanguage?: string; perimeter?: string[]; tools?: ToolDef[]; modelId?: string; family?: FamilyId }
   | { kind: 'user'; text: string; attachments?: Attachment[] }
   /** `truncated`: the context ran out in the middle of it — the answer is incomplete. */
-  | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true }
+  /** `calls`: a service's answer (a sub-agent there, audit S1) — its calls, which `raw` (its text) does not hold. */
+  | { kind: 'assistant'; raw: string; usage?: Usage; stopped?: 'user' | 'engine'; truncated?: true; calls?: { id: string; name: string; input: Record<string, unknown> }[] }
   | { kind: 'tool-results'; results: ToolResult[] }
   | { kind: 'pending'; calls: PendingCall[]; ticket: string; subagents?: SubagentHold[] }
   | { kind: 'outcomes'; outcomes: Record<string, Outcome> }

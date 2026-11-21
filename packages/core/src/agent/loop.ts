@@ -26,6 +26,7 @@ import type { PermissionEngine } from '../permissions/engine.js';
 import type { ToolSet } from '../tools/registry.js';
 import type { ToolContext, ToolDef } from '../tools/types.js';
 import { answerCalls, type CallScope, type ChangePlace } from './calls.js';
+import { routeSubagents, type ServicePlace, type ServiceSubagents } from './service-subagent.js';
 import { subagentRunner, type SubagentEngine } from './subagents.js';
 
 export type { ChangePlace } from './calls.js';
@@ -64,6 +65,11 @@ export interface AgentTurnContext {
    * works in from then on (task 6.7) — or say why it cannot.
    */
   beforeChange?: () => Promise<ChangePlace | undefined>;
+  /**
+   * The sub-agents on a service (audit S1): those started in this turn run on `place` when one is given — the
+   * setting « Moteur des sous-agents » — and each resumed one where its thread says.
+   */
+  subagentsOn?: { engines: ServiceSubagents; place: ServicePlace | null };
 }
 
 /**
@@ -97,20 +103,23 @@ export async function runAgentTurn(
   const { subagentTurn, subagentPaused, recordSubagentAnswers } = ctx.conversations;
   if (subagentTurn && subagentPaused && recordSubagentAnswers) {
     const { windowTools: _window, ...inherited } = scope;
+    const builtin: SubagentEngine = {
+      subagentTurn: subagentTurn.bind(ctx.conversations),
+      subagentPaused: subagentPaused.bind(ctx.conversations),
+      recordSubagentAnswers: recordSubagentAnswers.bind(ctx.conversations),
+      // Read each time: the engine may have relaunched with another number of slots.
+      get slotCount() {
+        return ctx.conversations.slotCount ?? 1;
+      },
+      get freeSlots() {
+        return ctx.conversations.freeSlots ?? 0;
+      },
+    };
+    const on = ctx.subagentsOn;
     scope.subagents = subagentRunner({
       ...inherited,
-      engine: {
-        subagentTurn: subagentTurn.bind(ctx.conversations),
-        subagentPaused: subagentPaused.bind(ctx.conversations),
-        recordSubagentAnswers: recordSubagentAnswers.bind(ctx.conversations),
-        // Read each time: the engine may have relaunched with another number of slots.
-        get slotCount() {
-          return ctx.conversations.slotCount ?? 1;
-        },
-        get freeSlots() {
-          return ctx.conversations.freeSlots ?? 0;
-        },
-      },
+      engine: on ? routeSubagents(builtin, on.engines, on.place) : builtin,
+      ...(on?.place ? { service: { model: on.place.model } } : {}),
       emit,
       ...(ctx.maxToolRounds !== undefined ? { maxToolRounds: ctx.maxToolRounds } : {}),
     });

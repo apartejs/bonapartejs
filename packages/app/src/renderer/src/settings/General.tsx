@@ -5,8 +5,8 @@
  * at once, and the replies from the next message on (a note to the model).
  */
 
-import { appOpenDataFolder, conversationsExport } from '@aparte/bonaparte-shared';
-import { useState } from 'react';
+import { appOpenDataFolder, conversationsExport, providersList, providersModels } from '@aparte/bonaparte-shared';
+import { useEffect, useState } from 'react';
 import { bridge } from '../bridge';
 import { Choice, Row, Section, Switch } from './controls';
 import { RestartCard, useRestartAsk } from './RestartAsk';
@@ -142,6 +142,7 @@ export function GeneralPage({ messages, locale, values, change, known }: PagePro
           }
         />
         <RestartCard messages={messages} locale={locale} {...restart} />
+        <SubagentsEngine words={words} value={typeof values['subagentsEngine'] === 'string' ? values['subagentsEngine'] : 'conversation'} change={(next) => change('subagentsEngine', next)} />
       </Section>
       <Section title={words.notifications} hint={words.notificationsHint}>
         {notify('notifications.replyDone', words.notifyReplyDone)}
@@ -178,5 +179,68 @@ export function GeneralPage({ messages, locale, values, change, known }: PagePro
         ) : null}
       </Section>
     </div>
+  );
+}
+
+/** A service the person added, and the models it offers now. */
+interface Service {
+  id: string;
+  label: string;
+  models: string[];
+}
+
+/** The services added, each asked its models; empty while they are read, or when none is added. */
+function useServices(): Service[] {
+  const [services, setServices] = useState<Service[]>([]);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const all = await bridge.invoke(providersList, undefined).catch(() => []);
+      const found = await Promise.all(
+        all
+          .filter((provider) => provider.kind === 'openai-compat')
+          .map(async (provider) => ({ id: provider.id, label: provider.label, models: await bridge.invoke(providersModels, { id: provider.id }).catch(() => [] as string[]) })),
+      );
+      if (live) setServices(found);
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  return services;
+}
+
+/**
+ * « Moteur des sous-agents » (audit S1): the conversation's engine, or a service the person added and one of its
+ * models (`<service id>/<model>`). What leaves for the service is said before it is chosen, under the row.
+ */
+function SubagentsEngine({ words, value, change }: { words: PageProps['messages']['settings']['general']; value: string; change(next: string): void }) {
+  const services = useServices();
+  const listed = services.flatMap((service) => service.models.map((model) => `${service.id}/${model}`));
+  // A choice kept whose service does not answer now: still shown as it is, never replaced in silence.
+  const kept = value !== 'conversation' && !listed.includes(value) ? value : null;
+  const labelOf = (id: string): string => services.find((service) => service.id === id)?.label ?? id;
+  return (
+    <Row
+      label={words.subagentsEngine}
+      hint={services.length > 0 ? words.subagentsEngineHint : words.subagentsEngineNone}
+      control={
+        <select className="aparte-field subagents-engine" aria-label={words.subagentsEngine} value={value} onChange={(event) => change(event.target.value)}>
+          <option value="conversation">{words.subagentsEngineConversation}</option>
+          {services
+            .filter((service) => service.models.length > 0)
+            .map((service) => (
+              <optgroup key={service.id} label={service.label}>
+                {service.models.map((model) => (
+                  <option key={model} value={`${service.id}/${model}`}>
+                    {words.subagentsEngineOption(model, service.label)}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          {kept ? <option value={kept}>{words.subagentsEngineOption(kept.slice(kept.indexOf('/') + 1), labelOf(kept.slice(0, kept.indexOf('/'))))}</option> : null}
+        </select>
+      }
+    />
   );
 }

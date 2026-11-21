@@ -28,13 +28,21 @@ export const SAME_FAILURE_LIMIT = 3;
 
 /** What the engine gives a sub-agent: its turns, its pause, the answers to it. */
 export type SubagentEngine = Pick<ConversationEngine, 'subagentTurn' | 'subagentPaused' | 'recordSubagentAnswers'> &
-  Partial<Pick<ConversationEngine, 'slotCount' | 'freeSlots'>>;
+  Partial<Pick<ConversationEngine, 'slotCount' | 'freeSlots'>> & {
+    /** The service a sub-agent runs on, as its thread says (audit S1); null for the built-in engine's. */
+    placeOf?(conversationId: string, agentId: string): Promise<{ engineId: string; model: string } | null>;
+  };
 
 /** What a conversation's sub-agents inherit of its turn: its mode, its tools, its place, its signal — never more. */
 export interface SubagentParent extends Omit<CallScope, 'agentId' | 'subagents' | 'windowTools'> {
   engine: SubagentEngine;
   emit(event: StreamRunEvent): void;
   maxToolRounds?: number;
+  /**
+   * The model of the service its new sub-agents run on (audit S1, S3), named on their line; none: they run on the
+   * conversation's engine, on its slot.
+   */
+  service?: { model: string };
 }
 
 /**
@@ -243,8 +251,41 @@ function scopeOf(parent: SubagentParent, agentId: string, spec: SubagentSpec): C
   return { ...inherited, registry: toolsFor(registry, spec), agentId };
 }
 
-function announce(parent: SubagentParent, hold: { agentId: string; toolCallId: string }, spec: SubagentSpec): void {
-  parent.emit({ type: 'agent-start', agentId: hold.agentId, name: spec.name, description: spec.mission, toolCallId: hold.toolCallId });
+/**
+ * Its name on its line: a sub-agent on a service says the model it runs on (audit S1) — aparté's line has no place
+ * for a model (apartejs/aparte#286), so its name carries it.
+ */
+export function shownName(spec: SubagentSpec, model: string | undefined): string {
+  return model ? `${spec.name} · ${model}` : spec.name;
+}
+
+function announce(parent: SubagentParent, hold: { agentId: string; toolCallId: string }, spec: SubagentSpec, model: string | undefined): void {
+  parent.emit({ type: 'agent-start', agentId: hold.agentId, name: shownName(spec, model), description: spec.mission, toolCallId: hold.toolCallId });
+}
+
+/**
+ * The tools its model is shown: on the built-in engine the whole inventory its shared prompt holds (its grammar),
+ * on a service only its own — a service reads them from the request, not from a prompt it shares.
+ */
+const shownTools = (parent: SubagentParent, scope: CallScope, onService: boolean): readonly ToolDef[] => (onService ? scope.registry.list() : seen(parent));
+
+/**
+ * A sub-agent started now: its first turn, its note and its mission, on the engine its parent says. What
+ * `subagentRunner` runs for a call of the loop, and the core for a call of aparté's handler (a service turn, S3).
+ */
+export function startSubagent(parent: SubagentParent, agentId: string, spec: SubagentSpec, slot?: CallsSlot): Promise<SubagentEnd> {
+  return drive(parent, agentId, spec, (scope, sink, onCalls) =>
+    parent.engine.subagentTurn(
+      parent.conversationId,
+      { agentId, name: spec.name },
+      {
+        start: { note: noteFor(spec, scope.registry.list(), scope.place.roots, scope.mode), mission: spec.mission, tools: scope.registry.list() },
+        tools: { defs: shownTools(parent, scope, parent.service !== undefined), onCalls },
+      },
+      sink,
+      { ...(slot ? { lend: slot.lend } : {}), signal: parent.signal },
+    ),
+  );
 }
 
 /** The conversation's sub-agents, for its loop: announced with their step, run one after another. */
@@ -257,26 +298,16 @@ export function subagentRunner(parent: SubagentParent): SubagentRunner {
       const spec = readSubagentSpec(call.input);
       if ('error' in spec) return;
       const agentId = idOf(call);
-      announce(parent, { agentId, toolCallId: call.id }, spec);
-      if (waits) parent.emit({ type: 'step-start', name: 'slot-wait', agentId });
+      announce(parent, { agentId, toolCallId: call.id }, spec, parent.service?.model);
+      // On a service it waits for the one before it, never for the engine.
+      if (waits && !parent.service) parent.emit({ type: 'step-start', name: 'slot-wait', agentId });
     },
     async run(call, slot, waited) {
       const spec = readSubagentSpec(call.input);
       if ('error' in spec) return { kind: 'failed', result: spec.error };
       const agentId = idOf(call);
-      if (waited) parent.emit({ type: 'step-end', name: 'slot-wait', agentId });
-      return drive(parent, agentId, spec, (scope, sink, onCalls) =>
-        parent.engine.subagentTurn(
-          parent.conversationId,
-          { agentId, name: spec.name },
-          {
-            start: { note: noteFor(spec, scope.registry.list(), scope.place.roots, scope.mode), mission: spec.mission, tools: scope.registry.list() },
-            tools: { defs: seen(parent), onCalls },
-          },
-          sink,
-          { ...(slot ? { lend: slot.lend } : {}), signal: parent.signal },
-        ),
-      );
+      if (waited && !parent.service) parent.emit({ type: 'step-end', name: 'slot-wait', agentId });
+      return startSubagent(parent, agentId, spec, slot);
     },
   };
 }
@@ -297,8 +328,10 @@ export async function resumeSubagent(parent: SubagentParent, hold: SubagentHold,
   const read = readSubagentSpec(hold.input);
   const spec: SubagentSpec = 'error' in read ? { name: hold.name, mission: '', tools: 'read' } : read;
   const { agentId } = hold;
+  // Where it ran, it goes on: a service's model named on its line again.
+  const place = (await parent.engine.placeOf?.(parent.conversationId, agentId)) ?? null;
   // The same line goes on: the same agentId, the same call.
-  announce(parent, hold, spec);
+  announce(parent, hold, spec, place?.model);
   const pause = await parent.engine.subagentPaused(parent.conversationId, agentId);
   if (!pause) {
     const end: SubagentEnd = { kind: 'failed', result: 'The sub-agent was waiting for nothing: its pause is gone.' };
@@ -325,7 +358,7 @@ export async function resumeSubagent(parent: SubagentParent, hold: SubagentHold,
     parent.engine.subagentTurn(
       parent.conversationId,
       { agentId, name: spec.name },
-      { resume: true, tools: { defs: seen(parent), onCalls } },
+      { resume: true, tools: { defs: shownTools(parent, scopeOf(parent, agentId, spec), place !== null), onCalls } },
       sink,
       { signal: parent.signal },
     ),

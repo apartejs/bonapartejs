@@ -191,3 +191,37 @@ test('« En parallèle » says first what it costs — one slot more, a restart 
   await expect(card).toBeVisible();
   await expect(card).toContainText('« Sous-agents du moteur intégré » s’applique au redémarrage du moteur');
 });
+
+test('« Moteur des sous-agents » on a service: what leaves is said before the choice, and the sub-agent’s line names the service’s model (audit S1)', async ({ launch }) => {
+  type Request = { messages: { role: string; content?: unknown }[] };
+  const theirs = (request: Request) => String(request.messages[0]?.content ?? '').includes('You are a sub-agent named');
+  const { page, home, service } = await launch({
+    engine: { responder: model([{ name: 'Lecteur', mission: 'Lis notes.txt.', tools: 'read' }]) },
+    service: {
+      models: ['qwen3:8b'],
+      responder: (request) =>
+        !theirs(request)
+          ? { text: 'ok' }
+          : request.messages.some((message) => message.role === 'tool')
+            ? { text: 'Rendu du service.' }
+            : { calls: [{ name: 'read_file', arguments: { path: 'notes.txt' } }] },
+    },
+  });
+  await writeFile(join(home, 'notes.txt'), 'une note\n');
+  await page.getByRole('button', { name: 'Réglages', exact: true }).click();
+  const engine = page.getByRole('combobox', { name: 'Moteur des sous-agents' });
+  await expect(engine).toHaveValue('conversation');
+  // Said before anything is chosen: the missions and what it reads go to the service.
+  await expect(page.getByText(/les missions et tout ce que lit un sous-agent .* partent vers ce service/)).toBeVisible();
+  await engine.selectOption({ label: 'qwen3:8b · Ollama' });
+  await expect(engine).toHaveValue('ollama/qwen3:8b');
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Conversations' }).click();
+
+  const ui = chat(page);
+  await ui.send('Une piste');
+  await expect(ui.replyText).toHaveText('Synthèse.', { timeout: 20_000 });
+  await expect(ui.subagentLine('Lecteur · qwen3:8b')).toHaveCount(1);
+  expect(service!.requests.filter(theirs).map((request) => request.model)).toEqual(['qwen3:8b', 'qwen3:8b']);
+  await page.getByRole('group', { name: 'Volets' }).getByRole('button', { name: 'Sous-agents', exact: true }).click();
+  await expect(pane(page).getByRole('button', { name: /Lecteur · qwen3:8b/ })).toBeVisible();
+});

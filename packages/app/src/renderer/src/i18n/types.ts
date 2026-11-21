@@ -417,6 +417,12 @@ export interface Messages {
       subagentsHint: string;
       subagentsSequential: string;
       subagentsParallel: string;
+      /** « Moteur des sous-agents » (audit S1): the conversation's engine, or a service and one of its models. */
+      subagentsEngine: string;
+      subagentsEngineHint: string;
+      subagentsEngineConversation: string;
+      subagentsEngineOption: (model: string, service: string) => string;
+      subagentsEngineNone: string;
       notifications: string;
       notificationsHint: string;
       notifyReplyDone: string;

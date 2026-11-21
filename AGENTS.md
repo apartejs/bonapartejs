@@ -709,12 +709,28 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `run_subagent` call is run by the loop, not the registry. Its id is
   name-based (`agent-<uuid>` from the conversation and the call), its
   journal `<conv>/agents/<agentId>/main.jsonl`, its prompt the parent's
-  stable system turn, a note and the mission; on the wire `agent-start` …
+  stable system turn and its own project turn as frozen (instructions,
+  folders, environment), a note (no context but the mission, its tools —
+  those come after the freeze described —, its mode in a line, its budget,
+  the answer first then `path:line`) and the mission; on the wire `agent-start` …
   events with its `agentId` … `agent-end`, and only its result enters the
-  parent's journal. A pause of one keeps it in the parent's pending entry
+  parent's journal. At its last round (`maxToolRounds`), or with its context
+  past 80 % or short of `REPLY_ROOM`, it gets one last answer without tools
+  (the note read with the results; `TurnResult.concluded`) and ends
+  `partial`: the main agent reads « cut after N rounds » or « its own
+  context », the line `stopped` (apartejs/aparte#285). A pause of one keeps it in the parent's pending entry
   (`subagents`): the resume hands the answers to it, a refusal stops only
   it. Consecutive `run_subagent` calls of a step run together when the
-  engine has a second slot (`subagentsOnBuiltin: 'parallel'`, `-np 2`). The
+  engine has a second slot (`subagentsOnBuiltin: 'parallel'`, `-np 2`).
+  « Moteur des sous-agents » (`subagentsEngine`, « Général »: `conversation`
+  or `<service id>/<model>`) runs the new ones on a service
+  (`agent/service-subagent.ts`, `routeSubagents`): the same loop and policy,
+  each call through aparté's OpenAI-compatible adapter and direct transport,
+  no slot, what it reads disarmed, its journal opening with an `engine`
+  entry so a resume goes back there, its line « Nom · modèle »
+  (apartejs/aparte#286). A conversation on a service runs its own on that
+  service and model, inside aparté's run (`startAgent`): what its mode would
+  ask is refused to it there (`askedAsRefused`, apartejs/aparte#287). The
   window (`aparte/subagents.ts`, `panels/SubagentsPanel.tsx`): aparté's
   `setupSubagents` lines, our tracker of the run's events for the pane's
   counts; Stop says « Arrêter les sous-agents » while one works (the

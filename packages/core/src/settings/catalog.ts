@@ -67,7 +67,8 @@ export const APP_SETTINGS: SettingField[] = [
   { key: 'branchPrefix', type: 'string', scopes: BY_PROJECT, default: 'bonaparte/' },
   // In parallel, the engine runs one slot per sub-agent: a restart, announced (task 8.3).
   { key: 'subagentsOnBuiltin', type: 'select', scopes: GLOBAL, default: 'sequential', options: ['sequential', 'parallel'], requiresRestart: true },
-  // The conversation's own engine, or a provider's id (task 9.2).
+  // « Moteur des sous-agents » (audit S1): the conversation's own engine, or a service and one of its models,
+  // `<provider id>/<model>` (`agent/service-subagent.ts`).
   { key: 'subagentsEngine', type: 'string', scopes: GLOBAL, default: 'conversation' },
   // The web search (task 10.4): the public engine read in a hidden page, or an online provider whose key is in
   // the vault; a SearXNG's address.

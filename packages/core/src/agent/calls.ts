@@ -66,7 +66,8 @@ export interface CallScope {
   mode: PlayMode;
   projectId?: string;
   registry: ToolSet;
-  permissions: PermissionEngine;
+  /** The one policy (its `evaluate`): a sub-agent of a service turn's is the same, its asks refused (S3). */
+  permissions: Pick<PermissionEngine, 'evaluate'>;
   place: Place;
   /** The engine's context: what a tool's output is cut to. */
   nCtx: number;

@@ -504,6 +504,12 @@ export const fr: Messages = {
       subagentsHint: 'En parallèle : un slot de plus par sous-agent, de la mémoire vidéo en plus et un redémarrage du moteur, annoncés avant.',
       subagentsSequential: 'L’un après l’autre',
       subagentsParallel: 'En parallèle',
+      subagentsEngine: 'Moteur des sous-agents',
+      subagentsEngineHint:
+        'Sur un service, les missions et tout ce que lit un sous-agent (fichiers, résultats de commandes) partent vers ce service. Il ne prend pas de slot au moteur intégré. Une conversation sur un service garde le sien.',
+      subagentsEngineConversation: 'Celui de la conversation',
+      subagentsEngineOption: (model, service) => `${model} · ${service}`,
+      subagentsEngineNone: 'Aucun service ajouté : tes sous-agents tournent sur le moteur de leur conversation.',
       notifications: 'Notifications',
       notificationsHint: 'Quand bonaparte n’est pas au premier plan.',
       notifyReplyDone: 'Une réponse est finie',

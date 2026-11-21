@@ -375,13 +375,16 @@ function Workspace({
   const madeHereOn = plugins.find((plugin) => plugin.id === 'conversation-plugins')?.enabled ?? false;
   const commandsOf = useRef({ plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn, madeHere: madeHereOn });
   commandsOf.current = { plugins, conversationId, projectId: activeProject?.id, locale, messages, subagents: subagentsOn, madeHere: madeHereOn };
+  // A discussion has no run_subagent (it reaches no file): « /agents » is not offered there (audit S3).
+  const discussionShown = useRef(false);
   useEffect(() => {
     const collect = (event: Event): void => {
       const detail = (event as CustomEvent<{ add(command: { id: string; name: string; description: string; badge?: string; order: number; run(context: { notify(text: string): void }): void }): void }>).detail;
       const now = commandsOf.current;
       // « /agents » (a small model hands nothing to a sub-agent unless the tool is named): a pill in the person's
-      // words, the tool named in the message — only where sub-agents run.
-      if (now.subagents) {
+      // words, the tool named in the message — only where run_subagent runs: a code conversation, on the built-in
+      // engine or a service (audit S3), the sub-agents switched on.
+      if (now.subagents && !discussionShown.current) {
         detail.add({
           id: 'agents',
           name: 'agents',
@@ -1193,6 +1196,7 @@ function Workspace({
   const shownBegun = conversationId ? (handles.get(deck.shown)?.getMessages().length ?? 0) > 0 : false;
   const shownKind = conversationId ? statuses[conversationId]?.kind : undefined;
   const discussion = shownBegun && shownKind ? shownKind === 'discussion' : !activeProject && !(conversationId && projectOf(conversationId));
+  discussionShown.current = discussion;
   downOn.current = { conversationId, service: shownService };
   useEffect(() => {
     if (!conversationId) return;

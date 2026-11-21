@@ -90,7 +90,8 @@ import { runAgentTurn, type ChangePlace } from './agent/loop.js';
 import { answerPause, checkResume, type ResumeCheck } from './agent/resume.js';
 import { readInbox, saidIn, type Inbox } from './conversation/inbox.js';
 import { branchModel } from './conversation/switch.js';
-import { resumeSubagent, runQueuedSubagent, subagentId } from './agent/subagents.js';
+import { askedAsRefused, readSubagentsEngine, routeSubagents, ServiceSubagents, type ServicePlace } from './agent/service-subagent.js';
+import { resumeSubagent, runQueuedSubagent, shownName, startSubagent, subagentId } from './agent/subagents.js';
 import {
   createTickets,
   installationSecret,
@@ -142,8 +143,10 @@ export type KeyedSearch = 'brave' | 'tavily' | 'serper';
 import { PluginHost } from './plugins/host.js';
 import { PluginInstaller } from './plugins/install.js';
 import type { PluginPort } from './plugins/remote.js';
-import { ToolRegistry } from './tools/registry.js';
-import type { CommandOutputEvent, ToolDef } from './tools/types.js';
+import { ToolRegistry, type ToolSet } from './tools/registry.js';
+import type { CommandOutputEvent, ToolDef, ToolResult } from './tools/types.js';
+import { readSubagentSpec, RUN_SUBAGENT } from './tools/builtin/run-subagent.js';
+import type { AparteToolRun } from '@aparte/core';
 import { ConversationStore, type ConversationMeta } from './conversation/store.js';
 import { KvStore, memoriesRefusedBy } from './kv/kv-store.js';
 import { defaultBudgetBytes } from './kv/retention.js';
@@ -1760,6 +1763,50 @@ export function createCore(deps: CoreDeps): Core {
     return { client, family: loaded.layer };
   }
 
+  /**
+   * What a conversation's model reads on a service, as its system prompt (task 9.2): its folders, its environment,
+   * its project's instructions — sent whole at every turn, a service keeps no memory. Its sub-agents there read it too.
+   */
+  async function serviceSystemOf(meta: ConversationMeta): Promise<string> {
+    const place = await rootsOf(meta.id);
+    const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
+    // Cut as for a context of 32 k: a service's is not known (audit 2026-11-21, I2).
+    const instructions = project ? cutInstructions((await readProjectInstructions(project.roots))?.text ?? '', instructionsBudget(32_768)) : '';
+    return buildServicePrompt({
+      kind: meta.kind,
+      perimeter: place.projectId ? place.roots : [],
+      replyLanguage: deps.replyLanguage?.() ?? 'English',
+      platform: platformName(),
+      environment: await environmentOf(meta, meta.kind === 'code' && place.projectId ? place.roots[0] : undefined),
+      ...(instructions ? { projectInstructions: instructions } : {}),
+    });
+  }
+
+  // The sub-agents on a service (audit S1, S3): no slot, the core's tools and policy, what they read disarmed.
+  const serviceSubagents = new ServiceSubagents({
+    dir: conversationStore.dir,
+    service: async (engineId) => {
+      const provider = await providerRegistry.get(engineId);
+      return provider?.kind === 'openai-compat' ? { provider, key: await providerRegistry.keyOf(provider.id) } : undefined;
+    },
+    system: async (conversationId) => {
+      const meta = await conversationStore.get(conversationId);
+      if (!meta) throw new Error(`No conversation ${conversationId}.`);
+      return serviceSystemOf(meta);
+    },
+  });
+
+  /**
+   * Where a conversation's new sub-agents run: on its own service and model when it runs on one (S3); else where
+   * « Moteur des sous-agents » says — a service still added, and one of its models (S1) —, else on the built-in engine.
+   */
+  async function subagentPlace(meta: ConversationMeta | null | undefined): Promise<ServicePlace | null> {
+    if (meta && meta.engineId !== BUILTIN_PROVIDER.id && (await serviceOf(meta.id))) return { engineId: meta.engineId, model: meta.modelId };
+    const chosen = readSubagentsEngine(await appSettings.get('subagentsEngine').catch(() => 'conversation'));
+    if (!chosen) return null;
+    return (await providerRegistry.get(chosen.engineId))?.kind === 'openai-compat' ? chosen : null;
+  }
+
   async function agentTurn(
     conversationId: string,
     input: Omit<TurnInput, 'tools'>,
@@ -1830,6 +1877,7 @@ export function createCore(deps: CoreDeps): Core {
           windowTools,
           ...keepOriginals(conversationId, input.messageId ?? 'turn'),
           beforeChange: () => ensureBranch(conversationId),
+          subagentsOn: { engines: serviceSubagents, place: await subagentPlace(asked) },
           ticket: (pending) =>
             signer.signTicket({
               messageId: input.messageId ?? '',
@@ -1918,6 +1966,59 @@ export function createCore(deps: CoreDeps): Core {
     return releasedWhenRead(response, release);
   }
 
+  /**
+   * A `run_subagent` of a conversation on a service (audit S3): its sub-agent runs on the same service and model,
+   * announced in aparté's run of the turn (its line, its events), with the core's tools and policy in the
+   * conversation's mode. A server's run cannot wait for a person inside a call (aparté's `canAsk` is false there,
+   * apartejs/aparte#287):
+   * what its mode would ask is refused to the sub-agent, in words that hand it back to the main agent — never more
+   * than the mode, and never a pause the turn cannot keep.
+   */
+  async function subagentInServiceTurn(
+    meta: ConversationMeta,
+    scope: Awaited<ReturnType<typeof rootsOf>> & { mode: PlayMode; registry: ToolSet; originals: ReturnType<typeof keepOriginals> },
+    call: { id: string; name: string; input: unknown },
+    run: AparteToolRun | undefined,
+  ): Promise<ToolResult> {
+    const spec = readSubagentSpec(call.input);
+    if ('error' in spec) return { toolCallId: call.id, name: call.name, content: spec.error, failed: true };
+    if (!run) return { toolCallId: call.id, name: call.name, content: 'run_subagent cannot run here: do the work yourself.', failed: true };
+    const place: ServicePlace = { engineId: meta.engineId, model: meta.modelId };
+    const handle = run.startAgent({ name: shownName(spec, place.model), description: spec.mission });
+    const policy = meta.kind === 'discussion' ? permissions.forDiscussion() : permissions;
+    const end = await startSubagent(
+      {
+        conversationId: meta.id,
+        mode: scope.mode,
+        ...(scope.projectId ? { projectId: scope.projectId } : {}),
+        registry: scope.registry,
+        permissions: { evaluate: (query) => askedAsRefused(policy.evaluate(query)) },
+        place: { roots: scope.roots, ...(scope.barred ? { barred: scope.barred } : {}) },
+        // A service's context is not known: its outputs are cut as for a context of 32 k.
+        nCtx: 32_768,
+        signal: handle.signal,
+        ...scope.originals,
+        beforeChange: () => ensureBranch(meta.id),
+        engine: routeSubagents(conversations, serviceSubagents, place),
+        service: { model: place.model },
+        // Its events are the handle's (aparté sets its id on them); its end is the handle's end.
+        emit: (event) => {
+          if (event.type === 'agent-start') return;
+          if (event.type === 'agent-end') {
+            handle.end(event.status, { ...(event.result !== undefined ? { result: event.result } : {}), ...(event.error !== undefined ? { error: event.error } : {}) });
+            return;
+          }
+          const { agentId: _mine, ...rest } = event as StreamRunEvent & { agentId?: string };
+          handle.emit(rest as StreamRunEvent);
+        },
+      },
+      handle.agentId,
+      spec,
+    );
+    const content = end.kind === 'paused' ? 'The sub-agent waits for nothing it can be given here.' : end.result;
+    return { toolCallId: call.id, name: call.name, content, ...(end.kind === 'done' || end.kind === 'partial' ? {} : { failed: true }) };
+  }
+
   async function turnOnServiceHeld(conversationId: string, raw: Record<string, unknown>, request: Request): Promise<Response> {
     mcp.startAll();
     const meta = await conversationStore.get(conversationId);
@@ -1926,9 +2027,6 @@ export function createCore(deps: CoreDeps): Core {
     const place = await rootsOf(conversationId);
     const { mode } = await modeOf(conversationId);
     const registry = tools.view(visibleTo(place.projectId, conversationId, meta));
-    const project = place.projectId ? await projectStore.get(place.projectId) : undefined;
-    // Cut as for a context of 32 k: a service's is not known (audit 2026-11-21, I2).
-    const instructions = project ? cutInstructions((await readProjectInstructions(project.roots))?.text ?? '', instructionsBudget(32_768)) : '';
     const messageId = typeof raw['messageId'] === 'string' ? raw['messageId'] : 'turn';
     const originals = keepOriginals(conversationId, messageId);
     // What the turn says is kept in the journal, the truth (task 9.2): the message, then the answer — nothing
@@ -1964,7 +2062,9 @@ export function createCore(deps: CoreDeps): Core {
         key: await providerRegistry.keyOf(provider.id),
         model: meta.modelId,
         tools: toolsFor(meta.kind, registry.list()),
-        run: async (call, signal) => {
+        run: async (call, signal, run) => {
+          // Its sub-agents run on its service and model, in aparté's run of this turn (audit S3).
+          if (call.name === RUN_SUBAGENT) return subagentInServiceTurn(meta, { ...place, mode, registry, originals }, call, run);
           const def = registry.get(call.name)?.def;
           let roots = place.roots;
           // A change waits for its conversation's own branch (task 6.7), as on the built-in engine.
@@ -1985,15 +2085,8 @@ export function createCore(deps: CoreDeps): Core {
             roots: place.roots,
             ...(place.barred ? { barred: place.barred } : {}),
           }),
-        system: buildServicePrompt({
-          kind: meta.kind,
-          perimeter: place.projectId ? place.roots : [],
-          replyLanguage: deps.replyLanguage?.() ?? 'English',
-          platform: platformName(),
-          // Sent whole at every turn: a service keeps no memory, nothing is frozen there.
-          environment: await environmentOf(meta, meta.kind === 'code' && place.projectId ? place.roots[0] : undefined),
-          ...(instructions ? { projectInstructions: instructions } : {}),
-        }),
+        // Sent whole at every turn: a service keeps no memory, nothing is frozen there.
+        system: await serviceSystemOf(meta),
         secret: (await installationSecret(deps.dataDir)).toString('hex'),
         maxTurns: Number(await appSettings.get('maxToolRounds').catch(() => 25)) || 25,
       },
@@ -2674,7 +2767,13 @@ export function createCore(deps: CoreDeps): Core {
         beforeChange: () => ensureBranch(conversationId),
       };
       // The sub-agents the pause holds go on, and those queued behind it run, on slots of their own (task 8.1).
-      const parent = { ...scope, engine: conversations, emit };
+      const fresh = await subagentPlace(resumed);
+      const parent = {
+        ...scope,
+        engine: routeSubagents(conversations, serviceSubagents, fresh),
+        ...(fresh ? { service: { model: fresh.model } } : {}),
+        emit,
+      };
       const { results, waiting, holds, letGo } = await answerPause(
         {
           ...scope,

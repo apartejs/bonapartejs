@@ -3,7 +3,8 @@
  * sub-agent — its own context, the tools it is given, never more than its
  * conversation may — and reads only its result. The agent's loop runs it
  * (`agent/subagents.ts`): it needs the slot its conversation holds, which only
- * the loop can lend. Its effect is `ui`: allowed in every mode — what the
+ * the loop can lend; on a service turn, the core runs it in aparté's run of
+ * the turn (audit S3). Its effect is `ui`: allowed in every mode — what the
  * sub-agent does is decided call by call, under the conversation's mode — and
  * it never waits in the line of its conversation's writes, which its own
  * sub-agent's writes go through.

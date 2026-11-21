@@ -8,7 +8,7 @@
  * resumed through the same address.
  */
 
-import { createAparteAgentHandler, type AparteTool } from '@aparte/core';
+import { createAparteAgentHandler, type AparteTool, type AparteToolRun } from '@aparte/core';
 import { createOpenAICompatProvider } from '@aparte/provider-openai-compat';
 import type { Verdict } from '@aparte/bonaparte-shared';
 import { disarmForService } from '../families/service-tokens.js';
@@ -21,7 +21,8 @@ export interface ServiceTurn {
   model: string;
   /** The conversation's tools that run in the core (the window's run in the window). */
   tools: readonly ToolDef[];
-  run(call: { id: string; name: string; input: unknown }, signal: AbortSignal): Promise<ToolResult>;
+  /** `run`: the run of aparté's handler the call belongs to — what a sub-agent of the turn is announced in (S3). */
+  run(call: { id: string; name: string; input: unknown }, signal: AbortSignal, run?: AparteToolRun): Promise<ToolResult>;
   /** The core's one policy, in the conversation's mode and perimeter. */
   judge(tool: ToolDef, input: unknown): Verdict;
   system: string;
@@ -71,8 +72,8 @@ export async function serveOnService(
     resolveKey: () => turn.key,
     tools: turn.tools.map((def) => ({
       tool: { name: def.name, description: disarm(def.description), inputSchema: disarmDeep(def.inputSchema) } satisfies AparteTool,
-      handler: async (call, signal) => {
-        const result = await turn.run({ id: call.id, name: call.name, input: call.input }, signal);
+      handler: async (call, signal, context) => {
+        const result = await turn.run({ id: call.id, name: call.name, input: call.input }, signal, context?.run);
         return {
           toolCallId: call.id,
           content: disarm(result.content),
