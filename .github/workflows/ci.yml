@@ -75,20 +75,90 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # The end-to-end tests drive the built app against the fake
-      # llama-server: no GPU, no model, and a data folder of their own. On
-      # Ubuntu they would need the runner's user namespaces lifted
-      # (`sysctl kernel.apparmor_restrict_unprivileged_userns=0`) and a display
-      # (`xvfb-run`): run them there by hand when a change concerns Linux.
-      - name: End-to-end (Windows)
-        if: runner.os == 'Windows'
-        run: pnpm --filter @aparte/bonaparte-app test:e2e
+  # The end-to-end tests drive the built app against the fake llama-server: no
+  # GPU, no model, and a data folder of their own. Windows only, the product's
+  # platform: on Ubuntu they would need the runner's user namespaces lifted and
+  # a display — run them there by hand when a change concerns Linux. They run
+  # one at a time (workers: 1), so they are split over four jobs that run
+  # together: one job took some 45 minutes (Paul, 2026-11-21; the repository
+  # is public, its minutes free).
+  e2e:
+    name: e2e ${{ matrix.shard }}/4
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+
+      - name: Use Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # The runner's screen is 1024 × 768: Windows shrinks the test window
+      # (1280 × 820) to it, and under 1 100 px the app draws its narrow layout,
+      # a pane over the conversation (rewind.spec.ts, first CI run, 2026-11-21).
+      - name: A screen as wide as a person's
+        shell: pwsh
+        run: Set-DisplayResolution -Width 1920 -Height 1080 -Force
+
+      - name: End-to-end
+        working-directory: packages/app
+        run: pnpm exec playwright test --shard=${{ matrix.shard }}/4
 
       - name: Upload the traces of the failed end-to-end tests
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-results-${{ matrix.os }}
+          name: e2e-results-${{ matrix.shard }}
           path: packages/app/test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # A version new on a green main is tagged and its release built (Paul, 2026-11-21: no one watches the CI to push
+  # the tag). Once a version: an existing tag is left alone, so the next pushes to main release nothing until the
+  # version changes. A tag pushed with GitHub's token runs no workflow; a dispatch on that tag does, as a tag would.
+  release:
+    needs: [gate, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      - name: Tag the version and dispatch its release, once
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version=$(node -p "require('./packages/app/package.json').version")
+          tag="v$version"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "$tag exists: nothing to release until the version changes."
+            exit 0
+          fi
+          grep -q "^## \[$version\]" CHANGELOG.md || { echo "CHANGELOG.md has no section for $version: not tagged."; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "$tag"
+          echo "Tagged $tag on $GITHUB_SHA; its release is building."

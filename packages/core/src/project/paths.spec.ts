@@ -152,7 +152,9 @@ describe('the real location decides, not the spelling', () => {
       return; // a relative file link needs a privilege on Windows: Linux and macOS run it
     }
     expect((await readlink(join(root, 'notes'))).split(/[\\/]/)).toContain('..');
-    expect(() => resolveInPerimeter([root], 'notes')).toThrow(PathOutsidePerimeterError);
+    // On Windows that '..' reads two ways (folded as text it stays in deep/er): refused as ambiguous, which the
+    // runner showed (CI of 2026-11-21); elsewhere it is followed, and lands outside.
+    expect(() => resolveInPerimeter([root], 'notes')).toThrow(process.platform === 'win32' ? AmbiguousLinkError : PathOutsidePerimeterError);
   });
 
   it('a file link that points nowhere yet is where it points', async () => {

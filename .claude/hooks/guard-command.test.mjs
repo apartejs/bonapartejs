@@ -30,6 +30,9 @@ const allowedPushes = [
   ['git push origin v1.0.0', 'Bash'],
   ['git push origin refs/tags/v1.2.10', 'Bash'],
   ['git push -u origin main', 'PowerShell'],
+  // A working branch for a pull request (Paul, 2026-11-21: « fusion quand vert »).
+  ['git push -u origin v1', 'Bash'],
+  ['git push origin fix/ci-windows', 'Bash'],
 ];
 
 for (const [command, tool] of allowedPushes) {
@@ -44,7 +47,9 @@ const narrowPushes = [
   'git push --force-with-lease origin main',
   'git push origin +main',
   'git push origin main:other',
-  'git push origin dev',
+  'git push origin archive/v0',
+  'git push origin HEAD',
+  'git push origin v1:main',
   'git push upstream main',
   'git push --all origin',
   'git push --tags origin',
@@ -52,8 +57,8 @@ const narrowPushes = [
   'git push origin --delete main',
   'git push origin :main',
   'git push origin main v1.0.0',
-  'git push origin v1.0',
-  'git push origin v1.0.0-rc',
+  'git push origin +v1',
+  'git push origin v1 --force',
   'git push --no-verify origin main',
   'git -C ../other push origin main',
   'git push -u origin main && git push --force origin main',
@@ -75,7 +80,7 @@ const pushes = [
   'git -C x push',
   'git -c user.name=x push --force',
   'git add . && git push',
-  'cd repo; git push origin v1',
+  'cd repo; git push --force origin v1',
   'bash -c "git push"',
   '& "C:\\Program Files\\Git\\bin\\git.exe" push',
 ];
@@ -168,7 +173,7 @@ const lines = (...parts) => parts.join('\n');
 
 const hiddenBehindQuoting = [
   // A PowerShell here-string is how a multi-line commit message is written.
-  [lines("git commit -m @'", 'feat: x', "'@", 'git push origin v1'), 'PowerShell', /Paul pushes/],
+  [lines("git commit -m @'", 'feat: x', "'@", 'git push -f origin v1'), 'PowerShell', /Paul pushes/],
   [lines("git commit -m @'", 'msg', "'@; git push"), 'PowerShell', /Paul pushes/],
   [lines('$m = @"', 'some text', '"@', 'Start-Process notepad'), 'PowerShell', /visible console/],
   // In Bash a backtick inside double quotes is not an escape character.
