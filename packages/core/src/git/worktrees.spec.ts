@@ -8,7 +8,7 @@
 
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { tempRepo, type TempRepo } from '../testing/temp-repo.js';
 import { git } from './git.js';
@@ -138,12 +138,20 @@ describe('a conversation on its own branch', { timeout: 30_000 }, () => {
   });
 
   it('a branch made in a folder of its repository: the project’s folders at the same place in the worktree', () => {
-    const worktree = join('C:', 'repo', '.bonaparte', 'worktrees', 'heures');
-    expect(branchRoots([join('C:', 'repo', 'packages', 'app'), join('C:', 'elsewhere')], worktree)).toEqual({
-      roots: [join(worktree, 'packages', 'app'), join('C:', 'elsewhere')],
-      barred: [join('C:', 'repo', 'packages', 'app')],
+    // Absolute on every platform: /repo on Linux and macOS, C:\repo (the current drive) on Windows.
+    const at = (...parts: string[]) => resolve(sep, ...parts);
+    const worktree = at('repo', '.bonaparte', 'worktrees', 'heures');
+    expect(branchRoots([at('repo', 'packages', 'app'), at('elsewhere')], worktree)).toEqual({
+      roots: [join(worktree, 'packages', 'app'), at('elsewhere')],
+      barred: [at('repo', 'packages', 'app')],
     });
-    expect(branchRoots([join('C:', 'repo')], worktree)).toEqual({ roots: [worktree], barred: [join('C:', 'repo')] });
+    expect(branchRoots([at('repo')], worktree)).toEqual({ roots: [worktree], barred: [at('repo')] });
+    // The roots and the barred folders are read the same way: a folder written with a detour is where it leads.
+    const detour = (from: string, ...parts: string[]) => [from, ...parts].join(sep);
+    expect(branchRoots([detour(at('repo', 'lib'), '..', 'packages', 'app', ''), detour(at('elsewhere', 'x'), '..')], worktree)).toEqual({
+      roots: [join(worktree, 'packages', 'app'), at('elsewhere')],
+      barred: [at('repo', 'packages', 'app')],
+    });
   });
 
   it('a folder that is not a repository has no root', async () => {

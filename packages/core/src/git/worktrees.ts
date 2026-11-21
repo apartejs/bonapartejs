@@ -32,14 +32,15 @@ export function branchRoots(projectRoots: readonly string[], worktree: string): 
   const repo = resolve(worktree, '..', '..', '..');
   const roots: string[] = [];
   const barred: string[] = [];
-  for (const root of projectRoots) {
-    const rel = relative(repo, resolve(root));
+  // Each folder read once, as an absolute path, for the roots and the barred alike.
+  for (const root of projectRoots.map((folder) => resolve(folder))) {
+    const rel = relative(repo, root);
     if (rel.startsWith('..') || isAbsolute(rel)) {
       roots.push(root);
       continue;
     }
-    roots.push(rel === '' ? worktree : join(worktree, rel));
-    barred.push(resolve(root));
+    roots.push(rel === '' ? resolve(worktree) : join(resolve(worktree), rel));
+    barred.push(root);
   }
   return { roots, barred };
 }
