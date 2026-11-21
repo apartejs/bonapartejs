@@ -26,13 +26,15 @@ jobs:
   # window. Ubuntu catches what only works on Windows by accident: a path
   # separator, a file name whose case is wrong. The end-to-end tests run on
   # Windows only, the product's platform: on both, they doubled the run.
+  # Ninety minutes: the end-to-end tests take some 14 on the maintainer's
+  # machine, and a private repository's Windows runner has two cores.
   gate:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
     steps:
