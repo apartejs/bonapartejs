@@ -184,7 +184,10 @@ test('Bash and PowerShell have the same rules', () => {
   }
 });
 
-test('a push is denied in both shells', () => {
-  assert.ok(settings.permissions.deny.includes('Bash(git push *)'));
-  assert.ok(settings.permissions.deny.includes('PowerShell(git push *)'));
+// Since 2026-11-21 (Paul took the deny rules out), the guard alone decides a push: main and a release tag to the
+// repository pass, everything else is refused (guard-command.test.mjs). A deny rule would refuse those two too.
+test('a push is left to the guard, in both shells', () => {
+  assert.ok(!settings.permissions.deny.some((rule) => /git push/.test(rule)));
+  const guards = JSON.stringify(settings.hooks.PreToolUse);
+  assert.match(guards, /guard-command\.mjs/);
 });

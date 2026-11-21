@@ -76,8 +76,6 @@
       "PowerShell(gh release view *)"
     ],
     "deny": [
-      "Bash(git push *)",
-      "PowerShell(git push *)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(**/.env)",
