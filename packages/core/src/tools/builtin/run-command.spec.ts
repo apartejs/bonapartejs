@@ -61,9 +61,11 @@ describe.runIf(process.platform === 'win32')('run_command on Windows: the npm fa
 
 describe('run_command', () => {
   it('an output past what is kept in memory keeps its head and its end — the exit code, the failures (audit 2026-11-21, D5)', async () => {
+    // process.exitCode, never process.exit(): a pipe is written asynchronously on Linux and macOS, and
+    // process.exit() drops what is not written yet — some 1.4 MB of the 2.5 there, nothing on Windows.
     const script =
       'process.stdout.write("START\\n"); const line = "y".repeat(99) + "\\n"; for (let i = 0; i < 25000; i++) process.stdout.write(line); ' +
-      'process.stdout.write("FAILED: the last test\\n"); process.exit(3)';
+      'process.stdout.write("FAILED: the last test\\n"); process.exitCode = 3';
     const result = await run(node(script));
     expect(result.content.startsWith(`$ ${process.execPath} -e`)).toBe(true);
     expect(result.content).toContain('START');
