@@ -14,7 +14,7 @@ import { aparteGlobalConfig } from '@aparte/core';
 import { approvalModeElement, getApprovalController, setupApproval, type ApprovalMode } from '@aparte/plugin-approval';
 import { createAparteElement } from '@aparte/react';
 import type { PlayMode } from '@aparte/bonaparte-shared';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { Messages } from '../i18n/index';
 
 const ApprovalModeSwitch = createAparteElement(approvalModeElement);
@@ -52,6 +52,52 @@ export function ModeSwitch({ mode, messages, onChange }: ModeSwitchProps) {
     if (controller.getMode() !== TO_APARTE[mode]) controller.setMode(TO_APARTE[mode]);
   }, [controller, mode]);
 
-  // The person's choice.
-  return <ApprovalModeSwitch className="mode-switch" labels={labels} onApprovalModeChange={(detail) => onChange(FROM_APARTE[detail.mode])} />;
+  // The person's choice — and only theirs. aparté's select says « change » when its value is set by code too, and
+  // the mode element turns that into a mode change: an update that came late, the mode of the conversation just
+  // left, became the next conversation's (GitHub's runner, 2026-11-21). A choice is made with the list open or a
+  // key typed in the switch; anything else is an echo, never told to the core (apartejs/aparte#295).
+  const host = useRef<HTMLSpanElement>(null);
+  const touched = useRef(0);
+  useEffect(() => {
+    const element = host.current;
+    if (!element) return;
+    let opened = false;
+    const open = (): void => {
+      opened = true;
+      touched.current = Number.POSITIVE_INFINITY;
+    };
+    // A close counts only after an open: a value set by code closes the list too.
+    const closed = (): void => {
+      if (!opened) return;
+      opened = false;
+      touched.current = performance.now();
+    };
+    const typed = (): void => {
+      touched.current = Math.max(touched.current, performance.now());
+    };
+    element.addEventListener('aparte-select-open', open);
+    element.addEventListener('aparte-select-close', closed);
+    element.addEventListener('keydown', typed, true);
+    return () => {
+      element.removeEventListener('aparte-select-open', open);
+      element.removeEventListener('aparte-select-close', closed);
+      element.removeEventListener('keydown', typed, true);
+    };
+  }, []);
+  const choice = (detail: { mode: ApprovalMode }): void => {
+    if (performance.now() - touched.current > PERSON_MS) {
+      // An echo: the switch goes back to the conversation's mode.
+      controller.setMode(TO_APARTE[mode]);
+      return;
+    }
+    onChange(FROM_APARTE[detail.mode]);
+  };
+  return (
+    <span ref={host} className="mode-switch-host">
+      <ApprovalModeSwitch className="mode-switch" labels={labels} onApprovalModeChange={choice} />
+    </span>
+  );
 }
+
+/** How long after the list closed, or a key was typed in it, a change is still the person's. */
+const PERSON_MS = 250;

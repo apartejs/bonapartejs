@@ -176,7 +176,7 @@ export interface CoreDeps {
    * bonaparte installed when Windows has none as recent. `systemDir` and `platform` are a test's.
    */
   llamaRuntime?: { dir: string | undefined; systemDir?: string; platform?: NodeJS.Platform; arch?: string };
-  /** The port of the managed server (default 8763). */
+  /** The port of the managed server: tests only; else a free one at each launch. */
   port?: number;
   /** Where models are looked for (default: the known folders, or `BONAPARTE_MODEL_DIRS`). */
   modelRoots?: ScanRoot[];

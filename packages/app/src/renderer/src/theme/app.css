@@ -842,7 +842,11 @@ body {
   box-sizing: border-box;
 }
 
-/* The mode switch leads the composer's toolbar; the gauge goes to its end. */
+/* The mode switch leads the composer's toolbar; the gauge goes to its end. Its host only listens: no box of its own. */
+.mode-switch-host {
+  display: contents;
+}
+
 .mode-switch {
   display: inline-flex;
   margin-inline-end: auto;

@@ -13,6 +13,7 @@
  * slightest request) nor launches a server: configuring costs nothing.
  */
 
+import { freePort } from './free-port.js';
 import { mkdir, readFile, rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { detectServeCommandPrefix } from '../backend/llamacpp/serve-command.js';
@@ -96,7 +97,6 @@ export interface EngineSupervisorOptions {
   onIdleUnload?: (minutes: number) => void;
 }
 
-const DEFAULT_PORT = 8763;
 const DEFAULT_IDLE_MINUTES = 15;
 
 /** One spelling of a path, to find it in a command line. */
@@ -236,7 +236,8 @@ export class EngineSupervisor {
       prefixArgs,
       launch: {
         modelPath,
-        port: this.options.port ?? DEFAULT_PORT,
+        // A port given (tests) is kept; else a free one at each launch — never one another program holds.
+        port: this.options.port ?? (await freePort()),
         // -c is shared between the slots: each gets the context asked.
         nCtx: engine.nCtx * slots,
         slots,
