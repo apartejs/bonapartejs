@@ -1,12 +1,18 @@
 /**
- * « Always allow » remembers the exact command, or the whole program — never
- * its first word read out of a string: a command is a program and its
- * arguments, run without a shell. A shell, or a line that chains, pipes or
- * substitutes, is never remembered.
+ * « Always allow » remembers what the card showed and nothing more (audit
+ * 2026-11-21, D3; security rule 2): the exact command — never its first word,
+ * never its program alone —, a write's folder, a page's site, or a tool whose
+ * calls name none of those. A shell, or a line that chains, pipes or
+ * substitutes, is never remembered; a rule read from disk that could not have
+ * been remembered answers nothing.
  */
 
 import { describe, expect, it } from 'vitest';
-import { alwaysRule, isRememberable, matchesRule, normalizeProgram, type AllowRule } from './rules.js';
+import { isRememberable, isValidRule, matchesRule, normalizeProgram, originOf, pathPattern, ruleFor, type AllowRule, type CallSubject } from './rules.js';
+
+const command = (program: string, args: string[]): CallSubject => ({ kind: 'command', command: { program, args } });
+const path = (relative: string | null): CallSubject => ({ kind: 'path', relative });
+const site = (origin: string | null): CallSubject => ({ kind: 'origin', origin });
 
 describe('normalizeProgram', () => {
   it('compares programs without case, folder or Windows extension', () => {
@@ -35,41 +41,99 @@ describe('isRememberable', () => {
   });
 });
 
-describe('alwaysRule', () => {
-  it('remembers the exact command, or the whole program', () => {
-    expect(alwaysRule('run_command', { program: 'pnpm.cmd', args: ['test'] }, 'command')).toEqual({
-      tool: 'run_command',
-      program: 'pnpm',
-      args: ['test'],
-    });
-    expect(alwaysRule('run_command', { program: 'pnpm', args: ['test'] }, 'program')).toEqual({ tool: 'run_command', program: 'pnpm' });
+describe('ruleFor: what the card offers to remember', () => {
+  it('a command: exactly that program and those arguments', () => {
+    expect(ruleFor('run_command', command('pnpm.cmd', ['test']))).toEqual({ tool: 'run_command', program: 'pnpm', args: ['test'] });
+    expect(ruleFor('run_command', command('git', []))).toEqual({ tool: 'run_command', program: 'git', args: [] });
   });
 
-  it('refuses to remember what may not be', () => {
-    expect(() => alwaysRule('run_command', { program: 'bash', args: ['-c', 'ls'] }, 'program')).toThrow(/cannot be remembered/);
-    expect(() => alwaysRule('run_command', { program: 'pnpm', args: ['test', '&&', 'curl'] }, 'command')).toThrow(/cannot be remembered/);
+  it('never a shell, never a chain — and says which', () => {
+    expect(ruleFor('run_command', command('bash', ['-c', 'ls']))).toEqual({ never: 'shell' });
+    expect(ruleFor('run_command', command('powershell', ['-Command', 'Get-ChildItem']))).toEqual({ never: 'shell' });
+    expect(ruleFor('run_command', command('pnpm', ['test', '&&', 'curl']))).toEqual({ never: 'chain' });
+  });
+
+  it('a write: its folder, or the file itself at the top of the perimeter; nothing outside it', () => {
+    expect(pathPattern('src/components/Button.tsx')).toBe('src/components/**');
+    expect(ruleFor('edit_file', path('src/format.ts'))).toEqual({ tool: 'edit_file', path: 'src/**' });
+    expect(ruleFor('edit_file', path('notes.txt'))).toEqual({ tool: 'edit_file', path: 'notes.txt' });
+    expect(ruleFor('edit_file', path(null))).toEqual({ never: 'outside' });
+  });
+
+  it('a page: its site — localhost with its port; nothing for a page not known', () => {
+    expect(originOf('http://localhost:5173/app?x=1')).toBe('http://localhost:5173');
+    expect(originOf('https://Example.com/a')).toBe('https://example.com');
+    expect(originOf('file:///C:/a.html')).toBeNull();
+    expect(originOf('not a url')).toBeNull();
+    expect(ruleFor('browser_act', site('http://localhost:5173'))).toEqual({ tool: 'browser_act', origin: 'http://localhost:5173' });
+    expect(ruleFor('browser_act', site(null))).toEqual({ never: 'unknown' });
+  });
+
+  it('a tool whose calls name nothing: the tool', () => {
+    expect(ruleFor('mcp__files__read_text_file', { kind: 'none' })).toEqual({ tool: 'mcp__files__read_text_file' });
+  });
+});
+
+describe('isValidRule: what a rule read from disk must be', () => {
+  it('a program without its exact arguments is its first word: never valid (security rule 2)', () => {
+    expect(isValidRule({ tool: 'run_command', program: 'pnpm' })).toBe(false);
+    expect(isValidRule({ tool: 'run_command', program: 'pnpm', args: ['test'] })).toBe(true);
+    expect(isValidRule({ tool: 'run_command', program: 'PNPM', args: ['test'] })).toBe(false);
+    expect(isValidRule({ tool: 'run_command', program: 'bash', args: ['-c', 'ls'] })).toBe(false);
+  });
+
+  it('a path climbs nowhere and names no drive; a site is an origin; one subject at most', () => {
+    for (const bad of ['../x', '/etc/passwd', 'C:/Windows/x', 'src\\a.ts', 'src/*.ts', '**', 'a/**/b', 'a//b', './a']) {
+      expect(isValidRule({ tool: 'edit_file', path: bad })).toBe(false);
+    }
+    expect(isValidRule({ tool: 'edit_file', path: 'src/**' })).toBe(true);
+    expect(isValidRule({ tool: 'browser_act', origin: 'https://example.com/' })).toBe(false);
+    expect(isValidRule({ tool: 'browser_act', origin: 'https://example.com' })).toBe(true);
+    expect(isValidRule({ tool: 'browser_act', origin: 'https://example.com', path: 'a' })).toBe(false);
+    expect(isValidRule({ tool: 'web_fetch', args: ['x'] })).toBe(false);
   });
 });
 
 describe('matchesRule', () => {
   const exact: AllowRule = { tool: 'run_command', program: 'pnpm', args: ['test'] };
-  const program: AllowRule = { tool: 'run_command', program: 'pnpm' };
 
-  it('an exact rule answers that command only', () => {
-    expect(matchesRule(exact, 'run_command', { program: 'PNPM.cmd', args: ['test'] })).toBe(true);
-    expect(matchesRule(exact, 'run_command', { program: 'pnpm', args: ['test', '--watch'] })).toBe(false);
-    expect(matchesRule(exact, 'run_command', { program: 'pnpm', args: ['testament'] })).toBe(false);
+  it('an exact rule answers that command only — never another argument, never a chain', () => {
+    expect(matchesRule(exact, 'run_command', command('PNPM.cmd', ['test']))).toBe(true);
+    expect(matchesRule(exact, 'run_command', command('pnpm', ['test', '--watch']))).toBe(false);
+    expect(matchesRule(exact, 'run_command', command('pnpm', ['testament']))).toBe(false);
+    expect(matchesRule(exact, 'run_command', command('npm', ['test']))).toBe(false);
+    expect(matchesRule({ tool: 'run_command', program: 'git', args: ['status'] }, 'run_command', command('git', ['push', '--force']))).toBe(false);
   });
 
-  it('a program rule answers its arguments — never another program, never a chain', () => {
-    expect(matchesRule(program, 'run_command', { program: 'pnpm', args: ['build'] })).toBe(true);
-    expect(matchesRule(program, 'run_command', { program: 'npm', args: ['build'] })).toBe(false);
-    expect(matchesRule(program, 'run_command', { program: 'pnpm', args: ['test', '&&', 'curl', 'evil'] })).toBe(false);
+  it('a forged program-wide rule answers nothing', () => {
+    expect(matchesRule({ tool: 'run_command', program: 'pnpm' }, 'run_command', command('pnpm', ['build']))).toBe(false);
   });
 
-  it('a rule answers its own tool only; a command rule never answers a call without its command', () => {
-    expect(matchesRule(program, 'browser_act', { program: 'pnpm', args: [] })).toBe(false);
-    expect(matchesRule(program, 'run_command', undefined)).toBe(false);
-    expect(matchesRule({ tool: 'web_fetch' }, 'web_fetch', undefined)).toBe(true);
+  it('a folder answers the files under it, a file itself only', () => {
+    const folder: AllowRule = { tool: 'edit_file', path: 'src/**' };
+    expect(matchesRule(folder, 'edit_file', path('src/a.ts'))).toBe(true);
+    expect(matchesRule(folder, 'edit_file', path('src/deep/b.ts'))).toBe(true);
+    expect(matchesRule(folder, 'edit_file', path('srcx/a.ts'))).toBe(false);
+    expect(matchesRule(folder, 'edit_file', path('src'))).toBe(false);
+    expect(matchesRule(folder, 'edit_file', path(null))).toBe(false);
+    expect(matchesRule(folder, 'write_file', path('src/a.ts'))).toBe(false);
+    expect(matchesRule({ tool: 'edit_file', path: 'notes.txt' }, 'edit_file', path('notes.txt'))).toBe(true);
+    expect(matchesRule({ tool: 'edit_file', path: 'notes.txt' }, 'edit_file', path('notes.txt.bak'))).toBe(false);
+  });
+
+  it('a site answers its own origin only — another port, scheme or host is another site', () => {
+    const local: AllowRule = { tool: 'browser_act', origin: 'http://localhost:5173' };
+    expect(matchesRule(local, 'browser_act', site('http://localhost:5173'))).toBe(true);
+    expect(matchesRule(local, 'browser_act', site('http://localhost:3000'))).toBe(false);
+    expect(matchesRule(local, 'browser_act', site('https://localhost:5173'))).toBe(false);
+    expect(matchesRule(local, 'browser_act', site(null))).toBe(false);
+    expect(matchesRule(local, 'browser_open', site('http://localhost:5173'))).toBe(false);
+  });
+
+  it('a tool-wide rule answers only the calls that name nothing', () => {
+    expect(matchesRule({ tool: 'web_search' }, 'web_search', { kind: 'none' })).toBe(true);
+    expect(matchesRule({ tool: 'run_command' }, 'run_command', command('pnpm', ['test']))).toBe(false);
+    expect(matchesRule({ tool: 'edit_file' }, 'edit_file', path('src/a.ts'))).toBe(false);
+    expect(matchesRule({ tool: 'browser_act' }, 'browser_act', site('https://example.com'))).toBe(false);
   });
 });

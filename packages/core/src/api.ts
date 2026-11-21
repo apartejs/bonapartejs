@@ -108,7 +108,9 @@ import {
   type TurnResult,
 } from './conversation/engine.js';
 import type { BrowserService, PlayMode, PluginStatus, TerminalService } from '@aparte/bonaparte-shared';
-import { modeAfterRestart, PermissionEngine } from './permissions/engine.js';
+import { modeAfterRestart, PermissionEngine, type RememberOffer } from './permissions/engine.js';
+import { GrantStore, type GrantScope } from './permissions/grants.js';
+import type { AllowRule } from './permissions/rules.js';
 import { displayInPerimeter, resolveInPerimeter } from './project/paths.js';
 import { previewToolCall, type ToolPreview } from './tools/preview.js';
 import { buildServicePrompt, toolsFor } from './prompt/system-prompt.js';
@@ -623,6 +625,18 @@ export interface Core {
   ): Promise<{ mode: PlayMode; reconfirm: boolean }>;
   /** `confirmed`: the person chose it in this run (the default); Impro read from a default is not. */
   setMode(conversationId: string, mode: PlayMode, options?: { confirmed?: boolean }): Promise<void>;
+  /**
+   * « Toujours autoriser » (audit 2026-11-21, D3): what the card may offer to remember for a call that asks — the
+   * exact command, a write's folder, a page's site or the tool, and where « Toujours » keeps it — or why it is asked
+   * every time; remembering it, for its conversation or always; the rules kept, the app's (`projectId` null) or a
+   * project's, and one taken back.
+   */
+  readonly remembered: {
+    offer(conversationId: string, call: { name: string; input: unknown }): Promise<RememberOffer | null>;
+    remember(conversationId: string, call: { name: string; input: unknown }, scope: 'conversation' | 'always'): Promise<boolean>;
+    rules(projectId: string | null): Promise<AllowRule[]>;
+    revoke(projectId: string | null, rule: AllowRule): Promise<void>;
+  };
   /** What a call would change — the text before and after, and their diff — for the approval card. */
   previewCall(
     conversationId: string,
@@ -1553,10 +1567,16 @@ export function createCore(deps: CoreDeps): Core {
     branching.set(conversationId, made);
     return made;
   };
+  // « Toujours autoriser » (audit 2026-11-21, D3): the rules remembered, the app's, each project's, each conversation's.
+  const grants = new GrantStore(join(deps.dataDir, 'config'));
+  const grantsRead = grants.load().catch(() => undefined);
   const permissions = new PermissionEngine({
     roots: (projectId) =>
       projectId ? (projectRoots.get(projectId) ?? perimeter()) : perimeter(),
     dataDir: deps.dataDir,
+    rules: (projectId, conversationId) => grants.rulesFor(projectId, conversationId),
+    // The site of the agent's page, as the browser last said it: what a browser_act is judged on.
+    pageOf: (conversationId: string): string | undefined => plugins.agentPage(conversationId),
     askBeforeNetwork: () => askBeforeNetwork,
     alwaysAsk: (projectId) => [...alwaysAsk, ...(projectId ? (projectAlwaysAsk.get(projectId) ?? []) : [])],
   });
@@ -1575,6 +1595,23 @@ export function createCore(deps: CoreDeps): Core {
     // And what a command prints, for the terminal's agent tab.
     onOutput: (event: CommandOutputEvent) => deps.commandOutput?.(conversationId, event),
   });
+  /** What the card may offer to remember for a call, judged as its turn would judge it (audit D3). */
+  const offerFor = async (conversationId: string, call: { name: string; input: unknown }): Promise<RememberOffer | null> => {
+    const tool = tools.get(call.name)?.def;
+    if (!tool) return null;
+    const meta = await conversationStore.get(conversationId);
+    const place = await rootsOf(conversationId);
+    const policy = meta?.kind === 'discussion' ? permissions.forDiscussion() : permissions;
+    return policy.offer({
+      tool,
+      input: call.input,
+      mode: (await modeOf(conversationId)).mode,
+      conversationId,
+      ...(place.projectId ? { projectId: place.projectId } : {}),
+      roots: place.roots,
+      ...(place.barred ? { barred: place.barred } : {}),
+    });
+  };
   // Impro confirmed by the person during this run of the app: a mode read from disk is not a confirmation.
   const improConfirmed = new Set<string>();
   async function modeOf(
@@ -1658,7 +1695,7 @@ export function createCore(deps: CoreDeps): Core {
     judge: async ({ conversationId, tool, input }) => {
       const { projectId } = await rootsOf(conversationId);
       const { mode } = await modeOf(conversationId);
-      return permissions.evaluate({ tool, input, mode, ...(projectId ? { projectId } : {}) });
+      return permissions.evaluate({ tool, input, mode, conversationId, ...(projectId ? { projectId } : {}) });
     },
     // A page opened from a file (review of 2026-11-20): a discussion reaches no file; its page goes online only
     // where the conversation's network passes without asking — opening it is a read, never a way round the ask.
@@ -2122,6 +2159,7 @@ export function createCore(deps: CoreDeps): Core {
             tool,
             input,
             mode,
+            conversationId,
             ...(place.projectId ? { projectId: place.projectId } : {}),
             roots: place.roots,
             ...(place.barred ? { barred: place.barred } : {}),
@@ -2593,7 +2631,11 @@ export function createCore(deps: CoreDeps): Core {
         projectAlwaysAsk.set(project.id, project.alwaysAsk ?? []);
         return project;
       },
-      remove: (id) => projectStore.remove(id),
+      // What the project remembered goes with it (audit D3).
+      remove: async (id) => {
+        await projectStore.remove(id);
+        await grants.dropProject(id).catch(() => undefined);
+      },
       async folderTaken(id) {
         for (const meta of await conversationStore.list()) {
           if (meta.projectId !== id || meta.kind !== 'code' || meta.archivedAt) continue;
@@ -2642,6 +2684,9 @@ export function createCore(deps: CoreDeps): Core {
     },
 
     async removeConversation(id) {
+      // What it alone allowed, and its agent's page, go with it (audit D3).
+      await grants.dropConversation(id).catch(() => undefined);
+      plugins.forgetPage(id);
       // Its plugins on trial end with it; what it made goes too (one installed from it stays, as installed).
       await addedPlugins.stopTrialsOf(id);
       await extensions.forgetConversation(id).catch(() => undefined);
@@ -2791,6 +2836,35 @@ export function createCore(deps: CoreDeps): Core {
       await conversationStore.update(conversationId, { mode });
       if (mode === 'impro' && options.confirmed !== false) improConfirmed.add(conversationId);
       else improConfirmed.delete(conversationId);
+    },
+
+    remembered: {
+      async offer(conversationId, call) {
+        await grantsRead;
+        return offerFor(conversationId, call);
+      },
+      async remember(conversationId, call, scope) {
+        await grantsRead;
+        const offered = await offerFor(conversationId, call);
+        if (!offered || 'never' in offered) return false;
+        const { projectId } = await rootsOf(conversationId);
+        const where: GrantScope =
+          scope === 'conversation'
+            ? { kind: 'conversation', conversationId }
+            : offered.where === 'project' && projectId
+              ? { kind: 'project', projectId }
+              : { kind: 'app' };
+        await grants.add(where, offered.rule);
+        return true;
+      },
+      async rules(projectId) {
+        await grantsRead;
+        return grants.list(projectId ? { kind: 'project', projectId } : { kind: 'app' });
+      },
+      async revoke(projectId, rule) {
+        await grantsRead;
+        await grants.revoke(projectId ? { kind: 'project', projectId } : { kind: 'app' }, rule);
+      },
     },
 
     async previewCall(conversationId, call) {

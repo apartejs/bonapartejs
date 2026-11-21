@@ -13,6 +13,7 @@ import {
   type ModelChoiceView,
   modesGet,
   modesSet,
+  permissionsRemember,
   projectsList,
   settingsGet,
   type ConversationMemoryView,
@@ -47,7 +48,7 @@ import {
   updatesList,
 } from '@aparte/bonaparte-shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { allowAndSwitch, createApprovalResolver, createApprovalsStore } from './aparte/approvals';
+import { allowAndSwitch, createApprovalResolver, createApprovalsStore, rememberAndAllow, type ApprovalRequest } from './aparte/approvals';
 import { attachToken, ENGINE_READY, focusComposer, prefill, sendAsPerson, sendWhenFree, shownComposer, speakingForThePerson, type Composer } from './aparte/composer';
 import { setupPlanCards } from './aparte/plan-card';
 import { registerRereadProgress } from './aparte/reread-progress';
@@ -845,6 +846,15 @@ function Workspace({
     }
     // Read again when a reply ends, or when the person leaves the conversation: it may rest now.
   }, [statuses, turnsEnded, conversationId, inboxOpen]);
+  // « Pour cette conversation », « Toujours … » (audit 2026-11-21, D3): the core keeps what it offered, then the call
+  // is allowed — from the conversation's card or from « À traiter ».
+  const rememberApproval = (request: ApprovalRequest, scope: 'conversation' | 'always'): void => {
+    const id = request.conversationId;
+    void rememberAndAllow({
+      remember: () => (id ? bridge.invoke(permissionsRemember, { id, call: { name: request.name, input: request.input }, scope }) : Promise.resolve(false)),
+      allow: () => approvals.answer(request.id, { approved: true }),
+    });
+  };
   // « Ouvrir une PR »: said first — it goes online —, done on the person's word.
   const [openingPr, setOpeningPr] = useState<{ id: string; branch: string; base: string; failed: boolean } | null>(null);
   const [prBusy, setPrBusy] = useState(false);
@@ -1687,6 +1697,7 @@ function Workspace({
           engineDown={engineDown}
           questionOf={(id) => questions.of(id)}
           onAnswer={(id, answer) => approvals.answer(id, answer)}
+          onRemember={(request, scope) => rememberApproval(request, scope)}
           onOpen={(id) => goTo(id)}
           onReadAgain={async (id) => {
             await bridge.invoke(conversationsReadAgain, { id }).catch(() => undefined);
@@ -1881,6 +1892,7 @@ function Workspace({
               {...(discussion ? {} : { mode })}
               messages={messages}
               onAnswer={(answer) => approvals.answer(request.id, answer)}
+              onRemember={(scope) => rememberApproval(request, scope)}
               onAllowAndPlume={() => {
                 // The writes after this one pass without asking; the commands still ask.
                 setMode('plume');

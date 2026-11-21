@@ -213,6 +213,7 @@ export async function answerCalls(
           input: call.input,
           mode: scope.mode,
           ...(scope.projectId !== undefined ? { projectId: scope.projectId } : {}),
+          conversationId: scope.conversationId,
           roots: scope.place.roots,
           ...(scope.place.barred ? { barred: scope.place.barred } : {}),
           ...(scope.agentId ? { agentId: scope.agentId } : {}),

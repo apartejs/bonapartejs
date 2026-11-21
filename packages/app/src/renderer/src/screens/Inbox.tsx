@@ -32,6 +32,8 @@ export interface InboxPageProps {
   /** The question a conversation waits on, as its chat puts it on screen: answered from here when it is a choice. */
   questionOf?(conversationId: string): AparteElicitationPending | undefined;
   onAnswer(id: string, answer: ApprovalAnswer): void;
+  /** « Pour cette conversation », « Toujours … » (audit D3): remembered by the core, then allowed. */
+  onRemember?(request: ApprovalRequest, scope: 'conversation' | 'always'): void;
   onOpen(conversationId: string): void;
   onReadAgain(conversationId: string): Promise<void>;
   onLater(conversationId: string): void;
@@ -131,7 +133,13 @@ export function InboxPage(props: InboxPageProps) {
             >
               {/* The engine let go: an answer would resume the turn into nothing, and be lost (review of phase 8). */}
               {request && !props.engineDown ? (
-                <ApprovalCard request={request} messages={messages} focus={false} onAnswer={(answer) => props.onAnswer(request.id, answer)}>
+                <ApprovalCard
+                  request={request}
+                  messages={messages}
+                  focus={false}
+                  onAnswer={(answer) => props.onAnswer(request.id, answer)}
+                  {...(props.onRemember ? { onRemember: (scope: 'conversation' | 'always') => props.onRemember?.(request, scope) } : {})}
+                >
                   {openButton(item.conversationId)}
                 </ApprovalCard>
               ) : (

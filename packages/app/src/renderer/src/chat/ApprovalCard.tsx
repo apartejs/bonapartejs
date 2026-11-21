@@ -5,16 +5,21 @@
  * aparté's own diff, from the texts the core computed (aparté's panel has no
  * place for it, apartejs/aparte#214). Nothing runs before « Autoriser »;
  * « Refuser… » takes a word for the model. Enter allows, Escape refuses.
+ * « Pour cette conversation » and « Toujours … » (audit 2026-11-21, D3)
+ * remember what the core offers — the exact command, a write's folder, a
+ * page's site — said under the buttons; a call that cannot be remembered says
+ * why it is asked every time.
  */
 
 import '@aparte/plugin-diff';
 import type { AparteDiff } from '@aparte/plugin-diff';
-import { toolsPreview, type PlayMode, type ToolPreviewView } from '@aparte/bonaparte-shared';
+import { permissionsOffer, toolsPreview, type PlayMode, type RememberOfferView, type ToolPreviewView } from '@aparte/bonaparte-shared';
 import { createElement, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { ApprovalAnswer, ApprovalRequest } from '../aparte/approvals';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
 import { targetOf } from './approval-target';
+import { rememberedOnCard } from './remember';
 
 type Kind = keyof Messages['approval']['verbs'];
 
@@ -34,6 +39,8 @@ export interface ApprovalCardProps {
   onAnswer(answer: ApprovalAnswer): void;
   /** « Autoriser et passer en Plume »: only where the conversation is open. */
   onAllowAndPlume?(): void;
+  /** « Pour cette conversation » or « Toujours … »: the core remembers what it offered, then the call is allowed. */
+  onRemember?(scope: 'conversation' | 'always'): void;
   /** The card takes the focus on « Autoriser » (the composer's); not one card among others (« À traiter »). */
   focus?: boolean;
   /** More actions after its own (« Ouvrir la conversation »). */
@@ -56,10 +63,28 @@ function mayTakeFocus(button: HTMLElement | null): boolean {
   return text.trim() === '';
 }
 
-export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlume, focus = true, children }: ApprovalCardProps) {
+export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlume, onRemember, focus = true, children }: ApprovalCardProps) {
   const text = messages.approval;
   const kind = kindOf(request.name);
   const [preview, setPreview] = useState<ToolPreviewView | null>(null);
+  const [offer, setOffer] = useState<RememberOfferView>(null);
+
+  // What « Toujours autoriser » may keep for this call, as the core judges it (audit D3).
+  useEffect(() => {
+    setOffer(null);
+    if (!request.conversationId || !onRemember) return;
+    let current = true;
+    void bridge
+      .invoke(permissionsOffer, { id: request.conversationId, call: { name: request.name, input: request.input } })
+      .then((offered) => {
+        if (current) setOffer(offered);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+    // The card asks once per request; who answers does not change what is offered.
+  }, [request]);
   const [refusing, setRefusing] = useState(false);
   const [instruction, setInstruction] = useState('');
   const allow = useRef<HTMLButtonElement>(null);
@@ -110,6 +135,11 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
     }
   };
 
+  const rule = offer && 'rule' in offer ? offer.rule : null;
+  const remembered = rule ? rememberedOnCard(rule, messages) : null;
+  const always = offer && 'rule' in offer ? (offer.rule.origin !== undefined ? text.remember.always.site : text.remember.always[offer.where]) : null;
+  const never = offer && 'never' in offer ? text.remember.never[offer.never] : null;
+
   const fails =
     preview?.kind === 'fails'
       ? preview.reason === 'missing'
@@ -158,6 +188,16 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
             <button ref={allow} type="button" className="aparte-btn aparte-btn--primary aparte-btn--solid" onClick={() => onAnswer({ approved: true })}>
               {text.allow}
             </button>
+            {rule && onRemember ? (
+              <>
+                <button type="button" className="aparte-btn aparte-btn--outline approval-card__remember" onClick={() => onRemember('conversation')}>
+                  {text.remember.conversation}
+                </button>
+                <button type="button" className="aparte-btn aparte-btn--outline approval-card__remember" onClick={() => onRemember('always')}>
+                  {always}
+                </button>
+              </>
+            ) : null}
             {(kind === 'edit' || kind === 'write') && mode === 'repetition' && onAllowAndPlume ? (
               <button type="button" className="aparte-btn aparte-btn--outline" onClick={onAllowAndPlume}>
                 {text.allowAndPlume}
@@ -171,6 +211,12 @@ export function ApprovalCard({ request, mode, messages, onAnswer, onAllowAndPlum
         {children}
         <span className="approval-card__hint">{text.hint}</span>
       </div>
+      {!refusing && remembered ? (
+        <p className="approval-card__remembers">
+          {remembered.lead} <code>{remembered.subject}</code>
+        </p>
+      ) : null}
+      {!refusing && never ? <p className="approval-card__never">{never}</p> : null}
     </section>
   );
 }

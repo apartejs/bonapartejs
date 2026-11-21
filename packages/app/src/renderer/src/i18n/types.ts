@@ -219,6 +219,17 @@ export interface Messages {
     /** A sub-agent's call (task 8.2): who asks, and what refusing does. */
     askedBy(name: string): string;
     onlyIt: string;
+    /**
+     * « Toujours autoriser » (audit 2026-11-21, D3): for this conversation, or always — in the project, for the app, or
+     * for a page's site —, what is remembered said under the buttons; or why the call is asked every time.
+     */
+    remember: {
+      conversation: string;
+      always: Record<'project' | 'app' | 'site', string>;
+      /** What is remembered, before its subject in the code font. */
+      what: Record<'command' | 'folder' | 'file' | 'site' | 'tool', string>;
+      never: Record<'shell' | 'chain' | 'armed' | 'outside' | 'third-party' | 'sensitive' | 'unknown', string>;
+    };
   };
   /** « À traiter » (board « À traiter », task 8.4). */
   inbox: {
@@ -475,6 +486,19 @@ export interface Messages {
       openProject(name: string): string;
       noProject: string;
       noProjectHint: string;
+      /** The rules « Toujours » remembered (audit D3): the app's here, a project's on its page; each says what it lets pass. */
+      remembered: {
+        title: string;
+        hint: string;
+        projectHint: string;
+        none: string;
+        /** What a rule lets pass, before its subject in the code font. */
+        lets: Record<'command' | 'edit' | 'write' | 'act' | 'open' | 'fetch' | 'tool', string>;
+        /** After a folder's subject, a file's or a site's. */
+        folder: string;
+        remove: string;
+        removeOne(what: string): string;
+      };
     };
     project: {
       /** Its plugins and MCP servers (task 11.3): what it uses, and what it switches off of the app's plugins. */

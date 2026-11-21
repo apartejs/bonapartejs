@@ -153,6 +153,75 @@ export interface PlaceOptions {
   blank?: boolean;
 }
 
+/**
+ * What a page always confirms, whatever was remembered (audit 2026-11-21, D3), as the page itself can tell it:
+ * a field for a password or a one-time code (its type, its autocomplete), one for a card (`cc-…`), a click that
+ * sends a form (a submit button of a form, an image input), and one that opens a file chooser (a file input, or
+ * its label). A script of the page that posts on any click, or a link to a file, cannot be told beforehand; the
+ * agent's tab never downloads (its session refuses every download).
+ */
+const ALWAYS_ASKED = {
+  password: 'types into a password field',
+  payment: 'types into a payment card field',
+  submit: 'sends a form',
+  upload: 'chooses a file to upload',
+} as const;
+type AlwaysAsked = keyof typeof ALWAYS_ASKED;
+
+type ActOutcome =
+  | { kind: 'done'; done: string }
+  | { kind: 'missing' }
+  | { kind: 'moved'; origin: string }
+  | { kind: 'always-asked'; what: AlwaysAsked; origin: string };
+
+function readOutcome(raw: unknown): ActOutcome {
+  if (raw === null || raw === undefined) return { kind: 'missing' };
+  if (typeof raw !== 'object' || !('outcome' in raw)) return { kind: 'done', done: String(raw) };
+  const said = raw as { outcome?: unknown; done?: unknown; origin?: unknown; what?: unknown };
+  const origin = typeof said.origin === 'string' ? said.origin : '';
+  if (said.outcome === 'missing') return { kind: 'missing' };
+  if (said.outcome === 'moved') return { kind: 'moved', origin };
+  if (said.outcome === 'always-asked' && typeof said.what === 'string' && said.what in ALWAYS_ASKED) {
+    return { kind: 'always-asked', what: said.what as AlwaysAsked, origin };
+  }
+  return { kind: 'done', done: typeof said.done === 'string' ? said.done : 'done' };
+}
+
+/** The act, as one script of the page: its site checked, what it always confirms refused unless confirmed. */
+export function actScript(action: AgentAction, origin: string | null, confirmed: boolean): string {
+  const act =
+    action.kind === 'scroll'
+      ? `window.scrollBy(0, ${Number(action.by) || 0}); return { outcome: 'done', done: 'scrolled' };`
+      : action.kind === 'click'
+        ? 'element.click(); return { outcome: "done", done: "clicked" };'
+        : `element.focus(); element.value = ${JSON.stringify(action.text)}; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return { outcome: 'done', done: 'typed' };`;
+  return `(() => {
+  const here = location.origin;
+  const judged = ${JSON.stringify(origin)};
+  if (judged !== null && here.toLowerCase() !== judged) return { outcome: 'moved', origin: here };
+  ${action.kind === 'scroll' ? act : `const element = document.querySelector(${JSON.stringify(action.selector)});
+  if (!element) return null;
+  const confirmed = ${confirmed ? 'true' : 'false'};
+  const kind = ${JSON.stringify(action.kind)};
+  const alwaysAsked = (() => {
+    const auto = String(element.getAttribute('autocomplete') || '').toLowerCase().split(' ');
+    if (kind === 'type') {
+      if (element instanceof HTMLInputElement && element.type === 'password') return 'password';
+      if (auto.some((token) => token === 'current-password' || token === 'new-password' || token === 'one-time-code')) return 'password';
+      if (auto.some((token) => token.startsWith('cc-'))) return 'payment';
+      return null;
+    }
+    const file = element.closest('input[type="file"]') || (element.closest('label') && element.closest('label').control && element.closest('label').control.type === 'file' ? element.closest('label').control : null);
+    if (file) return 'upload';
+    const button = element.closest('button, input[type="submit"], input[type="image"]');
+    if (button && button.form && (button.type === 'submit' || button.type === 'image')) return 'submit';
+    return null;
+  })();
+  if (alwaysAsked && !confirmed) return { outcome: 'always-asked', what: alwaysAsked, origin: here };
+  ${act}`}
+})()`;
+}
+
 export type AgentAction = { kind: 'click'; selector: string } | { kind: 'type'; selector: string; text: string } | { kind: 'scroll'; by: number };
 
 export interface BrowserViewsOptions {
@@ -535,7 +604,10 @@ export class BrowserViews {
     return { url: tab.view.webContents.getURL(), png: image.toPNG(), width: size.width, height: size.height };
   }
 
-  async agentAct(action: AgentAction, from: AgentCaller): Promise<{ done: string } | { error: string }> {
+  async agentAct(
+    action: AgentAction,
+    from: AgentCaller & { origin?: string; confirmed?: boolean },
+  ): Promise<{ done: string; url?: string } | { error: string; url?: string }> {
     const tab = this.ownTab(from);
     if (!tab || !tab.view.webContents.getURL()) return { error: NO_PAGE };
     try {
@@ -543,18 +615,24 @@ export class BrowserViews {
     } catch (error) {
       return { error: (error as Error).message };
     }
-    // Selectors and text reach the page as JSON: a quote cannot close the script's string.
-    const script =
-      action.kind === 'scroll'
-        ? `(() => { window.scrollBy(0, ${Number(action.by) || 0}); return 'scrolled'; })()`
-        : `(() => {
-  const element = document.querySelector(${JSON.stringify(action.selector)});
-  if (!element) return null;
-  ${action.kind === 'click' ? 'element.click(); return "clicked";' : `element.focus(); element.value = ${JSON.stringify(action.text)}; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return 'typed';`}
-})()`;
-    const done = (await tab.view.webContents.executeJavaScript(script, true)) as string | null;
-    if (done === null) return { error: `No element matches ${action.kind === 'scroll' ? '' : action.selector}.` };
-    return { done: String(done) };
+    // One script, one turn of the page: where it is, what the element is, and the act — nothing changes in between.
+    // Selectors, text and the site reach the page as JSON: a quote cannot close the script's string.
+    const raw = (await tab.view.webContents.executeJavaScript(actScript(action, from.origin ?? null, from.confirmed === true), true)) as unknown;
+    const url = tab.view.webContents.getURL();
+    const outcome = readOutcome(raw);
+    switch (outcome.kind) {
+      case 'done':
+        return { done: outcome.done, url };
+      case 'missing':
+        return { error: `No element matches ${action.kind === 'scroll' ? '' : action.selector}.`, url };
+      case 'moved':
+        return {
+          error: `Not done: the page is now at ${outcome.origin}, not at ${from.origin ?? ''} where this was judged. Read it again with browser_read, then act.`,
+          url,
+        };
+      case 'always-asked':
+        return { error: `Not done: this ${ALWAYS_ASKED[outcome.what]} on ${outcome.origin}. That is always asked of the user: call browser_act again with the same input and "confirm": true.`, url };
+    }
   }
 
   // ── The person's tools (task 10.2): an element shown, pins on the page ──

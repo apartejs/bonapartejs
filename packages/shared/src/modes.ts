@@ -17,5 +17,5 @@ export type ToolEffect = 'read' | 'write' | 'execute' | 'network' | 'ui';
 /** What the approval policy rules on one tool call. */
 export type Verdict =
   | { verdict: 'allow' }
-  | { verdict: 'ask'; why: 'mode' | 'armed-path' | 'outside-project' | 'network' | 'undeclared-effect' }
+  | { verdict: 'ask'; why: 'mode' | 'armed-path' | 'outside-project' | 'network' | 'undeclared-effect' | 'sensitive' }
   | { verdict: 'deny'; reason: string };

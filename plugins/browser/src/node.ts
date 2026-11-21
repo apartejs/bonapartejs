@@ -105,7 +105,9 @@ export const browser = definePlugin({
       if (!ctx.browser) return UNAVAILABLE;
       const action = actionOf((input ?? {}) as Record<string, unknown>);
       if (!action) return { content: 'Give "action": click or type (with a "selector"), or scroll.', failed: true };
-      const result = await ctx.browser.act(action, { conversationId });
+      // `confirm` is always asked of the person by the core: only then does the page take what it always confirms (audit D3).
+      const confirmed = (input as Record<string, unknown> | undefined)?.['confirm'] === true;
+      const result = await ctx.browser.act(action, { conversationId, ...(confirmed ? { confirmed } : {}) });
       if ('error' in result) return { content: result.error, failed: true };
       return { content: `Done: ${result.done}.` };
     });

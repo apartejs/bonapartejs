@@ -587,10 +587,47 @@ describe('PluginHost — the built-in browser (task 10.1)', () => {
       ['open', c1],
       ['read', c1],
       ['screenshot', c1],
-      ['act', c1],
+      // Acted on the site the core judged it on: the page the browser last said (audit D3).
+      ['act', { ...c1, origin: 'http://localhost:5173' }],
       ['openFile', { network: false, ...c1 }],
       ['read', { conversationId: 'free' }],
     ]);
+  });
+
+  it('keeps where each conversation’s agent’s page is — the site a browser_act is judged and acted on; confirmed only when the plugin says so (audit D3)', async () => {
+    const acted: unknown[] = [];
+    let next = 'http://localhost:5173/after';
+    const browser = {
+      open: async (url: string) => ({ url: `${url}#opened`, title: 'Page' }),
+      openFile: async () => ({ error: 'unused' }),
+      read: async () => ({ url: 'http://localhost:5173/read', title: 'x', text: '', console: [] }),
+      screenshot: async () => null,
+      act: async (_action: unknown, from: unknown) => {
+        acted.push(from);
+        return { done: 'clicked', url: next };
+      },
+    };
+    const host = new PluginHost({ registry: new ToolRegistry(), browser });
+    host.add(manifest('pages', { effects: [{ effect: 'network', what: 'pages' }, { effect: 'read', what: 'pages' }, { effect: 'execute', what: 'pages' }] }), { builtin: true });
+    const pages = capture();
+    await host.activate('pages', pages);
+    expect(host.agentPage('c1')).toBeUndefined();
+    await pages.ctx!.browser!.act({ kind: 'scroll', by: 1 }, { conversationId: 'c1' });
+    await pages.ctx!.browser!.open('https://example.com/a', { conversationId: 'c1' });
+    expect(host.agentPage('c1')).toBe('https://example.com/a#opened');
+    expect(host.agentPage('c2')).toBeUndefined();
+    next = 'https://other.example/b';
+    await pages.ctx!.browser!.act({ kind: 'click', selector: 'a' }, { conversationId: 'c1', confirmed: true });
+    // Where the click led is where the next one is judged.
+    expect(host.agentPage('c1')).toBe('https://other.example/b');
+    await pages.ctx!.browser!.act({ kind: 'click', selector: 'a' }, { conversationId: 'c1', confirmed: false });
+    expect(acted).toEqual([
+      { conversationId: 'c1' },
+      { conversationId: 'c1', origin: 'https://example.com', confirmed: true },
+      { conversationId: 'c1', origin: 'https://other.example' },
+    ]);
+    host.forgetPage('c1');
+    expect(host.agentPage('c1')).toBeUndefined();
   });
 
   it('a file of the conversation’s folders opens as a read, its folder the only one its page may load from; nothing outside them (Paul, 2026-11-20)', async () => {

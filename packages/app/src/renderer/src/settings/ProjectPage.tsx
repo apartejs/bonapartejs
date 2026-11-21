@@ -12,6 +12,7 @@ import type { Messages } from '../i18n/index';
 import { Icon } from '../shell/icons';
 import { Section } from './controls';
 import { ProjectExtensions } from './ProjectExtensions';
+import { RememberedRules } from './RememberedRules';
 import { AlwaysAsked, ModeCards } from './rules';
 
 /** What a project's own list starts from: the files of a project that run later. */
@@ -92,6 +93,9 @@ export function ProjectPage({ messages, locale, projectId }: { messages: Message
         />
         <h3 className="setting-section__subtitle">{words.alwaysAskHere}</h3>
         <AlwaysAsked messages={messages} builtins={PROJECT_BUILTINS} added={project.alwaysAsk ?? []} onChange={(alwaysAsk) => update({ alwaysAsk })} />
+        <h3 className="setting-section__subtitle">{messages.settings.permissions.remembered.title}</h3>
+        <p className="setting-section__hint">{messages.settings.permissions.remembered.projectHint}</p>
+        <RememberedRules messages={messages} projectId={project.id} />
       </Section>
       <ProjectExtensions messages={messages} locale={locale} projectId={project.id} />
     </div>

@@ -545,6 +545,28 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   asked again as its conversation loads, before React knows which one is
   open: a capturing listener files it under the conversation aparté loaded
   (apartejs/aparte#221).
+- **« Toujours autoriser »** (`core/src/permissions/rules.ts`, `grants.ts`,
+  `engine.ts` `offer`; the core's `remembered`; `chat/ApprovalCard.tsx`,
+  `chat/remember.ts`, `settings/RememberedRules.tsx`; audit 2026-11-21, D3):
+  the card offers « Pour cette conversation » and « Toujours dans ce projet »
+  (« Toujours pour ce site » for a page, « Toujours » without a project) for
+  what the core says the call names — the exact command (security rule 2:
+  never a program alone, never a shell, never a chain), a write's folder
+  (`src/**`, relative to the perimeter), a page's origin (localhost with its
+  port), or the tool when the call names nothing — said under its buttons; a
+  call it cannot remember says why. The window names a call and a scope,
+  never a rule (`permissions.remember`); a rule is taken back by the key the
+  list gave (`permissions.revoke`). `<data>/config/grants.json` (armed) keeps
+  the app's rules (sites), each project's, and each conversation's own,
+  forgotten when it is deleted; a rule turns an ask of the mode or of the
+  network into an allow — never a refusal (Lecture), never a file that runs
+  later, never one outside the project, never a third party's tool. A
+  browser_act is judged on the site of its conversation's agent's page as
+  the host last heard it (`PluginHost.agentPage`); the act runs in one script
+  of the page that checks it is still there (`actScript`), and refuses a
+  password or a card typed, a form sent and a file chosen unless the call
+  says `confirm` — which the core always asks, Impro and a discussion
+  included. The agent's tab never downloads (its session).
 - **The thread of a working agent**: the tools' lines (`aparte/tool-lines.ts`,
   one line provider, apartejs/aparte#219; the target in the code font,
   apartejs/aparte#220), the plan card (`aparte/plan-card.ts`: aparté's card

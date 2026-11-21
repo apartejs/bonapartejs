@@ -103,6 +103,16 @@ export function createApprovalResolver(store: ApprovalsStore) {
 }
 
 /**
+ * « Pour cette conversation », « Toujours … » (audit 2026-11-21, D3): the core remembers first, then the call is
+ * allowed — the calls queued behind it are decided with the rule kept. A rule the core could not keep still answers
+ * the call: the person allowed it.
+ */
+export async function rememberAndAllow(steps: { remember(): Promise<unknown>; allow(): void }): Promise<void> {
+  await steps.remember().catch(() => undefined);
+  steps.allow();
+}
+
+/**
  * « Autoriser et passer en Plume »: the core takes the new mode first, then the call is allowed —
  * the calls queued behind it are decided in the mode the person just chose. A mode the core could
  * not take still answers the call: the person allowed it.

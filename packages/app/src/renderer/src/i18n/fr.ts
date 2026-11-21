@@ -266,6 +266,26 @@ export const fr: Messages = {
     },
     askedBy: (name) => `demandé par le sous-agent ${name}`,
     onlyIt: 'Refuser n’arrête que lui : il rend ce qu’il a.',
+    remember: {
+      conversation: 'Pour cette conversation',
+      always: { project: 'Toujours dans ce projet', app: 'Toujours', site: 'Toujours pour ce site' },
+      what: {
+        command: 'Retenu : la commande exacte',
+        folder: 'Retenu : les fichiers de',
+        file: 'Retenu : le fichier',
+        site: 'Retenu : le site',
+        tool: 'Retenu : l’outil',
+      },
+      never: {
+        shell: 'Toujours demandé : un shell n’est jamais retenu.',
+        chain: 'Toujours demandé : une commande qui en enchaîne d’autres n’est jamais retenue.',
+        armed: 'Toujours demandé : ce fichier s’exécute plus tard.',
+        outside: 'Toujours demandé : ce fichier est hors du projet.',
+        'third-party': 'Toujours demandé : l’outil d’un plugin tiers n’est jamais retenu.',
+        sensitive: 'Toujours demandé : saisir un mot de passe ou une carte, envoyer un formulaire, choisir un fichier à téléverser.',
+        unknown: 'Toujours demandé : le site de la page n’est pas connu.',
+      },
+    },
   },
   inbox: {
     title: 'À traiter',
@@ -591,6 +611,24 @@ export const fr: Messages = {
       openProject: (name) => `Ouvrir ${name}`,
       noProject: 'Sans projet',
       noProjectHint: 'Reste dans ton dossier personnel ; au-delà, demande.',
+      remembered: {
+        title: 'Autorisé sans demander',
+        hint: 'Ce que « Toujours » a retenu pour toute l’app : des sites, et ce qu’une conversation sans projet a permis. Les règles d’un projet sont sur sa page.',
+        projectHint: 'Ce que « Toujours dans ce projet » a retenu. Un fichier qui s’exécute plus tard et ce qui est hors du projet restent demandés.',
+        none: 'Rien n’est retenu.',
+        lets: {
+          command: 'Lancer',
+          edit: 'Modifier',
+          write: 'Écrire',
+          act: 'Agir sur les pages de',
+          open: 'Ouvrir les pages de',
+          fetch: 'Lire les pages de',
+          tool: 'Utiliser l’outil',
+        },
+        folder: 'et ce qu’il contient',
+        remove: 'Retirer',
+        removeOne: (what) => `Retirer : ${what}`,
+      },
     },
     project: {
       extensions: {

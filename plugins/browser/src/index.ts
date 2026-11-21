@@ -71,8 +71,9 @@ export const browserManifest = defineManifest({
       {
         name: 'browser_act',
         description:
-          'Act on the page in your own browser tab: click an element, type text into a field, or scroll. ' +
-          'Give a CSS selector for click and type, then read the page again to see the result. It works only on your tab, never on one of the user’s.',
+          'Act on the page in your own browser tab, never on one of the user’s: click an element or type text into a field (give a CSS selector), or scroll. ' +
+          'Read the page again afterwards to see the result. ' +
+          'Typing a password or a card number, sending a form and choosing a file to upload are refused unless you set "confirm": true, which always asks the user first.',
         effect: 'execute',
         inputSchema: {
           type: 'object',
@@ -81,6 +82,7 @@ export const browserManifest = defineManifest({
             selector: { type: 'string', description: 'A CSS selector, for click and type.' },
             text: { type: 'string', description: 'What to type.' },
             by: { type: 'number', description: 'Pixels to scroll, down when positive.' },
+            confirm: { type: 'boolean', description: 'true only to do what was refused as always asked of the user: the user is asked first.' },
           },
           required: ['action'],
         },

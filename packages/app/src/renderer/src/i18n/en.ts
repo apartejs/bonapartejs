@@ -266,6 +266,26 @@ export const en: Messages = {
     },
     askedBy: (name) => `asked by the sub-agent ${name}`,
     onlyIt: 'Refusing stops only it: it returns what it has.',
+    remember: {
+      conversation: 'For this conversation',
+      always: { project: 'Always in this project', app: 'Always', site: 'Always for this site' },
+      what: {
+        command: 'Remembered: exactly the command',
+        folder: 'Remembered: the files of',
+        file: 'Remembered: the file',
+        site: 'Remembered: the site',
+        tool: 'Remembered: the tool',
+      },
+      never: {
+        shell: 'Always asked: a shell is never remembered.',
+        chain: 'Always asked: a command that chains others is never remembered.',
+        armed: 'Always asked: this file runs later.',
+        outside: 'Always asked: this file is outside the project.',
+        'third-party': 'Always asked: a third-party plugin’s tool is never remembered.',
+        sensitive: 'Always asked: typing a password or a card, sending a form, choosing a file to upload.',
+        unknown: 'Always asked: the page’s site is not known.',
+      },
+    },
   },
   inbox: {
     title: 'To handle',
@@ -591,6 +611,24 @@ export const en: Messages = {
       openProject: (name) => `Open ${name}`,
       noProject: 'Without a project',
       noProjectHint: 'Stays in your home folder; beyond it, asks.',
+      remembered: {
+        title: 'Allowed without asking',
+        hint: 'What “Always” remembered for the whole app: sites, and what a conversation without a project allowed. A project’s rules are on its page.',
+        projectHint: 'What “Always in this project” remembered. A file that runs later, and what is outside the project, are still asked.',
+        none: 'Nothing is remembered.',
+        lets: {
+          command: 'Run',
+          edit: 'Edit',
+          write: 'Write',
+          act: 'Act on the pages of',
+          open: 'Open the pages of',
+          fetch: 'Read the pages of',
+          tool: 'Use the tool',
+        },
+        folder: 'and what it holds',
+        remove: 'Remove',
+        removeOne: (what) => `Remove: ${what}`,
+      },
     },
     project: {
       extensions: {

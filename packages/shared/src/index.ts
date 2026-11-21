@@ -25,6 +25,7 @@ export type {
   WebSearchResult,
   WebSearchService,
   BrowserService,
+  BrowserActGuard,
   BrowserCaller,
   PluginBrowser,
   BrowserAction,
@@ -185,6 +186,21 @@ export {
 export type { ConversationCard } from './ipc/conversations.js';
 export type { BranchView, ContextFullView, ConversationDocument, ConversationMemoryView, ConversationStatusView, InboxView, RewindWhatView } from './ipc/conversations.js';
 export { modesGet, modesSet, modeViewSchema, playModeSchema, toolPreviewSchema, toolsPreview } from './ipc/modes.js';
+export {
+  allowRuleSchema,
+  neverRememberedSchema,
+  permissionsOffer,
+  permissionsRemember,
+  permissionsRevoke,
+  permissionsRules,
+  rememberOfferSchema,
+  rememberedRuleSchema,
+  ruleKey,
+  type AllowRuleView,
+  type RememberedRuleView,
+  type NeverRememberedView,
+  type RememberOfferView,
+} from './ipc/permissions.js';
 export type { ModeView, ToolPreviewView } from './ipc/modes.js';
 export { mcpAdd, mcpOverview, mcpPaste, mcpRemove, mcpServerViewSchema, mcpStart, mcpStop } from './ipc/mcp.js';
 export type { McpServerViewData } from './ipc/mcp.js';

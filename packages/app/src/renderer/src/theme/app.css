@@ -769,6 +769,32 @@ body {
   color: var(--aparte-text-muted);
 }
 
+/* What « Pour cette conversation » and « Toujours » keep (audit D3), or why the call is asked every time: one quiet
+   line under the buttons, its subject in the code font. */
+.approval-card__remembers,
+.approval-card__never {
+  margin: calc(-1 * var(--aparte-space-1)) 0 0;
+  font-size: var(--aparte-font-size-xs);
+  color: var(--aparte-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.approval-card__remembers code {
+  font-family: var(--aparte-code-font-family);
+}
+
+/* The rules « Toujours » kept, in the settings: one row each, its subject in the code font. */
+.remembered-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remembered-rule code {
+  font-family: var(--aparte-code-font-family);
+  overflow-wrap: anywhere;
+}
+
 /* The mode switch leads the composer's toolbar; the gauge goes to its end. */
 .mode-switch {
   display: inline-flex;

@@ -2,12 +2,14 @@
  * « Réglages · Permissions » (board): the mode a conversation without a
  * project starts in; what is always asked, whatever the mode — the files
  * that run later, and the ones the person adds —; what leaves the machine;
- * the projects, each with its own rules (« Ouvrir » goes to its page).
+ * what « Toujours » remembered for the whole app (audit D3); the projects,
+ * each with its own rules (« Ouvrir » goes to its page).
  */
 
 import { projectsList, type PlayMode, type ProjectView } from '@aparte/bonaparte-shared';
 import { useEffect, useState } from 'react';
 import { bridge } from '../bridge';
+import { RememberedRules } from './RememberedRules';
 import { AlwaysAsked, ModeCards } from './rules';
 import { Row, Section, Switch } from './controls';
 import type { PageProps } from './SettingsView';
@@ -36,6 +38,9 @@ export function PermissionsPage({ messages, values, change, onProject }: PagePro
       </Section>
       <Section title={words.network} hint={words.networkHint}>
         <Switch label={words.networkAsk} checked={values['askBeforeNetwork'] !== false} onChange={(next) => change('askBeforeNetwork', next)} />
+      </Section>
+      <Section title={words.remembered.title} hint={words.remembered.hint}>
+        <RememberedRules messages={messages} projectId={null} />
       </Section>
       <Section title={words.byProject}>
         {projects.map((project) => (

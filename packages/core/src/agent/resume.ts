@@ -292,6 +292,7 @@ export async function answerPause(
       input: call.input,
       mode: ctx.mode,
       ...(ctx.projectId !== undefined ? { projectId: ctx.projectId } : {}),
+      conversationId: ctx.conversationId,
       roots: ctx.place.roots,
       ...(ctx.place.barred ? { barred: ctx.place.barred } : {}),
       ...(ctx.agentId ? { agentId: ctx.agentId } : {}),

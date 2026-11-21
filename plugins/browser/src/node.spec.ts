@@ -201,6 +201,20 @@ describe('the built-in browser plugin (task 10.1)', () => {
     expect(await call('browser_act', { action: 'dance' })).toMatchObject({ failed: true });
   });
 
+  it('says « confirmed » to the browser only for a call that says confirm — which the core always asks about (audit D3)', async () => {
+    const callers: unknown[] = [];
+    const call = await rig({
+      act: async (_action, from) => {
+        callers.push(from);
+        return { done: 'typed' };
+      },
+    });
+    await call('browser_act', { action: 'type', selector: '#password', text: 'x' });
+    await call('browser_act', { action: 'type', selector: '#password', text: 'x', confirm: true });
+    await call('browser_act', { action: 'type', selector: '#password', text: 'x', confirm: 'yes' });
+    expect(callers).toEqual([{ conversationId: 'c1' }, { conversationId: 'c1', confirmed: true }, { conversationId: 'c1' }]);
+  });
+
   it('where the app has no browser, every tool says so', async () => {
     const call = await rig();
     expect(await call('browser_open', { url: 'http://x' })).toMatchObject({ failed: true, content: expect.stringMatching(/not available/) });

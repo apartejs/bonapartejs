@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PERSON_PARTITION, partitionOf, type TabOwner } from './sessions.js';
-import { BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
+import { actScript, BrowserViews, readingSignal, windowHost, type PageView } from './views.js';
 
 /** The conversation whose agent calls, and another one. */
 const C1 = { conversationId: 'c1', projectId: 'p1' };
@@ -168,6 +168,36 @@ describe('the built-in browser’s pages (task 10.1)', () => {
     await browser.agentAct({ kind: 'click', selector: 'button.export"]' }, C1);
     // The selector reaches the page as JSON: a quote cannot close the script's string.
     expect(views[0]!.scripts.at(-1)).toContain(JSON.stringify('button.export"]'));
+  });
+
+  it('an act checks its site and what the page always confirms in the same script (audit 2026-11-21, D3)', async () => {
+    for (const action of [
+      { kind: 'click', selector: 'button[type="submit"]' },
+      { kind: 'type', selector: '#password', text: 'a "quoted" \\ text' },
+      { kind: 'scroll', by: 300 },
+    ] as const) {
+      for (const origin of [null, 'http://localhost:5173']) {
+        // A script the page can run: it compiles.
+        expect(() => new Function(`return ${actScript(action, origin, false)}`)).not.toThrow();
+      }
+    }
+    const script = actScript({ kind: 'type', selector: '#password', text: 'x' }, 'http://localhost:5173', false);
+    expect(script).toContain(JSON.stringify('http://localhost:5173'));
+    expect(script).toContain('const confirmed = false');
+    expect(actScript({ kind: 'type', selector: '#password', text: 'x' }, null, true)).toContain('const confirmed = true');
+
+    const said = async (read: unknown) => {
+      const { browser } = rig({ read: read as { title: string; text: string } });
+      await browser.agentOpen('http://localhost:5173/login', C1);
+      return browser.agentAct({ kind: 'type', selector: '#password', text: 'x' }, { ...C1, origin: 'http://localhost:5173' });
+    };
+    expect(await said({ outcome: 'always-asked', what: 'password', origin: 'http://localhost:5173' })).toEqual({
+      error: 'Not done: this types into a password field on http://localhost:5173. That is always asked of the user: call browser_act again with the same input and "confirm": true.',
+      url: 'http://localhost:5173/login',
+    });
+    expect(await said({ outcome: 'moved', origin: 'https://elsewhere.example' })).toMatchObject({ error: expect.stringContaining('the page is now at https://elsewhere.example, not at http://localhost:5173') });
+    expect(await said({ outcome: 'done', done: 'typed' })).toEqual({ done: 'typed', url: 'http://localhost:5173/login' });
+    expect(await said({ outcome: 'missing' })).toMatchObject({ error: 'No element matches #password.' });
   });
 
   it('the agent may open this machine’s own pages (a dev server), never the network it is in', async () => {

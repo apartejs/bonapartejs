@@ -69,6 +69,7 @@ import { changesList, changesRevert } from './changes.js';
 import { filesChanged, filesList, filesRead } from './files.js';
 import { pluginsAck, pluginsCheckUpdates, pluginsDiscard, pluginsInstall, pluginsInvoke, pluginsOverview, pluginsPickFolder, pluginsPreview, pluginsRemove, pluginsSetEnabled, searchKeysList, searchKeysSet, extensionsTry, extensionsInstall, extensionsCode, extensionsStop } from './plugins.js';
 import { modesGet, modesSet, toolsPreview } from './modes.js';
+import { permissionsOffer, permissionsRemember, permissionsRevoke, permissionsRules } from './permissions.js';
 import { projectsAddFolder, projectsChooseFolder, projectsCreate, projectsDetect, projectsFolderTaken, projectsList, projectsRemove, projectsUpdate } from './projects.js';
 import { engineMemory, engineReleaseMemory, engineDiskCheck, engineResources, engineRestart, engineUnload } from './memory.js';
 import { modelsAddFolder, modelsScanCancel, modelsScanDisk, modelsScanState } from './models.js';
@@ -77,6 +78,10 @@ import { searchQuery } from './search.js';
 import { appOpenDataFolder, conversationsExport, settingsAll, settingsGet, settingsSet } from './settings.js';
 
 export const CHANNELS = [
+  permissionsOffer,
+  permissionsRemember,
+  permissionsRules,
+  permissionsRevoke,
   appInfo,
   windowTitleBar,
   filesList,

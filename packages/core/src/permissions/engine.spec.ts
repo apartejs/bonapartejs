@@ -191,36 +191,147 @@ describe('a tool that does not say what it does', () => {
   });
 });
 
-describe('the rules remembered', () => {
+describe('the rules remembered (audit 2026-11-21, D3)', () => {
   const rules = (list: AllowRule[]) => engine({ rules: () => list });
+  const MODES: PlayMode[] = ['lecture', 'repetition', 'plume', 'impro'];
+  const verdicts = (judge: PermissionEngine, query: Omit<Parameters<PermissionEngine['evaluate']>[0], 'mode'>) =>
+    MODES.map((mode) => judge.evaluate({ ...query, mode }).verdict);
 
-  it('turn an ask into an allow — that command, that program only', () => {
+  it('turn an ask of the mode into an allow — that exact command only', () => {
     const remembered = rules([{ tool: 'run_command', program: 'pnpm', args: ['test'] }]);
-    expect(remembered.evaluate({ tool: RUN, input: { program: 'pnpm', args: ['test'] }, mode: 'repetition' })).toEqual({ verdict: 'allow' });
-    expect(remembered.evaluate({ tool: RUN, input: { program: 'pnpm', args: ['build'] }, mode: 'repetition' }).verdict).toBe('ask');
+    expect(verdicts(remembered, { tool: RUN, input: { program: 'pnpm', args: ['test'] } })).toEqual(['deny', 'allow', 'allow', 'allow']);
+    expect(verdicts(remembered, { tool: RUN, input: { program: 'pnpm', args: ['build'] } })).toEqual(['deny', 'ask', 'ask', 'allow']);
+    expect(verdicts(remembered, { tool: RUN, input: { program: 'pnpm', args: ['test', '&&', 'curl', 'x'] } })).toEqual(['deny', 'ask', 'ask', 'allow']);
   });
 
-  it('never turn a refusal into an allow', () => {
-    const remembered = rules([{ tool: 'run_command', program: 'pnpm' }]);
+  it('never turn a refusal into an allow: Lecture refuses what it refuses', () => {
+    const remembered = rules([
+      { tool: 'run_command', program: 'pnpm', args: ['test'] },
+      { tool: 'edit_file', path: 'src/**' },
+    ]);
     expect(remembered.evaluate({ tool: RUN, input: { program: 'pnpm', args: ['test'] }, mode: 'lecture' }).verdict).toBe('deny');
+    expect(remembered.evaluate({ tool: EDIT, input: { path: 'src/a.ts' }, mode: 'lecture' }).verdict).toBe('deny');
   });
 
-  it('never answer for a file that runs later, nor for one outside the project', () => {
-    const remembered = rules([{ tool: 'edit_file' }]);
-    expect(remembered.evaluate({ tool: EDIT, input: { path: 'package.json' }, mode: 'repetition' })).toEqual({
-      verdict: 'ask',
-      why: 'armed-path',
-    });
-    expect(remembered.evaluate({ tool: EDIT, input: { path: '../x.txt' }, mode: 'repetition' })).toEqual({
-      verdict: 'ask',
-      why: 'outside-project',
-    });
+  it('a write: its folder — never a file that runs later there, nor one outside the project', () => {
+    const remembered = rules([{ tool: 'edit_file', path: 'src/**' }]);
     expect(remembered.evaluate({ tool: EDIT, input: { path: 'src/a.ts' }, mode: 'repetition' })).toEqual({ verdict: 'allow' });
+    expect(remembered.evaluate({ tool: EDIT, input: { path: 'src/deep/b.ts' }, mode: 'repetition' })).toEqual({ verdict: 'allow' });
+    expect(remembered.evaluate({ tool: EDIT, input: { path: 'lib/a.ts' }, mode: 'repetition' })).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(remembered.evaluate({ tool: EDIT, input: { path: 'src/package.json' }, mode: 'repetition' })).toEqual({ verdict: 'ask', why: 'armed-path' });
+    expect(remembered.evaluate({ tool: EDIT, input: { path: 'src/vite.config.ts' }, mode: 'impro' })).toEqual({ verdict: 'ask', why: 'armed-path' });
+    expect(remembered.evaluate({ tool: EDIT, input: { path: '../src/x.txt' }, mode: 'repetition' })).toEqual({ verdict: 'ask', why: 'outside-project' });
+    // Climbing out and back in is where it lands that counts.
+    expect(remembered.evaluate({ tool: EDIT, input: { path: 'lib/../src/c.ts' }, mode: 'repetition' })).toEqual({ verdict: 'allow' });
+  });
+
+  it('a site answers the network of that site only, localhost counted with its port', () => {
+    const FETCH = tool('web_fetch', 'network');
+    const remembered = rules([{ tool: 'web_fetch', origin: 'http://localhost:5173' }]);
+    expect(verdicts(remembered, { tool: FETCH, input: { url: 'http://localhost:5173/api' } })).toEqual(['allow', 'allow', 'allow', 'allow']);
+    expect(verdicts(remembered, { tool: FETCH, input: { url: 'http://localhost:3000/api' } })).toEqual(['ask', 'ask', 'ask', 'allow']);
+  });
+
+  it('the rules of a conversation answer for it alone', () => {
+    const remembered = engine({ rules: (_project, conversation) => (conversation === 'c1' ? [{ tool: 'run_command', program: 'git', args: ['status'] }] : []) });
+    const query = { tool: RUN, input: { program: 'git', args: ['status'] }, mode: 'plume' as const };
+    expect(remembered.evaluate({ ...query, conversationId: 'c1' })).toEqual({ verdict: 'allow' });
+    expect(remembered.evaluate({ ...query, conversationId: 'c2' })).toEqual({ verdict: 'ask', why: 'mode' });
+  });
+
+  it('never answer for a third party’s tool, nor for a tool that does not say what it does', () => {
+    const SCAN = { ...tool('plugin__x__scan', 'read'), source: 'extension' as const };
+    const vague = tool('mystery', undefined);
+    const remembered = rules([{ tool: 'plugin__x__scan' }, { tool: 'mystery' }]);
+    expect(remembered.evaluate({ tool: SCAN, input: {}, mode: 'plume' })).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(remembered.evaluate({ tool: vague, input: {}, mode: 'plume' })).toEqual({ verdict: 'ask', why: 'undeclared-effect' });
+    expect(remembered.offer({ tool: SCAN, input: {}, mode: 'plume' })).toEqual({ never: 'third-party' });
   });
 
   it('a rule read from disk that could not have been remembered answers nothing', () => {
-    const forged = rules([{ tool: 'run_command', program: 'bash' }]);
+    const forged = rules([
+      { tool: 'run_command', program: 'bash', args: ['-c', 'ls'] },
+      { tool: 'run_command', program: 'pnpm' },
+      { tool: 'run_command' },
+      { tool: 'edit_file' },
+    ]);
     expect(forged.evaluate({ tool: RUN, input: { program: 'bash', args: ['-c', 'ls'] }, mode: 'repetition' }).verdict).toBe('ask');
+    expect(forged.evaluate({ tool: RUN, input: { program: 'pnpm', args: ['build'] }, mode: 'repetition' }).verdict).toBe('ask');
+    expect(forged.evaluate({ tool: EDIT, input: { path: 'src/a.ts' }, mode: 'repetition' }).verdict).toBe('ask');
+  });
+});
+
+describe('what the card offers to remember (audit 2026-11-21, D3)', () => {
+  it('the exact command in its project; never a shell, nor a chain', () => {
+    expect(engine().offer({ tool: RUN, input: { program: 'pnpm.cmd', args: ['test'] }, mode: 'plume', projectId: 'p1' })).toEqual({
+      rule: { tool: 'run_command', program: 'pnpm', args: ['test'] },
+      where: 'project',
+    });
+    expect(engine().offer({ tool: RUN, input: { program: 'powershell', args: ['-Command', 'ls'] }, mode: 'plume' })).toEqual({ never: 'shell' });
+    expect(engine().offer({ tool: RUN, input: { program: 'git', args: ['log', '|', 'sh'] }, mode: 'plume' })).toEqual({ never: 'chain' });
+  });
+
+  it('a write’s folder; never a file that runs later, nor one outside the project', () => {
+    expect(engine().offer({ tool: EDIT, input: { path: 'src/format.ts' }, mode: 'repetition', projectId: 'p1' })).toEqual({
+      rule: { tool: 'edit_file', path: 'src/**' },
+      where: 'project',
+    });
+    expect(engine().offer({ tool: EDIT, input: { path: 'package.json' }, mode: 'repetition' })).toEqual({ never: 'armed' });
+    expect(engine().offer({ tool: EDIT, input: { path: '../x.txt' }, mode: 'repetition' })).toEqual({ never: 'outside' });
+  });
+
+  it('nothing for a call that does not ask', () => {
+    expect(engine().offer({ tool: RUN, input: { program: 'pnpm', args: ['test'] }, mode: 'lecture' })).toBeNull();
+    expect(engine().offer({ tool: EDIT, input: { path: 'src/a.ts' }, mode: 'plume' })).toBeNull();
+  });
+});
+
+describe('a page: its site, and what is always confirmed (Paul, 2026-11-20; audit D3)', () => {
+  const ACT: ToolDef = { ...tool('browser_act', 'execute'), source: 'plugin' };
+  const OPEN: ToolDef = { ...tool('browser_open', 'network'), source: 'plugin' };
+  const pages = (url: string | undefined) => ({ pageOf: () => url });
+  const click = { action: 'click', selector: 'button' };
+
+  it('acting is asked per site: the conversation’s agent’s page decides, a rule of that site answers', () => {
+    const judge = engine({ ...pages('http://localhost:5173/login'), rules: () => [{ tool: 'browser_act', origin: 'http://localhost:5173' }] });
+    expect(judge.evaluate({ tool: ACT, input: click, mode: 'plume', conversationId: 'c1' })).toEqual({ verdict: 'allow' });
+    const elsewhere = engine({ ...pages('https://example.com/'), rules: () => [{ tool: 'browser_act', origin: 'http://localhost:5173' }] });
+    expect(elsewhere.evaluate({ tool: ACT, input: click, mode: 'plume', conversationId: 'c1' })).toEqual({ verdict: 'ask', why: 'mode' });
+    // No page known: nothing answers.
+    expect(engine({ ...pages(undefined), rules: () => [{ tool: 'browser_act', origin: 'http://localhost:5173' }] }).evaluate({ tool: ACT, input: click, mode: 'plume', conversationId: 'c1' })).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(engine(pages('http://localhost:5173/')).offer({ tool: ACT, input: click, mode: 'plume', conversationId: 'c1', projectId: 'p1' })).toEqual({
+      rule: { tool: 'browser_act', origin: 'http://localhost:5173' },
+      where: 'app',
+    });
+  });
+
+  it('in a discussion too, whatever its Lecture — and a code conversation in Lecture still refuses to act', () => {
+    const remembered = engine({ roots: () => [], ...pages('https://example.com/a'), rules: () => [{ tool: 'browser_act', origin: 'https://example.com' }] });
+    expect(remembered.forDiscussion().evaluate({ tool: ACT, input: click, mode: 'lecture', conversationId: 'd1' })).toEqual({ verdict: 'allow' });
+    expect(engine(pages('https://other.org/')).forDiscussion().evaluate({ tool: ACT, input: click, mode: 'lecture', conversationId: 'd1' })).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(remembered.evaluate({ tool: ACT, input: click, mode: 'lecture', conversationId: 'c1' }).verdict).toBe('deny');
+  });
+
+  it('what is always confirmed is asked every time — whatever was remembered, Impro included, a discussion too', () => {
+    const remembered = engine({ ...pages('https://example.com/'), rules: () => [{ tool: 'browser_act', origin: 'https://example.com' }] });
+    const confirmed = { action: 'type', selector: '#password', text: 'x', confirm: true };
+    for (const mode of ['repetition', 'plume', 'impro'] as const) {
+      expect(remembered.evaluate({ tool: ACT, input: confirmed, mode, conversationId: 'c1' })).toEqual({ verdict: 'ask', why: 'sensitive' });
+    }
+    expect(remembered.forDiscussion().evaluate({ tool: ACT, input: confirmed, mode: 'lecture', conversationId: 'd1' })).toEqual({ verdict: 'ask', why: 'sensitive' });
+    expect(remembered.offer({ tool: ACT, input: confirmed, mode: 'plume', conversationId: 'c1' })).toEqual({ never: 'sensitive' });
+    // Lecture's refusal stands for a code conversation.
+    expect(remembered.evaluate({ tool: ACT, input: confirmed, mode: 'lecture', conversationId: 'c1' }).verdict).toBe('deny');
+  });
+
+  it('opening a page asks per site where the network is asked', () => {
+    const remembered = engine({ rules: () => [{ tool: 'browser_open', origin: 'http://localhost:5173' }] });
+    expect(remembered.evaluate({ tool: OPEN, input: { url: 'http://localhost:5173/' }, mode: 'repetition' })).toEqual({ verdict: 'allow' });
+    expect(remembered.evaluate({ tool: OPEN, input: { url: 'http://localhost:5174/' }, mode: 'repetition' })).toEqual({ verdict: 'ask', why: 'network' });
+    expect(engine().offer({ tool: OPEN, input: { url: 'https://Example.com/docs' }, mode: 'plume' })).toEqual({
+      rule: { tool: 'browser_open', origin: 'https://example.com' },
+      where: 'app',
+    });
   });
 });
 

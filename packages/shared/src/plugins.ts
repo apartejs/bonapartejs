@@ -314,7 +314,19 @@ export interface BrowserService {
   read(from: BrowserCaller): Promise<{ url: string; title: string; text: string; console: BrowserConsoleLine[] } | null>;
   /** A picture of the caller's page, kept in the app's data folder (`saved`); null with no page open. */
   screenshot(from: BrowserCaller): Promise<{ url: string; width: number; height: number; saved: string } | null>;
-  act(action: BrowserAction, from: BrowserCaller): Promise<{ done: string } | { error: string }>;
+  /**
+   * A click, a text typed or a scroll on the caller's page (audit 2026-11-21, D3). `origin`: the site the core judged
+   * the call on — refused when the page is elsewhere now. What a page always confirms (a password or a card typed, a
+   * form sent, a file chosen to upload) is refused unless `confirmed`, which only a call the person was asked about
+   * says. `url`: where the page is after it, as far as the browser knows.
+   */
+  act(action: BrowserAction, from: BrowserCaller & BrowserActGuard): Promise<{ done: string; url?: string } | { error: string; url?: string }>;
+}
+
+/** What the core judged a browser_act on: its site, and whether the person was asked about what is always confirmed. */
+export interface BrowserActGuard {
+  origin?: string;
+  confirmed?: boolean;
 }
 
 export interface TerminalService {
@@ -383,7 +395,8 @@ export interface PluginBrowser {
   ): Promise<{ url: string; title: string; offline?: boolean } | { error: string }>;
   read(from: { conversationId: string }): ReturnType<BrowserService['read']>;
   screenshot(from: { conversationId: string }): ReturnType<BrowserService['screenshot']>;
-  act(action: BrowserAction, from: { conversationId: string }): ReturnType<BrowserService['act']>;
+  /** `confirmed`: the call said `confirm`, which the core always asks the person about (audit D3). */
+  act(action: BrowserAction, from: { conversationId: string; confirmed?: boolean }): ReturnType<BrowserService['act']>;
 }
 
 export interface PluginNodeModule {

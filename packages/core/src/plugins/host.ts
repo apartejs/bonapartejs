@@ -50,6 +50,7 @@ import type { SpawnedProcess, SpawnFn } from '../process/spawn.js';
 import { spawnTree, stopProcessTree } from '../process/tree.js';
 import type { ToolRegistry } from '../tools/registry.js';
 import type { ToolContext, ToolDef, ToolHandler, ToolOutput } from '../tools/types.js';
+import { originOf } from '../permissions/rules.js';
 import { PluginState } from './state.js';
 import { remoteModule, type PluginPort } from './remote.js';
 import { CORE_ENTRIES, OFF_BY_DEFAULT } from './entries.js';
@@ -175,6 +176,8 @@ export class PluginHost {
   private readonly owners = new Map<string, string>();
   private readonly log: (message: string) => void;
   private readonly listeners = new Set<() => void>();
+  /** Where each conversation's agent's page is, as the browser last said it: the site a browser_act is judged on (audit D3). */
+  private readonly pages = new Map<string, string>();
 
   constructor(private readonly options: PluginHostOptions) {
     this.log = options.log ?? (() => undefined);
@@ -404,6 +407,16 @@ export class PluginHost {
    * Which tools a conversation sees: a plugin its project turned off is not there, nor one tried in another
    * conversation (task 11.4).
    */
+  /** The address of a conversation's agent's page, as the browser last said it; none before its first page. */
+  agentPage(conversationId: string): string | undefined {
+    return this.pages.get(conversationId);
+  }
+
+  /** A conversation gone: its page is no one's. */
+  forgetPage(conversationId: string): void {
+    this.pages.delete(conversationId);
+  }
+
   visibleTo(projectId: string | undefined, conversationId?: string): (def: ToolDef) => boolean {
     return (def) => {
       if (def.source !== 'plugin' && def.source !== 'extension') return true;
@@ -552,17 +565,33 @@ export class PluginHost {
         ...(access.projectId ? { projectId: access.projectId } : {}),
       });
       const caller = async (from: { conversationId: string }): Promise<BrowserCaller> => callerOf(from.conversationId, await accessOf(from.conversationId));
+      // Where the page is after each call: the site the next browser_act is judged on (audit D3).
+      const heard = <T>(conversationId: string, result: T): T => {
+        const url = typeof result === 'object' && result !== null ? (result as { url?: unknown }).url : undefined;
+        if (typeof url === 'string' && url !== '') this.pages.set(conversationId, url);
+        return result;
+      };
       context.browser = {
-        open: (url, from) => live(async () => browser.open(url, await caller(from))),
-        read: (from) => within('read', 'read the page', async () => browser.read(await caller(from))),
-        screenshot: (from) => within('read', 'picture the page', async () => browser.screenshot(await caller(from))),
-        act: (action, from) => within('execute', 'act in the page', async () => browser.act(action, await caller(from))),
+        open: (url, from) => live(async () => heard(from.conversationId, await browser.open(url, await caller(from)))),
+        read: (from) => within('read', 'read the page', async () => heard(from.conversationId, await browser.read(await caller(from)))),
+        screenshot: (from) => within('read', 'picture the page', async () => heard(from.conversationId, await browser.screenshot(await caller(from)))),
+        // Acted on the site it was judged on, or not at all; what a page always confirms only on a call the person was
+        // asked about (audit D3).
+        act: (action, from) =>
+          within('execute', 'act in the page', async () => {
+            const page = this.pages.get(from.conversationId);
+            const origin = page ? originOf(page) : null;
+            return heard(
+              from.conversationId,
+              await browser.act(action, { ...(await caller(from)), ...(origin ? { origin } : {}), ...(from.confirmed === true ? { confirmed: true } : {}) }),
+            );
+          }),
         // A file is read: in the call's perimeter, checked here, never on the plugin's word (Paul, 2026-11-20).
         openFile: (path, from) =>
           within('read', 'open a file', async () => {
             const access = await accessOf(from.conversationId);
             if (!access.files) return { error: 'A discussion has no folder, so it opens no file: give browser_open the http(s) address of a page instead.' };
-            const opened = await openPerimeterFile(browser, path, from.roots, access.network, callerOf(from.conversationId, access));
+            const opened = heard(from.conversationId, await openPerimeterFile(browser, path, from.roots, access.network, callerOf(from.conversationId, access)));
             return 'error' in opened || access.network ? opened : { ...opened, offline: true };
           }),
       };

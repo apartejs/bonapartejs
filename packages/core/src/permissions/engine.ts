@@ -13,22 +13,28 @@
  * - a tool that does not say what it does is taken as one that runs something;
  * - a rule remembered turns an ask of the mode (or of the network) into an
  *   allow — never a refusal, never a file that runs later, never a write
- *   outside the project.
+ *   outside the project, never a third party's tool (audit 2026-11-21, D3);
+ * - on a page, what is always confirmed (a password typed, a form sent, a file
+ *   chosen to upload) is asked every time, in every mode that acts: the
+ *   browser refuses it unless the call says `confirm`, and a call that says it
+ *   is always asked.
  */
 
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 import type { PlayMode, ToolEffect, Verdict } from '@aparte/bonaparte-shared';
 import type { ToolDef } from '../tools/types.js';
 import { contains, InvalidPathError, NetworkPathError, PathOutsideHomeError, permissionPath, realLocation, resolveInPerimeter } from '../project/paths.js';
-import { isValidRule, matchesRule, type AllowRule, type CommandLine } from './rules.js';
+import { isValidRule, matchesRule, originOf, ruleFor, type AllowRule, type CallSubject, type CommandLine, type NeverRemembered } from './rules.js';
 
 export interface PermissionQuery {
   tool: ToolDef;
   input: unknown;
   mode: PlayMode;
   projectId?: string;
+  /** Its conversation: whose own rules answer too, and whose agent's page a browser_act acts on. */
+  conversationId?: string;
   agentId?: string;
   /** Where this conversation works when it is not its project's folders: its worktree (task 6.7). */
   roots?: readonly string[];
@@ -41,8 +47,10 @@ export interface PermissionEngineDeps {
   roots(projectId: string | undefined): readonly string[];
   /** bonaparte's data folder: its settings, rules and servers are commands run later. */
   dataDir: string;
-  /** The rules « always allow » remembered for a project. */
-  rules?(projectId: string | undefined): readonly AllowRule[];
+  /** The rules « always allow » remembered: the app's, the project's and the conversation's own (audit D3). */
+  rules?(projectId: string | undefined, conversationId: string | undefined): readonly AllowRule[];
+  /** The address of a conversation's agent's page, as the core last heard it: the site a browser_act acts on. */
+  pageOf?(conversationId: string): string | undefined;
   /** « Ask before going online » (on by default). */
   askBeforeNetwork?(): boolean;
   /** What a project adds to the files always asked (« Dockerfile »). */
@@ -180,21 +188,88 @@ export function effectOfCall(tool: ToolDef, input: unknown): ToolEffect {
   return typeof path === 'string' && path.trim() !== '' ? 'read' : tool.effect;
 }
 
+
+/** Where a write lands, relative to the folder of the perimeter that holds it, `/`-separated; null outside every one. */
+function relativeIn(roots: readonly string[], real: string): string | null {
+  for (const root of roots) {
+    for (const place of new Set([resolve(root), realPlace(resolve(root))])) {
+      if (!contains(place, real)) continue;
+      const rel = relative(place, real);
+      return rel === '' ? null : rel.split(sep).join('/');
+    }
+  }
+  return null;
+}
+
+/** A browser_act that says it does what is always asked (a password, a form sent, a file chosen). */
+function confirms(input: unknown): boolean {
+  return typeof input === 'object' && input !== null && (input as Record<string, unknown>)['confirm'] === true;
+}
+
+function urlOf(input: unknown): string | undefined {
+  if (typeof input !== 'object' || input === null) return undefined;
+  const url = (input as Record<string, unknown>)['url'];
+  return typeof url === 'string' && url.trim() !== '' ? url : undefined;
+}
+
+/** What « always allow » may remember for a call that asks: its rule and where it is kept — or why nothing. */
+export type RememberOffer = { rule: AllowRule; where: 'app' | 'project' } | { never: NeverRemembered };
+
+interface Judgment {
+  verdict: Verdict;
+  /** An ask a remembered rule may answer: what the call names. Absent: nothing answers it. */
+  answerable?: CallSubject;
+  /** Why it cannot be remembered, when it asks and nothing answers it. */
+  never?: NeverRemembered;
+}
+
 export class PermissionEngine {
   constructor(
     private readonly deps: PermissionEngineDeps,
     private readonly kind: 'code' | 'discussion' = 'code',
   ) {}
 
-  /** The same policy for a discussion: in Lecture for want of a project, the built-in browser's act asked each time. */
+  /** The same policy for a discussion: in Lecture for want of a project, the built-in browser's act asked per site. */
   forDiscussion(): PermissionEngine {
     return new PermissionEngine(this.deps, 'discussion');
   }
 
   evaluate(query: PermissionQuery): Verdict {
-    // A discussion has the whole built-in browser (Paul, 2026-11-20): a click or a text typed on a web page is asked
-    // each time — never refused by the Lecture it runs in, never let through by a mode or a rule.
-    if (this.kind === 'discussion' && builtinBrowser(query.tool, 'browser_act')) return { verdict: 'ask', why: 'mode' };
+    const judged = this.judge(query);
+    if (judged.verdict.verdict !== 'ask' || !judged.answerable) return judged.verdict;
+    const subject = judged.answerable;
+    const rules = (this.deps.rules?.(query.projectId, query.conversationId) ?? []).filter(isValidRule);
+    return rules.some((rule) => matchesRule(rule, query.tool.name, subject)) ? { verdict: 'allow' } : judged.verdict;
+  }
+
+  /**
+   * What the card may offer to remember for a call that asks (audit D3): the rule — the exact command, the file's
+   * folder, the page's site, or the tool — and where « Toujours » keeps it (a site for the whole app, the rest for
+   * the project); or why it is asked every time. Null for a call that does not ask.
+   */
+  offer(query: PermissionQuery): RememberOffer | null {
+    const judged = this.judge(query);
+    if (judged.verdict.verdict !== 'ask') return null;
+    if (!judged.answerable) return { never: judged.never ?? 'unknown' };
+    const rule = ruleFor(query.tool.name, judged.answerable);
+    if ('never' in rule) return rule;
+    return { rule, where: rule.origin !== undefined || !query.projectId ? 'app' : 'project' };
+  }
+
+  /** The site of the conversation's agent's page, as the core last heard it. */
+  private pageSite(query: PermissionQuery): CallSubject {
+    const url = query.conversationId ? this.deps.pageOf?.(query.conversationId) : undefined;
+    return { kind: 'origin', origin: url ? originOf(url) : null };
+  }
+
+  private judge(query: PermissionQuery): Judgment {
+    const act = builtinBrowser(query.tool, 'browser_act');
+    // A discussion has the whole built-in browser (Paul, 2026-11-20): acting on a page is asked per site — never
+    // refused by the Lecture it runs in; what is always confirmed is asked every time.
+    if (this.kind === 'discussion' && act) {
+      if (confirms(query.input)) return { verdict: { verdict: 'ask', why: 'sensitive' }, never: 'sensitive' };
+      return { verdict: { verdict: 'ask', why: 'mode' }, answerable: this.pageSite(query) };
+    }
     const called = effectOfCall(query.tool, query.input);
     const declared = KNOWN.has(called);
     // A third party's plugin runs in a plain Node process: what it declares cannot be held to, so its tool is judged
@@ -208,9 +283,12 @@ export class PermissionEngine {
     }
     // Lecture runs nothing: a third party's code included, whatever it says it does.
     if (query.tool.source === 'extension' && query.mode === 'lecture') short = 'deny';
-    if (short === 'deny') return { verdict: 'deny', reason: refusal(query.mode, effect, query.agentId !== undefined) };
+    if (short === 'deny') return { verdict: { verdict: 'deny', reason: refusal(query.mode, effect, query.agentId !== undefined) } };
+    // What a page always confirms is asked in every mode that acts, Impro included.
+    if (act && confirms(query.input)) return { verdict: { verdict: 'ask', why: 'sensitive' }, never: 'sensitive' };
 
     // A write: where it really lands decides — a file that runs later, outside the project, the network.
+    let landed: string | null = null;
     if (effect === 'write') {
       const requested = pathOf(query.input);
       if (requested !== undefined) {
@@ -223,7 +301,7 @@ export class PermissionEngine {
           // A network path, a stream, or — without a project — a place outside the home folder:
           // never written, whatever the person would answer (security rule 6).
           if (error instanceof NetworkPathError || error instanceof InvalidPathError || error instanceof PathOutsideHomeError) {
-            return { verdict: 'deny', reason: error.message };
+            return { verdict: { verdict: 'deny', reason: error.message } };
           }
           inside = false;
         }
@@ -233,25 +311,36 @@ export class PermissionEngine {
         // anything is offered, a file that runs later included (audit 13.4).
         if (!inside && (query.barred ?? []).some((root) => contains(root, real))) {
           return {
-            verdict: 'deny',
-            reason: `This conversation works on its own branch, in ${roots[0] ?? ''}: write its files there, never in the project's own folder.`,
+            verdict: {
+              verdict: 'deny',
+              reason: `This conversation works on its own branch, in ${roots[0] ?? ''}: write its files there, never in the project's own folder.`,
+            },
           };
         }
         // Where it really lands, and the name it was asked under: a link named `.githooks` is armed wherever it leads.
         const alwaysAsk = this.deps.alwaysAsk?.(query.projectId) ?? [];
         const spelled = resolve(roots[0] ?? home, requested);
         if (isArmedPath(real, this.deps.dataDir, alwaysAsk) || isArmedPath(spelled, this.deps.dataDir, alwaysAsk)) {
-          return { verdict: 'ask', why: 'armed-path' };
+          return { verdict: { verdict: 'ask', why: 'armed-path' }, never: 'armed' };
         }
-        if (!inside) return { verdict: 'ask', why: 'outside-project' };
+        if (!inside) return { verdict: { verdict: 'ask', why: 'outside-project' }, never: 'outside' };
+        landed = relativeIn(roots.length > 0 ? roots : [home], real);
       }
     }
 
-    if (short === 'allow') return { verdict: 'allow' };
-    // An ask of the mode, or of the network: a rule remembered may answer it.
+    if (short === 'allow') return { verdict: { verdict: 'allow' } };
+    const verdict: Verdict = { verdict: 'ask', why: !declared ? 'undeclared-effect' : effect === 'network' ? 'network' : 'mode' };
+    // A third party's tool, or one that does not say what it does: asked every time, never remembered.
+    if (!declared || query.tool.source === 'extension') return { verdict, never: 'third-party' };
+    // An ask of the mode, or of the network: what the call names is what a rule may answer for.
     const command = effect === 'execute' ? commandOf(query.input) : undefined;
-    const rules = (this.deps.rules?.(query.projectId) ?? []).filter(isValidRule);
-    if (declared && rules.some((rule) => matchesRule(rule, query.tool.name, command))) return { verdict: 'allow' };
-    return { verdict: 'ask', why: !declared ? 'undeclared-effect' : effect === 'network' ? 'network' : 'mode' };
+    const url = effect === 'network' ? urlOf(query.input) : undefined;
+    let subject: CallSubject;
+    if (act) subject = this.pageSite(query);
+    else if (command) subject = { kind: 'command', command };
+    else if (effect === 'write' && pathOf(query.input) !== undefined) subject = { kind: 'path', relative: landed };
+    else if (url !== undefined) subject = { kind: 'origin', origin: originOf(url) };
+    else subject = { kind: 'none' };
+    return { verdict, answerable: subject };
   }
 }

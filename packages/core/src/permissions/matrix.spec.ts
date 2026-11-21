@@ -96,7 +96,7 @@ describe('a discussion has the whole built-in browser; one browser_open for a pa
   const plugin = (name: string, effect: ToolEffect): ToolDef => ({ ...tool(name, effect), source: 'plugin' });
   const dataDir = () => join(project, '..', 'bonaparte-data');
 
-  it('acting on a page is asked each time in a discussion — never refused by its Lecture, never let through by a rule', () => {
+  it('acting on a page is asked in a discussion — never refused by its Lecture; a tool-wide rule lets nothing through', () => {
     const remembered = () => [{ tool: 'browser_act' }];
     const discussion = new PermissionEngine({ roots: () => [], dataDir: dataDir(), rules: remembered }).forDiscussion();
     const act = { tool: plugin('browser_act', 'execute'), input: { action: 'click', selector: 'a' } };
