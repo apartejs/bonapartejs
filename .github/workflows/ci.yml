@@ -1,10 +1,14 @@
 name: ci
 
+# On a pull request and a push to main only, never on every branch: a private
+# repository pays its minutes, Windows's twice (audit 2026-11-21, N2). By hand
+# (« Run workflow ») on any branch — v1 before it is merged, say.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # A superseded push cancels its in-flight run instead of queuing.
 concurrency:
@@ -20,13 +24,15 @@ jobs:
   # The gate, on both platforms. Windows is not a courtesy: it is the
   # maintainer's machine, and the one where a child process can open a console
   # window. Ubuntu catches what only works on Windows by accident: a path
-  # separator, a file name whose case is wrong.
+  # separator, a file name whose case is wrong. The end-to-end tests run on
+  # Windows only, the product's platform: on both, they doubled the run.
   gate:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -49,8 +55,8 @@ jobs:
 
       # The guard hooks of the Claude Code configuration, and the definitions
       # of the project's agents and skills. Node only, no dependency.
-      - name: Guard hooks and agent definitions
-        run: node --test ".claude/hooks/*.test.mjs"
+      - name: Guard hooks, agent definitions and workflows
+        run: node --test ".claude/hooks/*.test.mjs" .github/workflows.test.mjs
 
       - name: Lint
         run: pnpm lint
@@ -65,19 +71,13 @@ jobs:
         run: pnpm test
 
       # The end-to-end tests drive the built app against the fake
-      # llama-server: no GPU, no model, and a data folder of their own.
+      # llama-server: no GPU, no model, and a data folder of their own. On
+      # Ubuntu they would need the runner's user namespaces lifted
+      # (`sysctl kernel.apparmor_restrict_unprivileged_userns=0`) and a display
+      # (`xvfb-run`): run them there by hand when a change concerns Linux.
       - name: End-to-end (Windows)
         if: runner.os == 'Windows'
         run: pnpm --filter @aparte/bonaparte-app test:e2e
-
-      # Ubuntu 24.04 forbids the unprivileged user namespaces that Chromium's
-      # sandbox needs. The app keeps its sandbox: the runner lifts the
-      # restriction instead. Electron needs a display, hence xvfb.
-      - name: End-to-end (Ubuntu, on a virtual display)
-        if: runner.os == 'Linux'
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          xvfb-run --auto-servernum pnpm --filter @aparte/bonaparte-app test:e2e
 
       - name: Upload the traces of the failed end-to-end tests
         if: ${{ failure() }}

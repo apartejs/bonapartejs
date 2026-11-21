@@ -10,9 +10,11 @@ import { expect, test } from './fixtures/app.js';
 import { chat } from './fixtures/chat.js';
 
 const packed = join(import.meta.dirname, '..', 'dist', process.platform === 'win32' ? 'win-unpacked' : 'linux-unpacked', process.platform === 'win32' ? 'bonaparte.exe' : 'bonaparte');
+// The release workflow packs first: there, nothing packed is a failure, never a skipped test.
+const nothingPacked = !existsSync(packed) && process.env['BONAPARTE_PACKED_REQUIRED'] !== '1';
 
 test('the packed app carries the Visual C++ runtime llama.cpp needs, outside the archive', () => {
-  test.skip(!existsSync(packed), 'nothing packed: run `pnpm dist:dir` first');
+  test.skip(nothingPacked, 'nothing packed: run `pnpm dist:dir` first');
   test.skip(process.platform !== 'win32', 'the runtime is Windows’');
   // llama.cpp, a program of its own, copies it from the disk: never from app.asar.
   const runtime = join(packed, '..', 'resources', 'app.asar.unpacked', 'resources', 'vcruntime');
@@ -22,7 +24,7 @@ test('the packed app carries the Visual C++ runtime llama.cpp needs, outside the
 });
 
 test('the packed app answers, and its terminal runs a shell', async ({ launch }) => {
-  test.skip(!existsSync(packed), 'nothing packed: run `pnpm dist:dir` first');
+  test.skip(nothingPacked, 'nothing packed: run `pnpm dist:dir` first');
   const { app, page } = await launch({ executable: packed, engine: { responder: () => 'Bonjour Paul' } });
   expect(await app.evaluate(({ app: electron }) => electron.isPackaged)).toBe(true);
   const ui = chat(page);

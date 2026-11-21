@@ -33,6 +33,8 @@ const found = await findCarriedRuntime(roots);
 if (!found) {
   console.error(
     'No Visual C++ runtime in Visual Studio’s redistributable folder (VC\\Redist\\MSVC\\<version>\\x64\\Microsoft.VC14x.CRT).\n' +
+      `Searched: ${roots.map((root) => `${root}\\<version>\\<edition>`).join(', ')} (Visual Studio 2026 is version 18,\n` +
+      'under Program Files; 2022 and its Build Tools under Program Files (x86)). Set BONAPARTE_VCRUNTIME_ROOTS to search elsewhere.\n' +
       'Install Visual Studio Community, or its Build Tools, with the C++ workload: the app carries that runtime for llama.cpp.',
   );
   process.exit(1);

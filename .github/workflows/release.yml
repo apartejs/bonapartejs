@@ -1,13 +1,29 @@
 name: release
 
-# The installers (task 13.2): built on a tag `v*` that Paul pushes, and
-# published as a draft release of the repository — electron-updater reads its
-# `latest.yml`. Nothing here runs on a branch, and nothing is signed yet
-# (design §17.2): Windows warns at the first install.
+# The installers (task 13.2). A tag `v*` that Paul pushes builds the Windows
+# installer and publishes it in a draft release of the repository, with its
+# `latest.yml`; the draft is invisible until he publishes it. A run by hand
+# (« Run workflow ») builds the installer of any branch and keeps it as an
+# artifact of the run, for three days: no release is made. Nothing is signed
+# yet (design §17.2): Windows warns at the first install.
+#
+# Minutes on a private repository (audit 2026-11-21, N2): Windows counts twice
+# and macOS ten times. Windows is the product's platform and the only one
+# built by default; macOS and Linux only when a run by hand asks for them.
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      macos:
+        description: 'Also build macOS (a dmg, not signed; its minutes count ten times)'
+        type: boolean
+        default: false
+      linux:
+        description: 'Also build Linux (an AppImage)'
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ github.ref }}
@@ -17,33 +33,61 @@ env:
   NX_DAEMON: 'false'
 
 jobs:
-  # One draft release for the tag, made before the installers: three jobs that
-  # each made their own would leave three drafts.
+  # One draft release for the tag, made before the installers: jobs that each
+  # made their own would leave several drafts. Its notes are the version's own
+  # section of CHANGELOG.md.
   draft:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Make the draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1             || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --title "$GITHUB_REF_NAME" --notes "See CHANGELOG.md."
-
-  installer:
-    needs: draft
-    strategy:
-      fail-fast: false
-      matrix:
-        # Windows is the product's platform; macOS and Linux at best. Windows on the image
-        # with Visual Studio 2026, as llama.cpp's own Windows builds: its redistributable
-        # Visual C++ runtime is the one the installer carries for llama.cpp.
-        os: [windows-2025-vs2026, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Make the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { keep = 1; next }
+            keep && /^## \[/ { exit }
+            keep { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "CHANGELOG.md has no section « ## [$version] »"; exit 1; }
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "bonaparte $version" --notes-file notes.md
+          fi
+
+  installer:
+    needs: draft
+    # A run by hand on a branch skips the draft: the installers run all the same.
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows on the image with Visual Studio 2026, as llama.cpp's own Windows builds: its redistributable Visual
+        # C++ runtime is the one the installer carries for llama.cpp. macOS and Linux at best, only when asked.
+        os: ${{ fromJSON(format('["windows-2025-vs2026"{0}{1}]', inputs.macos && ',"macos-latest"' || '', inputs.linux && ',"ubuntu-latest"' || '')) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    env:
+      RELEASE: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      # The tag is the version: a release whose tag and package disagree would offer an update that is not one — and
+      # electron-builder publishes into the release of `v<version>`, not of the tag. Checked before anything is built.
+      - name: Check the version
+        if: env.RELEASE == 'true'
+        shell: bash
+        run: |
+          version=$(node -p "require('./packages/app/package.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app $version"; exit 1; }
 
       - name: Install pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
@@ -60,32 +104,61 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # The tag is the version: a release whose tag and package disagree would
-      # offer an update that is not one.
-      - name: Check the version
-        shell: bash
-        run: |
-          version=$(node -p "require('./packages/app/package.json').version")
-          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app $version"; exit 1; }
-
-      # The Visual C++ runtime llama.cpp's package lacks, from the runner's Visual
-      # Studio (its redistributable folder): the installer carries it.
+      # The Visual C++ runtime llama.cpp's package lacks, from the runner's Visual Studio (its redistributable
+      # folder): the installer carries it. The script fails, naming the folders it searched, when there is none.
       - name: Prepare the Visual C++ runtime
         if: runner.os == 'Windows'
         working-directory: packages/app
         run: node scripts/prepare-vcruntime.mjs
 
-      # The packed app is run before it is published: a file it needs at run time
-      # and the pack missed fails here, not on the person's machine.
-      - name: Pack and run the packed app
+      # The packed app is run before it is published: a file it needs at run time and the pack missed fails here,
+      # not on the person's machine. Two steps: pwsh does not stop between two commands when the first one fails.
+      - name: Pack the app
         if: runner.os == 'Windows'
         working-directory: packages/app
-        run: |
-          pnpm exec electron-builder --dir --publish never
-          pnpm exec playwright test e2e/packaged.spec.ts
+        run: pnpm exec electron-builder --dir --publish never
 
+      - name: Run the packed app
+        if: runner.os == 'Windows'
+        working-directory: packages/app
+        env:
+          # Nothing packed is a failure here, not a skipped test.
+          BONAPARTE_PACKED_REQUIRED: '1'
+        run: pnpm exec playwright test e2e/packaged.spec.ts
+
+      - name: Upload the traces of the packed app's test
+        if: ${{ failure() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packaged-results
+          path: packages/app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # A tag: into the draft release of `v<version>`, with `latest.yml` (electron-updater reads it once the release is
+      # published, and only from a public repository).
       - name: Build and publish the installer
+        if: env.RELEASE == 'true'
         working-directory: packages/app
         run: pnpm exec electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A run by hand: the installer stays an artifact of the run.
+      - name: Build the installer
+        if: env.RELEASE != 'true'
+        working-directory: packages/app
+        run: pnpm exec electron-builder --publish never
+
+      - name: Keep the installer
+        if: env.RELEASE != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installer-${{ runner.os }}
+          path: |
+            packages/app/dist/*.exe
+            packages/app/dist/*.dmg
+            packages/app/dist/*.AppImage
+            packages/app/dist/*.yml
+          retention-days: 3
+          if-no-files-found: error

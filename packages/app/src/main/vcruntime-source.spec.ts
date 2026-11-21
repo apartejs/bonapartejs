@@ -42,6 +42,16 @@ describe('the runtime the app carries, taken from Visual Studio', () => {
     expect(await findCarriedRuntime([root, join(root, 'nowhere')])).toEqual({ dir: newest, version: [14, 51, 36247, 0] });
   });
 
+  it('is found as the release runner lays it out: Visual Studio 2026 Enterprise, beside its `v145` folder of installers', async () => {
+    // windows-2025-vs2026: C:\Program Files\Microsoft Visual Studio\18\Enterprise, VC.Redist.14.Latest installed.
+    const root = await mkdtemp(join(tmpdir(), 'bp-vs-'));
+    dirs.push(root);
+    await mkdir(join(root, '18', 'Enterprise', 'VC', 'Redist', 'MSVC', 'v145'), { recursive: true });
+    await writeFile(join(root, '18', 'Enterprise', 'VC', 'Redist', 'MSVC', 'v145', 'vc_redist.x64.exe'), 'MZ');
+    const dir = await crt(root, '18', 'Enterprise', '14.50.35710', [14, 50, 35719, 0]);
+    expect(await findCarriedRuntime([join(root, 'x86'), root])).toEqual({ dir, version: [14, 50, 35719, 0] });
+  });
+
   it('is none when no Visual Studio has one', async () => {
     const root = await mkdtemp(join(tmpdir(), 'bp-vs-'));
     dirs.push(root);

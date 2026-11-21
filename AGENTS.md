@@ -396,8 +396,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `--bonaparte-tray-*` token; `src/main/icons/draw.spec.ts` fails until it
   has run.
 - `.github/workflows/ci.yml` runs all of the above, `pnpm dev` excepted, on
-  Ubuntu and on Windows. A test run never asks GitHub: llama.cpp's releases
-  are a local server of the test (`testing/fake-llama-releases.ts`).
+  Ubuntu and on Windows — the end-to-end tests on Windows only — on a pull
+  request, a push to main, or by hand; never on every branch (a private
+  repository pays its minutes). `node --test .github/workflows.test.mjs`
+  reads both workflows as GitHub will run them (actions pinned, jobs bounded
+  in time, triggers, the release's systems). A test run never asks GitHub:
+  llama.cpp's releases are a local server of the test
+  (`testing/fake-llama-releases.ts`).
 - The real-model smoke (the `smoke` skill; never in CI), from
   `packages/core`:
 
@@ -1067,7 +1072,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `packages/cli/src/launch.ts`, `scripts/assemble-app.mjs`): the workspace is
   bundled into `out/` (the app's devDependencies), only the third-party
   dependencies ship; node-pty is out of the archive. A tag publishes a draft
-  release. The npm package carries the built app (`app/`, assembled on
+  release, its notes the version's section of CHANGELOG.md, with the Windows
+  installer — macOS and Linux only from a run by hand that asks for them; a
+  run by hand on a branch keeps its installer as an artifact, no release.
+  The packed app is run before it is published (`BONAPARTE_PACKED_REQUIRED`:
+  nothing packed fails, never skips). The npm package carries the built app (`app/`, assembled on
   `prepack`, removed on `postpack`), core and shared bundled, and the app's
   run-time dependencies at the same versions (a test pins it).
 - **The settings** (`renderer/src/settings/`): over the shell, which stays
