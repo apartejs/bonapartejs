@@ -37,8 +37,14 @@ export interface Place {
 
 /** How a sub-agent ended: its result for the conversation, or the calls it waits on the person for. */
 export type SubagentEnd =
-  | { kind: 'done' | 'stopped' | 'failed'; result: string }
+  /** `partial`: given its last answer early — its limit of rounds, or its context (audit S4, S5): what it found. */
+  | { kind: 'done' | 'partial' | 'stopped' | 'failed'; result: string }
   | { kind: 'paused'; pending: PendingCall[] };
+
+/** A sub-agent's end as its `run_subagent` call's outcome: a result the model reads (done, or cut short), or not. */
+export function answeredBy(kind: 'done' | 'partial' | 'stopped' | 'failed'): boolean {
+  return kind === 'done' || kind === 'partial';
+}
 
 /** Who runs the conversation's sub-agents: on the slot its turn lends, or on one of their own. */
 export interface SubagentRunner {
@@ -128,10 +134,10 @@ export async function answerCalls(
           return;
         }
         const content = capToolOutput(end.result, scope.nCtx);
-        if (end.kind === 'done') say({ type: 'tool-resolved', toolCallId: member.id, result: content });
+        if (answeredBy(end.kind)) say({ type: 'tool-resolved', toolCallId: member.id, result: content });
         else if (end.kind === 'stopped') say({ type: 'tool-aborted', toolCallId: member.id, cause: 'stopped' });
         else say({ type: 'tool-failed', toolCallId: member.id, error: content });
-        results.push({ toolCallId: member.id, name: member.name, content, ...(end.kind === 'done' ? {} : { failed: true }) });
+        results.push({ toolCallId: member.id, name: member.name, content, ...(answeredBy(end.kind) ? {} : { failed: true }) });
       };
       const free = announced.has(call.id) ? 0 : runner.free();
       if (free > 0) {
@@ -173,7 +179,7 @@ export async function answerCalls(
             continue;
           }
           const content = capToolOutput(end.result, scope.nCtx);
-          if (end.kind === 'done') say({ type: 'tool-resolved', toolCallId: member.id, result: content });
+          if (answeredBy(end.kind)) say({ type: 'tool-resolved', toolCallId: member.id, result: content });
           else if (end.kind === 'stopped') say({ type: 'tool-aborted', toolCallId: member.id, cause: 'stopped' });
           else say({ type: 'tool-failed', toolCallId: member.id, error: content });
           holds.push({ toolCallId: member.id, agentId: runner.idOf(member), name: member.name, input: member.input, result: { kind: end.kind, content } });

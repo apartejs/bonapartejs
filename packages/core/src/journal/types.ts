@@ -52,7 +52,7 @@ export interface SubagentHold {
    * pause, and enters the prompt after the earlier one's — the families match results to calls by position
    * (review of phase 8).
    */
-  result?: { kind: 'done' | 'stopped' | 'failed'; content: string };
+  result?: { kind: 'done' | 'partial' | 'stopped' | 'failed'; content: string };
 }
 
 export type Outcome =

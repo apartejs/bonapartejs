@@ -186,7 +186,11 @@ export interface ModelCall {
 
 /** What answers the calls of a round: their results, a pause for a person, or the end of the turn. */
 export type CallsAnswer =
-  | { results: ToolResult[] }
+  /**
+   * `last`: this round is the turn's last with tools (a sub-agent at its limit of rounds, audit S4) — the model reads
+   * `note` after the results, then answers once more without tools, and the turn ends `concluded`.
+   */
+  | { results: ToolResult[]; last?: { note: string; why: 'rounds' } }
   /** A pause: the calls that wait, the ticket that resumes them, the results of those that ran before. */
   | { suspend: { pending: PendingCall[]; ticket: string; results?: ToolResult[]; subagents?: SubagentHold[] } }
   | { stop: 'limit' };
@@ -269,6 +273,11 @@ export interface TurnResult {
   limited?: true;
   /** The model reasoned past this many characters in one answer without acting: the answer was cut (sub-agents). */
   overthought?: number;
+  /**
+   * The turn was given a last answer without tools (sub-agents, audit S4 and S5): its limit of rounds reached, or its
+   * context nearly full (`window`: its context, tokens). Its answer is what it found, not a finished work.
+   */
+  concluded?: { why: 'rounds' } | { why: 'context'; window: number };
 }
 
 /**
@@ -276,6 +285,18 @@ export interface TurnResult {
  * model can muse until the context is full. Past it, the answer is cut and the main agent told.
  */
 export const SUBAGENT_THINKING_CHARS = 32_000;
+
+/** Past this share of its context, a sub-agent is given its last answer (audit S5): what it found, before it is lost. */
+export const NEARLY_FULL = 0.8;
+/** What a sub-agent reads with its last results when its context nearly fills. Sent to the model: English. */
+export const SUBAGENT_CONTEXT_NOTE = 'Your context is nearly full: answer now with what you found, and say what is left.';
+/** A result that would leave a sub-agent no room to answer: not shown to it. */
+export const SUBAGENT_NOT_SHOWN = 'Not shown: your context has no room left for it.';
+
+/** The results of a round, the last one read with a note after it (a turn's last round with tools, audit S4 and S5). */
+export function withLastNote(results: readonly ToolResult[], note: string): ToolResult[] {
+  return results.map((result, index) => (index === results.length - 1 ? { ...result, content: `${result.content}\n\n${note}` } : result));
+}
 
 /** No model is loaded: nothing is loaded in silence (the window offers to). */
 export class NoEngineError extends Error {
@@ -1837,6 +1858,11 @@ export class ConversationEngine {
     window?: number;
     /** Compacts the conversation, the turn under way kept, in the slot it holds; false when it could not be. */
     compactMidTurn?(slot: { id: number }, opening: string): Promise<boolean>;
+    /**
+     * A sub-agent's context (tokens, audit S5): before a round that would not leave room for its answer, or past
+     * `NEARLY_FULL` of it, it is given one last answer without tools — never a compaction.
+     */
+    conclude?: { window: number };
   }): Promise<TurnResult> {
     const { journal, engine, owner, turning, tools, sink, signal, answerOf, slot } = run;
     const { family, client } = engine;
@@ -1845,6 +1871,8 @@ export class ConversationEngine {
     let prompt = run.prompt;
     let roundOpening = run.opening;
     let usage: Usage = { inputTokens: 0, outputTokens: 0 };
+    // Set: the next answer is the turn's last, and it calls no tool (a sub-agent's limit of rounds, or its context).
+    let last: TurnResult['concluded'];
     const finishReread = (): void => {
       if (!turning.rereading) return;
       turning.rereading = false;
@@ -1882,7 +1910,7 @@ export class ConversationEngine {
             stop: [...family.stop],
             ...(run.temperature !== undefined ? { temperature: run.temperature } : {}),
           },
-          ...(grammar ?? {}),
+          ...(last ? {} : (grammar ?? {})),
           signal: completionSignal,
         })) {
           if (overthinking.signal.aborted) break;
@@ -1941,6 +1969,8 @@ export class ConversationEngine {
         ...(truncated ? { truncated: true as const } : {}),
         rendered: roundOpening + raw + family.endAssistant(raw),
       });
+      // Its last answer, whatever it wrote: a call in it is never run.
+      if (last) return { usage, concluded: last, ...(truncated ? { truncated: true as const } : {}) };
       if (!tools || calls.length === 0 || truncated) {
         return truncated ? { usage, truncated: true as const } : { usage };
       }
@@ -1960,11 +1990,28 @@ export class ConversationEngine {
         });
         return { usage, suspended: answer.suspend };
       }
+      let results = answer.results;
+      let note = answer.last?.note;
+      if (answer.last) last = { why: answer.last.why };
+      roundOpening = family.beginAssistant({ thinking: run.thinking, continuing: true });
+      if (run.conclude && !last) {
+        // A sub-agent whose context these results would nearly fill: its last answer now, with what it found (S5).
+        const { window } = run.conclude;
+        const held = journal.entries();
+        const needed = (countedContext(held) ?? estimateTokens(frozenPrompt(held))) + estimateTokens(family.renderToolResults(results) + roundOpening);
+        if (needed + REPLY_ROOM > window || needed > window * NEARLY_FULL) {
+          last = { why: 'context', window };
+          note = SUBAGENT_CONTEXT_NOTE;
+          // Results that would leave no room for that answer are not shown: the answer comes first.
+          if (needed + REPLY_ROOM > window) results = results.map((result) => ({ ...result, content: SUBAGENT_NOT_SHOWN }));
+        }
+      }
+      // Its last round's note is read with the results: inside the model's turn, where a system turn cannot go.
+      if (note) results = withLastNote(results, note);
       // The results, disarmed by the family as it renders them, then the model's answer goes on.
-      await journal.append({ kind: 'tool-results', results: answer.results, rendered: family.renderToolResults(answer.results) });
+      await journal.append({ kind: 'tool-results', results, rendered: family.renderToolResults(results) });
       // Lent to its sub-agents while the calls ran: the conversation comes home before it reads on.
       await slot.home?.();
-      roundOpening = family.beginAssistant({ thinking: run.thinking, continuing: true });
       if (run.window !== undefined && run.compactMidTurn) {
         // The results would leave no room for the next answer: compacted now, while the turn goes on (D2).
         const held = journal.entries();

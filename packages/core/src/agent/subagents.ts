@@ -119,7 +119,26 @@ function noteFor(spec: SubagentSpec, tools: readonly ToolDef[], roots: readonly 
     .join('\n');
 }
 
-const statusOf = (end: SubagentEnd): 'done' | 'stopped' | 'failed' | 'waiting' => (end.kind === 'paused' ? 'waiting' : end.kind);
+/** What a sub-agent reads with the results of its last round of tools (audit S4). Sent to the model: English. */
+export function roundsNote(rounds: number): string {
+  return `You reached your limit of ${rounds} rounds of tools: answer now with what you found, and say what is left.`;
+}
+
+/** What the main agent reads of a sub-agent given its last answer early: cut, and what it found (audit S4, S5). */
+function cutResult(concluded: NonNullable<TurnResult['concluded']>, rounds: number, answer: string): string {
+  const why =
+    concluded.why === 'rounds'
+      ? `The sub-agent was cut after ${rounds} rounds of tools, before it finished.`
+      : `The sub-agent was cut when its own context (${concluded.window} tokens) was nearly full, before it finished.`;
+  return `${why} What it found:\n${answer || '(it said nothing)'}`;
+}
+
+/**
+ * Its status on the wire. A sub-agent cut short is not « done »: aparté has no status for it
+ * (apartejs/aparte#285), so its line says it stopped, its result kept.
+ */
+const statusOf = (end: SubagentEnd): 'done' | 'stopped' | 'failed' | 'waiting' =>
+  end.kind === 'paused' ? 'waiting' : end.kind === 'partial' ? 'stopped' : end.kind;
 
 /** Runs a sub-agent's turn and says its end: its events under its id on the way, then `agent-end`. */
 async function drive(
@@ -155,6 +174,11 @@ async function drive(
       stuck = `The sub-agent was stopped: it called ${names} the same way ${SAME_FAILURE_LIMIT} times in a row, and it failed each time (${why}). Do the work yourself, or give it a mission and tools that fit.`;
       return { stop: 'limit' };
     }
+    // Its last round of tools: one more answer, without them, to say what it found (audit S4).
+    if (rounds >= maxRounds) {
+      emit({ type: 'turn-limit-exceeded', scope: 'global', limit: maxRounds, agentId });
+      return { results: answer.results, last: { note: roundsNote(maxRounds), why: 'rounds' } };
+    }
     return { results: answer.results };
   };
   const rereading = { on: false };
@@ -173,6 +197,7 @@ async function drive(
     }
     else if (done.suspended) end = { kind: 'paused', pending: done.suspended.pending };
     else if (done.stopped) end = { kind: 'stopped', result: done.answer || NOT_RUN_STOPPED };
+    else if (done.concluded) end = { kind: 'partial', result: cutResult(done.concluded, maxRounds, done.answer) };
     else end = { kind: 'done', result: done.answer || 'The sub-agent gave no answer.' };
   } catch (error) {
     end = { kind: 'failed', result: `The sub-agent failed: ${error instanceof Error ? error.message : String(error)}` };
@@ -183,7 +208,7 @@ async function drive(
     type: 'agent-end',
     agentId,
     status: statusOf(end),
-    ...(end.kind === 'done' ? { result: end.result } : end.kind === 'failed' ? { error: end.result } : {}),
+    ...(end.kind === 'done' || end.kind === 'partial' ? { result: end.result } : end.kind === 'failed' ? { error: end.result } : {}),
   });
   return end;
 }

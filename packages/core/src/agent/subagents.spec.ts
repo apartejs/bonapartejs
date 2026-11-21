@@ -68,7 +68,11 @@ function model(missions: Record<string, string>[], work: (name: string) => strin
 }
 
 /** A conversation engine on a managed engine (its memory kept), the loop over it, and what the slot saw. */
-async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plume', options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number } = {}) {
+async function rig(
+  responder: (prompt: string) => string,
+  mode: PlayMode = 'plume',
+  options: { slots?: number; paceMs?: number; nCtx?: number; thinkingChars?: number; maxToolRounds?: number } = {},
+) {
   const dir = await mkdtemp(join(tmpdir(), 'bp-subagents-'));
   dirs.push(dir);
   const root = join(dir, 'project');
@@ -80,6 +84,8 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
   const placed: [string, unknown][] = [];
   /** The tool grammar each sub-agent's completion was given. */
   const grammars: string[] = [];
+  /** Each completion a sub-agent asked: whether it could call a tool, and its prompt. */
+  const asked: { grammar: boolean; prompt: string }[] = [];
   const label = (filename: string) => (filename.startsWith('seed-') ? 'seed' : filename.includes('_agent-') ? 'sub-agent' : 'conversation');
   const server = await startFakeLlamaServer({
     slotDir: kvDir,
@@ -92,6 +98,7 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
       order.push(`${isSubagent(prompt) ? `complete ${subagentName(prompt)}` : 'complete conversation'}${body['n_predict'] === 0 ? ' (read)' : ''}`);
       if (isSubagent(prompt) && body['n_predict'] !== 0) placed.push([subagentName(prompt), body['id_slot']]);
       if (isSubagent(prompt) && typeof body['grammar'] === 'string') grammars.push(body['grammar']);
+      if (isSubagent(prompt) && body['n_predict'] !== 0) asked.push({ grammar: typeof body['grammar'] === 'string', prompt });
     },
   });
   servers.push(server);
@@ -142,13 +149,14 @@ async function rig(responder: (prompt: string) => string, mode: PlayMode = 'plum
         nCtx: 8192,
         ticket: (pending) => `ticket-${pending.length}`,
         signal,
+        ...(options.maxToolRounds ? { maxToolRounds: options.maxToolRounds } : {}),
       },
       (event) => events.push(event),
       (event) => said.push(event),
     );
     return { result, events, said };
   };
-  return { dir, root, store, engine, meta, run, order, placed, grammars };
+  return { dir, root, store, engine, meta, run, order, placed, grammars, asked };
 }
 
 const of = (events: StreamRunEvent[], type: StreamRunEvent['type']) => events.filter((event) => event.type === type) as Record<string, any>[];
@@ -330,6 +338,29 @@ describe('a sub-agent on the built-in engine', () => {
     const [end] = of(events, 'agent-end');
     expect(end).toMatchObject({ agentId, status: 'failed' });
     expect(String(end!['error'])).toMatch(/its reasoning ran past 500 characters without acting/);
+  });
+
+  it('its limit of rounds reached, it is given one last answer without tools, and the main agent reads it as cut — never « done » (audit S4)', async () => {
+    const main = model([LECTEUR]);
+    const { run, asked } = await rig(
+      (prompt) => {
+        if (!isSubagent(prompt)) return main(prompt);
+        return prompt.includes('You reached your limit') ? 'Partial: a is 1; b.ts not read.' : call('read_file', { path: 'a.ts' });
+      },
+      'impro',
+      { maxToolRounds: 3 },
+    );
+    const { events } = await run('Lis tout.');
+    // Three rounds with its tools, then one answer that can call none.
+    expect(asked.map((one) => one.grammar)).toEqual([true, true, true, false]);
+    expect(asked.at(-1)!.prompt).toContain('You reached your limit of 3 rounds of tools: answer now with what you found, and say what is left.');
+    const [end] = of(events, 'agent-end');
+    expect(end!['status']).not.toBe('done');
+    expect(end).toMatchObject({ status: 'stopped' });
+    const launch = of(events, 'tool-start').find((event) => event['name'] === 'run_subagent')!;
+    const outcome = of(events, 'tool-resolved').find((event) => event['toolCallId'] === launch['toolCallId'])!;
+    expect(String(outcome['result'])).toMatch(/^The sub-agent was cut after 3 rounds of tools, before it finished\./);
+    expect(String(outcome['result'])).toContain('Partial: a is 1; b.ts not read.');
   });
 
   it('the tool says when to give a sub-agent all its tools: a mission that writes a file or runs a command', () => {

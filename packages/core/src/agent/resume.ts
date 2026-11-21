@@ -20,7 +20,9 @@ import type { JournalEntry, Outcome, PendingCall, SubagentHold } from '../journa
 import { RUN_SUBAGENT } from '../tools/builtin/run-subagent.js';
 import { capToolOutput } from '../tools/output-cap.js';
 import type { ToolResult } from '../tools/types.js';
-import type { CallScope, SubagentEnd } from './calls.js';
+import { answeredBy, type CallScope, type SubagentEnd } from './calls.js';
+
+type Ended = Exclude<SubagentEnd, { kind: 'paused' }>['kind'];
 import type { Tickets } from './tickets.js';
 
 export type Pause = Extract<JournalEntry, { kind: 'pending' }>;
@@ -104,16 +106,16 @@ export async function answerPause(
   const letGo: string[] = [];
   let refused = false;
   /** A sub-agent's end said to the window: its `run_subagent` call resolved, stopped or failed. */
-  const say = (hold: SubagentHold, kind: 'done' | 'stopped' | 'failed', content: string): void => {
-    if (kind === 'done') emit({ type: 'tool-resolved', toolCallId: hold.toolCallId, result: content });
+  const say = (hold: SubagentHold, kind: Ended, content: string): void => {
+    if (answeredBy(kind)) emit({ type: 'tool-resolved', toolCallId: hold.toolCallId, result: content });
     else if (kind === 'stopped') emit({ type: 'tool-aborted', toolCallId: hold.toolCallId, cause: 'stopped' });
     else emit({ type: 'tool-failed', toolCallId: hold.toolCallId, error: content });
   };
-  const resultOf = (hold: SubagentHold, kind: 'done' | 'stopped' | 'failed', content: string): ToolResult => ({
+  const resultOf = (hold: SubagentHold, kind: Ended, content: string): ToolResult => ({
     toolCallId: hold.toolCallId,
     name: hold.name,
     content,
-    ...(kind === 'done' ? {} : { failed: true }),
+    ...(answeredBy(kind) ? {} : { failed: true }),
   });
   /** A sub-agent's end: the result of its `run_subagent` call, or its calls waiting again. */
   const settle = (hold: SubagentHold, end: SubagentEnd): void => {
