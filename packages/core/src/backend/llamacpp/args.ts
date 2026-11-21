@@ -51,6 +51,8 @@ export function buildLlamaServerArgs(config: LlamaCppLaunchConfig): string[] {
     // room (server-context.cpp: try_clear_idle_slots) — a memory gone unsaid.
     // Without it llama.cpp keeps one KV stream a slot, which a saved state is
     // pinned to (KvStore: another number of slots is said before a restore).
+    // Nor can the person's environment turn it on: `serverEnvironment` drops
+    // every LLAMA_ARG_*.
     '-np', String(config.slots ?? 1),
     // The server's own default is "auto", which may leave layers on the
     // processor without saying so: a much slower model, unannounced.

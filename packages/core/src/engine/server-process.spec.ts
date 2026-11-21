@@ -62,6 +62,16 @@ describe('serverEnvironment', () => {
     );
     expect(env).toEqual({ PATH: 'C:\\bin', CUDA_VISIBLE_DEVICES: '0', LLAMA_API_KEY: 'fresh-key' });
   });
+
+  it("gives it none of the person's LLAMA_ARG_* either: llama.cpp reads one for any flag bonaparte does not pass (review of 2026-11-21)", () => {
+    // LLAMA_ARG_KV_UNIFIED=1 would give « En parallèle » one pool for both slots: the manifests' stream count wrong,
+    // each slot the whole pool, and an idle slot's memory purged without a word.
+    const env = serverEnvironment(
+      { PATH: 'C:\\bin', LLAMA_ARG_KV_UNIFIED: '1', LLAMA_ARG_KV_UNIFIED_PER_SLOT: '1', llama_arg_cache_reuse: '256', GGML_VK_VISIBLE_DEVICES: '0' },
+      'fresh-key',
+    );
+    expect(env).toEqual({ PATH: 'C:\\bin', GGML_VK_VISIBLE_DEVICES: '0', LLAMA_API_KEY: 'fresh-key' });
+  });
 });
 
 describe('launchServer', () => {

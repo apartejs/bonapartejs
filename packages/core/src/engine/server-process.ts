@@ -12,10 +12,17 @@ import { spawnHidden, type SpawnedProcess, type SpawnFn } from '../process/spawn
 /**
  * The environment of the server: the parent's, without anything that looks
  * like a secret (the server needs none, and a crash report or a verbose log
- * could print it — security rule 10), plus its own key.
+ * could print it — security rule 10), plus its own key. Nor any `LLAMA_ARG_*`
+ * (review of 2026-11-21): llama.cpp reads one for every flag missing from its
+ * command line (common/arg.cpp), so a variable the person set for a server of
+ * their own would steer ours unannounced — `LLAMA_ARG_KV_UNIFIED` gives two
+ * slots one pool, an idle slot purged without a word. The launch is said in
+ * full by its arguments. Windows reads a variable in any case: so is it taken.
  */
 export function serverEnvironment(base: Record<string, string | undefined>, key: string): Record<string, string> {
-  return { ...withoutSecrets(base), LLAMA_API_KEY: key };
+  const env = withoutSecrets(base);
+  for (const name of Object.keys(env)) if (/^LLAMA_ARG_/i.test(name)) delete env[name];
+  return { ...env, LLAMA_API_KEY: key };
 }
 
 export interface ServerProcess {
