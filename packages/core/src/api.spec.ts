@@ -756,6 +756,26 @@ describe('createCore — what the review of phase 2 found', () => {
     expect((await core.restartCost({ subagents: 'sequential' })).parallel).toBeUndefined();
   }, 40_000);
 
+  it('another number of slots: the memories saved under the other are counted before the restart, then said as such — never read again in silence (smoke of 2026-11-21)', async () => {
+    // llama.cpp gives its KV cache one stream a slot (no --kv-unified) and refuses a state of another count.
+    const { core, gemma } = await setup();
+    await core.loadModel(gemma);
+    await core.conversationStore.ensure('c1', { kind: 'code', engineId: 'builtin', modelId: gemma, mode: 'repetition' });
+    await core.conversations.turn('c1', { text: 'Bonjour' }, () => undefined);
+    await core.conversations.flush();
+
+    expect(await core.restartCost({ subagents: 'parallel' })).toMatchObject({ setting: 'subagents', memoriesLost: 1 });
+    await core.applyEngineSettings({ subagents: 'parallel' }, { restart: true });
+    await expect.poll(async () => (await core.memory()).engine.slots, { timeout: 15_000 }).toBe(2);
+    // Opening it says why it is read again, before anything is paid; « Moteur et mémoire » says it too.
+    expect(await core.conversations.open('c1')).toMatchObject({ kind: 'reread', reason: 'slots' });
+    expect((await core.memory()).rows.find((row) => row.id === 'c1')).toMatchObject({ state: 'saved', otherSlots: true });
+    // Read again under two slots, its memory is saved under two: going back to one counts it in turn.
+    await core.conversations.turn('c1', { text: 'Encore' }, () => undefined);
+    await core.conversations.flush();
+    expect(await core.restartCost({ subagents: 'sequential' })).toMatchObject({ memoriesLost: 1 });
+  }, 60_000);
+
   it('two slots on a card that holds 32 k for one only (review of C2): the context drops to 16 k each, said, and the memories past it counted as lost', async () => {
     // A card that holds the 32 k cache once, and not twice: the automatic context steps down for two slots.
     let card = 24 * GiB;

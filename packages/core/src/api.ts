@@ -2433,15 +2433,16 @@ export function createCore(deps: CoreDeps): Core {
               : null,
           }
         : undefined;
-      // The memories these settings would refuse that the current ones serve: those it makes to read again.
+      // The memories these settings would refuse that the current ones serve: those it makes to read again — another
+      // number of slots among them, llama.cpp keeping one KV stream a slot (the real smoke of 2026-11-21).
       const states = await kv.savedStates();
-      const served = states.filter((state) => memoriesRefusedBy([state], current) === 0);
+      const served = states.filter((state) => memoriesRefusedBy([state], { ...current, slots: slotsFor(current) }) === 0);
       const running = (await currentEngine()) && loaded ? (await models()).find((model) => samePath(model.path, loaded!.path)) : undefined;
       const restart = announceRestart({
         setting: Object.keys(changes)[0] ?? 'nCtx',
         loadSeconds: running?.announcement?.seconds ?? 0,
         loadEstimated: running?.announcement?.secondsEstimated ?? true,
-        memoriesLost: memoriesRefusedBy(served, relaunch),
+        memoriesLost: memoriesRefusedBy(served, { ...relaunch, slots: slotsFor(relaunch) }),
         replyRunning: supervisor.held,
         loaded: running !== undefined,
       });

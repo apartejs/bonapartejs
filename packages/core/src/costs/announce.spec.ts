@@ -182,7 +182,7 @@ describe('announceOpen', () => {
   });
 
   it('says why a state cannot serve, in the words of the manifest', () => {
-    for (const refusal of ['other-model', 'cache-types', 'context-too-small'] as const) {
+    for (const refusal of ['other-model', 'cache-types', 'context-too-small', 'slots'] as const) {
       expect(announceOpen({ resident: false, promptTokens: 100, saved: null, refusal, measures: {} })).toMatchObject({
         kind: 'reread',
         reason: refusal,

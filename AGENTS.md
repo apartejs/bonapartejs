@@ -1208,7 +1208,11 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   gauge must read the intermediate events.
 - **The KV manifest** checks only what llama.cpp cannot check itself: the model
   file and the K/V cache types. `n_ctx` only has to hold the saved tokens, and
-  a change of llama.cpp build does not force a re-read.
+  a change of llama.cpp build does not force a re-read. Since 2026-11-21 it
+  also pins the KV streams (`kvStreams`, one a slot): llama.cpp checks them
+  itself, but its refusal (« Unable to restore slot: n_stream mismatch »)
+  said nothing to the person, and a restart to another number of slots had
+  to count those memories before it was paid.
 - **The managed server** demands its per-launch key (`LLAMA_API_KEY` in the
   child's environment, `--no-webui`), listens on `127.0.0.1`, and `/props` is
   checked against the model that was launched.
@@ -1246,6 +1250,17 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   `gc()` (`node:v8` `setFlagsFromString('--expose-gc')`). In the app the
   response's body cancelled stops the turn too, which is why the window never
   showed it (`e2e/stop.spec.ts` collects the main process's heap).
+- **llama.cpp keeps one KV stream a slot** unless `--kv-unified`
+  (llama-kv-cache.cpp: `n_stream = unified ? 1 : n_seq_max`; `-np auto`
+  turns it on, an explicit `-np` does not), writes the count at the head of a
+  slot file and refuses a file of another count, both ways (the real smoke of
+  2026-11-21: a state saved under one slot, refused under two). bonaparte
+  does not pass `--kv-unified`: its slots would share one pool, each the
+  whole context, and an idle slot be purged for another's room
+  (`try_clear_idle_slots`) — a memory gone unsaid. The manifest pins the
+  count, the restart counts what it refuses, a seed of two slots is a seed of
+  its own (a key of one stream unchanged), and the fake engine refuses as
+  llama.cpp does.
 - **A failure of llama-server once the stream has begun is an event of the
   stream** (`data: {"error": …}`), not a status. Read past it, and the reply
   looks like one the person stopped.

@@ -165,6 +165,9 @@ describe('EngineSupervisor — a managed engine', () => {
     expect(args[args.indexOf('-c') + 1]).toBe('8192');
     expect(supervisor.loaded?.nCtx).toBe(4096);
     expect(lines.join('\n')).not.toMatch(/not the \d+ asked/);
+    // No unified KV buffer: llama.cpp keeps one stream a slot, what a saved state is pinned to.
+    expect(args).not.toContain('--kv-unified');
+    expect(supervisor.live?.kvStreams).toBe(2);
   });
 
   it('says so when a slot does not have the context asked, and goes by the real one', async () => {

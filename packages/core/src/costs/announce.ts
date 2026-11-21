@@ -37,7 +37,8 @@ export interface RestoreAnnouncement {
  * Why a conversation is read again: its memory let go under the budget
  * (`evicted`), never saved (`not-saved`), older than its last messages
  * (`behind`: its state is restored, and what came after is read), made for
- * another model or other cache settings, too big for the context now, or the
+ * another model, other cache settings or another number of slots, too big for
+ * the context now, or the
  * engine died in the middle of the last answer.
  */
 export type RereadReason =
@@ -47,6 +48,8 @@ export type RereadReason =
   | 'other-model'
   | 'cache-types'
   | 'context-too-small'
+  /** Saved under another number of engine slots: llama.cpp keeps one KV stream a slot, and reads no other count. */
+  | 'slots'
   | 'engine-died'
   /** Going back before a message: the prefix kept, from llama.cpp's nearest checkpoint (task 7.1). */
   | 'rewind';
@@ -253,7 +256,7 @@ export interface OpenFacts {
   /** Its saved state, when one can be restored. */
   saved: { promptTokenCount: number; slotFileBytes: number; savedAt: string } | null;
   /** Why it cannot be (the KV store's reason). */
-  refusal: 'missing' | 'refused' | 'other-model' | 'cache-types' | 'context-too-small' | null;
+  refusal: 'missing' | 'refused' | 'other-model' | 'cache-types' | 'context-too-small' | 'slots' | null;
   /** The saved state is older than the conversation's last entries: what came after must be read. */
   behind?: boolean;
   /** What came after it, estimated like the rest: what a restore leaves to read. */

@@ -55,6 +55,8 @@ export interface LiveEngine {
   nCtx: number;
   cacheTypeK: KvCacheType;
   cacheTypeV: KvCacheType;
+  /** One a slot: bonaparte never passes `--kv-unified` (its slots keep their own context). Absent: unknown, one. */
+  kvStreams?: number;
   buildTag: string;
 }
 
@@ -269,6 +271,8 @@ export class EngineSupervisor {
       nCtx,
       cacheTypeK: cacheType,
       cacheTypeV: cacheType,
+      // llama.cpp gives its KV cache one stream a slot without `--kv-unified`: a state is saved under that count.
+      kvStreams: slots,
       buildTag: await readBuildTag(command, versionArgs, this.options.spawn),
     };
     this.armIdleTimer();

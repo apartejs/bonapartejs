@@ -10,6 +10,9 @@
  * garbage); n_ctx only has to hold the saved tokens; the K/V types are pinned
  * for a clear reason before the server's; a new build is trusted to refuse a
  * file it cannot read — and a refusal is a re-read announced, never a crash.
+ * The KV streams are pinned too (the real smoke of 2026-11-21): llama.cpp
+ * refuses a file saved under another number of slots, as « Unable to restore
+ * slot », which said nothing of why — and the restart said nothing of it.
  *
  * The slot files live where the server saves them (`--slot-save-path`), which
  * is this store's folder; the manifests sit beside them, the seeds' under
@@ -32,20 +35,34 @@ export interface LiveConfig {
   nCtx: number;
   cacheTypeK: string;
   cacheTypeV: string;
+  /**
+   * The streams of the server's KV cache (absent: one). llama.cpp keeps one a slot unless `--kv-unified`, which
+   * bonaparte never passes (llama-kv-cache.cpp: `n_stream = unified ? 1 : n_seq_max`); it writes the count at the
+   * head of every slot file and refuses a file of another (« n_stream mismatch »), both ways.
+   */
+  kvStreams?: number;
   /** Recorded for diagnosis, never compared: the server reads its own format. */
   buildTag?: string;
 }
 
-export type RestoreRefusal = 'missing' | 'other-model' | 'cache-types' | 'context-too-small' | 'refused';
+export type RestoreRefusal = 'missing' | 'other-model' | 'cache-types' | 'context-too-small' | 'slots' | 'refused';
 
-export type RestoreVerdict = { ok: true } | { ok: false; reason: 'other-model' | 'cache-types' | 'context-too-small' };
+export type RestoreVerdict = { ok: true } | { ok: false; reason: 'other-model' | 'cache-types' | 'context-too-small' | 'slots' };
 
 interface Pinned {
   modelFingerprint: string;
   promptTokenCount: number;
   cacheTypeK: string;
   cacheTypeV: string;
+  /**
+   * Absent from a manifest written before the count was recorded (2026-11-21): read as one, what the engine ran
+   * unless « En parallèle » was on — a state saved under two then is refused by llama.cpp, a re-read still said.
+   */
+  kvStreams?: number;
 }
+
+/** The KV streams a state was saved under, or a server runs: one when not said. */
+const streamsOf = (config: { kvStreams?: number }): number => config.kvStreams ?? 1;
 
 export interface KvManifest extends Pinned {
   schemaVersion: 2;
@@ -107,16 +124,23 @@ export function canRestore(manifest: Pinned, live: LiveConfig): RestoreVerdict {
   if (manifest.cacheTypeK !== live.cacheTypeK || manifest.cacheTypeV !== live.cacheTypeV) {
     return { ok: false, reason: 'cache-types' };
   }
+  // What llama.cpp checks too, but answers only as « Unable to restore slot »: said before it is asked, and why.
+  if (streamsOf(manifest) !== streamsOf(live)) return { ok: false, reason: 'slots' };
   return { ok: true };
 }
 
 /**
  * The memories saved that launch settings would refuse (task 7.4: a setting that restarts the engine says it
- * first): another K/V cache type refuses them all; a smaller context, those whose tokens no longer fit.
+ * first): another K/V cache type refuses them all; a smaller context, those whose tokens no longer fit; another
+ * number of slots (`slots`, absent: one), those saved under the other count — one KV stream a slot.
  */
-export function memoriesRefusedBy(memories: readonly Pinned[], next: { nCtx: number; cacheType: string }): number {
+export function memoriesRefusedBy(memories: readonly Pinned[], next: { nCtx: number; cacheType: string; slots?: number }): number {
   return memories.filter(
-    (memory) => memory.cacheTypeK !== next.cacheType || memory.cacheTypeV !== next.cacheType || memory.promptTokenCount > next.nCtx,
+    (memory) =>
+      memory.cacheTypeK !== next.cacheType ||
+      memory.cacheTypeV !== next.cacheType ||
+      memory.promptTokenCount > next.nCtx ||
+      streamsOf(memory) !== (next.slots ?? 1),
   ).length;
 }
 
@@ -254,6 +278,7 @@ export class KvStore {
       schemaVersion: 2,
       stateId,
       ...live,
+      kvStreams: streamsOf(live),
       promptTokenCount: saved.nSaved,
       slotFileBytes: saved.nWritten,
       savedAt: new Date().toISOString(),
@@ -294,12 +319,17 @@ export class KvStore {
 
   // ── Seeds: the first system turn of a kind of conversation ──
 
-  /** A seed's identity: the model, the K/V types, the text of the prefix — not n_ctx: a seed only has to fit. */
+  /**
+   * A seed's identity: the model, the K/V types, the KV streams, the text of the prefix — not n_ctx: a seed only
+   * has to fit. One stream adds nothing to the key, which stays the one its seeds were saved under before the
+   * count was recorded; two slots have a seed of their own, so going back and forth never writes one over the other.
+   */
   seedKey(prefixText: string, live: LiveConfig): string {
+    const streams = streamsOf(live);
     return createHash('sha256')
       .update(live.modelFingerprint)
       .update('\n')
-      .update(`${live.cacheTypeK}/${live.cacheTypeV}`)
+      .update(`${live.cacheTypeK}/${live.cacheTypeV}${streams === 1 ? '' : `/${streams} streams`}`)
       .update('\n')
       .update(prefixText)
       .digest('hex')
@@ -314,6 +344,7 @@ export class KvStore {
       schemaVersion: 2,
       key,
       ...live,
+      kvStreams: streamsOf(live),
       promptTokenCount: saved.nSaved,
       slotFileBytes: saved.nWritten,
       savedAt: new Date().toISOString(),

@@ -16,6 +16,7 @@ export const memoryRowSchema = z.object({
   bytes: z.number().nullable(),
   at: z.string(),
   otherModel: z.boolean(),
+  otherSlots: z.boolean(),
   rereadSeconds: z.number().nullable(),
 });
 

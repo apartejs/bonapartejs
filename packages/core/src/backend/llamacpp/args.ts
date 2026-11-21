@@ -45,7 +45,12 @@ export function buildLlamaServerArgs(config: LlamaCppLaunchConfig): string[] {
     '--host', '127.0.0.1',
     '--port', String(config.port),
     // The server's own default is "auto", which sizes the slots itself: the
-    // context each one gets would not be the one we announced.
+    // context each one gets would not be the one we announced. Its "auto" also
+    // turns on `--kv-unified`, which bonaparte never passes: one pool for every
+    // slot, each then the whole context, and an idle slot purged for another's
+    // room (server-context.cpp: try_clear_idle_slots) — a memory gone unsaid.
+    // Without it llama.cpp keeps one KV stream a slot, which a saved state is
+    // pinned to (KvStore: another number of slots is said before a restore).
     '-np', String(config.slots ?? 1),
     // The server's own default is "auto", which may leave layers on the
     // processor without saying so: a much slower model, unannounced.

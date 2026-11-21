@@ -154,6 +154,31 @@ test('a setting that restarts the engine says first what it costs: « Annuler »
   await expect(engineFacts(page)).toContainText(/16\D?384 jetons/, { timeout: 20_000 });
 });
 
+test('« Slots du moteur » counts the memories saved under the other number, and says why each is read again — never in silence (smoke of 2026-11-21)', async ({ launch }) => {
+  test.setTimeout(120_000);
+  // llama.cpp keeps one KV stream a slot and refuses a state of another count: the fake engine refuses it too.
+  const { page } = await launch({ managed: { models: MODELS } });
+  await page.getByRole('button', { name: 'Démarrer' }).click();
+  const ui = chat(page);
+  await expect(ui.composer('Réponds, ou demande autre chose…')).toBeVisible({ timeout: 20_000 });
+  await ask(page, 'Premier');
+  const first = await page.locator('.bonaparte-conversations [data-conv-id]').first().getAttribute('data-conv-id');
+  await page.getByRole('button', { name: 'Nouvelle conversation', exact: true }).click();
+  await expect(ui.replies).toHaveCount(0);
+  await ask(page, 'Second');
+  await engineSettings(page);
+
+  await page.getByRole('radiogroup', { name: 'Slots du moteur' }).locator('label', { hasText: '2' }).click();
+  await expect(restart(page)).toContainText(/(Une mémoire sauvée sera|\d+ mémoires sauvées seront) à relire avec ce réglage\./);
+  await restart(page).getByRole('button', { name: 'Redémarrer maintenant' }).click();
+  await expect(engineFacts(page)).toContainText('2 slots', { timeout: 20_000 });
+  await expect(page.locator('.memory-row', { hasText: 'Premier' })).toContainText('Sauvée · autre nombre de slots');
+
+  await page.getByRole('navigation', { name: 'Réglages' }).getByRole('link', { name: 'Conversations' }).click();
+  await page.locator(`.bonaparte-conversations [data-conv-id="${first}"]`).click();
+  await expect(page.locator('.memory-banner')).toContainText('Sa mémoire a été sauvée avec un autre nombre de slots du moteur.', { timeout: 10_000 });
+});
+
 test('under a reply, a restart waits for its end — or cuts it, « Maintenant »', async ({ launch }) => {
   test.setTimeout(120_000);
   // A reply that lasts: 300 words, one every 60 ms.

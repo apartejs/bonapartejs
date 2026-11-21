@@ -30,6 +30,8 @@ export const FAKE_QWEN_TEMPLATE =
 
 export interface FakeSlotSnapshot {
   tokens: string[];
+  /** The KV streams of the server that saved it (absent: one), which llama.cpp writes at the head of the file. */
+  streams?: number;
 }
 
 export interface FakeLlamaServerOptions {
@@ -76,6 +78,12 @@ export interface FakeLlamaServerOptions {
   onCompletion?: (body: Record<string, unknown>) => void;
   /** Number of slots (default 1). */
   totalSlots?: number;
+  /**
+   * One KV pool for every slot, as `--kv-unified` gives: one stream, whatever the slots. Without it, one stream a
+   * slot (llama-kv-cache.cpp: `n_stream = unified ? 1 : n_seq_max`) — and a state saved under another count is
+   * refused, as llama.cpp refuses it (« n_stream mismatch »).
+   */
+  kvUnified?: boolean;
   /** The chat template /props reports: what the family is read from (default: a Gemma 4 one). */
   chatTemplate?: string;
   /**
@@ -163,6 +171,7 @@ export async function startFakeLlamaServer(
   const paceMs = options.paceMs ?? 0;
   const responder = options.responder ?? (() => 'ok');
   const totalSlots = options.totalSlots ?? 1;
+  const streams = options.kvUnified ? 1 : totalSlots;
   /** The context one slot really has. */
   const nCtx = options.nCtx === undefined ? undefined : Math.floor(options.nCtx / totalSlots);
   const modelPath = options.modelPath ?? 'C:\\fake\\model.gguf';
@@ -332,10 +341,10 @@ export async function startFakeLlamaServer(
         return;
       }
       const tokens = slotTokens(idSlot);
-      files.set(filename, { tokens });
+      files.set(filename, { tokens, streams });
       if (options.slotDir) {
         mkdirSync(options.slotDir, { recursive: true });
-        writeFileSync(join(options.slotDir, filename), JSON.stringify({ tokens }));
+        writeFileSync(join(options.slotDir, filename), JSON.stringify({ tokens, streams }));
       }
       json(res, 200, {
         id_slot: idSlot,
@@ -359,6 +368,12 @@ export async function startFakeLlamaServer(
       }
       if (!snapshot) {
         json(res, 400, { error: { message: `unknown file: ${filename}` } });
+        return;
+      }
+      if ((snapshot.streams ?? 1) !== streams) {
+        // What llama-server answers then (server-context.cpp: « Unable to restore slot: » and the error), the slot emptied.
+        slots.set(idSlot, '');
+        json(res, 400, { error: { code: 400, message: 'Unable to restore slot: n_stream mismatch', type: 'invalid_request_error' } });
         return;
       }
       slots.set(idSlot, snapshot.tokens.join(''));

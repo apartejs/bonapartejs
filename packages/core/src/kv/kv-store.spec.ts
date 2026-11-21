@@ -59,6 +59,16 @@ describe('canRestore', () => {
     expect(canRestore(saved, { ...LIVE, cacheTypeV: 'q8_0' })).toEqual({ ok: false, reason: 'cache-types' });
   });
 
+  it('refuses a state saved under another number of KV streams — one a slot, as bonaparte launches llama.cpp', () => {
+    // llama.cpp refuses it itself (« n_stream mismatch »), and the refusal read as a memory never saved.
+    expect(canRestore({ ...saved, kvStreams: 1 }, { ...LIVE, kvStreams: 2 })).toEqual({ ok: false, reason: 'slots' });
+    expect(canRestore({ ...saved, kvStreams: 2 }, { ...LIVE, kvStreams: 1 })).toEqual({ ok: false, reason: 'slots' });
+    expect(canRestore({ ...saved, kvStreams: 2 }, { ...LIVE, kvStreams: 2 })).toEqual({ ok: true });
+    // A manifest written before the count was recorded was saved under one slot, unless « En parallèle » ran then.
+    expect(canRestore(saved, { ...LIVE, kvStreams: 2 })).toEqual({ ok: false, reason: 'slots' });
+    expect(canRestore(saved, LIVE)).toEqual({ ok: true });
+  });
+
   it('a new build of llama.cpp alone refuses nothing: the server reads its own format', () => {
     expect(canRestore({ ...saved, buildTag: 'b10217' } as typeof saved, { ...LIVE, buildTag: 'b12383' })).toEqual({ ok: true });
   });
@@ -91,6 +101,16 @@ describe('KvStore', () => {
     });
     await writeFile(join(dir, 'c1_main.manifest.json'), '{ broken');
     expect(await store.restoreState(client, 0, 'c1_main', LIVE)).toEqual({ restored: false, reason: 'missing' });
+  });
+
+  it('records the KV streams it was saved under, and refuses another count before the server is asked', async () => {
+    const { store, client, prefill } = await rig();
+    await prefill(PROMPT);
+    expect(await store.saveState(client, 0, 'c1_main', { ...LIVE, kvStreams: 1 })).toMatchObject({ kvStreams: 1 });
+    const asked: string[] = [];
+    const watching = { saveSlot: client.saveSlot.bind(client), restoreSlot: async (id: number, file: string) => (asked.push(file), client.restoreSlot(id, file)) };
+    expect(await store.restoreState(watching, 0, 'c1_main', { ...LIVE, kvStreams: 2 })).toEqual({ restored: false, reason: 'slots' });
+    expect(asked).toEqual([]);
   });
 
   it('a state the server refuses is a re-read announced, never a crash', async () => {
@@ -141,6 +161,25 @@ describe('KvStore — seeds', () => {
     expect(store.seedKey('<|turn>system\nYou are someone.<turn|>\n', LIVE)).not.toBe(key);
     expect(store.seedKey('<|turn>system\nYou are bonaparte.<turn|>\n', { ...LIVE, modelFingerprint: 'x' })).not.toBe(key);
     expect(store.seedKey('<|turn>system\nYou are bonaparte.<turn|>\n', { ...LIVE, cacheTypeK: 'q8_0' })).not.toBe(key);
+  });
+
+  it('keys a seed by its KV streams too: one slot keeps the key it always had, two slots have a seed of their own', () => {
+    const store = new KvStore(join(tmpdir(), 'bp-kv-keys'));
+    const prefix = '<|turn>system\nYou are bonaparte.<turn|>\n';
+    // The key a seed got before the count was recorded: those seeds still serve one slot.
+    expect(store.seedKey(prefix, { ...LIVE, kvStreams: 1 })).toBe(store.seedKey(prefix, LIVE));
+    expect(store.seedKey(prefix, { ...LIVE, kvStreams: 2 })).not.toBe(store.seedKey(prefix, LIVE));
+  });
+
+  it('a seed saved under another number of slots is refused before the server is asked', async () => {
+    const { store, client, prefill } = await rig();
+    const key = store.seedKey(PROMPT, LIVE);
+    await prefill(PROMPT);
+    await store.saveSeed(client, 0, key, LIVE);
+    const asked: string[] = [];
+    const watching = { saveSlot: client.saveSlot.bind(client), restoreSlot: async (id: number, file: string) => (asked.push(file), client.restoreSlot(id, file)) };
+    expect(await store.restoreSeed(watching, 0, key, { ...LIVE, kvStreams: 2 })).toEqual({ restored: false, reason: 'slots' });
+    expect(asked).toEqual([]);
   });
 
   it('a seed saved by one conversation serves the next, and says how many it served', async () => {

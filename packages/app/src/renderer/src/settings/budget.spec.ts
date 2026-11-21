@@ -19,6 +19,7 @@ const row = (id: string, title: string, at: string, state: MemoryRowView['state'
   bytes: GIB,
   at,
   otherModel: false,
+  otherSlots: false,
   rereadSeconds: null,
 });
 

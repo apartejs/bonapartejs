@@ -23,6 +23,13 @@ describe('memoriesRefusedBy', () => {
     expect(memoriesRefusedBy(memories, { nCtx: 4096, cacheType: 'f16' })).toBe(2);
     expect(memoriesRefusedBy(memories, { nCtx: 16_384, cacheType: 'f16' })).toBe(1);
   });
+
+  it('another number of slots refuses every memory saved under the other count (llama.cpp: one KV stream a slot)', () => {
+    const memories = [saved(1_000), { ...saved(1_000), kvStreams: 1 }, { ...saved(1_000), kvStreams: 2 }];
+    expect(memoriesRefusedBy(memories, { nCtx: 8192, cacheType: 'f16', slots: 2 })).toBe(2);
+    expect(memoriesRefusedBy(memories, { nCtx: 8192, cacheType: 'f16', slots: 1 })).toBe(1);
+    expect(memoriesRefusedBy(memories, { nCtx: 8192, cacheType: 'f16' })).toBe(1);
+  });
 });
 
 describe('announceRestart', () => {

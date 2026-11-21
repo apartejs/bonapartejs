@@ -223,7 +223,9 @@ export function EngineMemoryPage({ messages, locale, values, change, onPage }: P
                           : row.state === 'saved'
                             ? row.otherModel
                               ? words.savedOther
-                              : words.saved
+                              : row.otherSlots
+                                ? words.savedOtherSlots
+                                : words.saved
                             : words.released(formatDuration(row.rereadSeconds ?? 0, locale))}
                       </span>
                     </td>

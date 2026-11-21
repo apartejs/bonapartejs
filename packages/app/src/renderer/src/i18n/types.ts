@@ -162,7 +162,7 @@ export interface Messages {
     restoreSaved(date: string, time: string, size: string): string;
     rereadTitle(tokens: string, duration: string): string;
     rereadReason: Record<
-      'evicted' | 'not-saved' | 'behind' | 'other-model' | 'cache-types' | 'context-too-small' | 'engine-died' | 'rewind',
+      'evicted' | 'not-saved' | 'behind' | 'other-model' | 'cache-types' | 'context-too-small' | 'slots' | 'engine-died' | 'rewind',
       string
     >;
     /** A memory let go under the disk budget: on which day, under which budget. */
@@ -594,6 +594,7 @@ export interface Messages {
       inEngine: string;
       saved: string;
       savedOther: string;
+      savedOtherSlots: string;
       released(duration: string): string;
       release: string;
       noMemory: string;

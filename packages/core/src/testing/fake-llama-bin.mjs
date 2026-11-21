@@ -93,6 +93,7 @@ try {
       ? { nCtx: process.env['FAKE_LLAMA_UNIFIED'] ? nCtx * (slots ?? 1) : nCtx }
       : {}),
     ...(slots !== undefined && slots > 0 ? { totalSlots: slots } : {}),
+    ...(process.env['FAKE_LLAMA_UNIFIED'] || args.includes('--kv-unified') || args.includes('-kvu') ? { kvUnified: true } : {}),
     ...(slotDir !== undefined ? { slotDir } : {}),
     ...(prefillBatch !== undefined ? { prefillBatch } : {}),
     ...(prefillPaceMs !== undefined ? { prefillPaceMs } : {}),

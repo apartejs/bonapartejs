@@ -178,6 +178,26 @@ describe('fake llama-server', () => {
     expect(final['timings']['prompt_ms']).toBe(100);
   });
 
+  it('refuses a state saved under another number of KV streams, both ways, as llama.cpp does (n_stream mismatch)', async () => {
+    // llama.cpp gives its KV cache one stream per slot unless --kv-unified (llama-kv-cache.cpp: n_stream =
+    // unified ? 1 : n_seq_max), writes that count at the head of a slot file and refuses a file of another count.
+    const disk = new Map();
+    const one = await start({ files: disk, responder: () => '' });
+    await complete(one, { prompt: 'x'.repeat(40), id_slot: 0 });
+    await slotAction(one, 0, 'save', 'one.slot');
+    const two = await start({ files: disk, totalSlots: 2, responder: () => '' });
+    const refused = await slotAction(two, 1, 'restore', 'one.slot');
+    expect(refused.status).toBe(400);
+    expect(refused.body['error']['message']).toMatch(/Unable to restore slot/);
+    await complete(two, { prompt: 'y'.repeat(40), id_slot: 0 });
+    await slotAction(two, 0, 'save', 'two.slot');
+    expect((await slotAction(two, 1, 'restore', 'two.slot')).status).toBe(200);
+    expect((await slotAction(one, 0, 'restore', 'two.slot')).status).toBe(400);
+    // One pool for every slot: one stream, whatever the slots.
+    const unified = await start({ files: disk, totalSlots: 2, kvUnified: true, responder: () => '' });
+    expect((await slotAction(unified, 1, 'restore', 'one.slot')).status).toBe(200);
+  });
+
   it('responds 400 when the file to restore is unknown', async () => {
     const server = await start();
     const { status } = await slotAction(server, 0, 'restore', 'inconnu.slot');
