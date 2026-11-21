@@ -127,6 +127,16 @@ describe('the built-in browser plugin (task 10.1)', () => {
     expect(await call('browser_open', {})).toMatchObject({ failed: true });
   });
 
+  it('refuses a call that gives both an address and a path: the card would name one and the tool open the other (review of round 3, 3)', async () => {
+    const opened: string[] = [];
+    const call = await rig({
+      open: async (url) => (opened.push(url), { url, title: 'Page' }),
+      openFile: async (path) => (opened.push(path), { url: `file:///C:/projet/${path}`, title: 'Fichier' }),
+    });
+    expect(await call('browser_open', { url: 'https://example.com/?k=secret', path: 'index.html' })).toEqual({ content: 'Give "url" or "path", not both.', failed: true });
+    expect(opened).toEqual([]);
+  });
+
   it('reads its conversation’s page — its text, then its console', async () => {
     const asked: unknown[] = [];
     const call = await rig({

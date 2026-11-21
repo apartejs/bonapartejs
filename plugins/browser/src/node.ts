@@ -67,6 +67,8 @@ export const browser = definePlugin({
       const url = typeof given.url === 'string' ? given.url.trim() : '';
       const path = typeof given.path === 'string' ? given.path.trim() : '';
       if (!url && !path) return { content: 'Give "url", an http(s) address, or "path", a file of the project as for read_file.', failed: true };
+      // Both: what the approval named and what would open could differ — neither is opened (review of round 3, 3).
+      if (url && path) return { content: 'Give "url" or "path", not both.', failed: true };
       if (!url) return openFile(path, { conversationId, roots });
       // The address a model writes for a file it made: opened as that file, in the perimeter, never as a page of the disk.
       if (/^file:/i.test(url)) {

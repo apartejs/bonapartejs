@@ -14,6 +14,7 @@ import { createElement, useEffect, useLayoutEffect, useRef, useState, type Keybo
 import type { ApprovalAnswer, ApprovalRequest } from '../aparte/approvals';
 import { bridge } from '../bridge';
 import type { Messages } from '../i18n/index';
+import { targetOf } from './approval-target';
 
 type Kind = keyof Messages['approval']['verbs'];
 
@@ -23,17 +24,6 @@ function kindOf(name: string): Kind {
   if (name === 'run_command' || name === 'browser_act') return 'run';
   if (name === 'web_fetch' || name === 'browser_open') return 'fetch';
   return 'other';
-}
-
-function targetOf(request: ApprovalRequest, preview: ToolPreviewView | null): string {
-  const { input } = request;
-  const text = (key: string): string | undefined => (typeof input[key] === 'string' ? (input[key] as string) : undefined);
-  if (preview) return preview.path;
-  if (request.name === 'run_command') {
-    const args = Array.isArray(input['args']) ? input['args'].filter((arg): arg is string => typeof arg === 'string') : [];
-    return [text('program') ?? '', ...args].join(' ').trim();
-  }
-  return text('path') ?? text('url') ?? request.name;
 }
 
 export interface ApprovalCardProps {
