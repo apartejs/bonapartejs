@@ -8,14 +8,19 @@
  * - a write: the file, or every file of its folder (`src/**`), relative to a
  *   folder of the perimeter;
  * - a page: its site — its origin, scheme, host and port (`http://localhost:5173`);
- * - a tool whose calls name none of those (an MCP server's tool, web_search):
- *   the tool.
+ * - a tool whose calls name none of those (an MCP server's tool that reads,
+ *   web_search): the tool — never one that runs code its call does not show
+ *   (extension_run, an MCP tool that executes), asked every time.
+ * A program spelled with a folder (`.\pnpm.exe`, `x/git.cmd`) is never
+ * remembered nor answered: a bare name runs from the PATH alone (audit 13.4),
+ * a path runs whatever lies there — a repository's own binary, a shim the
+ * agent wrote (review of round 6).
  * A rule read from disk that could not have been remembered answers nothing.
  */
 
 export interface AllowRule {
   tool: string;
-  /** A command's program, normalized (no folder, no case, no Windows extension) — with its exact arguments. */
+  /** A command's program, a bare name normalized (no case, no Windows extension) — with its exact arguments. */
   program?: string;
   /** Exactly these arguments; always given with a program. */
   args?: readonly string[];
@@ -40,7 +45,7 @@ export type CallSubject =
   | { kind: 'none' };
 
 /** Why a call that asks cannot be remembered: said on the card. */
-export type NeverRemembered = 'shell' | 'chain' | 'armed' | 'outside' | 'third-party' | 'sensitive' | 'unknown';
+export type NeverRemembered = 'shell' | 'chain' | 'path' | 'code' | 'armed' | 'outside' | 'third-party' | 'sensitive' | 'unknown';
 
 const SHELLS = new Set(['cmd', 'powershell', 'pwsh', 'bash', 'sh', 'zsh', 'fish', 'dash', 'ksh', 'nu', 'wsl']);
 /** What chains, pipes or substitutes: `&&`, `|`, `;`, a backtick, `$(`. */
@@ -49,6 +54,11 @@ const CHAINS = /&&|\||;|`|\$\(/;
 export function normalizeProgram(program: string): string {
   const name = program.trim().split(/[\\/]/).pop() ?? '';
   return name.toLowerCase().replace(/\.(exe|cmd|bat|com|ps1)$/, '');
+}
+
+/** A program named with a folder: run from that place, never from the PATH. */
+export function hasFolder(command: CommandLine): boolean {
+  return /[\\/]/.test(command.program);
 }
 
 export function isShell(command: CommandLine): boolean {
@@ -93,6 +103,7 @@ export function ruleFor(tool: string, subject: CallSubject): AllowRule | { never
     case 'command':
       if (isShell(subject.command)) return { never: 'shell' };
       if (chains(subject.command)) return { never: 'chain' };
+      if (hasFolder(subject.command)) return { never: 'path' };
       return { tool, program: normalizeProgram(subject.command.program), args: [...subject.command.args] };
     case 'path':
       return subject.relative === null ? { never: 'outside' } : { tool, path: pathPattern(subject.relative) };
@@ -129,7 +140,7 @@ export function matchesRule(rule: AllowRule, tool: string, subject: CallSubject)
   if (rule.tool !== tool || !isValidRule(rule)) return false;
   switch (subject.kind) {
     case 'command': {
-      if (rule.program === undefined || !isRememberable(subject.command)) return false;
+      if (rule.program === undefined || !isRememberable(subject.command) || hasFolder(subject.command)) return false;
       if (normalizeProgram(subject.command.program) !== rule.program) return false;
       const args = rule.args ?? [];
       return args.length === subject.command.args.length && args.every((arg, index) => arg === subject.command.args[index]);

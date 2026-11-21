@@ -280,6 +280,32 @@ describe('what the card offers to remember (audit 2026-11-21, D3)', () => {
     expect(engine().offer({ tool: EDIT, input: { path: '../x.txt' }, mode: 'repetition' })).toEqual({ never: 'outside' });
   });
 
+  it('never a tool that runs code its call does not show — extension_run, an MCP tool that executes (review of round 6)', () => {
+    const TRY = tool('extension_run', 'execute');
+    const MCP_WRITE: ToolDef = { ...tool('mcp__files__write_file', 'execute'), source: 'mcp' };
+    const MCP_READ: ToolDef = { ...tool('mcp__files__read_text_file', 'network'), source: 'mcp' };
+    for (const mode of ['repetition', 'plume'] as const) {
+      expect(engine().offer({ tool: TRY, input: { id: 'changelog' }, mode, projectId: 'p1' })).toEqual({ never: 'code' });
+      expect(engine().offer({ tool: MCP_WRITE, input: { path: '.git/hooks/pre-commit' }, mode, projectId: 'p1' })).toEqual({ never: 'code' });
+    }
+    // A rule written by hand answers neither.
+    const forged = engine({ rules: () => [{ tool: 'extension_run' }, { tool: 'mcp__files__write_file' }] });
+    expect(forged.evaluate({ tool: TRY, input: { id: 'changelog' }, mode: 'plume' })).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(forged.evaluate({ tool: MCP_WRITE, input: { path: 'a' }, mode: 'plume' })).toEqual({ verdict: 'ask', why: 'mode' });
+    // A tool that only reads the network is still remembered as the tool (D3).
+    expect(engine().offer({ tool: MCP_READ, input: { path: 'a' }, mode: 'plume', projectId: 'p1' })).toEqual({
+      rule: { tool: 'mcp__files__read_text_file' },
+      where: 'project',
+    });
+  });
+
+  it('a program spelled with a folder is never offered (review of round 6)', () => {
+    expect(engine().offer({ tool: RUN, input: { program: '.\\pnpm.exe', args: ['test'] }, mode: 'plume', projectId: 'p1' })).toEqual({ never: 'path' });
+    const remembered = engine({ rules: () => [{ tool: 'run_command', program: 'git', args: ['status'] }] });
+    expect(remembered.evaluate({ tool: RUN, input: { program: 'x\\git.cmd', args: ['status'] }, mode: 'plume' })).toEqual({ verdict: 'ask', why: 'mode' });
+    expect(remembered.evaluate({ tool: RUN, input: { program: 'git', args: ['status'] }, mode: 'plume' })).toEqual({ verdict: 'allow' });
+  });
+
   it('nothing for a call that does not ask', () => {
     expect(engine().offer({ tool: RUN, input: { program: 'pnpm', args: ['test'] }, mode: 'lecture' })).toBeNull();
     expect(engine().offer({ tool: EDIT, input: { path: 'src/a.ts' }, mode: 'plume' })).toBeNull();

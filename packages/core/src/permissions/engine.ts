@@ -345,6 +345,9 @@ export class PermissionEngine {
     else if (effect === 'write' && pathOf(query.input) !== undefined) subject = { kind: 'path', relative: landed };
     else if (url !== undefined) subject = { kind: 'origin', origin: originOf(url) };
     else subject = { kind: 'none' };
+    // What runs and names no command — extension_run, an MCP tool that executes — runs code its call does not show,
+    // a new revision's or a file it writes where nothing is armed: asked every time, never remembered (review of round 6).
+    if (effect === 'execute' && subject.kind === 'none') return { verdict, never: 'code' };
     return { verdict, answerable: subject };
   }
 }

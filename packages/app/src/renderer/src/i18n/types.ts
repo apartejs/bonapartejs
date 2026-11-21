@@ -228,7 +228,7 @@ export interface Messages {
       always: Record<'project' | 'app' | 'site', string>;
       /** What is remembered, before its subject in the code font. */
       what: Record<'command' | 'folder' | 'file' | 'site' | 'tool', string>;
-      never: Record<'shell' | 'chain' | 'armed' | 'outside' | 'third-party' | 'sensitive' | 'unknown', string>;
+      never: Record<'shell' | 'chain' | 'path' | 'code' | 'armed' | 'outside' | 'third-party' | 'sensitive' | 'unknown', string>;
     };
   };
   /** « À traiter » (board « À traiter », task 8.4). */

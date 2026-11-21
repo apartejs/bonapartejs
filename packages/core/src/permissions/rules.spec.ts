@@ -53,6 +53,12 @@ describe('ruleFor: what the card offers to remember', () => {
     expect(ruleFor('run_command', command('pnpm', ['test', '&&', 'curl']))).toEqual({ never: 'chain' });
   });
 
+  it('never a program spelled with a folder: what runs there is not what the PATH names (review of round 6)', () => {
+    for (const program of ['.\\pnpm.exe', './pnpm', 'x\\git.cmd', 'C:\\tools\\pnpm.exe', '/usr/local/bin/node']) {
+      expect(ruleFor('run_command', command(program, ['test'])), program).toEqual({ never: 'path' });
+    }
+  });
+
   it('a write: its folder, or the file itself at the top of the perimeter; nothing outside it', () => {
     expect(pathPattern('src/components/Button.tsx')).toBe('src/components/**');
     expect(ruleFor('edit_file', path('src/format.ts'))).toEqual({ tool: 'edit_file', path: 'src/**' });
@@ -103,6 +109,18 @@ describe('matchesRule', () => {
     expect(matchesRule(exact, 'run_command', command('pnpm', ['testament']))).toBe(false);
     expect(matchesRule(exact, 'run_command', command('npm', ['test']))).toBe(false);
     expect(matchesRule({ tool: 'run_command', program: 'git', args: ['status'] }, 'run_command', command('git', ['push', '--force']))).toBe(false);
+  });
+
+  it('a program spelled with a folder is never answered by a rule: a bare name runs from the PATH alone, a path from anywhere (review of round 6)', () => {
+    // A repository's own `.\pnpm.exe`, or a shim the agent wrote (`x\git.cmd`), is not the `pnpm` or the `git` approved.
+    expect(matchesRule(exact, 'run_command', command('.\\pnpm.exe', ['test']))).toBe(false);
+    expect(matchesRule(exact, 'run_command', command('./pnpm', ['test']))).toBe(false);
+    expect(matchesRule(exact, 'run_command', command('C:\\tools\\pnpm.exe', ['test']))).toBe(false);
+    const status: AllowRule = { tool: 'run_command', program: 'git', args: ['status'] };
+    expect(matchesRule(status, 'run_command', command('x\\git.cmd', ['status']))).toBe(false);
+    expect(matchesRule(status, 'run_command', command('sub/dir/GIT.cmd', ['status']))).toBe(false);
+    // The bare name, however it is cased or completed, is still the one the PATH finds.
+    expect(matchesRule(status, 'run_command', command('GIT.exe', ['status']))).toBe(true);
   });
 
   it('a forged program-wide rule answers nothing', () => {

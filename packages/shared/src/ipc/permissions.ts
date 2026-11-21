@@ -23,7 +23,7 @@ export const allowRuleSchema = z.object({
 export type AllowRuleView = z.infer<typeof allowRuleSchema>;
 
 /** Why a call that asks is asked every time. */
-export const neverRememberedSchema = z.enum(['shell', 'chain', 'armed', 'outside', 'third-party', 'sensitive', 'unknown']);
+export const neverRememberedSchema = z.enum(['shell', 'chain', 'path', 'code', 'armed', 'outside', 'third-party', 'sensitive', 'unknown']);
 export type NeverRememberedView = z.infer<typeof neverRememberedSchema>;
 
 /** What the card may offer: the rule, and where « Toujours » keeps it — or why nothing. Null: the call does not ask. */

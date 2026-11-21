@@ -279,6 +279,8 @@ export const fr: Messages = {
       never: {
         shell: 'Toujours demandé : un shell n’est jamais retenu.',
         chain: 'Toujours demandé : une commande qui en enchaîne d’autres n’est jamais retenue.',
+        path: 'Toujours demandé : un programme nommé avec son dossier lance ce qui s’y trouve — seul un nom nu, trouvé dans le PATH, est retenu.',
+        code: 'Toujours demandé : cet outil lance du code que son appel ne montre pas.',
         armed: 'Toujours demandé : ce fichier s’exécute plus tard.',
         outside: 'Toujours demandé : ce fichier est hors du projet.',
         'third-party': 'Toujours demandé : l’outil d’un plugin tiers n’est jamais retenu.',

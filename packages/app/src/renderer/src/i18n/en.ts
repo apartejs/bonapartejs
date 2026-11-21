@@ -279,6 +279,8 @@ export const en: Messages = {
       never: {
         shell: 'Always asked: a shell is never remembered.',
         chain: 'Always asked: a command that chains others is never remembered.',
+        path: 'Always asked: a program named with its folder runs whatever lies there — only a bare name, found on the PATH, is remembered.',
+        code: 'Always asked: this tool runs code its call does not show.',
         armed: 'Always asked: this file runs later.',
         outside: 'Always asked: this file is outside the project.',
         'third-party': 'Always asked: a third-party plugin’s tool is never remembered.',

@@ -551,10 +551,13 @@ pnpm --filter @aparte/bonaparte-app exec playwright test e2e/stream.spec.ts
   the card offers « Pour cette conversation » and « Toujours dans ce projet »
   (« Toujours pour ce site » for a page, « Toujours » without a project) for
   what the core says the call names — the exact command (security rule 2:
-  never a program alone, never a shell, never a chain), a write's folder
-  (`src/**`, relative to the perimeter), a page's origin (localhost with its
-  port), or the tool when the call names nothing — said under its buttons; a
-  call it cannot remember says why. The window names a call and a scope,
+  never a program alone, never a shell, never a chain, never a program
+  spelled with a folder — a bare name runs from the PATH alone, and a rule
+  answers only a bare name), a write's folder (`src/**`, relative to the
+  perimeter), a page's origin (localhost with its port), or the tool when the
+  call names nothing and runs no code it does not show (never extension_run
+  nor an MCP tool that executes) — said under its buttons; a call it cannot
+  remember says why. The window names a call and a scope,
   never a rule (`permissions.remember`); a rule is taken back by the key the
   list gave (`permissions.revoke`). `<data>/config/grants.json` (armed) keeps
   the app's rules (sites), each project's, and each conversation's own,
